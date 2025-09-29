@@ -16,7 +16,7 @@ st.set_page_config(
 
 # Initialize session state
 if 'portfolio_size' not in st.session_state:
-    st.session_state.portfolio_size = 192.91
+    st.session_state.portfolio_size = 0.0
 if 'risk_percent' not in st.session_state:
     st.session_state.risk_percent = 2
 if 'analyzed_stocks' not in st.session_state:
@@ -25,56 +25,13 @@ if 'favorites' not in st.session_state:
     st.session_state.favorites = []
 if 'buy_signals_history' not in st.session_state:
     st.session_state.buy_signals_history = []
-if 'dark_mode' not in st.session_state:
-    st.session_state.dark_mode = False
 if 'alerts' not in st.session_state:
     st.session_state.alerts = []
 if 'watchlist_data' not in st.session_state:
     st.session_state.watchlist_data = {}
 
-# Apply dark mode with better styling
-if st.session_state.dark_mode:
-    st.markdown("""
-        <style>
-        .stApp {
-            background-color: #1a1a1a !important;
-            color: #ffffff !important;
-        }
-        .stMarkdown {
-            color: #ffffff !important;
-        }
-        h1, h2, h3, h4, h5, h6 {
-            color: #ffffff !important;
-        }
-        .stTextInput > div > div > input {
-            background-color: #2d2d2d !important;
-            color: #ffffff !important;
-        }
-        .stSelectbox > div > div > select {
-            background-color: #2d2d2d !important;
-            color: #ffffff !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-else:
-    st.markdown("""
-        <style>
-        .stApp {
-            background-color: #ffffff !important;
-            color: #000000 !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
 # Title
-col1, col2 = st.columns([6, 1])
-with col1:
-    st.title("🚀 AI Stock Analyzer Ultimate")
-with col2:
-    if st.button("🌙" if not st.session_state.dark_mode else "☀️"):
-        st.session_state.dark_mode = not st.session_state.dark_mode
-        st.rerun()
-
+st.title("🚀 AI Stock Analyzer Ultimate")
 st.markdown("---")
 
 # Sidebar
@@ -135,37 +92,6 @@ if st.session_state.alerts:
                 st.rerun()
 else:
     st.sidebar.info("No active alerts")
-
-def get_stock_news(ticker):
-    """Fetch recent news for a stock"""
-    try:
-        stock = yf.Ticker(ticker)
-        info = stock.info
-        
-        # Try to get news from different sources
-        news_items = []
-        
-        # Method 1: Try .news attribute
-        if hasattr(stock, 'news') and stock.news:
-            news_items = stock.news[:5]
-        
-        # Method 2: If no news, create a placeholder with basic info
-        if not news_items:
-            return [{
-                'title': f"{info.get('longName', ticker)} - No recent news available",
-                'publisher': 'Yahoo Finance',
-                'providerPublishTime': int(datetime.now().timestamp()),
-                'link': f"https://finance.yahoo.com/quote/{ticker}"
-            }]
-        
-        return news_items
-    except Exception as e:
-        return [{
-            'title': f"Unable to fetch news for {ticker}",
-            'publisher': 'Error',
-            'providerPublishTime': int(datetime.now().timestamp()),
-            'link': f"https://finance.yahoo.com/quote/{ticker}"
-        }]
 
 def create_candlestick_chart(ticker, hist):
     """Create interactive candlestick chart"""
@@ -228,7 +154,7 @@ def create_candlestick_chart(ticker, hist):
         height=800,
         showlegend=True,
         xaxis_rangeslider_visible=False,
-        template='plotly_dark' if st.session_state.dark_mode else 'plotly_white'
+        template='plotly_white'
     )
     
     return fig
@@ -466,14 +392,13 @@ def analyze_stock(ticker, portfolio_size, risk_percent):
         return {"ticker": ticker, "verdict": "ERROR", "score": 0, "error": True, "error_msg": str(e)}
 
 # Main tabs
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📊 Analysis",
     "🎯 Watchlist Dashboard", 
     "🔍 Stock Screener",
-    "📰 News & Alerts",
+    "🔔 Custom Alerts",
     "📈 Backtesting",
-    "💎 Buy Signals",
-    "📜 History"
+    "💎 Buy Signals"
 ])
 
 with tab1:
@@ -635,70 +560,32 @@ with tab3:
             st.warning(f"No stocks found with score >= {min_score}")
 
 with tab4:
-    st.header("📰 News & Custom Alerts")
+    st.header("🔔 Custom Alerts")
     
-    col1, col2 = st.columns(2)
+    st.subheader("Create Custom Alert")
     
-    with col1:
-        st.subheader("📰 Stock News")
-        news_ticker = st.text_input("Get news for ticker", "AAPL").upper()
-        
-        if st.button("📰 Fetch News"):
-            with st.spinner("Fetching news..."):
-                news = get_stock_news(news_ticker)
-                
-                if news:
-                    st.success(f"Found {len(news)} news articles for {news_ticker}")
-                    for article in news:
-                        title = article.get('title', 'No Title')
-                        publisher = article.get('publisher', 'Unknown')
-                        timestamp = article.get('providerPublishTime', 0)
-                        link = article.get('link', '')
-                        
-                        # Format the timestamp properly
-                        try:
-                            if timestamp > 0:
-                                pub_date = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M')
-                            else:
-                                pub_date = 'Recently'
-                        except:
-                            pub_date = 'Recently'
-                        
-                        with st.expander(f"📰 {title[:80]}..."):
-                            st.write(f"**Publisher:** {publisher}")
-                            st.write(f"**Published:** {pub_date}")
-                            if link:
-                                st.markdown(f"[Read Full Article]({link})")
-                            else:
-                                st.info("Link unavailable")
-                else:
-                    st.warning("No news available. Try searching on Yahoo Finance directly.")
+    alert_ticker = st.text_input("Ticker for alert", "").upper()
+    alert_type = st.selectbox("Alert Type", [
+        "RSI < 30",
+        "Strong Buy Signal",
+        "Price Below Target",
+        "Score Above 5"
+    ])
     
-    with col2:
-        st.subheader("🔔 Create Custom Alert")
-        
-        alert_ticker = st.text_input("Ticker for alert", "").upper()
-        alert_type = st.selectbox("Alert Type", [
-            "RSI < 30",
-            "Strong Buy Signal",
-            "Price Below Target",
-            "Score Above 5"
-        ])
-        
-        alert_value = None
-        if alert_type == "Price Below Target":
-            alert_value = st.number_input("Target Price", min_value=0.0, step=1.0)
-        
-        if st.button("➕ Create Alert") and alert_ticker:
-            new_alert = {
-                'ticker': alert_ticker,
-                'condition': alert_type,
-                'value': alert_value,
-                'created': datetime.now().strftime('%Y-%m-%d %H:%M')
-            }
-            st.session_state.alerts.append(new_alert)
-            st.success(f"Alert created for {alert_ticker}!")
-            st.rerun()
+    alert_value = None
+    if alert_type == "Price Below Target":
+        alert_value = st.number_input("Target Price", min_value=0.0, step=1.0)
+    
+    if st.button("➕ Create Alert") and alert_ticker:
+        new_alert = {
+            'ticker': alert_ticker,
+            'condition': alert_type,
+            'value': alert_value,
+            'created': datetime.now().strftime('%Y-%m-%d %H:%M')
+        }
+        st.session_state.alerts.append(new_alert)
+        st.success(f"Alert created for {alert_ticker}!")
+        st.rerun()
 
 with tab5:
     st.header("📈 Strategy Backtesting")
@@ -746,7 +633,7 @@ with tab5:
                     title="Cumulative Returns",
                     xaxis_title="Date",
                     yaxis_title="Cumulative P&L %",
-                    template='plotly_dark' if st.session_state.dark_mode else 'plotly_white'
+                    template='plotly_white'
                 )
                 st.plotly_chart(fig, use_container_width=True)
                 
@@ -802,8 +689,8 @@ with tab6:
     else:
         st.info("Analyze stocks to see buy signals")
 
-with tab7:
-    st.header("📜 Historical Buy Signals")
+with tab6:
+    st.header("💎 Buy Signals Summary")
     
     if st.session_state.buy_signals_history:
         st.info(f"Total historical signals: {len(st.session_state.buy_signals_history)}")
@@ -852,7 +739,6 @@ st.sidebar.markdown("""
 **Features:**
 - 🎯 Live Watchlist Dashboard
 - 🔍 AI Stock Screener
-- 📰 Real-time News
 - 🔔 Custom Alerts
 - 📈 Strategy Backtesting
 """)
