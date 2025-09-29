@@ -706,4 +706,393 @@ with tab1:
         if overview.get('VIX', {}).get('price', 0) > 25:
             insights.append("⚠️ High volatility - caution")
         elif overview.get('VIX', {}).get('price', 0) < 15:
-            insights.append("✅ Low volat
+            insights.append("✅ Low volatility")
+        
+        if sectors:
+            top_sector = max(sectors.items(), key=lambda x: x[1])
+            insights.append(f"🏆 {top_sector[0]} leading (+{top_sector[1]:.2f}%)")
+        
+        for insight in insights:
+            st.info(insight)
+    else:
+        st.info("Click 'Refresh Market Data' to load overview")
+    
+    if st.session_state.auto_refresh:
+        time.sleep(st.session_state.refresh_interval)
+        st.rerun()
+
+with tab2:
+    st.header("Stock Analysis")
+    
+    col1, col2, col3 = st.columns([3, 1, 1])
+    with col1:
+        ticker_input = st.text_input("Enter Stock Ticker", value=st.session_state.get('quick_analyze', ''), key="main_analysis_ticker").upper()
+    with col2:
+        analyze_btn = st.button("🔍 Analyze", type="primary", key="main_analyze_btn", use_container_width=True)
+    with col3:
+        if ticker_input and ticker_input not in st.session_state.favorites:
+            if st.button("⭐ Watchlist", key="add_to_watchlist_btn", use_container_width=True):
+                st.session_state.favorites.append(ticker_input)
+                st.rerun()
+    
+    if analyze_btn and ticker_input:
+        with st.spinner(f"Analyzing {ticker_input}..."):
+            result = analyze_stock(ticker_input, st.session_state.portfolio_size, st.session_state.risk_percent)
+            
+            if not result["error"]:
+                st.session_state.analyzed_stocks.append(result)
+                
+                st.markdown("---")
+                st.subheader(f"{result['ticker']} - {result['company']}")
+                
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Price", f"${result['price']}")
+                with col2:
+                    st.metric("Change", f"{result['daily_change']}%", delta=f"{result['daily_change']}%")
+                with col3:
+                    st.metric("Score", result['score'])
+                with col4:
+                    st.metric("Verdict", result['verdict'])
+                
+                st.plotly_chart(create_candlestick_chart(ticker_input, result['hist']), use_container_width=True)
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.markdown("### 📈 Technical")
+                    st.write(f"**RSI:** {result['rsi']}")
+                    st.write(f"**SMA50:** ${result['sma50']}")
+                    st.write(f"**SMA200:** ${result['sma200']}")
+                    st.write(f"**Volume:** {result['volume_ratio']}x")
+                
+                with col2:
+                    st.markdown("### 🎯 Targets")
+                    st.success(f"**TP1:** ${result['tp1']}")
+                    st.success(f"**TP2:** ${result['tp2']}")
+                    st.error(f"**SL1:** ${result['sl1']}")
+                    st.error(f"**SL2:** ${result['sl2']}")
+                
+                with col3:
+                    st.markdown("### 💼 Position")
+                    st.info(f"**Shares:** {result['shares']}")
+                    st.info(f"**Value:** ${result['position_value']}")
+                    st.info(f"**Risk:** ${result['risk_amount']}")
+                
+                with st.expander("🔍 Details"):
+                    for factor in result['factors']:
+                        st.write(factor)
+            else:
+                st.error(f"Error: {result.get('error_msg', 'Unable to analyze')}")
+
+with tab3:
+    st.header("🎯 Watchlist")
+    
+    if st.session_state.favorites:
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            if st.button("🔄 Refresh", type="primary", key="watchlist_refresh_btn", use_container_width=True):
+                with st.spinner("Updating..."):
+                    for ticker in st.session_state.favorites:
+                        result = analyze_stock(ticker, st.session_state.portfolio_size, st.session_state.risk_percent)
+                        if not result['error']:
+                            st.session_state.watchlist_data[ticker] = result
+                    st.success("Updated!")
+                    st.rerun()
+        with col2:
+            if st.session_state.auto_refresh:
+                st.info("🟢 Auto-refresh enabled")
+        
+        st.markdown("---")
+        
+        cols = st.columns(min(3, len(st.session_state.favorites)))
+        for i, ticker in enumerate(st.session_state.favorites):
+            with cols[i % 3]:
+                if ticker in st.session_state.watchlist_data:
+                    data = st.session_state.watchlist_data[ticker]
+                    
+                    if "STRONG BUY" in data['verdict']:
+                        st.success(f"### {ticker}")
+                    elif "BUY" in data['verdict']:
+                        st.info(f"### {ticker}")
+                    else:
+                        st.warning(f"### {ticker}")
+                    
+                    st.metric("Price", f"${data['price']}", f"{data['daily_change']}%")
+                    st.write(f"**Score:** {data['score']}")
+                    st.write(f"**RSI:** {data['rsi']}")
+                    
+                    if st.button("Analyze", key=f"watchlist_analyze_{i}_{ticker}"):
+                        st.session_state.quick_analyze = ticker
+                        st.rerun()
+                else:
+                    st.info(f"### {ticker}")
+                    st.write("Click 'Refresh'")
+    else:
+        st.info("Add tickers to watchlist!")
+
+with tab4:
+    st.header("🔍 Screener")
+    
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        screener_option = st.radio("Select:", ["Popular", "S&P 100", "Custom"], key="screener_option")
+    with col2:
+        min_score = st.slider("Min Score", 0, 10, 3, key="screener_min_score")
+    
+    if screener_option == "Popular":
+        tickers = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA", "NVDA", "META", "NFLX", "AMD", "INTC"]
+    elif screener_option == "S&P 100":
+        tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "BRK.B", "JPM", "JNJ"]
+    else:
+        custom = st.text_area("Tickers (comma-separated)", "AAPL,TSLA", key="screener_custom")
+        tickers = [t.strip().upper() for t in custom.split(",")]
+    
+    if st.button("🚀 Run Screener", type="primary", key="run_screener_btn"):
+        progress = st.progress(0)
+        results = []
+        
+        for i, ticker in enumerate(tickers):
+            result = analyze_stock(ticker, st.session_state.portfolio_size, st.session_state.risk_percent)
+            if not result['error'] and result['score'] >= min_score:
+                results.append(result)
+            progress.progress((i + 1) / len(tickers))
+        
+        progress.empty()
+        
+        if results:
+            results_sorted = sorted(results, key=lambda x: x['score'], reverse=True)
+            st.success(f"Found {len(results_sorted)} stocks!")
+            
+            st.markdown("### 🏆 Top Picks")
+            cols = st.columns(min(3, len(results_sorted[:3])))
+            for i, r in enumerate(results_sorted[:3]):
+                with cols[i]:
+                    st.success(f"### #{i+1} {r['ticker']}")
+                    st.metric("Score", r['score'])
+                    st.write(f"**Price:** ${r['price']}")
+            
+            df = pd.DataFrame(results_sorted)
+            df = df[["ticker", "price", "score", "verdict", "rsi"]]
+            df.columns = ["Ticker", "Price", "Score", "Verdict", "RSI"]
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        else:
+            st.warning(f"No stocks with score >= {min_score}")
+
+with tab5:
+    st.header("📈 Patterns & Predictions")
+    
+    pattern_ticker = st.text_input("Ticker", "AAPL", key="pattern_ticker_input").upper()
+    
+    if st.button("🔍 Analyze", type="primary", key="pattern_analyze_btn"):
+        with st.spinner("Analyzing..."):
+            result = analyze_stock(pattern_ticker, st.session_state.portfolio_size, st.session_state.risk_percent)
+            
+            if not result['error']:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.subheader("📊 Patterns")
+                    for pattern in result['patterns']:
+                        if "Bullish" in pattern:
+                            st.success(pattern)
+                        elif "Bearish" in pattern:
+                            st.error(pattern)
+                        else:
+                            st.info(pattern)
+                
+                with col2:
+                    st.subheader("🔮 Prediction")
+                    if result['prediction']:
+                        pred = result['prediction']
+                        st.metric("5-Day Forecast", f"${pred['predicted_5day']:.2f}", f"{pred['change_percent']:.2f}%")
+                        st.write(f"**Current:** ${pred['current']:.2f}")
+                        st.write(f"**Trend:** {pred['trend']}")
+                    else:
+                        st.info("Not enough data")
+                
+                st.markdown("### 📐 Advanced Indicators")
+                adv = result['advanced_indicators']
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.write("**Fibonacci**")
+                    st.write(f"23.6%: ${adv['fib_236']:.2f}")
+                    st.write(f"38.2%: ${adv['fib_382']:.2f}")
+                    st.write(f"50.0%: ${adv['fib_500']:.2f}")
+                    st.write(f"61.8%: ${adv['fib_618']:.2f}")
+                
+                with col2:
+                    st.write("**Stochastic**")
+                    st.write(f"K: {adv['stochastic_k']:.2f}")
+                    st.write(f"D: {adv['stochastic_d']:.2f}")
+                    if adv['stochastic_k'] > 80:
+                        st.error("Overbought")
+                    elif adv['stochastic_k'] < 20:
+                        st.success("Oversold")
+                    else:
+                        st.info("Neutral")
+                
+                with col3:
+                    st.write("**Trend**")
+                    st.write(f"ADX: {adv['adx']:.2f}")
+                    if adv['adx'] > 25:
+                        st.success("Strong")
+                    elif adv['adx'] > 20:
+                        st.info("Moderate")
+                    else:
+                        st.warning("Weak")
+                    st.write(f"**OBV:** {adv['obv_trend']}")
+
+with tab6:
+    st.header("📐 Position Calculator")
+    
+    calc_ticker = st.text_input("Ticker", "AAPL", key="calc_ticker_input").upper()
+    
+    if st.button("💰 Calculate", type="primary", key="calc_position_btn"):
+        with st.spinner("Calculating..."):
+            result = analyze_stock(calc_ticker, st.session_state.portfolio_size, st.session_state.risk_percent)
+            
+            if not result['error'] and st.session_state.portfolio_size > 0:
+                st.success(f"Position sizing for {calc_ticker} @ ${result['price']}")
+                
+                positions = result['position_sizes']
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("Fixed %", f"{positions['fixed_percent']} shares")
+                    st.write("**Risk:** 2% portfolio")
+                    st.info(f"Value: ${positions['fixed_percent'] * result['price']:.2f}")
+                
+                with col2:
+                    st.metric("Volatility", f"{positions['volatility_based']} shares")
+                    st.write(f"**Vol:** {result['volatility']:.1f}%")
+                    st.info(f"Value: ${positions['volatility_based'] * result['price']:.2f}")
+                
+                with col3:
+                    st.metric("Kelly", f"{positions['kelly']} shares")
+                    st.write("**Win:** 55%")
+                    st.info(f"Value: ${positions['kelly'] * result['price']:.2f}")
+                
+                avg_shares = int(np.mean([positions['fixed_percent'], positions['volatility_based'], positions['kelly']]))
+                st.success(f"**Recommended:** {avg_shares} shares (${avg_shares * result['price']:.2f})")
+            elif st.session_state.portfolio_size == 0:
+                st.warning("Set portfolio size in sidebar!")
+
+with tab7:
+    st.header("💰 Fundamentals")
+    
+    fund_ticker = st.text_input("Ticker", "AAPL", key="fund_ticker_input").upper()
+    
+    if st.button("📊 Get Fundamentals", type="primary", key="fund_get_btn"):
+        with st.spinner("Loading..."):
+            fundamentals = get_fundamental_data(fund_ticker)
+            
+            if fundamentals:
+                st.success(f"Fundamentals for {fund_ticker}")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.markdown("### 💵 Valuation")
+                    st.write(f"**P/E:** {fundamentals['pe_ratio']}")
+                    st.write(f"**Forward P/E:** {fundamentals['forward_pe']}")
+                    st.write(f"**P/B:** {fundamentals['pb_ratio']}")
+                    st.write(f"**PEG:** {fundamentals['peg_ratio']}")
+                
+                with col2:
+                    st.markdown("### 📈 Growth")
+                    st.write(f"**Revenue:** {fundamentals['revenue_growth']}")
+                    st.write(f"**Earnings:** {fundamentals['earnings_growth']}")
+                    st.write(f"**Profit Margin:** {fundamentals['profit_margin']}")
+                    st.write(f"**ROE:** {fundamentals['roe']}")
+                
+                with col3:
+                    st.markdown("### 🏦 Health")
+                    st.write(f"**Debt/Equity:** {fundamentals['debt_to_equity']}")
+                    st.write(f"**Current Ratio:** {fundamentals['current_ratio']}")
+                    st.write(f"**Dividend:** {fundamentals['dividend_yield']}")
+
+with tab8:
+    st.header("🔙 Backtesting")
+    
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        backtest_ticker = st.text_input("Ticker", "AAPL", key="backtest_ticker_input").upper()
+    with col2:
+        years = st.selectbox("Years", [1, 2, 3, 5], index=1, key="backtest_years")
+    
+    if st.button("🔬 Backtest", type="primary", key="backtest_run_btn"):
+        with st.spinner("Backtesting..."):
+            results = backtest_strategy(backtest_ticker, years)
+            
+            if results:
+                st.success("Complete!")
+                
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Trades", results['total_trades'])
+                with col2:
+                    st.metric("Win Rate", f"{results['win_rate']:.1f}%")
+                with col3:
+                    st.metric("Avg Win", f"{results['avg_win']:.2f}%")
+                with col4:
+                    st.metric("Avg Loss", f"{results['avg_loss']:.2f}%")
+                
+                st.dataframe(results['trades'], use_container_width=True)
+                
+                results['trades']['cumulative'] = results['trades']['pnl_percent'].cumsum()
+                
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=results['trades']['exit_date'],
+                    y=results['trades']['cumulative'],
+                    mode='lines+markers',
+                    line=dict(color='green', width=2)
+                ))
+                fig.update_layout(
+                    title="Cumulative Returns",
+                    template='plotly_white'
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+with tab9:
+    st.header("💎 Buy Signals")
+    
+    if st.session_state.analyzed_stocks:
+        buy_signals = [s for s in st.session_state.analyzed_stocks if "BUY" in s.get("verdict", "") and not s.get("error", False)]
+        buy_signals_sorted = sorted(buy_signals, key=lambda x: x["score"], reverse=True)
+        
+        if buy_signals_sorted:
+            st.success(f"Found {len(buy_signals_sorted)} signals")
+            
+            df = pd.DataFrame(buy_signals_sorted)
+            df = df[["ticker", "price", "score", "verdict", "tp1", "sl1"]]
+            df.columns = ["Ticker", "Price", "Score", "Verdict", "TP1", "SL1"]
+            
+            st.dataframe(df, use_container_width=True, hide_index=True)
+            
+            csv = df.to_csv(index=False)
+            st.download_button("📥 Download", csv, f"signals_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv", key="download_signals_btn")
+        else:
+            st.info("No signals yet")
+        
+        if st.button("🗑️ Clear", key="clear_signals_btn"):
+            st.session_state.analyzed_stocks = []
+            st.rerun()
+    else:
+        st.info("Analyze stocks first")
+
+# Footer
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📊 Pro Features")
+st.sidebar.markdown("""
+✅ Live Market Data  
+✅ Pattern Recognition  
+✅ Price Predictions  
+✅ Advanced Indicators  
+✅ Fundamentals  
+✅ Position Calculator  
+✅ Backtesting  
+✅ Auto-Refresh
+""")
