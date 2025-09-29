@@ -684,6 +684,9 @@ with tab1:
     
     refresh_btn = st.button("🔄 Refresh Market Data", type="primary")
     
+    overview = None
+    sectors = None
+    
     if refresh_btn or st.session_state.auto_refresh:
         with st.spinner("Loading market data..."):
             # Major Indices
@@ -779,8 +782,9 @@ with tab1:
                 st.metric("Last Updated", current_time)
     
     # Market insights
-    st.markdown("---")
-    st.subheader("💡 Market Insights")
+    if overview:
+        st.markdown("---")
+        st.subheader("💡 Market Insights")
     
     if overview:
         insights = []
@@ -801,6 +805,8 @@ with tab1:
         
         for insight in insights:
             st.info(insight)
+    else:
+        st.info("Click 'Refresh Market Data' to load market overview")
     
     # Auto-refresh implementation
     if st.session_state.auto_refresh:
