@@ -937,7 +937,7 @@ with tab3:
         tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "BRK.B", "JPM", "JNJ", 
                    "V", "PG", "XOM", "MA", "HD", "CVX", "MRK", "PFE", "ABBV", "KO"]
     else:
-        custom = st.text_area("Tickers (comma-separated)", "AAPL,TSLA")
+        custom = st.text_area("Tickers (comma-separated)", "AAPL,TSLA", key="screener_custom")
         tickers = [t.strip().upper() for t in custom.split(",")]
     
     if st.button("🚀 Run Screener", type="primary"):
