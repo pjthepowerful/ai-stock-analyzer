@@ -31,7 +31,7 @@ if st.session_state.dark_mode:
 
 # Initialize session state
 if 'portfolio_size' not in st.session_state:
-    st.session_state.portfolio_size = 192.91
+    st.session_state.portfolio_size = 0.00
 if 'risk_percent' not in st.session_state:
     st.session_state.risk_percent = 2
 if 'analyzed_stocks' not in st.session_state:
