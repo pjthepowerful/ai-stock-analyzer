@@ -32,13 +32,36 @@ if 'alerts' not in st.session_state:
 if 'watchlist_data' not in st.session_state:
     st.session_state.watchlist_data = {}
 
-# Apply dark mode
+# Apply dark mode with better styling
 if st.session_state.dark_mode:
     st.markdown("""
         <style>
         .stApp {
-            background-color: #0e1117;
-            color: #fafafa;
+            background-color: #1a1a1a !important;
+            color: #ffffff !important;
+        }
+        .stMarkdown {
+            color: #ffffff !important;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            color: #ffffff !important;
+        }
+        .stTextInput > div > div > input {
+            background-color: #2d2d2d !important;
+            color: #ffffff !important;
+        }
+        .stSelectbox > div > div > select {
+            background-color: #2d2d2d !important;
+            color: #ffffff !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+else:
+    st.markdown("""
+        <style>
+        .stApp {
+            background-color: #ffffff !important;
+            color: #000000 !important;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -117,10 +140,32 @@ def get_stock_news(ticker):
     """Fetch recent news for a stock"""
     try:
         stock = yf.Ticker(ticker)
-        news = stock.news[:5] if hasattr(stock, 'news') and stock.news else []
-        return news
-    except:
-        return []
+        info = stock.info
+        
+        # Try to get news from different sources
+        news_items = []
+        
+        # Method 1: Try .news attribute
+        if hasattr(stock, 'news') and stock.news:
+            news_items = stock.news[:5]
+        
+        # Method 2: If no news, create a placeholder with basic info
+        if not news_items:
+            return [{
+                'title': f"{info.get('longName', ticker)} - No recent news available",
+                'publisher': 'Yahoo Finance',
+                'providerPublishTime': int(datetime.now().timestamp()),
+                'link': f"https://finance.yahoo.com/quote/{ticker}"
+            }]
+        
+        return news_items
+    except Exception as e:
+        return [{
+            'title': f"Unable to fetch news for {ticker}",
+            'publisher': 'Error',
+            'providerPublishTime': int(datetime.now().timestamp()),
+            'link': f"https://finance.yahoo.com/quote/{ticker}"
+        }]
 
 def create_candlestick_chart(ticker, hist):
     """Create interactive candlestick chart"""
@@ -603,13 +648,31 @@ with tab4:
                 news = get_stock_news(news_ticker)
                 
                 if news:
+                    st.success(f"Found {len(news)} news articles for {news_ticker}")
                     for article in news:
-                        with st.expander(f"📰 {article.get('title', 'News Article')}"):
-                            st.write(f"**Publisher:** {article.get('publisher', 'Unknown')}")
-                            st.write(f"**Published:** {datetime.fromtimestamp(article.get('providerPublishTime', 0)).strftime('%Y-%m-%d %H:%M')}")
-                            st.write(article.get('link', ''))
+                        title = article.get('title', 'No Title')
+                        publisher = article.get('publisher', 'Unknown')
+                        timestamp = article.get('providerPublishTime', 0)
+                        link = article.get('link', '')
+                        
+                        # Format the timestamp properly
+                        try:
+                            if timestamp > 0:
+                                pub_date = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M')
+                            else:
+                                pub_date = 'Recently'
+                        except:
+                            pub_date = 'Recently'
+                        
+                        with st.expander(f"📰 {title[:80]}..."):
+                            st.write(f"**Publisher:** {publisher}")
+                            st.write(f"**Published:** {pub_date}")
+                            if link:
+                                st.markdown(f"[Read Full Article]({link})")
+                            else:
+                                st.info("Link unavailable")
                 else:
-                    st.info("No recent news available")
+                    st.warning("No news available. Try searching on Yahoo Finance directly.")
     
     with col2:
         st.subheader("🔔 Create Custom Alert")
