@@ -894,52 +894,52 @@ with tab2:
             st.session_state.daily_analyses += 1
             
             with st.spinner(f"Analyzing {ticker_input}..."):
-            result = analyze_stock(ticker_input, st.session_state.portfolio_size, st.session_state.risk_percent)
-            
-            if not result["error"]:
-                st.session_state.analyzed_stocks.append(result)
+                result = analyze_stock(ticker_input, st.session_state.portfolio_size, st.session_state.risk_percent)
                 
-                st.markdown("---")
-                st.subheader(f"{result['ticker']} - {result['company']}")
-                
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Price", f"${result['price']}")
-                with col2:
-                    st.metric("Change", f"{result['daily_change']}%", delta=f"{result['daily_change']}%")
-                with col3:
-                    st.metric("Score", result['score'])
-                with col4:
-                    st.metric("Verdict", result['verdict'])
-                
-                st.plotly_chart(create_candlestick_chart(ticker_input, result['hist']), use_container_width=True)
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.markdown("### 📈 Technical")
-                    st.write(f"**RSI:** {result['rsi']}")
-                    st.write(f"**SMA50:** ${result['sma50']}")
-                    st.write(f"**SMA200:** ${result['sma200']}")
-                    st.write(f"**Volume:** {result['volume_ratio']}x")
-                
-                with col2:
-                    st.markdown("### 🎯 Targets")
-                    st.success(f"**TP1:** ${result['tp1']}")
-                    st.success(f"**TP2:** ${result['tp2']}")
-                    st.error(f"**SL1:** ${result['sl1']}")
-                    st.error(f"**SL2:** ${result['sl2']}")
-                
-                with col3:
-                    st.markdown("### 💼 Position")
-                    st.info(f"**Shares:** {result['shares']}")
-                    st.info(f"**Value:** ${result['position_value']}")
-                    st.info(f"**Risk:** ${result['risk_amount']}")
-                
-                with st.expander("🔍 Details"):
-                    for factor in result['factors']:
-                        st.write(factor)
-            else:
-                st.error(f"Error: {result.get('error_msg', 'Unable to analyze')}")
+                if not result["error"]:
+                    st.session_state.analyzed_stocks.append(result)
+                    
+                    st.markdown("---")
+                    st.subheader(f"{result['ticker']} - {result['company']}")
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Price", f"${result['price']}")
+                    with col2:
+                        st.metric("Change", f"{result['daily_change']}%", delta=f"{result['daily_change']}%")
+                    with col3:
+                        st.metric("Score", result['score'])
+                    with col4:
+                        st.metric("Verdict", result['verdict'])
+                    
+                    st.plotly_chart(create_candlestick_chart(ticker_input, result['hist']), use_container_width=True)
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.markdown("### 📈 Technical")
+                        st.write(f"**RSI:** {result['rsi']}")
+                        st.write(f"**SMA50:** ${result['sma50']}")
+                        st.write(f"**SMA200:** ${result['sma200']}")
+                        st.write(f"**Volume:** {result['volume_ratio']}x")
+                    
+                    with col2:
+                        st.markdown("### 🎯 Targets")
+                        st.success(f"**TP1:** ${result['tp1']}")
+                        st.success(f"**TP2:** ${result['tp2']}")
+                        st.error(f"**SL1:** ${result['sl1']}")
+                        st.error(f"**SL2:** ${result['sl2']}")
+                    
+                    with col3:
+                        st.markdown("### 💼 Position")
+                        st.info(f"**Shares:** {result['shares']}")
+                        st.info(f"**Value:** ${result['position_value']}")
+                        st.info(f"**Risk:** ${result['risk_amount']}")
+                    
+                    with st.expander("🔍 Details"):
+                        for factor in result['factors']:
+                            st.write(factor)
+                else:
+                    st.error(f"Error: {result.get('error_msg', 'Unable to analyze')}")
 
 with tab3:
     st.header("🎯 Watchlist")
