@@ -34,11 +34,80 @@ if 'auto_refresh' not in st.session_state:
     st.session_state.auto_refresh = False
 if 'refresh_interval' not in st.session_state:
     st.session_state.refresh_interval = 60
+if 'premium_tier' not in st.session_state:
+    st.session_state.premium_tier = "Free"  # Free, Pro, Premium
+if 'daily_analyses' not in st.session_state:
+    st.session_state.daily_analyses = 0
+if 'last_reset_date' not in st.session_state:
+    st.session_state.last_reset_date = datetime.now().date()
 
-# Title with live indicator
-col_title, col_live = st.columns([5, 1])
+# Reset daily counter
+if st.session_state.last_reset_date != datetime.now().date():
+    st.session_state.daily_analyses = 0
+    st.session_state.last_reset_date = datetime.now().date()
+
+# Tier limits
+TIER_LIMITS = {
+    "Free": {
+        "daily_analyses": 5,
+        "watchlist_size": 3,
+        "screener_stocks": 10,
+        "backtest_years": 1,
+        "auto_refresh": False,
+        "advanced_indicators": False,
+        "price_predictions": False,
+        "position_calculator": False,
+        "fundamentals": False
+    },
+    "Pro": {
+        "daily_analyses": 50,
+        "watchlist_size": 15,
+        "screener_stocks": 50,
+        "backtest_years": 3,
+        "auto_refresh": True,
+        "advanced_indicators": True,
+        "price_predictions": True,
+        "position_calculator": True,
+        "fundamentals": False
+    },
+    "Premium": {
+        "daily_analyses": 999,
+        "watchlist_size": 50,
+        "screener_stocks": 200,
+        "backtest_years": 5,
+        "auto_refresh": True,
+        "advanced_indicators": True,
+        "price_predictions": True,
+        "position_calculator": True,
+        "fundamentals": True
+    }
+}
+
+def check_feature_access(feature):
+    """Check if user has access to a feature"""
+    return TIER_LIMITS[st.session_state.premium_tier].get(feature, False)
+
+def show_upgrade_prompt(feature_name, required_tier):
+    """Show upgrade prompt for locked features"""
+    st.warning(f"🔒 **{feature_name}** is a {required_tier} feature")
+    
+    col1, col2, col3 = st.columns(3)
+    with col2:
+        if st.button(f"⭐ Upgrade to {required_tier}", type="primary", use_container_width=True):
+            st.session_state.show_pricing = True
+            st.rerun()
+
+# Title with live indicator and tier badge
+col_title, col_badge, col_live = st.columns([4, 1, 1])
 with col_title:
     st.title("🚀 AI Stock Analyzer Pro")
+with col_badge:
+    if st.session_state.premium_tier == "Premium":
+        st.markdown("### 💎 Premium")
+    elif st.session_state.premium_tier == "Pro":
+        st.markdown("### ⭐ Pro")
+    else:
+        st.markdown("### 🆓 Free")
 with col_live:
     if st.session_state.auto_refresh:
         st.success("🟢 LIVE")
@@ -46,6 +115,19 @@ with col_live:
         st.info("⚪ Paused")
 
 st.markdown("---")
+
+# Show usage stats for Free tier
+if st.session_state.premium_tier == "Free":
+    tier_limit = TIER_LIMITS["Free"]["daily_analyses"]
+    remaining = tier_limit - st.session_state.daily_analyses
+    
+    if remaining <= 2:
+        st.error(f"⚠️ Only {remaining} free analyses left today! Upgrade for unlimited access.")
+    elif remaining <= tier_limit // 2:
+        st.warning(f"📊 {remaining}/{tier_limit} free analyses remaining today")
+    else:
+        st.info(f"📊 {remaining}/{tier_limit} free analyses remaining today")
+
 
 # Sidebar
 st.sidebar.header("💼 Portfolio Settings")
@@ -69,11 +151,72 @@ st.sidebar.markdown(f"**Risk:** {st.session_state.risk_percent}%")
 st.sidebar.markdown(f"**Max Risk:** ${st.session_state.portfolio_size * (st.session_state.risk_percent / 100):.2f}")
 
 st.sidebar.markdown("---")
+
+# Pricing/Upgrade Section
+if st.sidebar.button("⭐ Upgrade Plan", type="primary", use_container_width=True):
+    st.session_state.show_pricing = True
+
+# Show pricing modal
+if st.session_state.get('show_pricing', False):
+    st.sidebar.markdown("---")
+    st.sidebar.header("💎 Upgrade Your Plan")
+    
+    # Tier selector for demo purposes
+    st.sidebar.markdown("### Select Plan (Demo)")
+    selected_tier = st.sidebar.radio(
+        "Choose tier:",
+        ["Free", "Pro", "Premium"],
+        index=["Free", "Pro", "Premium"].index(st.session_state.premium_tier),
+        key="tier_selector"
+    )
+    
+    if st.sidebar.button("Apply Plan", key="apply_tier"):
+        st.session_state.premium_tier = selected_tier
+        st.session_state.show_pricing = False
+        st.success(f"Upgraded to {selected_tier}!")
+        st.rerun()
+    
+    if st.sidebar.button("Close", key="close_pricing"):
+        st.session_state.show_pricing = False
+        st.rerun()
+    
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 🆓 Free Plan")
+    st.sidebar.markdown("- 5 analyses/day")
+    st.sidebar.markdown("- 3 watchlist stocks")
+    st.sidebar.markdown("- Basic features")
+    
+    st.sidebar.markdown("### ⭐ Pro - $29/mo")
+    st.sidebar.markdown("- 50 analyses/day")
+    st.sidebar.markdown("- 15 watchlist stocks")
+    st.sidebar.markdown("- Auto-refresh")
+    st.sidebar.markdown("- Advanced indicators")
+    st.sidebar.markdown("- AI predictions")
+    st.sidebar.markdown("- Position calculator")
+    
+    st.sidebar.markdown("### 💎 Premium - $99/mo")
+    st.sidebar.markdown("- Unlimited analyses")
+    st.sidebar.markdown("- 50 watchlist stocks")
+    st.sidebar.markdown("- All Pro features")
+    st.sidebar.markdown("- Fundamental analysis")
+    st.sidebar.markdown("- Priority support")
+    st.sidebar.markdown("- API access")
+
+st.sidebar.markdown("---")
 st.sidebar.header("⭐ Watchlist")
 
 new_ticker = st.sidebar.text_input("Add to Watchlist", "", key="add_watchlist_input").upper()
 if st.sidebar.button("➕ Add", key="add_watchlist_btn") and new_ticker:
-    if new_ticker not in st.session_state.favorites:
+    # Check watchlist limit
+    limit = TIER_LIMITS[st.session_state.premium_tier]["watchlist_size"]
+    
+    if len(st.session_state.favorites) >= limit:
+        st.sidebar.error(f"🔒 Watchlist limit reached ({limit} stocks)")
+        if st.session_state.premium_tier == "Free":
+            st.sidebar.info("Upgrade to Pro for 15 stocks!")
+        elif st.session_state.premium_tier == "Pro":
+            st.sidebar.info("Upgrade to Premium for 50 stocks!")
+    elif new_ticker not in st.session_state.favorites:
         st.session_state.favorites.append(new_ticker)
         st.sidebar.success(f"Added {new_ticker}!")
         st.rerun()
@@ -101,10 +244,17 @@ if st.session_state.alerts:
 
 st.sidebar.markdown("---")
 st.sidebar.header("🔄 Auto-Refresh")
-st.session_state.auto_refresh = st.sidebar.checkbox("Enable Live Updates", value=st.session_state.auto_refresh, key="auto_refresh_check")
-if st.session_state.auto_refresh:
-    st.session_state.refresh_interval = st.sidebar.slider("Refresh interval (seconds)", 30, 300, 60, key="refresh_interval_slider")
-    st.sidebar.info(f"Updates every {st.session_state.refresh_interval}s")
+
+if not check_feature_access("auto_refresh"):
+    st.sidebar.warning("🔒 Pro Feature")
+    if st.sidebar.button("Unlock Auto-Refresh", key="unlock_autorefresh"):
+        st.session_state.show_pricing = True
+        st.rerun()
+else:
+    st.session_state.auto_refresh = st.sidebar.checkbox("Enable Live Updates", value=st.session_state.auto_refresh, key="auto_refresh_check")
+    if st.session_state.auto_refresh:
+        st.session_state.refresh_interval = st.sidebar.slider("Refresh interval (seconds)", 30, 300, 60, key="refresh_interval_slider")
+        st.sidebar.info(f"Updates every {st.session_state.refresh_interval}s")
 
 def get_market_overview():
     """Get major market indices"""
@@ -736,7 +886,14 @@ with tab2:
                 st.rerun()
     
     if analyze_btn and ticker_input:
-        with st.spinner(f"Analyzing {ticker_input}..."):
+        # Check daily limit
+        if st.session_state.daily_analyses >= TIER_LIMITS[st.session_state.premium_tier]["daily_analyses"]:
+            st.error("🔒 Daily analysis limit reached!")
+            show_upgrade_prompt("Unlimited Analyses", "Pro")
+        else:
+            st.session_state.daily_analyses += 1
+            
+            with st.spinner(f"Analyzing {ticker_input}..."):
             result = analyze_stock(ticker_input, st.session_state.portfolio_size, st.session_state.risk_percent)
             
             if not result["error"]:
@@ -839,13 +996,25 @@ with tab4:
     with col2:
         min_score = st.slider("Min Score", 0, 10, 3, key="screener_min_score")
     
+    # Determine max stocks based on tier
+    max_stocks = TIER_LIMITS[st.session_state.premium_tier]["screener_stocks"]
+    
     if screener_option == "Popular":
         tickers = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA", "NVDA", "META", "NFLX", "AMD", "INTC"]
     elif screener_option == "S&P 100":
-        tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "BRK.B", "JPM", "JNJ"]
+        all_tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "BRK.B", "JPM", "JNJ",
+                      "V", "PG", "XOM", "MA", "HD", "CVX", "MRK", "PFE", "ABBV", "KO"]
+        tickers = all_tickers[:max_stocks]
+        
+        if len(all_tickers) > max_stocks:
+            st.info(f"🔒 Screening first {max_stocks} stocks. Upgrade for more!")
     else:
         custom = st.text_area("Tickers (comma-separated)", "AAPL,TSLA", key="screener_custom")
-        tickers = [t.strip().upper() for t in custom.split(",")]
+        all_custom = [t.strip().upper() for t in custom.split(",")]
+        tickers = all_custom[:max_stocks]
+        
+        if len(all_custom) > max_stocks:
+            st.warning(f"🔒 Limited to {max_stocks} stocks. Upgrade for {TIER_LIMITS['Premium']['screener_stocks']}!")
     
     if st.button("🚀 Run Screener", type="primary", key="run_screener_btn"):
         progress = st.progress(0)
@@ -881,9 +1050,12 @@ with tab4:
 with tab5:
     st.header("📈 Patterns & Predictions")
     
-    pattern_ticker = st.text_input("Ticker", "AAPL", key="pattern_ticker_input").upper()
-    
-    if st.button("🔍 Analyze", type="primary", key="pattern_analyze_btn"):
+    if not check_feature_access("advanced_indicators") or not check_feature_access("price_predictions"):
+        show_upgrade_prompt("Advanced Analysis", "Pro")
+    else:
+        pattern_ticker = st.text_input("Ticker", "AAPL", key="pattern_ticker_input").upper()
+        
+        if st.button("🔍 Analyze", type="primary", key="pattern_analyze_btn"):
         with st.spinner("Analyzing..."):
             result = analyze_stock(pattern_ticker, st.session_state.portfolio_size, st.session_state.risk_percent)
             
@@ -946,9 +1118,12 @@ with tab5:
 with tab6:
     st.header("📐 Position Calculator")
     
-    calc_ticker = st.text_input("Ticker", "AAPL", key="calc_ticker_input").upper()
-    
-    if st.button("💰 Calculate", type="primary", key="calc_position_btn"):
+    if not check_feature_access("position_calculator"):
+        show_upgrade_prompt("Position Calculator", "Pro")
+    else:
+        calc_ticker = st.text_input("Ticker", "AAPL", key="calc_ticker_input").upper()
+        
+        if st.button("💰 Calculate", type="primary", key="calc_position_btn"):
         with st.spinner("Calculating..."):
             result = analyze_stock(calc_ticker, st.session_state.portfolio_size, st.session_state.risk_percent)
             
@@ -982,9 +1157,12 @@ with tab6:
 with tab7:
     st.header("💰 Fundamentals")
     
-    fund_ticker = st.text_input("Ticker", "AAPL", key="fund_ticker_input").upper()
-    
-    if st.button("📊 Get Fundamentals", type="primary", key="fund_get_btn"):
+    if not check_feature_access("fundamentals"):
+        show_upgrade_prompt("Fundamental Analysis", "Premium")
+    else:
+        fund_ticker = st.text_input("Ticker", "AAPL", key="fund_ticker_input").upper()
+        
+        if st.button("📊 Get Fundamentals", type="primary", key="fund_get_btn"):
         with st.spinner("Loading..."):
             fundamentals = get_fundamental_data(fund_ticker)
             
@@ -1016,11 +1194,17 @@ with tab7:
 with tab8:
     st.header("🔙 Backtesting")
     
+    max_years = TIER_LIMITS[st.session_state.premium_tier]["backtest_years"]
+    
     col1, col2 = st.columns([2, 1])
     with col1:
         backtest_ticker = st.text_input("Ticker", "AAPL", key="backtest_ticker_input").upper()
     with col2:
-        years = st.selectbox("Years", [1, 2, 3, 5], index=1, key="backtest_years")
+        available_years = [y for y in [1, 2, 3, 5] if y <= max_years]
+        years = st.selectbox("Years", available_years, key="backtest_years")
+    
+    if max_years < 5:
+        st.info(f"🔒 Limited to {max_years} year(s). Upgrade for {TIER_LIMITS['Premium']['backtest_years']} years!")
     
     if st.button("🔬 Backtest", type="primary", key="backtest_run_btn"):
         with st.spinner("Backtesting..."):
@@ -1085,14 +1269,38 @@ with tab9:
 
 # Footer
 st.sidebar.markdown("---")
-st.sidebar.markdown("### 📊 Pro Features")
-st.sidebar.markdown("""
-✅ Live Market Data  
-✅ Pattern Recognition  
-✅ Price Predictions  
-✅ Advanced Indicators  
-✅ Fundamentals  
-✅ Position Calculator  
-✅ Backtesting  
-✅ Auto-Refresh
-""")
+st.sidebar.markdown(f"### {st.session_state.premium_tier} Plan")
+
+if st.session_state.premium_tier == "Free":
+    st.sidebar.markdown("""
+    ✅ 5 analyses/day  
+    ✅ 3 watchlist stocks  
+    ✅ 10 screener stocks  
+    ✅ 1 year backtest  
+    🔒 Auto-refresh (Pro)  
+    🔒 Advanced indicators (Pro)  
+    🔒 Predictions (Pro)  
+    🔒 Fundamentals (Premium)
+    """)
+elif st.session_state.premium_tier == "Pro":
+    st.sidebar.markdown("""
+    ✅ 50 analyses/day  
+    ✅ 15 watchlist stocks  
+    ✅ 50 screener stocks  
+    ✅ 3 year backtest  
+    ✅ Auto-refresh  
+    ✅ Advanced indicators  
+    ✅ Price predictions  
+    ✅ Position calculator  
+    🔒 Fundamentals (Premium)
+    """)
+else:
+    st.sidebar.markdown("""
+    ✅ Unlimited analyses  
+    ✅ 50 watchlist stocks  
+    ✅ 200 screener stocks  
+    ✅ 5 year backtest  
+    ✅ All features unlocked  
+    ✅ Priority support  
+    ✅ API access (coming soon)
+    """)
