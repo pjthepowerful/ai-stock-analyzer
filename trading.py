@@ -7,6 +7,21 @@ from datetime import datetime, timedelta
 import numpy as np
 import time
 
+# Database setup (optional - comment out if not using Supabase yet)
+try:
+    from supabase import create_client, Client
+    
+    # Get secrets from Streamlit
+    SUPABASE_URL = st.secrets["supabase"]["https://wkochyecnjnpabjxhbui.supabase.co"]
+    SUPABASE_KEY = st.secrets["supabase"]["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indrb2NoeWVjbmpucGFianhoYnVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkzNTQwMDksImV4cCI6MjA3NDkzMDAwOX0.NQtJ-LM3wQhxnwsBWXNX3jUQFc3vddhvkE6Q2oDW6Ww"]
+    
+    # Initialize Supabase client
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    DB_ENABLED = True
+except:
+    DB_ENABLED = False
+    st.warning("Database not configured. Running in local mode.")
+
 # Page configuration
 st.set_page_config(
     page_title="AI Stock Analyzer Pro", 
@@ -71,10 +86,75 @@ def show_paywall():
                 if st.button("✅ Complete Payment (Demo)", key="demo_payment", use_container_width=True):
                     st.session_state.is_subscribed = True
                     st.session_state.user_email = user_email
+                    
+                    # Save to database
+                    if DB_ENABLED:
+                        save_user_subscription(user_email)
+                    
                     st.success("Subscription activated!")
                     st.rerun()
             else:
                 st.error("Please enter your email")
+
+def save_user_subscription(email):
+    """Save user subscription to database"""
+    if not DB_ENABLED:
+        return
+    
+    try:
+        data = {
+            "email": email,
+            "subscribed": True,
+            "subscription_date": datetime.now().isoformat(),
+            "plan": "premium"
+        }
+        supabase.table("users").upsert(data).execute()
+    except Exception as e:
+        st.error(f"Database error: {e}")
+
+def save_watchlist(email, tickers):
+    """Save user's watchlist to database"""
+    if not DB_ENABLED:
+        return
+    
+    try:
+        data = {
+            "email": email,
+            "watchlist": tickers,
+            "updated_at": datetime.now().isoformat()
+        }
+        supabase.table("watchlists").upsert(data).execute()
+    except Exception as e:
+        st.error(f"Failed to save watchlist: {e}")
+
+def load_watchlist(email):
+    """Load user's watchlist from database"""
+    if not DB_ENABLED:
+        return []
+    
+    try:
+        response = supabase.table("watchlists").select("watchlist").eq("email", email).execute()
+        if response.data and len(response.data) > 0:
+            return response.data[0]["watchlist"]
+        return []
+    except:
+        return []
+
+def save_analysis(email, ticker, result):
+    """Save stock analysis to database"""
+    if not DB_ENABLED:
+        return
+    
+    try:
+        data = {
+            "email": email,
+            "ticker": ticker,
+            "analysis_data": result,
+            "created_at": datetime.now().isoformat()
+        }
+        supabase.table("analyses").insert(data).execute()
+    except Exception as e:
+        st.error(f"Failed to save analysis: {e}")
 
 # Title with subscription badge
 col_title, col_badge = st.columns([5, 1])
@@ -136,6 +216,11 @@ new_ticker = st.sidebar.text_input("Add to Watchlist", "", key="add_watchlist_in
 if st.sidebar.button("➕ Add", key="add_watchlist_btn") and new_ticker:
     if new_ticker not in st.session_state.favorites:
         st.session_state.favorites.append(new_ticker)
+        
+        # Save to database
+        if DB_ENABLED and st.session_state.user_email:
+            save_watchlist(st.session_state.user_email, st.session_state.favorites)
+        
         st.sidebar.success(f"Added {new_ticker}!")
         st.rerun()
     else:
