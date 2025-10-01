@@ -93,7 +93,9 @@ def show_upgrade_prompt(feature_name, required_tier):
     
     col1, col2, col3 = st.columns(3)
     with col2:
-        if st.button(f"⭐ Upgrade to {required_tier}", type="primary", use_container_width=True):
+        # Use feature_name in key to make it unique
+        button_key = f"upgrade_{feature_name.replace(' ', '_').lower()}"
+        if st.button(f"⭐ Upgrade to {required_tier}", type="primary", use_container_width=True, key=button_key):
             st.session_state.show_pricing = True
             st.rerun()
 
