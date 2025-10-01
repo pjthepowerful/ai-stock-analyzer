@@ -1285,7 +1285,7 @@ with tab9:
 # Footer
 st.sidebar.markdown("---")
 if st.session_state.is_subscribed:
-    st.sidebar.markdown("### ✅ Premium Features")
+    st.sidebar.markdown("### Premium Active")
     st.sidebar.markdown("""
     - Unlimited analyses
     - Unlimited watchlist
@@ -1299,7 +1299,7 @@ if st.session_state.is_subscribed:
     - 5-year backtesting
     """)
 else:
-    st.sidebar.markdown("### 🔒 Subscribe to Unlock")
+    st.sidebar.markdown("### Subscribe to Unlock")
     st.sidebar.markdown("""
     **$9.99/month gets you:**
     - All premium features
