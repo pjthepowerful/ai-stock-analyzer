@@ -1056,64 +1056,64 @@ with tab5:
         pattern_ticker = st.text_input("Ticker", "AAPL", key="pattern_ticker_input").upper()
         
         if st.button("🔍 Analyze", type="primary", key="pattern_analyze_btn"):
-        with st.spinner("Analyzing..."):
-            result = analyze_stock(pattern_ticker, st.session_state.portfolio_size, st.session_state.risk_percent)
-            
-            if not result['error']:
-                col1, col2 = st.columns(2)
+            with st.spinner("Analyzing..."):
+                result = analyze_stock(pattern_ticker, st.session_state.portfolio_size, st.session_state.risk_percent)
                 
-                with col1:
-                    st.subheader("📊 Patterns")
-                    for pattern in result['patterns']:
-                        if "Bullish" in pattern:
-                            st.success(pattern)
-                        elif "Bearish" in pattern:
-                            st.error(pattern)
+                if not result['error']:
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.subheader("📊 Patterns")
+                        for pattern in result['patterns']:
+                            if "Bullish" in pattern:
+                                st.success(pattern)
+                            elif "Bearish" in pattern:
+                                st.error(pattern)
+                            else:
+                                st.info(pattern)
+                    
+                    with col2:
+                        st.subheader("🔮 Prediction")
+                        if result['prediction']:
+                            pred = result['prediction']
+                            st.metric("5-Day Forecast", f"${pred['predicted_5day']:.2f}", f"{pred['change_percent']:.2f}%")
+                            st.write(f"**Current:** ${pred['current']:.2f}")
+                            st.write(f"**Trend:** {pred['trend']}")
                         else:
-                            st.info(pattern)
-                
-                with col2:
-                    st.subheader("🔮 Prediction")
-                    if result['prediction']:
-                        pred = result['prediction']
-                        st.metric("5-Day Forecast", f"${pred['predicted_5day']:.2f}", f"{pred['change_percent']:.2f}%")
-                        st.write(f"**Current:** ${pred['current']:.2f}")
-                        st.write(f"**Trend:** {pred['trend']}")
-                    else:
-                        st.info("Not enough data")
-                
-                st.markdown("### 📐 Advanced Indicators")
-                adv = result['advanced_indicators']
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.write("**Fibonacci**")
-                    st.write(f"23.6%: ${adv['fib_236']:.2f}")
-                    st.write(f"38.2%: ${adv['fib_382']:.2f}")
-                    st.write(f"50.0%: ${adv['fib_500']:.2f}")
-                    st.write(f"61.8%: ${adv['fib_618']:.2f}")
-                
-                with col2:
-                    st.write("**Stochastic**")
-                    st.write(f"K: {adv['stochastic_k']:.2f}")
-                    st.write(f"D: {adv['stochastic_d']:.2f}")
-                    if adv['stochastic_k'] > 80:
-                        st.error("Overbought")
-                    elif adv['stochastic_k'] < 20:
-                        st.success("Oversold")
-                    else:
-                        st.info("Neutral")
-                
-                with col3:
-                    st.write("**Trend**")
-                    st.write(f"ADX: {adv['adx']:.2f}")
-                    if adv['adx'] > 25:
-                        st.success("Strong")
-                    elif adv['adx'] > 20:
-                        st.info("Moderate")
-                    else:
-                        st.warning("Weak")
-                    st.write(f"**OBV:** {adv['obv_trend']}")
+                            st.info("Not enough data")
+                    
+                    st.markdown("### 📐 Advanced Indicators")
+                    adv = result['advanced_indicators']
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.write("**Fibonacci**")
+                        st.write(f"23.6%: ${adv['fib_236']:.2f}")
+                        st.write(f"38.2%: ${adv['fib_382']:.2f}")
+                        st.write(f"50.0%: ${adv['fib_500']:.2f}")
+                        st.write(f"61.8%: ${adv['fib_618']:.2f}")
+                    
+                    with col2:
+                        st.write("**Stochastic**")
+                        st.write(f"K: {adv['stochastic_k']:.2f}")
+                        st.write(f"D: {adv['stochastic_d']:.2f}")
+                        if adv['stochastic_k'] > 80:
+                            st.error("Overbought")
+                        elif adv['stochastic_k'] < 20:
+                            st.success("Oversold")
+                        else:
+                            st.info("Neutral")
+                    
+                    with col3:
+                        st.write("**Trend**")
+                        st.write(f"ADX: {adv['adx']:.2f}")
+                        if adv['adx'] > 25:
+                            st.success("Strong")
+                        elif adv['adx'] > 20:
+                            st.info("Moderate")
+                        else:
+                            st.warning("Weak")
+                        st.write(f"**OBV:** {adv['obv_trend']}")
 
 with tab6:
     st.header("📐 Position Calculator")
@@ -1124,35 +1124,35 @@ with tab6:
         calc_ticker = st.text_input("Ticker", "AAPL", key="calc_ticker_input").upper()
         
         if st.button("💰 Calculate", type="primary", key="calc_position_btn"):
-        with st.spinner("Calculating..."):
-            result = analyze_stock(calc_ticker, st.session_state.portfolio_size, st.session_state.risk_percent)
-            
-            if not result['error'] and st.session_state.portfolio_size > 0:
-                st.success(f"Position sizing for {calc_ticker} @ ${result['price']}")
+            with st.spinner("Calculating..."):
+                result = analyze_stock(calc_ticker, st.session_state.portfolio_size, st.session_state.risk_percent)
                 
-                positions = result['position_sizes']
-                
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    st.metric("Fixed %", f"{positions['fixed_percent']} shares")
-                    st.write("**Risk:** 2% portfolio")
-                    st.info(f"Value: ${positions['fixed_percent'] * result['price']:.2f}")
-                
-                with col2:
-                    st.metric("Volatility", f"{positions['volatility_based']} shares")
-                    st.write(f"**Vol:** {result['volatility']:.1f}%")
-                    st.info(f"Value: ${positions['volatility_based'] * result['price']:.2f}")
-                
-                with col3:
-                    st.metric("Kelly", f"{positions['kelly']} shares")
-                    st.write("**Win:** 55%")
-                    st.info(f"Value: ${positions['kelly'] * result['price']:.2f}")
-                
-                avg_shares = int(np.mean([positions['fixed_percent'], positions['volatility_based'], positions['kelly']]))
-                st.success(f"**Recommended:** {avg_shares} shares (${avg_shares * result['price']:.2f})")
-            elif st.session_state.portfolio_size == 0:
-                st.warning("Set portfolio size in sidebar!")
+                if not result['error'] and st.session_state.portfolio_size > 0:
+                    st.success(f"Position sizing for {calc_ticker} @ ${result['price']}")
+                    
+                    positions = result['position_sizes']
+                    
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.metric("Fixed %", f"{positions['fixed_percent']} shares")
+                        st.write("**Risk:** 2% portfolio")
+                        st.info(f"Value: ${positions['fixed_percent'] * result['price']:.2f}")
+                    
+                    with col2:
+                        st.metric("Volatility", f"{positions['volatility_based']} shares")
+                        st.write(f"**Vol:** {result['volatility']:.1f}%")
+                        st.info(f"Value: ${positions['volatility_based'] * result['price']:.2f}")
+                    
+                    with col3:
+                        st.metric("Kelly", f"{positions['kelly']} shares")
+                        st.write("**Win:** 55%")
+                        st.info(f"Value: ${positions['kelly'] * result['price']:.2f}")
+                    
+                    avg_shares = int(np.mean([positions['fixed_percent'], positions['volatility_based'], positions['kelly']]))
+                    st.success(f"**Recommended:** {avg_shares} shares (${avg_shares * result['price']:.2f})")
+                elif st.session_state.portfolio_size == 0:
+                    st.warning("Set portfolio size in sidebar!")
 
 with tab7:
     st.header("💰 Fundamentals")
@@ -1163,33 +1163,33 @@ with tab7:
         fund_ticker = st.text_input("Ticker", "AAPL", key="fund_ticker_input").upper()
         
         if st.button("📊 Get Fundamentals", type="primary", key="fund_get_btn"):
-        with st.spinner("Loading..."):
-            fundamentals = get_fundamental_data(fund_ticker)
-            
-            if fundamentals:
-                st.success(f"Fundamentals for {fund_ticker}")
+            with st.spinner("Loading..."):
+                fundamentals = get_fundamental_data(fund_ticker)
                 
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    st.markdown("### 💵 Valuation")
-                    st.write(f"**P/E:** {fundamentals['pe_ratio']}")
-                    st.write(f"**Forward P/E:** {fundamentals['forward_pe']}")
-                    st.write(f"**P/B:** {fundamentals['pb_ratio']}")
-                    st.write(f"**PEG:** {fundamentals['peg_ratio']}")
-                
-                with col2:
-                    st.markdown("### 📈 Growth")
-                    st.write(f"**Revenue:** {fundamentals['revenue_growth']}")
-                    st.write(f"**Earnings:** {fundamentals['earnings_growth']}")
-                    st.write(f"**Profit Margin:** {fundamentals['profit_margin']}")
-                    st.write(f"**ROE:** {fundamentals['roe']}")
-                
-                with col3:
-                    st.markdown("### 🏦 Health")
-                    st.write(f"**Debt/Equity:** {fundamentals['debt_to_equity']}")
-                    st.write(f"**Current Ratio:** {fundamentals['current_ratio']}")
-                    st.write(f"**Dividend:** {fundamentals['dividend_yield']}")
+                if fundamentals:
+                    st.success(f"Fundamentals for {fund_ticker}")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.markdown("### 💵 Valuation")
+                        st.write(f"**P/E:** {fundamentals['pe_ratio']}")
+                        st.write(f"**Forward P/E:** {fundamentals['forward_pe']}")
+                        st.write(f"**P/B:** {fundamentals['pb_ratio']}")
+                        st.write(f"**PEG:** {fundamentals['peg_ratio']}")
+                    
+                    with col2:
+                        st.markdown("### 📈 Growth")
+                        st.write(f"**Revenue:** {fundamentals['revenue_growth']}")
+                        st.write(f"**Earnings:** {fundamentals['earnings_growth']}")
+                        st.write(f"**Profit Margin:** {fundamentals['profit_margin']}")
+                        st.write(f"**ROE:** {fundamentals['roe']}")
+                    
+                    with col3:
+                        st.markdown("### 🏦 Health")
+                        st.write(f"**Debt/Equity:** {fundamentals['debt_to_equity']}")
+                        st.write(f"**Current Ratio:** {fundamentals['current_ratio']}")
+                        st.write(f"**Dividend:** {fundamentals['dividend_yield']}")
 
 with tab8:
     st.header("🔙 Backtesting")
