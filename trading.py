@@ -1297,9 +1297,9 @@ else:
 # Show paywall modal if triggered
 if st.session_state.get('show_paywall', False):
     show_paywall() watchlist stocks  
-    ✅ 200 screener stocks  
-    ✅ 5 year backtest  
-    ✅ All features unlocked  
-    ✅ Priority support  
-    ✅ API access (coming soon)
+    200 screener stocks  
+    5 year backtest  
+    All features unlocked  
+    Priority support  
+    API access (coming soon)
     """)
