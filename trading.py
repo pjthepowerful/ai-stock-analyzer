@@ -12,8 +12,8 @@ try:
     from supabase import create_client, Client
     
     # Get secrets from Streamlit
-    SUPABASE_URL = st.secrets["supabase"]["https://wkochyecnjnpabjxhbui.supabase.co"]
-    SUPABASE_KEY = st.secrets["supabase"]["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indrb2NoeWVjbmpucGFianhoYnVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkzNTQwMDksImV4cCI6MjA3NDkzMDAwOX0.NQtJ-LM3wQhxnwsBWXNX3jUQFc3vddhvkE6Q2oDW6Ww"]
+    SUPABASE_URL = st.secrets["supabase"]["url"]
+    SUPABASE_KEY = st.secrets["supabase"]["key"]
     
     # Initialize Supabase client
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -1256,7 +1256,7 @@ with tab8:
                 st.plotly_chart(fig, use_container_width=True)
 
 with tab9:
-    st.header("💎 Buy Signals")
+    st.header("Buy Signals")
     
     if st.session_state.analyzed_stocks:
         buy_signals = [s for s in st.session_state.analyzed_stocks if "BUY" in s.get("verdict", "") and not s.get("error", False)]
@@ -1272,11 +1272,11 @@ with tab9:
             st.dataframe(df, use_container_width=True, hide_index=True)
             
             csv = df.to_csv(index=False)
-            st.download_button("📥 Download", csv, f"signals_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv", key="download_signals_btn")
+            st.download_button("Download CSV", csv, f"signals_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv", key="download_signals_btn")
         else:
             st.info("No signals yet")
         
-        if st.button("🗑️ Clear", key="clear_signals_btn"):
+        if st.button("Clear", key="clear_signals_btn"):
             st.session_state.analyzed_stocks = []
             st.rerun()
     else:
@@ -1286,26 +1286,10 @@ with tab9:
 st.sidebar.markdown("---")
 if st.session_state.is_subscribed:
     st.sidebar.markdown("### Premium Active")
-    st.sidebar.markdown("""
-    - Unlimited analyses
-    - Unlimited watchlist
-    - 200+ stock screener
-    - Auto-refresh
-    - Advanced indicators
-    - AI predictions
-    - Pattern recognition
-    - Position calculator
-    - Fundamental analysis
-    - 5-year backtesting
-    """)
+    st.sidebar.markdown("All features unlocked")
 else:
     st.sidebar.markdown("### Subscribe to Unlock")
-    st.sidebar.markdown("""
-    **$9.99/month gets you:**
-    - All premium features
-    - Unlimited everything
-    - Priority support
-    """)
+    st.sidebar.markdown("$9.99/month for all features")
     if st.sidebar.button("Subscribe Now", key="footer_subscribe"):
         st.session_state.show_paywall = True
         st.rerun()
