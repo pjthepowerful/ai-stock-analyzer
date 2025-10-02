@@ -1210,7 +1210,7 @@ with tab7:
                         st.write(f"**Dividend:** {fundamentals['dividend_yield']}")
 
 with tab8:
-    st.header("🔙 Backtesting")
+    st.header("Backtesting")
     
     if not st.session_state.is_subscribed:
         show_paywall()
@@ -1221,39 +1221,41 @@ with tab8:
         with col2:
             years = st.selectbox("Years", [1, 2, 3, 5], index=1, key="backtest_years")
         
-        if st.button("🔬 Backtest", type="primary", key="backtest_run_btn"):
-        with st.spinner("Backtesting..."):
-            results = backtest_strategy(backtest_ticker, years)
-            
-            if results:
-                st.success("Complete!")
+        if st.button("Backtest", type="primary", key="backtest_run_btn"):
+            with st.spinner("Backtesting..."):
+                results = backtest_strategy(backtest_ticker, years)
                 
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Trades", results['total_trades'])
-                with col2:
-                    st.metric("Win Rate", f"{results['win_rate']:.1f}%")
-                with col3:
-                    st.metric("Avg Win", f"{results['avg_win']:.2f}%")
-                with col4:
-                    st.metric("Avg Loss", f"{results['avg_loss']:.2f}%")
-                
-                st.dataframe(results['trades'], use_container_width=True)
-                
-                results['trades']['cumulative'] = results['trades']['pnl_percent'].cumsum()
-                
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=results['trades']['exit_date'],
-                    y=results['trades']['cumulative'],
-                    mode='lines+markers',
-                    line=dict(color='green', width=2)
-                ))
-                fig.update_layout(
-                    title="Cumulative Returns",
-                    template='plotly_white'
-                )
-                st.plotly_chart(fig, use_container_width=True)
+                if results:
+                    st.success("Complete!")
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Trades", results['total_trades'])
+                    with col2:
+                        st.metric("Win Rate", f"{results['win_rate']:.1f}%")
+                    with col3:
+                        st.metric("Avg Win", f"{results['avg_win']:.2f}%")
+                    with col4:
+                        st.metric("Avg Loss", f"{results['avg_loss']:.2f}%")
+                    
+                    st.dataframe(results['trades'], use_container_width=True)
+                    
+                    results['trades']['cumulative'] = results['trades']['pnl_percent'].cumsum()
+                    
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(
+                        x=results['trades']['exit_date'],
+                        y=results['trades']['cumulative'],
+                        mode='lines+markers',
+                        line=dict(color='green', width=2)
+                    ))
+                    fig.update_layout(
+                        title="Cumulative Returns",
+                        template='plotly_white'
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.error("Not enough data")
 
 with tab9:
     st.header("Buy Signals")
@@ -1296,9 +1298,9 @@ else:
 
 if st.session_state.get('show_paywall', False):
     show_paywall() watchlist stocks  
-    200 screener stocks  
-    5 year backtest  
-    All features unlocked  
-    Priority support  
-    API access (coming soon)
-    ""
+    ✅ 200 screener stocks  
+    ✅ 5 year backtest  
+    ✅ All features unlocked  
+    ✅ Priority support  
+    ✅ API access (coming soon)
+    """)
