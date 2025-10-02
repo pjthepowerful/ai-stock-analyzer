@@ -1301,4 +1301,4 @@ if st.session_state.get('show_paywall', False):
     All features unlocked  
     Priority support  
     API access (coming soon)
-    "")
+    ""
