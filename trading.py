@@ -63,14 +63,16 @@ def show_paywall():
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        user_email = st.text_input("Email for subscription", key="subscription_email")
+        # Use unique key with timestamp to avoid duplicates
+        user_email = st.text_input("Email for subscription", key=f"subscription_email_{id(st.session_state)}")
         
-        if st.button("Subscribe Now - $9.99/month", type="primary", use_container_width=True, key="subscribe_btn"):
+        if st.button("Subscribe Now - $9.99/month", type="primary", use_container_width=True, key=f"subscribe_btn_{id(st.session_state)}"):
             if user_email:
                 st.info("Redirecting to payment (Demo mode)")
-                if st.button("Complete Payment (Demo)", key="demo_payment", use_container_width=True):
+                if st.button("Complete Payment (Demo)", key=f"demo_payment_{id(st.session_state)}", use_container_width=True):
                     st.session_state.is_subscribed = True
                     st.session_state.user_email = user_email
+                    st.session_state.show_paywall = False
                     
                     if DB_ENABLED:
                         save_user_subscription(user_email)
@@ -1271,9 +1273,11 @@ with tab9:
 # Footer
 st.sidebar.markdown("---")
 if st.session_state.is_subscribed:
-    st.sidebar.write("Premium Active - All features unlocked")
+    st.sidebar.markdown("### Premium Active")
+    st.sidebar.write("All features unlocked")
 else:
-    st.sidebar.write("Subscribe for $9.99/month")
+    st.sidebar.markdown("### Subscribe to Unlock")
+    st.sidebar.write("$9.99/month for all features")
     if st.sidebar.button("Subscribe Now", key="footer_subscribe"):
         st.session_state.show_paywall = True
         st.rerun()
