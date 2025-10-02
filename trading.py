@@ -733,7 +733,7 @@ def analyze_stock(ticker, portfolio_size, risk_percent):
             "tp1": tp1,
             "tp2": tp2,
             "sl1": sl1,
-            "sl2": sl2
+            "sl2": sl2,
             "shares": shares,
             "position_value": round(shares * close, 2),
             "risk_amount": round(max_risk, 2),
