@@ -56,23 +56,10 @@ if 'user_email' not in st.session_state:
 
 def show_paywall():
     """Show subscription paywall"""
-    st.warning("🔒 This is a premium feature")
+    st.warning("This is a premium feature")
     
     st.markdown("### Subscribe for $9.99/month")
-    st.markdown("""
-    **Get unlimited access to:**
-    - Unlimited stock analyses
-    - Unlimited watchlist stocks
-    - Large screener (200+ stocks)
-    - Auto-refresh & live data
-    - Advanced technical indicators
-    - AI price predictions
-    - Pattern recognition
-    - Position size calculator
-    - Fundamental analysis
-    - 5-year backtesting
-    - Priority support
-    """)
+    st.markdown("Get unlimited access to all features")
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
@@ -80,14 +67,11 @@ def show_paywall():
         
         if st.button("Subscribe Now - $9.99/month", type="primary", use_container_width=True, key="subscribe_btn"):
             if user_email:
-                st.info("🔄 Redirecting to payment... (Demo mode - click below to activate)")
-                # In production, integrate Stripe here
-                # For demo purposes:
-                if st.button("✅ Complete Payment (Demo)", key="demo_payment", use_container_width=True):
+                st.info("Redirecting to payment (Demo mode)")
+                if st.button("Complete Payment (Demo)", key="demo_payment", use_container_width=True):
                     st.session_state.is_subscribed = True
                     st.session_state.user_email = user_email
                     
-                    # Save to database
                     if DB_ENABLED:
                         save_user_subscription(user_email)
                     
