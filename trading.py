@@ -63,13 +63,13 @@ def show_paywall():
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        # Use unique key with timestamp to avoid duplicates
-        user_email = st.text_input("Email for subscription", key=f"subscription_email_{id(st.session_state)}")
+        # Use consistent unique key
+        user_email = st.text_input("Email for subscription", key="subscription_email_input")
         
-        if st.button("Subscribe Now - $9.99/month", type="primary", use_container_width=True, key=f"subscribe_btn_{id(st.session_state)}"):
+        if st.button("Subscribe Now - $9.99/month", type="primary", use_container_width=True, key="subscribe_btn_main"):
             if user_email:
                 st.info("Redirecting to payment (Demo mode)")
-                if st.button("Complete Payment (Demo)", key=f"demo_payment_{id(st.session_state)}", use_container_width=True):
+                if st.button("Complete Payment (Demo)", key="demo_payment_btn", use_container_width=True):
                     st.session_state.is_subscribed = True
                     st.session_state.user_email = user_email
                     st.session_state.show_paywall = False
@@ -733,7 +733,7 @@ def analyze_stock(ticker, portfolio_size, risk_percent):
             "tp1": tp1,
             "tp2": tp2,
             "sl1": sl1,
-            "sl2": sl2,
+            "sl2": sl2
             "shares": shares,
             "position_value": round(shares * close, 2),
             "risk_amount": round(max_risk, 2),
@@ -1019,37 +1019,37 @@ with tab4:
         else:
             custom = st.text_area("Tickers (comma-separated)", "AAPL,TSLA", key="screener_custom")
             tickers = [t.strip().upper() for t in custom.split(",")]
-    
-    if st.button("🚀 Run Screener", type="primary", key="run_screener_btn"):
-        progress = st.progress(0)
-        results = []
         
-        for i, ticker in enumerate(tickers):
-            result = analyze_stock(ticker, st.session_state.portfolio_size, st.session_state.risk_percent)
-            if not result['error'] and result['score'] >= min_score:
-                results.append(result)
-            progress.progress((i + 1) / len(tickers))
-        
-        progress.empty()
-        
-        if results:
-            results_sorted = sorted(results, key=lambda x: x['score'], reverse=True)
-            st.success(f"Found {len(results_sorted)} stocks!")
+        if st.button("🚀 Run Screener", type="primary", key="run_screener_btn"):
+            progress = st.progress(0)
+            results = []
             
-            st.markdown("### 🏆 Top Picks")
-            cols = st.columns(min(3, len(results_sorted[:3])))
-            for i, r in enumerate(results_sorted[:3]):
-                with cols[i]:
-                    st.success(f"### #{i+1} {r['ticker']}")
-                    st.metric("Score", r['score'])
-                    st.write(f"**Price:** ${r['price']}")
+            for i, ticker in enumerate(tickers):
+                result = analyze_stock(ticker, st.session_state.portfolio_size, st.session_state.risk_percent)
+                if not result['error'] and result['score'] >= min_score:
+                    results.append(result)
+                progress.progress((i + 1) / len(tickers))
             
-            df = pd.DataFrame(results_sorted)
-            df = df[["ticker", "price", "score", "verdict", "rsi"]]
-            df.columns = ["Ticker", "Price", "Score", "Verdict", "RSI"]
-            st.dataframe(df, use_container_width=True, hide_index=True)
-        else:
-            st.warning(f"No stocks with score >= {min_score}")
+            progress.empty()
+            
+            if results:
+                results_sorted = sorted(results, key=lambda x: x['score'], reverse=True)
+                st.success(f"Found {len(results_sorted)} stocks!")
+                
+                st.markdown("### 🏆 Top Picks")
+                cols = st.columns(min(3, len(results_sorted[:3])))
+                for i, r in enumerate(results_sorted[:3]):
+                    with cols[i]:
+                        st.success(f"### #{i+1} {r['ticker']}")
+                        st.metric("Score", r['score'])
+                        st.write(f"**Price:** ${r['price']}")
+                
+                df = pd.DataFrame(results_sorted)
+                df = df[["ticker", "price", "score", "verdict", "rsi"]]
+                df.columns = ["Ticker", "Price", "Score", "Verdict", "RSI"]
+                st.dataframe(df, use_container_width=True, hide_index=True)
+            else:
+                st.warning(f"No stocks with score >= {min_score}")
 
 with tab5:
     st.header("📈 Patterns & Predictions")
@@ -1282,5 +1282,7 @@ else:
         st.session_state.show_paywall = True
         st.rerun()
 
-if st.session_state.get('show_paywall', False):
-    show_paywall()
+# Only show paywall if explicitly requested via button clicks
+if st.session_state.get('show_paywall', False) and not st.session_state.is_subscribed:
+    # This section is already handled in tab0
+    pass
