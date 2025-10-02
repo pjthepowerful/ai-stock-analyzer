@@ -1271,20 +1271,12 @@ with tab9:
 # Footer
 st.sidebar.markdown("---")
 if st.session_state.is_subscribed:
-    st.sidebar.markdown("### Premium Active")
-    st.sidebar.write("All features unlocked")
+    st.sidebar.write("Premium Active - All features unlocked")
 else:
-    st.sidebar.markdown("### Subscribe to Unlock")
-    st.sidebar.write("$9.99/month for all features")
+    st.sidebar.write("Subscribe for $9.99/month")
     if st.sidebar.button("Subscribe Now", key="footer_subscribe"):
         st.session_state.show_paywall = True
         st.rerun()
 
 if st.session_state.get('show_paywall', False):
-    show_paywall() watchlist stocks  
-    200 screener stocks  
-    5 year backtest  
-    All features unlocked  
-    Priority support  
-    API access (coming soon)
-    ""
+    show_paywall()
