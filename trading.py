@@ -1282,7 +1282,6 @@ else:
         st.session_state.show_paywall = True
         st.rerun()
 
-# Only show paywall if explicitly requested via button clicks
-if st.session_state.get('show_paywall', False) and not st.session_state.is_subscribed:
-    # This section is already handled in tab0
-    pass
+# Show paywall when buttons trigger it
+if st.session_state.get('show_paywall', False):
+    st.session_state.show_paywall = False  # Reset flag immediately
