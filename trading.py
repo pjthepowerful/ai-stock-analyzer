@@ -791,9 +791,6 @@ with tab0:
         - ✅ Fundamental analysis
         - ✅ 5-year backtesting
         """)
-    else:
-        show_paywall()
-
 with tab1:
     st.header("🌍 Market Overview Dashboard")
     
@@ -1003,7 +1000,6 @@ with tab4:
     st.header("🔍 Screener")
     
     if not st.session_state.is_subscribed:
-        show_paywall()
     else:
         col1, col2 = st.columns([2, 1])
         with col1:
