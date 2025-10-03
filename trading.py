@@ -1000,7 +1000,7 @@ with tab4:
     st.header("🔍 Screener")
     
     if not st.session_state.is_subscribed:
-    else:
+    if:
         col1, col2 = st.columns([2, 1])
         with col1:
             screener_option = st.radio("Select:", ["Popular", "S&P 100", "Custom"], key="screener_option")
