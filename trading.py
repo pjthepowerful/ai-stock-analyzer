@@ -22,7 +22,7 @@ st.markdown("""
     
     /* Global Styles */
     .stApp {
-        background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+        background: #0e1117;
     }
     
     /* Main Header */
@@ -111,83 +111,51 @@ st.markdown("""
         font-size: 1rem;
     }
     
-    /* Glassmorphism Cards */
-    .glass-card {
-        background: rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(10px);
-        border-radius: 20px;
-        padding: 2rem;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-        margin: 1rem 0;
-    }
-    
     /* Buttons */
     .stButton > button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: #1f2937;
         color: white;
-        border: none;
-        border-radius: 12px;
+        border: 1px solid #374151;
+        border-radius: 8px;
         padding: 0.75rem 2rem;
         font-weight: 600;
         font-size: 1rem;
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
         transition: all 0.3s ease;
         width: 100%;
     }
     
     .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        background: #374151;
+        border-color: #4b5563;
     }
     
     /* Sidebar Styling */
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
-        border-right: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    section[data-testid="stSidebar"] .stRadio > label {
-        background: rgba(255, 255, 255, 0.05);
-        padding: 0.75rem 1rem;
-        border-radius: 10px;
-        margin: 0.25rem 0;
-        transition: all 0.3s ease;
-        border: 1px solid transparent;
-    }
-    
-    section[data-testid="stSidebar"] .stRadio > label:hover {
-        background: rgba(102, 126, 234, 0.2);
-        border: 1px solid rgba(102, 126, 234, 0.5);
-        transform: translateX(5px);
+        background: #1a1d24;
+        border-right: 1px solid #374151;
     }
     
     /* Input Fields */
     .stTextInput > div > div > input {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 10px;
+        background: #1f2937;
+        border: 1px solid #374151;
+        border-radius: 8px;
         color: white;
         font-size: 1rem;
         padding: 0.75rem;
     }
     
     .stSelectbox > div > div {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 10px;
+        background: #1f2937;
+        border: 1px solid #374151;
+        border-radius: 8px;
     }
     
     /* DataFrames */
     .stDataFrame {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 15px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    /* Progress bars */
-    .stProgress > div > div {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 10px;
+        border: 1px solid #374151;
     }
     
     /* Section Headers */
@@ -198,16 +166,14 @@ st.markdown("""
     }
     
     h2 {
-        border-bottom: 2px solid rgba(102, 126, 234, 0.3);
+        border-bottom: 2px solid #374151;
         padding-bottom: 0.5rem;
         margin-top: 2rem;
     }
     
     /* Info boxes */
     .stAlert {
-        background: rgba(102, 126, 234, 0.1);
-        border: 1px solid rgba(102, 126, 234, 0.3);
-        border-radius: 10px;
+        border-radius: 8px;
     }
     
     /* Tooltips and captions */
