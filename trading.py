@@ -27,26 +27,14 @@ st.markdown("""
     
     /* Main Header */
     .main-header {
-        font-size: 3.5rem;
+        font-size: 2rem;
         font-weight: 900;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        color: #ffffff;
         margin-bottom: 0.5rem;
         font-family: 'Inter', sans-serif;
-        letter-spacing: -2px;
-        text-align: center;
+        letter-spacing: -1px;
+        text-align: left;
         padding: 1rem 0;
-        animation: glow 2s ease-in-out infinite alternate;
-    }
-    
-    @keyframes glow {
-        from {
-            filter: drop-shadow(0 0 10px rgba(102, 126, 234, 0.5));
-        }
-        to {
-            filter: drop-shadow(0 0 20px rgba(118, 75, 162, 0.8));
-        }
     }
     
     /* Subtitle */
@@ -60,33 +48,50 @@ st.markdown("""
     
     /* Premium Badge Styles */
     .premium-badge {
-        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        background: #10b981;
         color: white;
-        padding: 0.5rem 1.5rem;
-        border-radius: 25px;
-        font-weight: bold;
-        font-size: 0.9rem;
-        box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4);
+        padding: 0.4rem 1rem;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.85rem;
         display: inline-block;
-        margin: 1rem 0;
-        animation: pulse 2s infinite;
-    }
-    
-    @keyframes pulse {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.05); }
+        margin: 0.5rem 0;
     }
     
     .free-badge {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: #6b7280;
         color: white;
-        padding: 0.5rem 1.5rem;
-        border-radius: 25px;
-        font-weight: bold;
-        font-size: 0.9rem;
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        padding: 0.4rem 1rem;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.85rem;
         display: inline-block;
-        margin: 1rem 0;
+        margin: 0.5rem 0;
+    }
+    
+    /* Navigation Items */
+    .nav-item {
+        padding: 0.75rem;
+        margin: 0.5rem 0;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+    }
+    
+    .nav-item:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .nav-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #ffffff;
+        margin-bottom: 0.25rem;
+    }
+    
+    .nav-desc {
+        font-size: 0.8rem;
+        color: #9ca3af;
+        line-height: 1.3;
     }
     
     /* Metric Cards */
@@ -442,47 +447,60 @@ def screen_stocks():
 
 # Sidebar
 with st.sidebar:
-    st.markdown('<div class="main-header" style="font-size: 2rem;">WealthStockify</div>', unsafe_allow_html=True)
+    st.markdown("# WealthStockify")
     
     if st.session_state.is_premium:
-        st.markdown('<div class="premium-badge">⭐ PREMIUM ACTIVE</div>', unsafe_allow_html=True)
-        st.success("🎉 All features unlocked!")
+        st.success("⭐ PREMIUM")
     else:
-        st.markdown('<div class="free-badge">🆓 FREE TIER</div>', unsafe_allow_html=True)
-        st.warning("⚡ Limited access")
-        if st.button("🚀 Upgrade to Premium - $9.99/mo"):
+        st.info("🆓 FREE TIER")
+        if st.button("Upgrade to Premium - $9.99/mo", use_container_width=True):
             st.session_state.is_premium = True
             st.rerun()
     
     st.markdown("---")
+    st.subheader("Navigation")
     
     page = st.radio(
-        "🧭 Navigation",
-        ["📊 Stock Analysis", "🔍 Stock Screener", "📈 Backtesting", "👁️ Watchlist", "💰 Position Sizer"]
+        "Choose a section:",
+        ["Stock Analysis", "Stock Screener", "Backtesting", "Watchlist", "Position Sizer"],
+        label_visibility="collapsed"
     )
+    
+    # Add descriptions below radio
+    descriptions = {
+        "Stock Analysis": "📊 Real-time stock data with AI scoring and technical analysis",
+        "Stock Screener": "🔍 Find top opportunities across 30+ popular stocks",
+        "Backtesting": "📈 Test trading strategies with historical data",
+        "Watchlist": "👁️ Track your favorite stocks with smart alerts",
+        "Position Sizer": "💰 Calculate optimal position sizes for risk management"
+    }
+    
+    if page in descriptions:
+        st.caption(descriptions[page])
     
     st.markdown("---")
     
-    st.subheader("✨ Premium Features")
-    features = [
-        "Unlimited Stock Analysis",
-        "AI Scoring System",
-        "Advanced Indicators",
-        "Stock Screener (30+ stocks)",
-        "AI Price Predictions",
-        "Position Calculator",
-        "5-Year Backtesting",
-        "Watchlist & Alerts",
-        "Export to CSV"
-    ]
-    for idx, feature in enumerate(features, 1):
-        icon = "✅" if st.session_state.is_premium else "🔒"
-        st.markdown(f"{icon} {feature}")
+    with st.expander("✨ Premium Features"):
+        features = [
+            "✅ Unlimited Stock Analysis",
+            "✅ AI Scoring System",
+            "✅ Advanced Technical Indicators",
+            "✅ Stock Screener (30+ stocks)",
+            "✅ AI Price Predictions",
+            "✅ Position Size Calculator",
+            "✅ 5-Year Backtesting",
+            "✅ Watchlist with Alerts",
+            "✅ Export to CSV"
+        ]
+        for feature in features:
+            if st.session_state.is_premium:
+                st.markdown(feature)
+            else:
+                st.markdown(feature.replace("✅", "🔒"))
 
 # Main Content
-if page == "📊 Stock Analysis":
-    st.markdown('<div class="main-header">WealthStockify</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitle">Professional-Grade Stock Analysis Platform</div>', unsafe_allow_html=True)
+if page == "Stock Analysis":
+    st.title("📊 Stock Analysis Dashboard")
     
     col1, col2, col3 = st.columns([3, 2, 1])
     
@@ -723,9 +741,8 @@ if page == "📊 Stock Analysis":
         except Exception as e:
             st.error(f"❌ Error fetching data: {str(e)}")
 
-elif page == "🔍 Stock Screener":
-    st.markdown('<div class="main-header">Stock Screener</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitle">Find the best investment opportunities</div>', unsafe_allow_html=True)
+elif page == "Stock Screener":
+    st.title("🔍 Stock Screener")
     
     if st.session_state.is_premium:
         st.info("🔍 Screening 30 popular stocks with AI analysis...")
@@ -776,9 +793,8 @@ elif page == "🔍 Stock Screener":
         }
         st.dataframe(pd.DataFrame(preview_data), hide_index=True)
 
-elif page == "📈 Backtesting":
-    st.markdown('<div class="main-header">Backtesting Engine</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitle">Test your strategies with historical data</div>', unsafe_allow_html=True)
+elif page == "Backtesting":
+    st.title("📈 Backtesting Engine")
     
     if st.session_state.is_premium:
         col1, col2, col3 = st.columns(3)
@@ -884,9 +900,8 @@ elif page == "📈 Backtesting":
         st.warning("🔒 Backtesting is a Premium Feature")
         st.info("✨ Upgrade to Premium to backtest strategies over 5+ years of data!")
 
-elif page == "👁️ Watchlist":
-    st.markdown('<div class="main-header">Watchlist</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitle">Track your favorite stocks with smart alerts</div>', unsafe_allow_html=True)
+elif page == "Watchlist":
+    st.title("👁️ Watchlist & Alerts")
     
     if st.session_state.is_premium:
         col1, col2 = st.columns([3, 1])
@@ -979,9 +994,8 @@ elif page == "👁️ Watchlist":
         st.warning("🔒 Watchlist is a Premium Feature")
         st.info("✨ Upgrade to Premium to track unlimited stocks with real-time alerts!")
 
-elif page == "💰 Position Sizer":
-    st.markdown('<div class="main-header">Position Calculator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitle">Calculate optimal position sizes with advanced risk management</div>', unsafe_allow_html=True)
+elif page == "Position Sizer":
+    st.title("💰 Position Size Calculator")
     
     if st.session_state.is_premium:
         col1, col2 = st.columns(2)
