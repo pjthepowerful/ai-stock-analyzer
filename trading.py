@@ -424,27 +424,6 @@ with st.sidebar:
             st.rerun()
     
     st.markdown("---")
-    st.subheader("Navigation")
-    
-    page = st.radio(
-        "Choose a section:",
-        ["Stock Analysis", "Stock Screener", "Backtesting", "Watchlist", "Position Sizer"],
-        label_visibility="collapsed"
-    )
-    
-    # Add descriptions below radio
-    descriptions = {
-        "Stock Analysis": "📊 Real-time stock data with AI scoring and technical analysis",
-        "Stock Screener": "🔍 Find top opportunities across 30+ popular stocks",
-        "Backtesting": "📈 Test trading strategies with historical data",
-        "Watchlist": "👁️ Track your favorite stocks with smart alerts",
-        "Position Sizer": "💰 Calculate optimal position sizes for risk management"
-    }
-    
-    if page in descriptions:
-        st.caption(descriptions[page])
-    
-    st.markdown("---")
     
     with st.expander("✨ Premium Features"):
         features = [
@@ -463,6 +442,38 @@ with st.sidebar:
                 st.markdown(feature)
             else:
                 st.markdown(feature.replace("✅", "🔒"))
+
+# Top Navigation Bar
+st.markdown("### 🧭 Navigation")
+nav_cols = st.columns(5)
+
+with nav_cols[0]:
+    if st.button("📊 Stock Analysis", use_container_width=True, type="primary" if 'page' not in st.session_state or st.session_state.get('page') == "Stock Analysis" else "secondary"):
+        st.session_state.page = "Stock Analysis"
+
+with nav_cols[1]:
+    if st.button("🔍 Stock Screener", use_container_width=True, type="primary" if st.session_state.get('page') == "Stock Screener" else "secondary"):
+        st.session_state.page = "Stock Screener"
+
+with nav_cols[2]:
+    if st.button("📈 Backtesting", use_container_width=True, type="primary" if st.session_state.get('page') == "Backtesting" else "secondary"):
+        st.session_state.page = "Backtesting"
+
+with nav_cols[3]:
+    if st.button("👁️ Watchlist", use_container_width=True, type="primary" if st.session_state.get('page') == "Watchlist" else "secondary"):
+        st.session_state.page = "Watchlist"
+
+with nav_cols[4]:
+    if st.button("💰 Position Sizer", use_container_width=True, type="primary" if st.session_state.get('page') == "Position Sizer" else "secondary"):
+        st.session_state.page = "Position Sizer"
+
+# Set default page
+if 'page' not in st.session_state:
+    st.session_state.page = "Stock Analysis"
+
+page = st.session_state.page
+
+st.markdown("---")
 
 # Main Content
 if page == "Stock Analysis":
