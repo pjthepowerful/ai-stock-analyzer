@@ -51,12 +51,7 @@ def sign_up(email: str, password: str):
             "password": password
         })
         if response.user:
-            # Create user profile
-            supabase.table('user_profiles').insert({
-                'id': response.user.id,
-                'email': email,
-                'is_premium': False
-            }).execute()
+            # Profile is auto-created by trigger now
             return True, "Account created successfully! Please check your email to verify."
         return False, "Failed to create account"
     except Exception as e:
