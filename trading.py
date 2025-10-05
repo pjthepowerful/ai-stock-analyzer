@@ -69,8 +69,10 @@ def sign_in(email: str, password: str):
             return True, response.user, profile.data[0] if profile.data else None
         return False, None, None
     except Exception as e:
-        return False, None, str(e)
-
+        error_msg = str(e)
+        if "Email not confirmed" in error_msg:
+            return False, None, "Please verify your email before signing in"
+        return False, None, error_msg
 def sign_out():
     supabase.auth.sign_out()
     st.session_state.clear()
