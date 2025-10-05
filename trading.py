@@ -208,9 +208,13 @@ class DatabaseService:
     @staticmethod
     def upgrade_to_premium(user_id: str) -> bool:
         try:
+            # Get user email from session
+            user_email = st.session_state.user.email
             end_date = (datetime.now() + timedelta(days=30)).isoformat()
+            
             supabase.table('user_profiles').upsert({
                 'id': user_id,
+                'email': user_email,
                 'is_premium': True,
                 'subscription_end_date': end_date
             }).execute()
