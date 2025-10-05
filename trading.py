@@ -662,7 +662,7 @@ st.markdown(
 # Auto-refresh logic
 if st.session_state.is_premium and st.session_state.auto_refresh and page == "📊 Stock Analysis":
     time.sleep(60)
-    st.rerun()🚀 Upgrade to Premium - $9.99/mo"):
+    st.rerun() Upgrade to Premium - $9.99/mo"):
             st.session_state.is_premium = True
             st.rerun()
     
