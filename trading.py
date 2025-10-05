@@ -51,7 +51,12 @@ def sign_up(email: str, password: str):
             "password": password
         })
         if response.user:
-            # Profile is auto-created by trigger now
+            # Create user profile
+            supabase.table('user_profiles').insert({
+                'id': response.user.id,
+                'email': email,
+                'is_premium': False
+            }).execute()
             return True, "Account created successfully! Please check your email to verify."
         return False, "Failed to create account"
     except Exception as e:
@@ -69,10 +74,8 @@ def sign_in(email: str, password: str):
             return True, response.user, profile.data[0] if profile.data else None
         return False, None, None
     except Exception as e:
-        error_msg = str(e)
-        if "Email not confirmed" in error_msg:
-            return False, None, "Please verify your email before signing in"
-        return False, None, error_msg
+        return False, None, str(e)
+
 def sign_out():
     supabase.auth.sign_out()
     st.session_state.clear()
@@ -108,6 +111,10 @@ if 'user' not in st.session_state:
     st.session_state.user = None
 if 'user_profile' not in st.session_state:
     st.session_state.user_profile = None
+if 'show_welcome' not in st.session_state:
+    st.session_state.show_welcome = False
+if 'onboarding_complete' not in st.session_state:
+    st.session_state.onboarding_complete = False
 
 # Helper Functions (same as before)
 def calculate_technical_indicators(df):
