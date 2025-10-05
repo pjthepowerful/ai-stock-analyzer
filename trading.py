@@ -111,10 +111,6 @@ if 'user' not in st.session_state:
     st.session_state.user = None
 if 'user_profile' not in st.session_state:
     st.session_state.user_profile = None
-if 'show_welcome' not in st.session_state:
-    st.session_state.show_welcome = False
-if 'onboarding_complete' not in st.session_state:
-    st.session_state.onboarding_complete = False
 
 # Helper Functions (same as before)
 def calculate_technical_indicators(df):
@@ -234,6 +230,33 @@ if not st.session_state.authenticated:
     st.stop()
 
 # Main App (for authenticated users)
+# Sidebar
+        
+        if st.button("🚀 Upgrade Now", use_container_width=True, type="primary"):
+            st.info("Payment integration coming soon! Contact support to upgrade.")
+        
+        st.markdown("---")
+        
+        st.markdown("### 📚 Quick Tips")
+        st.write("""
+        1. Start by analyzing a stock like AAPL or TSLA
+        2. Try the stock screener to discover new opportunities
+        3. Add stocks to your watchlist for easy tracking
+        4. Upgrade to Premium for full AI features
+        """)
+    
+    st.markdown("---")
+    
+    col1, col2, col3 = st.columns([1, 1, 1])
+    
+    with col2:
+        if st.button("✨ Start Using WealthStockify", use_container_width=True, type="primary"):
+            st.session_state.onboarding_complete = True
+            st.session_state.show_welcome = False
+            st.rerun()
+    
+    st.stop()
+
 # Sidebar
 with st.sidebar:
     st.markdown(f"# WealthStockify")
