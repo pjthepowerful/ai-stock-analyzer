@@ -212,8 +212,7 @@ class DatabaseService:
             supabase.table('user_profiles').upsert({
                 'id': user_id,
                 'is_premium': True,
-                'subscription_end_date': end_date,
-                'updated_at': datetime.now().isoformat()
+                'subscription_end_date': end_date
             }).execute()
             return True
         except Exception as e:
