@@ -231,33 +231,6 @@ if not st.session_state.authenticated:
 
 # Main App (for authenticated users)
 # Sidebar
-        
-        if st.button("🚀 Upgrade Now", use_container_width=True, type="primary"):
-            st.info("Payment integration coming soon! Contact support to upgrade.")
-        
-        st.markdown("---")
-        
-        st.markdown("### 📚 Quick Tips")
-        st.write("""
-        1. Start by analyzing a stock like AAPL or TSLA
-        2. Try the stock screener to discover new opportunities
-        3. Add stocks to your watchlist for easy tracking
-        4. Upgrade to Premium for full AI features
-        """)
-    
-    st.markdown("---")
-    
-    col1, col2, col3 = st.columns([1, 1, 1])
-    
-    with col2:
-        if st.button("✨ Start Using WealthStockify", use_container_width=True, type="primary"):
-            st.session_state.onboarding_complete = True
-            st.session_state.show_welcome = False
-            st.rerun()
-    
-    st.stop()
-
-# Sidebar
 with st.sidebar:
     st.markdown(f"# WealthStockify")
     st.markdown(f"**{st.session_state.user.email}**")
