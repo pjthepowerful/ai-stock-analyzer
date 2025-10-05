@@ -677,4 +677,439 @@ if page == "📊 Stock Analysis":
                             
                             st.metric("30-Day Forecast", f"${pred_30:.2f}", f"{pred_change_30:+.2f}%")
                             st.metric("90-Day Forecast", f"${pred_90:.2f}", f"{pred_change_90:+.2f}%")
-                            st.
+                            st.caption("⚠️ AI predictions for educational purposes only")
+                        else:
+                            st.warning("Insufficient data for predictions")
+                    
+                    # Technical Indicators Summary
+                    st.subheader("📉 Technical Indicators Summary")
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        rsi = hist['RSI'].iloc[-1]
+                        rsi_signal = "Oversold 🟢" if rsi < 30 else "Overbought 🔴" if rsi > 70 else "Neutral 🟡"
+                        st.metric("RSI (14)", f"{rsi:.2f}", rsi_signal)
+                    
+                    with col2:
+                        macd = hist['MACD'].iloc[-1]
+                        signal = hist['Signal'].iloc[-1]
+                        macd_signal = "Bullish 🟢" if macd > signal else "Bearish 🔴"
+                        st.metric("MACD Signal", macd_signal)
+                    
+                    with col3:
+                        sma50 = hist['SMA_50'].iloc[-1]
+                        sma_signal = "Above 🟢" if current_price > sma50 else "Below 🔴"
+                        st.metric("vs SMA 50", sma_signal)
+                    
+                    with col4:
+                        atr = hist['ATR'].iloc[-1]
+                        volatility = (atr / current_price) * 100
+                        st.metric("Volatility", f"{volatility:.2f}%")
+                    
+                    # Export
+                    st.markdown("---")
+                    if st.button("📥 Export Full Analysis to CSV"):
+                        csv = hist.to_csv()
+                        st.download_button(
+                            label="⬇️ Download CSV File",
+                            data=csv,
+                            file_name=f"{ticker}_analysis_{datetime.now().strftime('%Y%m%d')}.csv",
+                            mime="text/csv"
+                        )
+                else:
+                    st.info("🔒 Upgrade to Premium to unlock fundamental analysis, AI predictions, and advanced indicators!")
+                
+        except Exception as e:
+            st.error(f"❌ Error fetching data: {str(e)}")
+
+elif page == "🔍 Stock Screener":
+    st.markdown('<div class="main-header">Stock Screener</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Find the best investment opportunities</div>', unsafe_allow_html=True)
+    
+    if st.session_state.is_premium:
+        st.info("🔍 Screening 30 popular stocks with AI analysis...")
+        
+        if st.button("🚀 Run Advanced Screener", type="primary"):
+            with st.spinner("Analyzing markets..."):
+                results_df = screen_stocks()
+            
+            if not results_df.empty:
+                st.success(f"✅ Found {len(results_df)} stocks")
+                
+                # Filters
+                col1, col2 = st.columns(2)
+                with col1:
+                    min_score = st.slider("🎯 Minimum AI Score", 0, 100, 50)
+                with col2:
+                    sort_by = st.selectbox("📊 Sort By", ["AI_Score", "Change_6M"])
+                
+                filtered_df = results_df[results_df['AI_Score'] >= min_score].sort_values(sort_by, ascending=False)
+                
+                st.dataframe(
+                    filtered_df.style.background_gradient(subset=['AI_Score'], cmap='RdYlGn', vmin=0, vmax=100),
+                    use_container_width=True,
+                    hide_index=True,
+                    height=600
+                )
+                
+                # Export
+                st.markdown("---")
+                if st.button("📥 Export Screener Results"):
+                    csv = filtered_df.to_csv(index=False)
+                    st.download_button(
+                        label="⬇️ Download CSV",
+                        data=csv,
+                        file_name=f"stock_screener_{datetime.now().strftime('%Y%m%d')}.csv",
+                        mime="text/csv"
+                    )
+    else:
+        st.warning("🔒 Stock Screener is a Premium Feature")
+        st.info("✨ Upgrade to Premium to screen 30+ stocks with advanced AI filters!")
+        
+        # Preview
+        st.subheader("Preview")
+        preview_data = {
+            'Ticker': ['AAPL', 'MSFT', 'GOOGL'],
+            'Price': ['$258.02', '$423.15', '$142.58'],
+            'AI_Score': ['🔒 Premium', '🔒 Premium', '🔒 Premium']
+        }
+        st.dataframe(pd.DataFrame(preview_data), hide_index=True)
+
+elif page == "📈 Backtesting":
+    st.markdown('<div class="main-header">Backtesting Engine</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Test your strategies with historical data</div>', unsafe_allow_html=True)
+    
+    if st.session_state.is_premium:
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            bt_ticker = st.text_input("📊 Ticker Symbol", value="AAPL").upper()
+        
+        with col2:
+            start_date = st.date_input("📅 Start Date", value=datetime.now() - timedelta(days=365*2))
+        
+        with col3:
+            end_date = st.date_input("📅 End Date", value=datetime.now())
+        
+        initial_capital = st.number_input("💰 Initial Capital ($)", value=10000, min_value=1000, step=1000)
+        
+        if st.button("🚀 Run Backtest", type="primary"):
+            with st.spinner("⏳ Running backtest simulation..."):
+                results = run_backtest(bt_ticker, start_date, end_date, initial_capital)
+            
+            if results:
+                st.success("✅ Backtest completed successfully!")
+                
+                # Performance Metrics
+                st.subheader("📊 Performance Metrics")
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("💹 Strategy Return", f"{results['total_return']:.2f}%")
+                with col2:
+                    st.metric("📈 Buy & Hold", f"{results['buy_hold_return']:.2f}%")
+                with col3:
+                    st.metric("🔄 Total Trades", results['num_trades'])
+                with col4:
+                    st.metric("⚡ Sharpe Ratio", f"{results['sharpe_ratio']:.2f}")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("📉 Max Drawdown", f"{results['max_drawdown']:.2f}%")
+                with col2:
+                    alpha = results['total_return'] - results['buy_hold_return']
+                    st.metric("🎯 Alpha", f"{alpha:.2f}%")
+                
+                # Equity Curve
+                st.subheader("📈 Equity Curve")
+                
+                fig = go.Figure()
+                
+                fig.add_trace(go.Scatter(
+                    x=results['df'].index,
+                    y=results['df']['Cumulative_Strategy_Returns'] * initial_capital,
+                    name='Strategy',
+                    line=dict(color='#00D9FF', width=3),
+                    fill='tozeroy',
+                    fillcolor='rgba(0, 217, 255, 0.1)'
+                ))
+                
+                fig.add_trace(go.Scatter(
+                    x=results['df'].index,
+                    y=results['df']['Cumulative_Returns'] * initial_capital,
+                    name='Buy & Hold',
+                    line=dict(color='#FF6B6B', width=2, dash='dash')
+                ))
+                
+                fig.update_layout(
+                    title=f"{bt_ticker} - Strategy Performance",
+                    xaxis_title="Date",
+                    yaxis_title="Portfolio Value ($)",
+                    height=500,
+                    template='plotly_dark',
+                    hovermode='x unified',
+                    showlegend=True
+                )
+                
+                fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.2)')
+                fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.2)')
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Trade Signals
+                st.subheader("📊 Trade History")
+                
+                trades_df = results['df'][results['df']['Signal'] != 0][['Close', 'Signal', 'RSI', 'MACD']].copy()
+                if not trades_df.empty:
+                    trades_df['Action'] = trades_df['Signal'].apply(lambda x: '🟢 BUY' if x == 1 else '🔴 SELL')
+                    trades_df['Price'] = trades_df['Close'].apply(lambda x: f"${x:.2f}")
+                    trades_df = trades_df[['Action', 'Price', 'RSI', 'MACD']]
+                    
+                    st.dataframe(trades_df, use_container_width=True, height=400)
+                
+                # Export
+                st.markdown("---")
+                if st.button("📥 Export Backtest Results"):
+                    csv = results['df'].to_csv()
+                    st.download_button(
+                        label="⬇️ Download Full Results",
+                        data=csv,
+                        file_name=f"{bt_ticker}_backtest_{datetime.now().strftime('%Y%m%d')}.csv",
+                        mime="text/csv"
+                    )
+            else:
+                st.error("❌ Backtest failed. Please check the ticker and date range.")
+    else:
+        st.warning("🔒 Backtesting is a Premium Feature")
+        st.info("✨ Upgrade to Premium to backtest strategies over 5+ years of data!")
+
+elif page == "👁️ Watchlist":
+    st.markdown('<div class="main-header">Watchlist</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Track your favorite stocks with smart alerts</div>', unsafe_allow_html=True)
+    
+    if st.session_state.is_premium:
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            new_ticker = st.text_input("➕ Add Stock to Watchlist", placeholder="e.g., AAPL, TSLA").upper()
+        
+        with col2:
+            st.write("")
+            st.write("")
+            if st.button("Add to List", type="primary"):
+                if new_ticker and new_ticker not in st.session_state.watchlist:
+                    st.session_state.watchlist.append(new_ticker)
+                    st.success(f"✅ Added {new_ticker}")
+                    st.rerun()
+                elif new_ticker in st.session_state.watchlist:
+                    st.warning("Already in watchlist!")
+        
+        if st.session_state.watchlist:
+            st.subheader("📋 Your Stocks")
+            
+            watchlist_data = []
+            
+            for ticker in st.session_state.watchlist:
+                try:
+                    stock = yf.Ticker(ticker)
+                    hist = stock.history(period='1mo')
+                    info = stock.info
+                    
+                    if not hist.empty:
+                        hist = calculate_technical_indicators(hist)
+                        current_price = hist['Close'].iloc[-1]
+                        prev_close = hist['Close'].iloc[-2] if len(hist) > 1 else current_price
+                        change = ((current_price - prev_close) / prev_close) * 100
+                        
+                        ai_score = calculate_ai_score(hist, info)
+                        rsi = hist['RSI'].iloc[-1] if 'RSI' in hist.columns else 0
+                        
+                        alert = ""
+                        if rsi < 30:
+                            alert = "🟢 Oversold"
+                        elif rsi > 70:
+                            alert = "🔴 Overbought"
+                        elif ai_score >= 75:
+                            alert = "⭐ High Score"
+                        
+                        watchlist_data.append({
+                            'Ticker': ticker,
+                            'Price': f"${current_price:.2f}",
+                            'Change': f"{change:+.2f}%",
+                            'AI Score': f"{ai_score:.0f}",
+                            'RSI': f"{rsi:.1f}",
+                            'Alert': alert
+                        })
+                except:
+                    continue
+            
+            if watchlist_data:
+                df = pd.DataFrame(watchlist_data)
+                st.dataframe(
+                    df.style.background_gradient(subset=['AI Score'], cmap='RdYlGn', vmin=0, vmax=100),
+                    use_container_width=True,
+                    hide_index=True,
+                    height=400
+                )
+                
+                # Remove
+                st.subheader("🗑️ Manage")
+                ticker_to_remove = st.selectbox("Remove ticker:", st.session_state.watchlist)
+                if st.button("Remove Selected"):
+                    st.session_state.watchlist.remove(ticker_to_remove)
+                    st.success(f"Removed {ticker_to_remove}")
+                    st.rerun()
+                
+                # Export
+                st.markdown("---")
+                if st.button("📥 Export Watchlist"):
+                    csv = df.to_csv(index=False)
+                    st.download_button(
+                        label="⬇️ Download CSV",
+                        data=csv,
+                        file_name=f"watchlist_{datetime.now().strftime('%Y%m%d')}.csv",
+                        mime="text/csv"
+                    )
+            else:
+                st.info("No valid data for watchlist items")
+        else:
+            st.info("📝 Your watchlist is empty. Add some stocks to get started!")
+    else:
+        st.warning("🔒 Watchlist is a Premium Feature")
+        st.info("✨ Upgrade to Premium to track unlimited stocks with real-time alerts!")
+
+elif page == "💰 Position Sizer":
+    st.markdown('<div class="main-header">Position Calculator</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Calculate optimal position sizes with advanced risk management</div>', unsafe_allow_html=True)
+    
+    if st.session_state.is_premium:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            ps_ticker = st.text_input("📊 Stock Ticker", value="AAPL").upper()
+            account_size = st.number_input("💰 Account Size ($)", value=100000, min_value=1000, step=1000)
+            risk_percent = st.slider("⚠️ Risk Per Trade (%)", 0.5, 5.0, 2.0, 0.5)
+        
+        with col2:
+            method = st.selectbox(
+                "🎯 Calculation Method",
+                ["Fixed Risk", "Kelly Criterion", "Volatility-Based"]
+            )
+        
+        # Kelly parameters
+        if method == "Kelly Criterion":
+            col1, col2 = st.columns(2)
+            with col1:
+                win_rate = st.slider("📊 Win Rate (%)", 30, 80, 55) / 100
+                avg_win = st.number_input("📈 Avg Win Multiple", value=1.5, min_value=1.0, step=0.1)
+            with col2:
+                avg_loss = st.number_input("📉 Avg Loss Multiple", value=1.0, min_value=0.5, step=0.1)
+        
+        if st.button("🧮 Calculate Position Size", type="primary"):
+            try:
+                with st.spinner("Calculating..."):
+                    stock = yf.Ticker(ps_ticker)
+                    hist = stock.history(period='3mo')
+                
+                if hist.empty:
+                    st.error("❌ Invalid ticker symbol")
+                else:
+                    current_price = hist['Close'].iloc[-1]
+                    hist = calculate_technical_indicators(hist)
+                    
+                    returns = hist['Close'].pct_change()
+                    volatility = returns.std()
+                    atr = hist['ATR'].iloc[-1] if 'ATR' in hist.columns else 0
+                    
+                    # Calculate
+                    if method == "Kelly Criterion":
+                        shares = calculate_position_size(
+                            account_size, current_price, 'kelly', risk_percent,
+                            volatility, win_rate, avg_win, avg_loss
+                        )
+                    elif method == "Volatility-Based":
+                        shares = calculate_position_size(
+                            account_size, current_price, 'volatility', risk_percent, volatility
+                        )
+                    else:
+                        shares = calculate_position_size(
+                            account_size, current_price, 'fixed', risk_percent
+                        )
+                    
+                    position_value = shares * current_price
+                    position_pct = (position_value / account_size) * 100
+                    
+                    st.success("✅ Position calculated!")
+                    
+                    # Results
+                    st.subheader("📊 Position Details")
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        st.metric("💵 Price", f"${current_price:.2f}")
+                    with col2:
+                        st.metric("📦 Shares", f"{shares:,}")
+                    with col3:
+                        st.metric("💰 Position Value", f"${position_value:,.2f}")
+                    with col4:
+                        st.metric("📊 % of Account", f"{position_pct:.2f}%")
+                    
+                    # Risk Analysis
+                    st.subheader("⚠️ Risk Analysis")
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        risk_amount = account_size * (risk_percent / 100)
+                        st.metric("💸 Risk Amount", f"${risk_amount:,.2f}")
+                        st.metric("📊 Daily Volatility", f"{volatility*100:.2f}%")
+                    
+                    with col2:
+                        if atr > 0:
+                            st.metric("📉 ATR (14)", f"${atr:.2f}")
+                            stop_loss = current_price - (2 * atr)
+                            st.metric("🛑 Stop Loss (2x ATR)", f"${stop_loss:.2f}")
+                    
+                    # Summary
+                    st.subheader("📝 Trade Summary")
+                    
+                    summary = f"""
+                    **Position Setup for {ps_ticker}**
+                    
+                    - Entry Price: ${current_price:.2f}
+                    - Shares to Buy: {shares:,}
+                    - Total Investment: ${position_value:,.2f}
+                    - Position Size: {position_pct:.2f}% of account
+                    - Risk per Trade: ${risk_amount:,.2f} ({risk_percent}%)
+                    - Method: {method}
+                    
+                    **Risk Management**
+                    - Suggested Stop Loss: ${stop_loss:.2f} ({((stop_loss-current_price)/current_price*100):.2f}%)
+                    - Risk per Share: ${abs(current_price - stop_loss):.2f}
+                    """
+                    
+                    st.markdown(summary)
+                    st.caption("⚠️ For educational purposes only. Not financial advice.")
+                    
+            except Exception as e:
+                st.error(f"❌ Error: {str(e)}")
+    else:
+        st.warning("🔒 Position Calculator is a Premium Feature")
+        st.info("✨ Upgrade to Premium for Kelly Criterion, volatility-based sizing, and more!")
+
+# Footer
+st.markdown("---")
+st.markdown(
+    """
+    <div style='text-align: center; color: #666; padding: 2rem;'>
+        <p style='font-size: 1.1rem; font-weight: 600;'>WealthStockify © 2025</p>
+        <p style='font-size: 0.9rem; margin-top: 0.5rem;'>Professional Stock Analysis Platform</p>
+        <p style='font-size: 0.85rem; color: #888; margin-top: 1rem;'>
+            ⚠️ <strong>Disclaimer:</strong> This platform is for educational purposes only.<br>
+            Not financial advice. Always conduct your own research before investing.
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
