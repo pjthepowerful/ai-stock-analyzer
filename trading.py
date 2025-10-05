@@ -217,16 +217,14 @@ def calculate_position_size(account_size, stock_price, method='kelly', risk_perc
         
     elif method == 'kelly':
         # Kelly Criterion: f = (p*b - q) / b
-        # p = win rate, q = loss rate, b = avg_win/avg_loss
         q = 1 - win_rate
         b = avg_win / avg_loss
         kelly_fraction = (win_rate * b - q) / b
-        kelly_fraction = max(0, min(kelly_fraction * 0.5, 0.25))  # Use half Kelly, cap at 25%
+        kelly_fraction = max(0, min(kelly_fraction * 0.5, 0.25))
         position_value = account_size * kelly_fraction
         shares = int(position_value / stock_price)
         
     elif method == 'volatility' and volatility:
-        # Volatility-based sizing
         target_risk = account_size * (risk_percent / 100)
         position_value = target_risk / volatility
         shares = int(position_value / stock_price)
@@ -664,7 +662,7 @@ st.markdown(
 # Auto-refresh logic
 if st.session_state.is_premium and st.session_state.auto_refresh and page == "📊 Stock Analysis":
     time.sleep(60)
-    st.rerun()button("🚀 Upgrade to Premium - $9.99/mo"):
+    st.rerun()🚀 Upgrade to Premium - $9.99/mo"):
             st.session_state.is_premium = True
             st.rerun()
     
@@ -949,4 +947,4 @@ elif page == "📈 Backtesting":
         
         initial_capital = st.number_input("Initial Capital ($)", value=10000, min_value=1000, step=1000)
         
-        if st.
+        if st.button("
