@@ -2,6 +2,15 @@ import streamlit as st
 from datetime import datetime, timedelta
 import time
 
+# ============================================
+# MAINTENANCE END TIME - CHANGE THIS!
+# ============================================
+MAINTENANCE_END = datetime(2025, 10, 6, 20, 30, 0)  # Year, Month, Day, Hour, Minute, Second
+# Examples:
+# datetime(2025, 10, 7, 14, 0, 0)  = October 7, 2025 at 2:00 PM
+# datetime(2025, 12, 25, 9, 0, 0)  = December 25, 2025 at 9:00 AM
+# ============================================
+
 # Page configuration
 st.set_page_config(
     page_title="Maintenance Mode",
@@ -51,17 +60,6 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
-
-# Initialize session state for the end time if not exists
-if 'maintenance_end' not in st.session_state:
-    # Set your maintenance end time here
-    # Example: maintenance ends in 2 hours from now
-    st.session_state.maintenance_end = datetime.now() + timedelta(hours=5, minutes=0)
-    
-    # You can also set a specific date/time:
-    # st.session_state.maintenance_end = datetime(2025, 10, 6, 18, 0, 0)
-
-MAINTENANCE_END = st.session_state.maintenance_end
 
 def get_time_remaining():
     """Calculate time remaining until maintenance ends"""
@@ -142,17 +140,16 @@ else:
         st.warning(f"⏱️ Almost done: {time_left['minutes']} minutes, {time_left['seconds']} seconds")
     
     # Update progress bar (inverse progress - starts at 100% and goes down)
-    total_maintenance_seconds = 5 * 3600  # 2.5 hours in seconds
+    total_maintenance_seconds = 2.5 * 3600  # 2.5 hours in seconds
     progress = max(0, (time_left['total_seconds'] / total_maintenance_seconds))
     st.progress(1.0 - progress)
 
 # Information
 with st.expander("ℹ️ What's happening?"):
     st.write("""
-    - **UI Improvements** - Improving looks, quality, and visuals!
-    - **Text Updates** - Rebranding and fixing all texts!
-    - **Watchlist + Sizer Error Fixes** - Fixing All Erorss
-    - **BUG & Quality of life fixes** - Making things smoother for you!
+    - **Database optimization** - Improving performance
+    - **Security updates** - Keeping your data safe
+    - **New features** - Adding exciting functionality
     """)
 
 st.markdown('</div>', unsafe_allow_html=True)
