@@ -1,4 +1,119 @@
-import streamlit as st
+elif st.session_state.page == 'backtest':
+    st.title("⚡ Advanced Backtesting Engine")
+    
+    if is_premium:
+        st.markdown("Test strategies with advanced position sizing, stop losses, and take profits")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            ticker = st.text_input("Stock Ticker", "AAPL").upper()
+        with col2:
+            start_date = st.date_input("Start Date", datetime.now() - timedelta(days=365*2))
+        with col3:
+            end_date = st.date_input("End Date", datetime.now())
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            capital = st.number_input("Initial Capital ($)", value=10000, min_value=1000, step=1000)
+            risk_per_trade = st.slider("Risk Per Trade (%)", 0.5, 5.0, 2.0, 0.5) / 100
+        with col2:
+            risk_reward = st.slider("Risk/Reward Ratio", 1.0, 5.0, 2.0, 0.5)
+        
+        if st.button("Run Advanced Backtest", type="primary", use_container_width=True):
+            with st.spinner("Running backtest with position sizing and risk management..."):
+                result = AdvancedStrategy.run_advanced_backtest(ticker, start_date, end_date, capital, risk_per_trade, risk_reward)
+                
+                if result:
+                    st.success("Backtest completed!")
+                    
+                    # Performance metrics
+                    st.subheader("Strategy Performance")
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    col1.metric("Total Return", f"{result['total_return']:.2f}%")
+                    col2.metric("Buy & Hold", f"{result['buy_hold_return']:.2f}%")
+                    col3.metric("Alpha", f"{result['alpha']:.2f}%", help="Excess return over buy & hold")
+                    col4.metric("Final Value", f"${result['final_equity']:,.0f}")
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    col1.metric("Total Trades", result['num_trades'])
+                    col2.metric("Win Rate", f"{result['win_rate']:.1f}%")
+                    col3.metric("Profit Factor", f"{result['profit_factor']:.2f}", help="Gross profit / Gross loss")
+                    col4.metric("Sharpe Ratio", f"{result['sharpe_ratio']:.2f}")
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    col1.metric("Avg Win", f"${result['avg_win']:.2f}")
+                    col2.metric("Avg Loss", f"${result['avg_loss']:.2f}")
+                    col3.metric("Max Drawdown", f"{result['max_drawdown']:.2f}%")
+                    col4.metric("R:R Used", f"1:{risk_reward:.1f}")
+                    
+                    st.markdown("---")
+                    
+                    # Equity curve
+                    st.subheader("Equity Curve")
+                    
+                    fig = go.Figure()
+                    
+                    fig.add_trace(go.Scatter(
+                        x=list(range(len(result['equity_curve']))),
+                        y=result['equity_curve'],
+                        name='Strategy',
+                        line=dict(color='#3b82f6', width=3),
+                        fill='tozeroy',
+                        fillcolor='rgba(59, 130, 246, 0.1)'
+                    ))
+                    
+                    fig.add_hline(y=capital, line_dash="dash", line_color="#6b7280", 
+                                 annotation_text="Initial Capital")
+                    
+                    fig.update_layout(
+                        xaxis_title="Trading Days",
+                        yaxis_title="Portfolio Value ($)",
+                        height=500,
+                        template='plotly_dark',
+                        hovermode='x unified'
+                    )
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    st.markdown("---")
+                    
+                    # Trade history
+                    st.subheader("Trade History")
+                    
+                    if result['trades']:
+                        trade_df = pd.DataFrame(result['trades'])
+                        trade_df['Entry'] = trade_df['entry'].apply(lambda x: f"${x:.2f}")
+                        trade_df['Exit'] = trade_df['exit'].apply(lambda x: f"${x:.2f}")
+                        trade_df['P/L'] = trade_df['pnl'].apply(lambda x: f"${x:.2f}")
+                        trade_df['Type'] = trade_df['type'].str.replace('_', ' ').str.title()
+                        
+                        st.dataframe(
+                            trade_df[['Entry', 'Exit', 'P/L', 'Type']],
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                        
+                        # Export trades
+                        if st.button("Export Trade History"):
+                            csv = trade_df.to_csv(index=False)
+                            st.download_button(
+                                "Download CSV",
+                                csv,
+                                f"{ticker}_trades_{datetime.now().strftime('%Y%m%d')}.csv",
+                                "text/csv"
+                            )
+                else:
+                    st.error("Backtest failed. Check ticker and date range.")
+    else:
+        st.warning("Advanced Backtesting is a Premium feature!")
+
+else:
+    st.info(f"{st.session_state.page.title()} - Feature under development")
+
+st.markdown("---")
+st.caption("WealthStockify Professional © 2025 | Not financial advice")import streamlit as st
 import yfinance as yf
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -245,6 +360,11 @@ class DatabaseService:
     @staticmethod
     def add_to_watchlist(user_id: str, ticker: str, notes: str = "") -> bool:
         try:
+            # Check if already exists
+            existing = supabase.table('watchlists').select('ticker').eq('user_id', user_id).eq('ticker', ticker).execute()
+            if existing.data:
+                return False  # Already in watchlist
+            
             supabase.table('watchlists').insert({
                 'user_id': user_id,
                 'ticker': ticker,
@@ -252,7 +372,8 @@ class DatabaseService:
                 'created_at': datetime.now().isoformat()
             }).execute()
             return True
-        except:
+        except Exception as e:
+            st.error(f"Watchlist error: {e}")
             return False
     
     @staticmethod
@@ -284,6 +405,24 @@ class DatabaseService:
     @staticmethod
     def add_portfolio_position(user_id: str, ticker: str, shares: float, avg_price: float, purchase_date: str) -> bool:
         try:
+            # Check if position already exists
+            existing = supabase.table('portfolio').select('ticker').eq('user_id', user_id).eq('ticker', ticker).execute()
+            if existing.data:
+                # Update existing position
+                old_shares = existing.data[0].get('shares', 0)
+                old_price = existing.data[0].get('average_price', 0)
+                
+                # Calculate new average
+                total_shares = old_shares + shares
+                new_avg = ((old_shares * old_price) + (shares * avg_price)) / total_shares
+                
+                supabase.table('portfolio').update({
+                    'shares': total_shares,
+                    'average_price': new_avg
+                }).eq('user_id', user_id).eq('ticker', ticker).execute()
+                return True
+            
+            # Insert new position
             supabase.table('portfolio').insert({
                 'user_id': user_id,
                 'ticker': ticker,
@@ -293,7 +432,8 @@ class DatabaseService:
                 'created_at': datetime.now().isoformat()
             }).execute()
             return True
-        except:
+        except Exception as e:
+            st.error(f"Portfolio error: {e}")
             return False
     
     @staticmethod
@@ -468,8 +608,280 @@ class TechnicalAnalysis:
         return patterns
 
 # =============================================================================
-# STOCK SCREENER ENGINE
+# ADVANCED TRADING STRATEGY ENGINE
 # =============================================================================
+
+class AdvancedStrategy:
+    @staticmethod
+    def calculate_position_size(account_size: float, stock_price: float, volatility: float, 
+                               method: str = 'kelly', risk_per_trade: float = 0.02,
+                               win_rate: float = 0.55, avg_win: float = 2.0, avg_loss: float = 1.0) -> dict:
+        """Calculate optimal position size using multiple methods"""
+        
+        results = {}
+        
+        # Kelly Criterion
+        if method == 'kelly' or method == 'all':
+            q = 1 - win_rate
+            b = avg_win / avg_loss
+            kelly_pct = (win_rate * b - q) / b
+            kelly_pct = max(0, min(kelly_pct * 0.5, 0.25))  # Half Kelly, cap at 25%
+            kelly_shares = int((account_size * kelly_pct) / stock_price)
+            results['kelly'] = {
+                'shares': kelly_shares,
+                'position_value': kelly_shares * stock_price,
+                'position_pct': kelly_pct * 100
+            }
+        
+        # Fixed Risk
+        if method == 'fixed' or method == 'all':
+            risk_amount = account_size * risk_per_trade
+            fixed_shares = int(risk_amount / stock_price)
+            results['fixed'] = {
+                'shares': fixed_shares,
+                'position_value': fixed_shares * stock_price,
+                'position_pct': (fixed_shares * stock_price / account_size) * 100
+            }
+        
+        # Volatility-Based
+        if method == 'volatility' or method == 'all':
+            target_risk = account_size * risk_per_trade
+            vol_shares = int(target_risk / (volatility * stock_price))
+            results['volatility'] = {
+                'shares': vol_shares,
+                'position_value': vol_shares * stock_price,
+                'position_pct': (vol_shares * stock_price / account_size) * 100
+            }
+        
+        return results
+    
+    @staticmethod
+    def calculate_stop_loss_take_profit(entry_price: float, atr: float, risk_reward: float = 2.0) -> dict:
+        """Calculate stop loss and take profit levels"""
+        
+        # ATR-based stop loss (2x ATR)
+        stop_loss = entry_price - (2 * atr)
+        
+        # Risk/Reward based take profit
+        risk = entry_price - stop_loss
+        take_profit = entry_price + (risk * risk_reward)
+        
+        return {
+            'entry': entry_price,
+            'stop_loss': stop_loss,
+            'take_profit': take_profit,
+            'risk_per_share': risk,
+            'reward_per_share': take_profit - entry_price,
+            'risk_reward_ratio': risk_reward,
+            'stop_loss_pct': ((entry_price - stop_loss) / entry_price) * 100,
+            'take_profit_pct': ((take_profit - entry_price) / entry_price) * 100
+        }
+    
+    @staticmethod
+    def generate_advanced_signals(df: pd.DataFrame) -> pd.DataFrame:
+        """Generate trading signals using multiple strategies"""
+        
+        df['Signal'] = 0
+        df['Signal_Strength'] = 0
+        df['Entry_Reason'] = ''
+        
+        for i in range(50, len(df)):
+            strength = 0
+            reasons = []
+            
+            # MACD + RSI Strategy
+            if (df['MACD'].iloc[i] > df['MACD_Signal'].iloc[i] and 
+                df['MACD'].iloc[i-1] <= df['MACD_Signal'].iloc[i-1] and
+                df['RSI'].iloc[i] < 70 and df['RSI'].iloc[i] > 30):
+                strength += 3
+                reasons.append("MACD Bullish Cross")
+            
+            # Moving Average Confluence
+            if (df['Close'].iloc[i] > df['SMA_20'].iloc[i] > df['SMA_50'].iloc[i] > df['SMA_200'].iloc[i]):
+                strength += 4
+                reasons.append("MA Uptrend")
+            
+            # Volume Confirmation
+            if df['Volume_Ratio'].iloc[i] > 1.5:
+                strength += 2
+                reasons.append("Volume Spike")
+            
+            # Bollinger Band Squeeze Breakout
+            if (df['BB_Width'].iloc[i] < df['BB_Width'].iloc[i-10:i].mean() * 0.7 and
+                df['Close'].iloc[i] > df['BB_Upper'].iloc[i]):
+                strength += 3
+                reasons.append("BB Breakout")
+            
+            # Stochastic Oversold Recovery
+            if (df['Stoch_K'].iloc[i-1] < 20 and df['Stoch_K'].iloc[i] > 20):
+                strength += 2
+                reasons.append("Stoch Recovery")
+            
+            # Buy Signal (strength >= 5)
+            if strength >= 5:
+                df.loc[df.index[i], 'Signal'] = 1
+                df.loc[df.index[i], 'Signal_Strength'] = strength
+                df.loc[df.index[i], 'Entry_Reason'] = ', '.join(reasons)
+            
+            # Sell Signals
+            elif (df['MACD'].iloc[i] < df['MACD_Signal'].iloc[i] and 
+                  df['MACD'].iloc[i-1] >= df['MACD_Signal'].iloc[i-1]) or \
+                 (df['RSI'].iloc[i] > 80) or \
+                 (df['Close'].iloc[i] < df['SMA_50'].iloc[i] and df['Close'].iloc[i-1] >= df['SMA_50'].iloc[i-1]):
+                df.loc[df.index[i], 'Signal'] = -1
+                df.loc[df.index[i], 'Entry_Reason'] = "Exit Signal"
+        
+        return df
+    
+    @staticmethod
+    def run_advanced_backtest(ticker: str, start_date, end_date, capital: float = 10000,
+                             risk_per_trade: float = 0.02, risk_reward: float = 2.0) -> dict:
+        """Run advanced backtest with position sizing and risk management"""
+        
+        try:
+            stock = yf.Ticker(ticker)
+            df = stock.history(start=start_date, end=end_date)
+            
+            if df.empty:
+                return None
+            
+            df = TechnicalAnalysis.calculate_all_indicators(df)
+            df = AdvancedStrategy.generate_advanced_signals(df)
+            
+            # Backtest with position sizing and stops
+            cash = capital
+            position = 0
+            entry_price = 0
+            stop_loss = 0
+            take_profit = 0
+            trades = []
+            equity_curve = []
+            
+            for i in range(len(df)):
+                current_price = df['Close'].iloc[i]
+                signal = df['Signal'].iloc[i]
+                
+                # Check stops if in position
+                if position > 0:
+                    # Stop loss hit
+                    if current_price <= stop_loss:
+                        pnl = position * (stop_loss - entry_price)
+                        cash += position * stop_loss
+                        trades.append({
+                            'entry': entry_price,
+                            'exit': stop_loss,
+                            'pnl': pnl,
+                            'type': 'stop_loss'
+                        })
+                        position = 0
+                    # Take profit hit
+                    elif current_price >= take_profit:
+                        pnl = position * (take_profit - entry_price)
+                        cash += position * take_profit
+                        trades.append({
+                            'entry': entry_price,
+                            'exit': take_profit,
+                            'pnl': pnl,
+                            'type': 'take_profit'
+                        })
+                        position = 0
+                    # Sell signal
+                    elif signal == -1:
+                        pnl = position * (current_price - entry_price)
+                        cash += position * current_price
+                        trades.append({
+                            'entry': entry_price,
+                            'exit': current_price,
+                            'pnl': pnl,
+                            'type': 'signal_exit'
+                        })
+                        position = 0
+                
+                # Buy signal
+                if signal == 1 and position == 0:
+                    atr = df['ATR'].iloc[i]
+                    volatility = df['Close'].iloc[i-20:i].pct_change().std()
+                    
+                    # Calculate position size
+                    size_info = AdvancedStrategy.calculate_position_size(
+                        cash, current_price, volatility, 'kelly', risk_per_trade
+                    )
+                    
+                    shares = size_info['kelly']['shares']
+                    
+                    if shares > 0 and shares * current_price <= cash:
+                        # Calculate stops
+                        stops = AdvancedStrategy.calculate_stop_loss_take_profit(
+                            current_price, atr, risk_reward
+                        )
+                        
+                        position = shares
+                        entry_price = current_price
+                        stop_loss = stops['stop_loss']
+                        take_profit = stops['take_profit']
+                        cash -= shares * current_price
+                
+                # Track equity
+                total_equity = cash + (position * current_price if position > 0 else 0)
+                equity_curve.append(total_equity)
+            
+            # Close any remaining position
+            if position > 0:
+                pnl = position * (df['Close'].iloc[-1] - entry_price)
+                cash += position * df['Close'].iloc[-1]
+                trades.append({
+                    'entry': entry_price,
+                    'exit': df['Close'].iloc[-1],
+                    'pnl': pnl,
+                    'type': 'final_exit'
+                })
+            
+            # Calculate metrics
+            final_equity = cash
+            total_return = ((final_equity - capital) / capital) * 100
+            
+            winning_trades = [t for t in trades if t['pnl'] > 0]
+            losing_trades = [t for t in trades if t['pnl'] <= 0]
+            
+            win_rate = (len(winning_trades) / len(trades) * 100) if trades else 0
+            avg_win = np.mean([t['pnl'] for t in winning_trades]) if winning_trades else 0
+            avg_loss = np.mean([abs(t['pnl']) for t in losing_trades]) if losing_trades else 0
+            
+            profit_factor = (sum([t['pnl'] for t in winning_trades]) / 
+                           sum([abs(t['pnl']) for t in losing_trades])) if losing_trades else 0
+            
+            # Calculate buy and hold
+            buy_hold_return = ((df['Close'].iloc[-1] - df['Close'].iloc[0]) / df['Close'].iloc[0]) * 100
+            
+            # Sharpe ratio
+            returns = pd.Series(equity_curve).pct_change()
+            sharpe = np.sqrt(252) * returns.mean() / returns.std() if returns.std() > 0 else 0
+            
+            # Max drawdown
+            equity_series = pd.Series(equity_curve)
+            running_max = equity_series.expanding().max()
+            drawdown = (equity_series - running_max) / running_max
+            max_drawdown = drawdown.min() * 100
+            
+            return {
+                'df': df,
+                'trades': trades,
+                'equity_curve': equity_curve,
+                'total_return': total_return,
+                'buy_hold_return': buy_hold_return,
+                'alpha': total_return - buy_hold_return,
+                'num_trades': len(trades),
+                'win_rate': win_rate,
+                'avg_win': avg_win,
+                'avg_loss': avg_loss,
+                'profit_factor': profit_factor,
+                'sharpe_ratio': sharpe,
+                'max_drawdown': max_drawdown,
+                'final_equity': final_equity
+            }
+        except Exception as e:
+            st.error(f"Advanced backtest error: {e}")
+            return None
 
 class StockScreener:
     @staticmethod
@@ -806,6 +1218,7 @@ with st.sidebar:
         "analysis": "📈 Stock Analysis",
         "screener": "🔍 Stock Screener",
         "backtest": "⚡ Backtesting",
+        "position_sizer": "📏 Position Sizer",
         "watchlist": "👁️ Watchlist",
         "portfolio": "💼 Portfolio"
     }
@@ -1343,6 +1756,172 @@ elif st.session_state.page == 'portfolio':
     else:
         st.warning("Portfolio Tracker is a Premium feature!")
         st.info("Upgrade to Premium to track your investments and see real-time P/L")
+
+elif st.session_state.page == 'position_sizer':
+    st.title("📏 Position Size Manager")
+    
+    if is_premium:
+        st.markdown("Calculate optimal position sizes with stop loss and take profit levels")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("Trade Parameters")
+            ticker = st.text_input("Stock Ticker", "AAPL").upper()
+            account_size = st.number_input("Account Size ($)", value=100000.0, min_value=1000.0, step=1000.0)
+            risk_per_trade = st.slider("Risk Per Trade (%)", 0.5, 5.0, 2.0, 0.5) / 100
+            risk_reward = st.slider("Risk/Reward Ratio", 1.0, 5.0, 2.0, 0.5)
+            
+        with col2:
+            st.subheader("Position Sizing Method")
+            method = st.radio(
+                "Calculation Method",
+                ["Kelly Criterion", "Fixed Risk", "Volatility-Based", "All Methods"],
+                help="Kelly: Optimal sizing based on win rate | Fixed: Percentage of account | Volatility: Adjusted for stock volatility"
+            )
+            
+            if method == "Kelly Criterion":
+                win_rate = st.slider("Expected Win Rate (%)", 30, 80, 55) / 100
+                avg_win_multiple = st.number_input("Avg Win Multiple (R)", 1.0, 5.0, 2.0, 0.1)
+                avg_loss_multiple = st.number_input("Avg Loss Multiple (R)", 0.5, 2.0, 1.0, 0.1)
+        
+        if st.button("Calculate Position Size", type="primary", use_container_width=True):
+            try:
+                stock = yf.Ticker(ticker)
+                hist = stock.history(period='3mo')
+                
+                if hist.empty:
+                    st.error("Invalid ticker")
+                else:
+                    hist = TechnicalAnalysis.calculate_all_indicators(hist)
+                    
+                    current_price = hist['Close'].iloc[-1]
+                    atr = hist['ATR'].iloc[-1]
+                    volatility = hist['Close'].pct_change().std()
+                    
+                    st.markdown("---")
+                    st.subheader(f"Analysis for {ticker}")
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    col1.metric("Current Price", f"${current_price:.2f}")
+                    col2.metric("ATR (14)", f"${atr:.2f}")
+                    col3.metric("Daily Volatility", f"{volatility*100:.2f}%")
+                    col4.metric("Risk Amount", f"${account_size * risk_per_trade:,.0f}")
+                    
+                    st.markdown("---")
+                    
+                    # Calculate position sizes
+                    method_map = {
+                        "Kelly Criterion": "kelly",
+                        "Fixed Risk": "fixed",
+                        "Volatility-Based": "volatility",
+                        "All Methods": "all"
+                    }
+                    
+                    if method == "Kelly Criterion":
+                        sizes = AdvancedStrategy.calculate_position_size(
+                            account_size, current_price, volatility, method_map[method],
+                            risk_per_trade, win_rate, avg_win_multiple, avg_loss_multiple
+                        )
+                    else:
+                        sizes = AdvancedStrategy.calculate_position_size(
+                            account_size, current_price, volatility, method_map[method], risk_per_trade
+                        )
+                    
+                    # Calculate stops
+                    stops = AdvancedStrategy.calculate_stop_loss_take_profit(current_price, atr, risk_reward)
+                    
+                    # Display results
+                    if method_map[method] == "all":
+                        st.subheader("Position Size Comparison")
+                        
+                        comparison_data = []
+                        for m, data in sizes.items():
+                            comparison_data.append({
+                                'Method': m.title(),
+                                'Shares': data['shares'],
+                                'Position Value': f"${data['position_value']:,.0f}",
+                                '% of Account': f"{data['position_pct']:.1f}%"
+                            })
+                        
+                        st.dataframe(pd.DataFrame(comparison_data), use_container_width=True, hide_index=True)
+                    else:
+                        method_key = method_map[method]
+                        size_data = sizes[method_key]
+                        
+                        st.subheader("Recommended Position")
+                        
+                        col1, col2, col3 = st.columns(3)
+                        col1.metric("Shares to Buy", f"{size_data['shares']:,}")
+                        col2.metric("Position Value", f"${size_data['position_value']:,.0f}")
+                        col3.metric("% of Account", f"{size_data['position_pct']:.1f}%")
+                    
+                    st.markdown("---")
+                    st.subheader("Risk Management")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Entry Price", f"${stops['entry']:.2f}")
+                    col2.metric("Stop Loss", f"${stops['stop_loss']:.2f}", f"-{stops['stop_loss_pct']:.2f}%", delta_color="inverse")
+                    col3.metric("Take Profit", f"${stops['take_profit']:.2f}", f"+{stops['take_profit_pct']:.2f}%")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Risk per Share", f"${stops['risk_per_share']:.2f}")
+                    col2.metric("Reward per Share", f"${stops['reward_per_share']:.2f}")
+                    col3.metric("R:R Ratio", f"1:{stops['risk_reward_ratio']:.1f}")
+                    
+                    # Trade plan summary
+                    st.markdown("---")
+                    st.subheader("Trade Plan Summary")
+                    
+                    # Use recommended method or first method if "all"
+                    if method_map[method] == "all":
+                        recommended_shares = sizes['kelly']['shares']
+                    else:
+                        recommended_shares = sizes[method_map[method]]['shares']
+                    
+                    max_loss = recommended_shares * stops['risk_per_share']
+                    max_profit = recommended_shares * stops['reward_per_share']
+                    
+                    summary = f"""
+                    **Trade Setup for {ticker}**
+                    
+                    📊 **Entry**
+                    - Price: ${stops['entry']:.2f}
+                    - Shares: {recommended_shares:,}
+                    - Total Investment: ${recommended_shares * current_price:,.0f}
+                    
+                    🛡️ **Risk Management**
+                    - Stop Loss: ${stops['stop_loss']:.2f} ({stops['stop_loss_pct']:.2f}%)
+                    - Take Profit: ${stops['take_profit']:.2f} ({stops['take_profit_pct']:.2f}%)
+                    - Risk/Reward: 1:{stops['risk_reward_ratio']:.1f}
+                    
+                    💰 **Potential Outcomes**
+                    - Maximum Loss: ${max_loss:,.0f}
+                    - Maximum Profit: ${max_profit:,.0f}
+                    - Risk as % of Account: {(max_loss/account_size)*100:.2f}%
+                    
+                    ⚠️ Remember: This is for educational purposes only. Markets are unpredictable.
+                    """
+                    
+                    st.markdown(summary)
+                    
+                    # Send to portfolio option
+                    if st.button("Add to Portfolio", use_container_width=True):
+                        if DatabaseService.add_portfolio_position(
+                            st.session_state.user.id,
+                            ticker,
+                            recommended_shares,
+                            current_price,
+                            datetime.now().date().isoformat()
+                        ):
+                            st.success(f"Added {recommended_shares} shares of {ticker} to your portfolio!")
+                        else:
+                            st.warning("Position already exists in portfolio. Check Portfolio tab.")
+            
+            except Exception as e:
+                st.error(f"Error: {e}")
+    else:
+        st.warning("Position Size Manager is a Premium feature!")
 
 elif st.session_state.page == 'backtest':
     st.title("⚡ Backtesting Engine")
