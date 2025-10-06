@@ -8,7 +8,7 @@ import pytz
 # ============================================
 # Set the end time in CST (Central Standard Time)
 CST = pytz.timezone('America/Chicago')
-MAINTENANCE_END = CST.localize(datetime(2025, 10, 6, 22, 0, 0))  # Year, Month, Day, Hour, Minute, Second (CST)
+MAINTENANCE_END = CST.localize(datetime(2025, 10, 6, 20, 30, 0))  # Year, Month, Day, Hour, Minute, Second (CST)
 # Examples:
 # CST.localize(datetime(2025, 10, 7, 14, 0, 0))  = October 7, 2025 at 2:00 PM CST
 # CST.localize(datetime(2025, 12, 25, 9, 0, 0))  = December 25, 2025 at 9:00 AM CST
@@ -144,8 +144,8 @@ else:
     
     # Update progress bar (inverse progress - starts at 100% and goes down)
     total_maintenance_seconds = 2.5 * 3600  # 2.5 hours in seconds
-    progress = max(0, (time_left['total_seconds'] / total_maintenance_seconds))
-    st.progress(1.0 - progress)
+    progress = max(0.0, min(1.0, (time_left['total_seconds'] / total_maintenance_seconds)))
+    st.progress(max(0.0, min(1.0, 1.0 - progress)))
 
 # Information
 with st.expander("ℹ️ What's happening?"):
