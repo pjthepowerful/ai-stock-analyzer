@@ -150,9 +150,9 @@ else:
 # Information
 with st.expander("ℹ️ What's happening?"):
     st.write("""
-    - **Database optimization** - Improving performance
-    - **Security updates** - Keeping your data safe
-    - **New features** - Adding exciting functionality
+    - **UI Improvements** - Making the look better
+    - **Quality of life updates & bug fixes** - Making your life easier
+    - **Watchlist and Portfolio** - Adding exciting functionality
     """)
 
 st.markdown('</div>', unsafe_allow_html=True)
