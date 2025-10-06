@@ -56,7 +56,7 @@ st.markdown("""
 if 'maintenance_end' not in st.session_state:
     # Set your maintenance end time here
     # Example: maintenance ends in 2 hours from now
-    st.session_state.maintenance_end = datetime.now() + timedelta(hours=5, minutes=)
+    st.session_state.maintenance_end = datetime.now() + timedelta(hours=5, minutes=0)
     
     # You can also set a specific date/time:
     # st.session_state.maintenance_end = datetime(2025, 10, 6, 18, 0, 0)
