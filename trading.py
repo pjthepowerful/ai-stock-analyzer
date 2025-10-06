@@ -5,7 +5,7 @@ import time
 # ============================================
 # MAINTENANCE END TIME - CHANGE THIS!
 # ============================================
-MAINTENANCE_END = datetime(2025, 10, 6, 20, 30, 0)  # Year, Month, Day, Hour, Minute, Second
+MAINTENANCE_END = datetime(2025, 10, 6, 22, 30, 0)  # Year, Month, Day, Hour, Minute, Second
 # Examples:
 # datetime(2025, 10, 7, 14, 0, 0)  = October 7, 2025 at 2:00 PM
 # datetime(2025, 12, 25, 9, 0, 0)  = December 25, 2025 at 9:00 AM
