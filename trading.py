@@ -1272,6 +1272,24 @@ if st.session_state.page == 'dashboard':
     col2.metric("Account Type", "Premium" if is_premium else "Free")
     col3.metric("Features Unlocked", "10/10" if is_premium else "3/10")
     col4.metric("Member Since", st.session_state.profile.get('created_at', 'N/A')[:10] if 'created_at' in st.session_state.profile else 'Today')
+if st.session_state.page == 'dashboard':
+    st.title("📊 Dashboard")
+    
+    if is_premium:
+        st.success("Welcome back! You have full access to all premium features.")
+    else:
+        st.info("You're on the free tier. Upgrade to Premium for advanced analytics!")
+    
+    st.markdown("### Quick Stats")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    watchlist = DatabaseService.get_watchlist(st.session_state.user.id)
+    
+    col1.metric("Watchlist Stocks", len(watchlist))
+    col2.metric("Account Type", "Premium" if is_premium else "Free")
+    col3.metric("Features Unlocked", "10/10" if is_premium else "3/10")
+    col4.metric("Member Since", st.session_state.profile.get('created_at', 'N/A')[:10] if 'created_at' in st.session_state.profile else 'Today')
 
 elif st.session_state.page == 'analysis':
     st.title("📈 Stock Analysis")
