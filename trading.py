@@ -142,16 +142,17 @@ else:
         st.warning(f"⏱️ Almost done: {time_left['minutes']} minutes, {time_left['seconds']} seconds")
     
     # Update progress bar (inverse progress - starts at 100% and goes down)
-    total_maintenance_seconds = 2.5 * 3600  # 2.5 hours in seconds
+    total_maintenance_seconds = 5 * 3600  # 2.5 hours in seconds
     progress = max(0, (time_left['total_seconds'] / total_maintenance_seconds))
     st.progress(1.0 - progress)
 
 # Information
 with st.expander("ℹ️ What's happening?"):
     st.write("""
-    - **Database optimization** - Improving performance
-    - **Security updates** - Keeping your data safe
-    - **New features** - Adding exciting functionality
+    - **UI Improvements** - Improving looks, quality, and visuals!
+    - **Text Updates** - Rebranding and fixing all texts!
+    - **Watchlist + Sizer Error Fixes** - Fixing All Erorss
+    - **BUG & Quality of life fixes** - Making things smoother for you!
     """)
 
 st.markdown('</div>', unsafe_allow_html=True)
