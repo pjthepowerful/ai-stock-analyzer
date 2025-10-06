@@ -30,6 +30,21 @@ st.markdown("""
         margin: 2rem 0;
         font-family: 'Courier New', monospace;
     }
+    .countdown-unit {
+        display: inline-block;
+        margin: 0 1rem;
+    }
+    .countdown-number {
+        font-size: 4rem;
+        display: block;
+        color: #667eea;
+    }
+    .countdown-label {
+        font-size: 1rem;
+        color: #666;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+    }
     .maintenance-icon {
         font-size: 5rem;
         margin: 1rem 0;
@@ -37,12 +52,16 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Set your maintenance end time here
-# Example: maintenance ends in 2 hours from now
-MAINTENANCE_END = datetime.now() + timedelta(hours=2, minutes=30)
+# Initialize session state for the end time if not exists
+if 'maintenance_end' not in st.session_state:
+    # Set your maintenance end time here
+    # Example: maintenance ends in 2 hours from now
+    st.session_state.maintenance_end = datetime.now() + timedelta(hours=2, minutes=30)
+    
+    # You can also set a specific date/time:
+    # st.session_state.maintenance_end = datetime(2025, 10, 6, 18, 0, 0)
 
-# You can also set a specific date/time:
-# MAINTENANCE_END = datetime(2025, 10, 6, 18, 0, 0)  # Oct 6, 2025 at 6:00 PM
+MAINTENANCE_END = st.session_state.maintenance_end
 
 def get_time_remaining():
     """Calculate time remaining until maintenance ends"""
@@ -81,14 +100,51 @@ We're currently performing scheduled maintenance to improve your experience.
 Thank you for your patience.
 """)
 
-# Countdown placeholder
-countdown_placeholder = st.empty()
+# Get time remaining
+time_left = get_time_remaining()
 
-# Status message placeholder
-status_placeholder = st.empty()
-
-# Progress bar
-progress_bar = st.progress(0)
+if time_left is None:
+    st.markdown(
+        '<div class="countdown">✅ Maintenance Complete!</div>',
+        unsafe_allow_html=True
+    )
+    st.success("System is now online. Please refresh the page.")
+    st.progress(1.0)
+else:
+    # Display countdown with styled boxes
+    st.markdown(f"""
+        <div class="countdown">
+            <div class="countdown-unit">
+                <span class="countdown-number">{time_left['days']:02d}</span>
+                <span class="countdown-label">Days</span>
+            </div>
+            <div class="countdown-unit">
+                <span class="countdown-number">{time_left['hours']:02d}</span>
+                <span class="countdown-label">Hours</span>
+            </div>
+            <div class="countdown-unit">
+                <span class="countdown-number">{time_left['minutes']:02d}</span>
+                <span class="countdown-label">Minutes</span>
+            </div>
+            <div class="countdown-unit">
+                <span class="countdown-number">{time_left['seconds']:02d}</span>
+                <span class="countdown-label">Seconds</span>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Status message
+    if time_left['days'] > 0:
+        st.info(f"⏱️ Estimated completion: {time_left['days']} days, {time_left['hours']} hours")
+    elif time_left['hours'] > 0:
+        st.info(f"⏱️ Estimated completion: {time_left['hours']} hours, {time_left['minutes']} minutes")
+    else:
+        st.warning(f"⏱️ Almost done: {time_left['minutes']} minutes, {time_left['seconds']} seconds")
+    
+    # Update progress bar (inverse progress - starts at 100% and goes down)
+    total_maintenance_seconds = 2.5 * 3600  # 2.5 hours in seconds
+    progress = max(0, (time_left['total_seconds'] / total_maintenance_seconds))
+    st.progress(1.0 - progress)
 
 # Information
 with st.expander("ℹ️ What's happening?"):
@@ -100,40 +156,6 @@ with st.expander("ℹ️ What's happening?"):
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# Auto-refresh countdown
-while True:
-    time_left = get_time_remaining()
-    
-    if time_left is None:
-        countdown_placeholder.markdown(
-            '<div class="countdown">✅ Maintenance Complete!</div>',
-            unsafe_allow_html=True
-        )
-        status_placeholder.success("System is now online. Please refresh the page.")
-        progress_bar.progress(100)
-        break
-    
-    # Display countdown
-    countdown_text = f"{time_left['days']:02d}:{time_left['hours']:02d}:{time_left['minutes']:02d}:{time_left['seconds']:02d}"
-    countdown_placeholder.markdown(
-        f'<div class="countdown">{countdown_text}</div>',
-        unsafe_allow_html=True
-    )
-    
-    # Status message
-    if time_left['days'] > 0:
-        status_placeholder.info(f"⏱️ Estimated completion: {time_left['days']} days, {time_left['hours']} hours")
-    elif time_left['hours'] > 0:
-        status_placeholder.info(f"⏱️ Estimated completion: {time_left['hours']} hours, {time_left['minutes']} minutes")
-    else:
-        status_placeholder.warning(f"⏱️ Almost done: {time_left['minutes']} minutes, {time_left['seconds']} seconds")
-    
-    # Update progress bar (inverse progress - starts at 100% and goes down)
-    # You can adjust the total maintenance time here
-    total_maintenance_seconds = 2.5 * 3600  # 2.5 hours in seconds
-    progress = max(0, int((time_left['total_seconds'] / total_maintenance_seconds) * 100))
-    progress_bar.progress(100 - progress)
-    
-    # Wait 1 second before updating
-    time.sleep(1)
-    st.rerun()
+# Auto-refresh every second
+time.sleep(1)
+st.rerun()
