@@ -1,14 +1,17 @@
 import streamlit as st
 from datetime import datetime, timedelta
 import time
+import pytz
 
 # ============================================
 # MAINTENANCE END TIME - CHANGE THIS!
 # ============================================
-MAINTENANCE_END = datetime(2025, 10, 7, 1, 30, 0)  # Year, Month, Day, Hour, Minute, Second
+# Set the end time in CST (Central Standard Time)
+CST = pytz.timezone('America/Chicago')
+MAINTENANCE_END = CST.localize(datetime(2025, 10, 6, 20, 30, 0))  # Year, Month, Day, Hour, Minute, Second (CST)
 # Examples:
-# datetime(2025, 10, 7, 14, 0, 0)  = October 7, 2025 at 2:00 PM
-# datetime(2025, 12, 25, 9, 0, 0)  = December 25, 2025 at 9:00 AM
+# CST.localize(datetime(2025, 10, 7, 14, 0, 0))  = October 7, 2025 at 2:00 PM CST
+# CST.localize(datetime(2025, 12, 25, 9, 0, 0))  = December 25, 2025 at 9:00 AM CST
 # ============================================
 
 # Page configuration
@@ -63,7 +66,7 @@ st.markdown("""
 
 def get_time_remaining():
     """Calculate time remaining until maintenance ends"""
-    now = datetime.now()
+    now = datetime.now(CST)  # Get current time in CST
     remaining = MAINTENANCE_END - now
     
     if remaining.total_seconds() <= 0:
