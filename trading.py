@@ -272,6 +272,48 @@ class DatabaseService:
             return True
         except:
             return False
+    
+    @staticmethod
+    def get_portfolio(user_id: str) -> list:
+        try:
+            result = supabase.table('portfolio').select('*').eq('user_id', user_id).execute()
+            return result.data if result.data else []
+        except:
+            return []
+    
+    @staticmethod
+    def add_portfolio_position(user_id: str, ticker: str, shares: float, avg_price: float, purchase_date: str) -> bool:
+        try:
+            supabase.table('portfolio').insert({
+                'user_id': user_id,
+                'ticker': ticker,
+                'shares': shares,
+                'average_price': avg_price,
+                'purchase_date': purchase_date,
+                'created_at': datetime.now().isoformat()
+            }).execute()
+            return True
+        except:
+            return False
+    
+    @staticmethod
+    def remove_portfolio_position(user_id: str, ticker: str) -> bool:
+        try:
+            supabase.table('portfolio').delete().eq('user_id', user_id).eq('ticker', ticker).execute()
+            return True
+        except:
+            return False
+    
+    @staticmethod
+    def update_portfolio_position(user_id: str, ticker: str, shares: float, avg_price: float) -> bool:
+        try:
+            supabase.table('portfolio').update({
+                'shares': shares,
+                'average_price': avg_price
+            }).eq('user_id', user_id).eq('ticker', ticker).execute()
+            return True
+        except:
+            return False
 
 # =============================================================================
 # TECHNICAL ANALYSIS ENGINE
@@ -426,8 +468,102 @@ class TechnicalAnalysis:
         return patterns
 
 # =============================================================================
-# PREDICTION ENGINE
+# STOCK SCREENER ENGINE
 # =============================================================================
+
+class StockScreener:
+    @staticmethod
+    def get_stock_universe():
+        """Returns list of popular stocks to screen"""
+        return [
+            # Tech
+            'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'TSLA', 'AMD', 'INTC', 'NFLX',
+            'ADBE', 'CRM', 'ORCL', 'CSCO', 'QCOM', 'AVGO', 'TXN', 'SNOW', 'SHOP', 'SQ',
+            # Finance
+            'JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'BLK', 'SCHW', 'AXP', 'V', 'MA', 'PYPL',
+            # Healthcare
+            'JNJ', 'UNH', 'PFE', 'ABBV', 'TMO', 'ABT', 'DHR', 'LLY', 'MRK', 'CVS',
+            # Consumer
+            'WMT', 'HD', 'NKE', 'SBUX', 'MCD', 'COST', 'TGT', 'LOW', 'DIS', 'CMCSA',
+            # Energy
+            'XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PSX', 'VLO', 'OXY', 'HAL',
+            # Industrial
+            'BA', 'CAT', 'GE', 'HON', 'UNP', 'UPS', 'RTX', 'LMT', 'DE', 'MMM'
+        ]
+    
+    @staticmethod
+    def screen_stocks(criteria: dict, progress_callback=None):
+        """Screen stocks based on criteria"""
+        universe = StockScreener.get_stock_universe()
+        results = []
+        
+        for idx, ticker in enumerate(universe):
+            try:
+                if progress_callback:
+                    progress_callback(idx / len(universe))
+                
+                stock = yf.Ticker(ticker)
+                info = stock.info
+                hist = stock.history(period='6mo')
+                
+                if hist.empty:
+                    continue
+                
+                hist = TechnicalAnalysis.calculate_all_indicators(hist)
+                
+                # Get metrics
+                price = hist['Close'].iloc[-1]
+                rsi = hist['RSI'].iloc[-1]
+                pe_ratio = info.get('trailingPE', 0)
+                market_cap = info.get('marketCap', 0)
+                dividend_yield = info.get('dividendYield', 0)
+                profit_margin = info.get('profitMargins', 0)
+                
+                # Calculate 6-month return
+                change_6m = ((price - hist['Close'].iloc[0]) / hist['Close'].iloc[0]) * 100
+                
+                # Apply filters
+                passes_filters = True
+                
+                if criteria.get('min_price') and price < criteria['min_price']:
+                    passes_filters = False
+                if criteria.get('max_price') and price > criteria['max_price']:
+                    passes_filters = False
+                if criteria.get('min_rsi') and rsi < criteria['min_rsi']:
+                    passes_filters = False
+                if criteria.get('max_rsi') and rsi > criteria['max_rsi']:
+                    passes_filters = False
+                if criteria.get('min_pe') and pe_ratio < criteria['min_pe']:
+                    passes_filters = False
+                if criteria.get('max_pe') and pe_ratio > criteria['max_pe']:
+                    passes_filters = False
+                if criteria.get('min_market_cap') and market_cap < criteria['min_market_cap'] * 1e9:
+                    passes_filters = False
+                if criteria.get('min_dividend') and dividend_yield < criteria['min_dividend'] / 100:
+                    passes_filters = False
+                
+                if passes_filters:
+                    ai_score = TechnicalAnalysis.calculate_ai_score(hist, info)
+                    
+                    results.append({
+                        'Ticker': ticker,
+                        'Name': info.get('shortName', ticker),
+                        'Price': price,
+                        'Change_6M': change_6m,
+                        'RSI': rsi,
+                        'P/E': pe_ratio if pe_ratio else 0,
+                        'Market_Cap': market_cap / 1e9,
+                        'Dividend': dividend_yield * 100 if dividend_yield else 0,
+                        'AI_Score': ai_score['score'],
+                        'Rating': ai_score['rating']
+                    })
+            except:
+                continue
+        
+        if progress_callback:
+            progress_callback(1.0)
+        
+        return pd.DataFrame(results)
 
 class PredictionEngine:
     @staticmethod
@@ -946,6 +1082,267 @@ elif st.session_state.page == 'watchlist':
             st.info("Your watchlist is empty. Add stocks to start tracking!")
     else:
         st.warning("Watchlist is a Premium feature. Upgrade to track unlimited stocks!")
+
+elif st.session_state.page == 'screener':
+    st.title("🔍 Stock Screener")
+    
+    if is_premium:
+        st.markdown("Screen stocks based on technical and fundamental criteria")
+        
+        with st.expander("Screening Criteria", expanded=True):
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown("**Price**")
+                min_price = st.number_input("Min Price ($)", value=0.0, step=10.0)
+                max_price = st.number_input("Max Price ($)", value=1000.0, step=10.0)
+                
+                st.markdown("**RSI**")
+                min_rsi = st.slider("Min RSI", 0, 100, 0)
+                max_rsi = st.slider("Max RSI", 0, 100, 100)
+            
+            with col2:
+                st.markdown("**Fundamentals**")
+                min_pe = st.number_input("Min P/E Ratio", value=0.0, step=1.0)
+                max_pe = st.number_input("Max P/E Ratio", value=100.0, step=1.0)
+                min_market_cap = st.number_input("Min Market Cap ($B)", value=0.0, step=1.0)
+            
+            with col3:
+                st.markdown("**Income**")
+                min_dividend = st.number_input("Min Dividend Yield (%)", value=0.0, step=0.1)
+                
+                st.markdown("**Sort By**")
+                sort_by = st.selectbox("Sort Results By", 
+                    ["AI_Score", "Price", "Change_6M", "RSI", "P/E", "Market_Cap", "Dividend"])
+                ascending = st.checkbox("Ascending Order", value=False)
+        
+        if st.button("🔍 Run Screener", type="primary", use_container_width=True):
+            criteria = {
+                'min_price': min_price if min_price > 0 else None,
+                'max_price': max_price if max_price < 1000 else None,
+                'min_rsi': min_rsi if min_rsi > 0 else None,
+                'max_rsi': max_rsi if max_rsi < 100 else None,
+                'min_pe': min_pe if min_pe > 0 else None,
+                'max_pe': max_pe if max_pe < 100 else None,
+                'min_market_cap': min_market_cap if min_market_cap > 0 else None,
+                'min_dividend': min_dividend if min_dividend > 0 else None
+            }
+            
+            progress_bar = st.progress(0)
+            status = st.empty()
+            
+            def update_progress(pct):
+                progress_bar.progress(pct)
+                status.text(f"Screening stocks... {int(pct * 100)}%")
+            
+            results = StockScreener.screen_stocks(criteria, update_progress)
+            
+            progress_bar.empty()
+            status.empty()
+            
+            if not results.empty:
+                st.success(f"Found {len(results)} stocks matching your criteria")
+                
+                # Sort results
+                results = results.sort_values(by=sort_by, ascending=ascending)
+                
+                # Display summary stats
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("Stocks Found", len(results))
+                col2.metric("Avg AI Score", f"{results['AI_Score'].mean():.1f}")
+                col3.metric("Avg P/E", f"{results['P/E'].mean():.1f}")
+                col4.metric("Avg Dividend", f"{results['Dividend'].mean():.2f}%")
+                
+                st.markdown("---")
+                
+                # Format dataframe
+                display_df = results.copy()
+                display_df['Price'] = display_df['Price'].apply(lambda x: f"${x:.2f}")
+                display_df['Change_6M'] = display_df['Change_6M'].apply(lambda x: f"{x:+.1f}%")
+                display_df['RSI'] = display_df['RSI'].apply(lambda x: f"{x:.1f}")
+                display_df['P/E'] = display_df['P/E'].apply(lambda x: f"{x:.1f}")
+                display_df['Market_Cap'] = display_df['Market_Cap'].apply(lambda x: f"${x:.1f}B")
+                display_df['Dividend'] = display_df['Dividend'].apply(lambda x: f"{x:.2f}%")
+                display_df['AI_Score'] = display_df['AI_Score'].apply(lambda x: f"{x:.0f}")
+                
+                st.dataframe(
+                    display_df,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "Ticker": st.column_config.TextColumn("Ticker", width="small"),
+                        "Name": st.column_config.TextColumn("Company", width="medium"),
+                        "AI_Score": st.column_config.TextColumn("AI Score", width="small"),
+                        "Rating": st.column_config.TextColumn("Rating", width="small")
+                    }
+                )
+                
+                # Export option
+                if st.button("📥 Export Results to CSV"):
+                    csv = results.to_csv(index=False)
+                    st.download_button(
+                        "Download CSV",
+                        csv,
+                        f"screener_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        "text/csv"
+                    )
+            else:
+                st.warning("No stocks match your criteria. Try adjusting the filters.")
+    else:
+        st.warning("Stock Screener is a Premium feature!")
+        st.info("Upgrade to Premium to screen 80+ stocks with advanced filters")
+
+elif st.session_state.page == 'portfolio':
+    st.title("💼 Portfolio Tracker")
+    
+    if is_premium:
+        # Add new position
+        with st.expander("➕ Add New Position", expanded=False):
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                new_ticker = st.text_input("Ticker", key="portfolio_ticker").upper()
+            with col2:
+                shares = st.number_input("Shares", min_value=0.0, step=0.1, key="portfolio_shares")
+            with col3:
+                avg_price = st.number_input("Avg Price ($)", min_value=0.0, step=0.01, key="portfolio_price")
+            with col4:
+                purchase_date = st.date_input("Purchase Date", datetime.now(), key="portfolio_date")
+            
+            if st.button("Add Position", use_container_width=True):
+                if new_ticker and shares > 0 and avg_price > 0:
+                    if DatabaseService.add_portfolio_position(
+                        st.session_state.user.id,
+                        new_ticker,
+                        shares,
+                        avg_price,
+                        purchase_date.isoformat()
+                    ):
+                        st.success(f"Added {shares} shares of {new_ticker}")
+                        st.rerun()
+                    else:
+                        st.error("Failed to add position")
+                else:
+                    st.warning("Please fill all fields")
+        
+        # Get portfolio
+        portfolio = DatabaseService.get_portfolio(st.session_state.user.id)
+        
+        if portfolio:
+            st.markdown("---")
+            
+            # Calculate totals
+            total_invested = 0
+            total_current_value = 0
+            portfolio_data = []
+            
+            for position in portfolio:
+                ticker = position['ticker']
+                shares = position['shares']
+                avg_price = position['average_price']
+                
+                try:
+                    stock = yf.Ticker(ticker)
+                    current_price = stock.history(period='1d')['Close'].iloc[-1]
+                    
+                    invested = shares * avg_price
+                    current_value = shares * current_price
+                    profit_loss = current_value - invested
+                    profit_loss_pct = (profit_loss / invested) * 100
+                    
+                    total_invested += invested
+                    total_current_value += current_value
+                    
+                    portfolio_data.append({
+                        'ticker': ticker,
+                        'shares': shares,
+                        'avg_price': avg_price,
+                        'current_price': current_price,
+                        'invested': invested,
+                        'current_value': current_value,
+                        'profit_loss': profit_loss,
+                        'profit_loss_pct': profit_loss_pct,
+                        'purchase_date': position.get('purchase_date', 'N/A')
+                    })
+                except:
+                    portfolio_data.append({
+                        'ticker': ticker,
+                        'shares': shares,
+                        'avg_price': avg_price,
+                        'current_price': 0,
+                        'invested': shares * avg_price,
+                        'current_value': 0,
+                        'profit_loss': 0,
+                        'profit_loss_pct': 0,
+                        'purchase_date': position.get('purchase_date', 'N/A')
+                    })
+            
+            # Portfolio summary
+            total_pl = total_current_value - total_invested
+            total_pl_pct = (total_pl / total_invested * 100) if total_invested > 0 else 0
+            
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Total Invested", f"${total_invested:,.2f}")
+            col2.metric("Current Value", f"${total_current_value:,.2f}")
+            col3.metric("Total P/L", f"${total_pl:,.2f}", f"{total_pl_pct:+.2f}%")
+            col4.metric("Positions", len(portfolio))
+            
+            st.markdown("---")
+            
+            # Individual positions
+            for pos in portfolio_data:
+                with st.container():
+                    col1, col2, col3, col4, col5, col6 = st.columns([2, 1, 1, 1, 1, 1])
+                    
+                    with col1:
+                        st.markdown(f"**{pos['ticker']}**")
+                        st.caption(f"{pos['shares']} shares")
+                    
+                    with col2:
+                        st.metric("Avg Price", f"${pos['avg_price']:.2f}")
+                    
+                    with col3:
+                        st.metric("Current", f"${pos['current_price']:.2f}")
+                    
+                    with col4:
+                        st.metric("Invested", f"${pos['invested']:,.0f}")
+                    
+                    with col5:
+                        pl_color = "normal" if pos['profit_loss'] >= 0 else "inverse"
+                        st.metric("P/L", f"${pos['profit_loss']:,.0f}", 
+                                f"{pos['profit_loss_pct']:+.1f}%", 
+                                delta_color=pl_color)
+                    
+                    with col6:
+                        if st.button("Remove", key=f"remove_portfolio_{pos['ticker']}"):
+                            DatabaseService.remove_portfolio_position(st.session_state.user.id, pos['ticker'])
+                            st.rerun()
+                    
+                    st.markdown("---")
+            
+            # Portfolio chart
+            if len(portfolio_data) > 0:
+                st.subheader("Portfolio Allocation")
+                
+                fig = go.Figure(data=[go.Pie(
+                    labels=[p['ticker'] for p in portfolio_data],
+                    values=[p['current_value'] for p in portfolio_data],
+                    hole=0.4,
+                    marker=dict(colors=['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'])
+                )])
+                
+                fig.update_layout(
+                    template='plotly_dark',
+                    height=400,
+                    showlegend=True
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Your portfolio is empty. Add your first position above!")
+    else:
+        st.warning("Portfolio Tracker is a Premium feature!")
+        st.info("Upgrade to Premium to track your investments and see real-time P/L")
 
 elif st.session_state.page == 'backtest':
     st.title("⚡ Backtesting Engine")
