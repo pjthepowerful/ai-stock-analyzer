@@ -1689,7 +1689,6 @@ if not SessionManager.get('authenticated'):
                                 SessionManager.set('user', user)
                                 SessionManager.set('profile', profile)
                                 st.success("Welcome back!")
-                                time.sleep(0.5)
                                 st.rerun()
                             else:
                                 st.error("Invalid email or password. Please try again.")
