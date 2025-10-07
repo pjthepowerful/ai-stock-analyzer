@@ -627,7 +627,12 @@ def render_position_sizer_page(is_premium: bool):
                 vol = df['Close'].pct_change().std()
                 atr = df['ATR'].iloc[-1]
                 
-                method_map = {"Kelly Criterion": "kelly", "Fixed Risk": "fixed", "Volatility": "volatility", "All Methods": "all"}
+                method_map = {
+                    "Kelly Criterion": "kelly", 
+                    "Fixed Risk": "fixed", 
+                    "Volatility": "volatility", 
+                    "All Methods": "all"
+                }
                 sizes = PositionSizingEngine.calculate_position_size(account, price, vol, method_map[method], risk)
                 stops = PositionSizingEngine.calculate_stop_loss_take_profit(price, atr, rr)
                 
