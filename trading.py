@@ -1,4 +1,11 @@
-@staticmethod
+# =============================================================================
+# PERFORMANCE ANALYTICS
+# =============================================================================
+
+class PerformanceAnalytics:
+    """Portfolio performance and risk analytics"""
+    
+    @staticmethod
     def calculate_portfolio_metrics(portfolio: List[Dict]) -> Dict:
         """Calculate comprehensive portfolio metrics"""
         try:
