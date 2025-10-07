@@ -1,4 +1,51 @@
-except:
+@staticmethod
+    def calculate_portfolio_metrics(portfolio: List[Dict]) -> Dict:
+        """Calculate comprehensive portfolio metrics"""
+        try:
+            total_invested = 0
+            total_current = 0
+            positions_data = []
+            
+            for position in portfolio:
+                ticker = position['ticker']
+                shares = position['shares']
+                avg_price = position['average_price']
+                
+                try:
+                    stock = yf.Ticker(ticker)
+                    current_price = stock.history(period='1d')['Close'].iloc[-1]
+                    
+                    invested = shares * avg_price
+                    current_value = shares * current_price
+                    pnl = current_value - invested
+                    pnl_pct = (pnl / invested) * 100
+                    
+                    total_invested += invested
+                    total_current += current_value
+                    
+                    positions_data.append({
+                        'ticker': ticker,
+                        'invested': invested,
+                        'current': current_value,
+                        'pnl': pnl,
+                        'pnl_pct': pnl_pct
+                    })
+                except:
+                    continue
+            
+            total_pnl = total_current - total_invested
+            total_pnl_pct = (total_pnl / total_invested * 100) if total_invested > 0 else 0
+            
+            return {
+                'total_invested': total_invested,
+                'total_current': total_current,
+                'total_pnl': total_pnl,
+                'total_pnl_pct': total_pnl_pct,
+                'positions': positions_data,
+                'num_positions': len(positions_data)
+            }
+            
+        except:
             return {
                 'total_invested': 0,
                 'total_current': 0,
