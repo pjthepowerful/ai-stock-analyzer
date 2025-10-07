@@ -1257,8 +1257,6 @@ def load_custom_css():
     </style>
     """, unsafe_allow_html=True)
 
-load_custom_css()
-
 # =============================================================================
 # SESSION STATE MANAGER
 # =============================================================================
@@ -1303,6 +1301,14 @@ class SessionManager:
         """Safely set session state value"""
         st.session_state[key] = value
 
+# =============================================================================
+# INITIALIZE APPLICATION
+# =============================================================================
+
+# Load custom CSS
+load_custom_css()
+
+# Initialize session state
 SessionManager.initialize()
 
 # =============================================================================
