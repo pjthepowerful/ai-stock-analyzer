@@ -1901,15 +1901,56 @@ def render_analysis_page(is_premium: bool):
     col1, col2, col3 = st.columns([3, 2, 1])
     
     with col1:
-        ticker = st.text_input("Enter Stock Ticker", value="AAPL", placeholder="e.g., AAPL, TSLA, MSFT").upper()
+        # Search input with better handling
+        search_query = st.text_input(
+            "Search by company name or ticker", 
+            placeholder="e.g., Apple, TSLA, Microsoft",
+            key="stock_search"
+        )
+        
+        ticker = None
+        
+        # Show search results if query exists
+        if search_query and len(search_query) > 0:
+            results = StockSearchHelper.search_stock(search_query)
+            if results:
+                options = [StockSearchHelper.format_stock_option(t, n) for t, n in results]
+                selected = st.selectbox(
+                    "Select stock:", 
+                    options, 
+                    label_visibility="collapsed",
+                    key="stock_selector"
+                )
+                if selected:
+                    ticker = selected.split(" - ")[0]
+            else:
+                # If no results, treat as direct ticker input
+                ticker = search_query.upper().strip()
+        else:
+            # Default to AAPL if nothing entered
+            ticker = "AAPL"
+            st.caption("💡 Default: AAPL - Apple Inc.")
     
     with col2:
-        period = st.selectbox("Time Period", ["1mo", "3mo", "6mo", "1y", "2y", "5y"], index=2)
+        period = st.selectbox(
+            "Time Period", 
+            options=["1mo", "3mo", "6mo", "1y", "2y", "5y"],
+            index=2,
+            format_func=lambda x: {
+                "1mo": "1 Month",
+                "3mo": "3 Months", 
+                "6mo": "6 Months",
+                "1y": "1 Year",
+                "2y": "2 Years",
+                "5y": "5 Years"
+            }[x],
+            key="time_period"
+        )
     
     with col3:
         st.write("")
         st.write("")
-        analyze_btn = st.button("🔍 Analyze", type="primary")
+        analyze_btn = st.button("🔍 Analyze", type="primary", key="analyze_btn")
     
     if ticker:
         try:
@@ -2023,7 +2064,7 @@ def render_analysis_page(is_premium: bool):
                         
                         st.markdown("---")
                         
-                        if st.button(f"⭐ Add {ticker} to Watchlist", use_container_width=True, type="primary"):
+                        if st.button(f"⭐ Add {ticker} to Watchlist", use_container_width=True, type="primary", key="add_watchlist"):
                             if DatabaseService.add_to_watchlist(SessionManager.get('user').id, ticker):
                                 st.success(f"✅ {ticker} added to watchlist!")
                             else:
