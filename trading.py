@@ -1901,56 +1901,62 @@ def render_analysis_page(is_premium: bool):
     col1, col2, col3 = st.columns([3, 2, 1])
     
     with col1:
-        # Search input with better handling
-        search_query = st.text_input(
+        # Simple text input for stock search
+        search_input = st.text_input(
             "Search by company name or ticker", 
+            value="",
             placeholder="e.g., Apple, TSLA, Microsoft",
-            key="stock_search"
+            key="stock_search_input"
         )
         
         ticker = None
         
-        # Show search results if query exists
-        if search_query and len(search_query) > 0:
-            results = StockSearchHelper.search_stock(search_query)
-            if results:
-                options = [StockSearchHelper.format_stock_option(t, n) for t, n in results]
+        if search_input:
+            # Search for matches
+            results = StockSearchHelper.search_stock(search_input)
+            if results and len(results) > 0:
+                # Create options list
+                options = [f"{t} - {n}" for t, n in results]
+                
+                # Show dropdown with results
                 selected = st.selectbox(
                     "Select stock:", 
-                    options, 
-                    label_visibility="collapsed",
-                    key="stock_selector"
+                    options=options,
+                    index=0,
+                    key="stock_select_dropdown"
                 )
+                
+                # Extract ticker from selection
                 if selected:
-                    ticker = selected.split(" - ")[0]
+                    ticker = selected.split(" - ")[0].strip()
             else:
-                # If no results, treat as direct ticker input
-                ticker = search_query.upper().strip()
+                # No matches - use input as ticker
+                ticker = search_input.upper().strip()
+                st.info(f"Using ticker: {ticker}")
         else:
-            # Default to AAPL if nothing entered
+            # Default
             ticker = "AAPL"
-            st.caption("💡 Default: AAPL - Apple Inc.")
+            st.caption("💡 Type a company name or ticker to search")
     
     with col2:
-        period = st.selectbox(
-            "Time Period", 
-            options=["1mo", "3mo", "6mo", "1y", "2y", "5y"],
+        # Time period with proper labels
+        period_options = ["1mo", "3mo", "6mo", "1y", "2y", "5y"]
+        period_labels = ["1 Month", "3 Months", "6 Months", "1 Year", "2 Years", "5 Years"]
+        
+        selected_period = st.selectbox(
+            "Time Period",
+            options=period_options,
+            format_func=lambda x: period_labels[period_options.index(x)],
             index=2,
-            format_func=lambda x: {
-                "1mo": "1 Month",
-                "3mo": "3 Months", 
-                "6mo": "6 Months",
-                "1y": "1 Year",
-                "2y": "2 Years",
-                "5y": "5 Years"
-            }[x],
-            key="time_period"
+            key="period_select"
         )
+        
+        period = selected_period
     
     with col3:
         st.write("")
         st.write("")
-        analyze_btn = st.button("🔍 Analyze", type="primary", key="analyze_btn")
+        analyze_btn = st.button("🔍 Analyze", type="primary", key="analyze_button")
     
     if ticker:
         try:
@@ -2064,7 +2070,7 @@ def render_analysis_page(is_premium: bool):
                         
                         st.markdown("---")
                         
-                        if st.button(f"⭐ Add {ticker} to Watchlist", use_container_width=True, type="primary", key="add_watchlist"):
+                        if st.button(f"⭐ Add {ticker} to Watchlist", use_container_width=True, type="primary", key="add_to_watchlist_btn"):
                             if DatabaseService.add_to_watchlist(SessionManager.get('user').id, ticker):
                                 st.success(f"✅ {ticker} added to watchlist!")
                             else:
