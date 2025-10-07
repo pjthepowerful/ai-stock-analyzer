@@ -497,6 +497,178 @@ load_custom_css()
 SessionManager.initialize()
 
 # =============================================================================
+# STOCK SEARCH HELPER
+# =============================================================================
+
+class StockSearchHelper:
+    """Helper for searching stocks by name or ticker"""
+    
+    @staticmethod
+    @st.cache_data(ttl=86400)  # Cache for 24 hours
+    def get_stock_database():
+        """Get a database of stock tickers and names"""
+        # Common stocks database
+        stocks = {
+            # Tech Giants
+            'AAPL': 'Apple Inc.',
+            'MSFT': 'Microsoft Corporation',
+            'GOOGL': 'Alphabet Inc. (Google)',
+            'GOOG': 'Alphabet Inc. Class C',
+            'AMZN': 'Amazon.com Inc.',
+            'META': 'Meta Platforms Inc. (Facebook)',
+            'NVDA': 'NVIDIA Corporation',
+            'TSLA': 'Tesla Inc.',
+            'AMD': 'Advanced Micro Devices',
+            'INTC': 'Intel Corporation',
+            'NFLX': 'Netflix Inc.',
+            'ADBE': 'Adobe Inc.',
+            'CRM': 'Salesforce Inc.',
+            'ORCL': 'Oracle Corporation',
+            'CSCO': 'Cisco Systems',
+            'QCOM': 'Qualcomm Inc.',
+            'AVGO': 'Broadcom Inc.',
+            'TXN': 'Texas Instruments',
+            'SNOW': 'Snowflake Inc.',
+            'SHOP': 'Shopify Inc.',
+            'SQ': 'Block Inc. (Square)',
+            'UBER': 'Uber Technologies',
+            'LYFT': 'Lyft Inc.',
+            'TWLO': 'Twilio Inc.',
+            'DDOG': 'Datadog Inc.',
+            'NET': 'Cloudflare Inc.',
+            'CRWD': 'CrowdStrike Holdings',
+            'ZM': 'Zoom Video Communications',
+            'DOCU': 'DocuSign Inc.',
+            'OKTA': 'Okta Inc.',
+            'MDB': 'MongoDB Inc.',
+            
+            # Financial
+            'JPM': 'JPMorgan Chase & Co.',
+            'BAC': 'Bank of America Corp',
+            'WFC': 'Wells Fargo & Company',
+            'GS': 'Goldman Sachs Group',
+            'MS': 'Morgan Stanley',
+            'C': 'Citigroup Inc.',
+            'BLK': 'BlackRock Inc.',
+            'SCHW': 'Charles Schwab Corp',
+            'AXP': 'American Express Company',
+            'V': 'Visa Inc.',
+            'MA': 'Mastercard Inc.',
+            'PYPL': 'PayPal Holdings',
+            'COIN': 'Coinbase Global',
+            'SOFI': 'SoFi Technologies',
+            'HOOD': 'Robinhood Markets',
+            'AFRM': 'Affirm Holdings',
+            'NU': 'Nu Holdings',
+            'UPST': 'Upstart Holdings',
+            'LC': 'LendingClub Corp',
+            
+            # Healthcare
+            'JNJ': 'Johnson & Johnson',
+            'UNH': 'UnitedHealth Group',
+            'PFE': 'Pfizer Inc.',
+            'ABBV': 'AbbVie Inc.',
+            'TMO': 'Thermo Fisher Scientific',
+            'ABT': 'Abbott Laboratories',
+            'DHR': 'Danaher Corporation',
+            'LLY': 'Eli Lilly and Company',
+            'MRK': 'Merck & Co.',
+            'CVS': 'CVS Health Corporation',
+            'GILD': 'Gilead Sciences',
+            'AMGN': 'Amgen Inc.',
+            'VRTX': 'Vertex Pharmaceuticals',
+            'REGN': 'Regeneron Pharmaceuticals',
+            'BIIB': 'Biogen Inc.',
+            'ILMN': 'Illumina Inc.',
+            'MRNA': 'Moderna Inc.',
+            'BNTX': 'BioNTech SE',
+            'EXAS': 'Exact Sciences',
+            'TDOC': 'Teladoc Health',
+            
+            # Consumer
+            'WMT': 'Walmart Inc.',
+            'HD': 'Home Depot Inc.',
+            'NKE': 'Nike Inc.',
+            'SBUX': 'Starbucks Corporation',
+            'MCD': "McDonald's Corporation",
+            'COST': 'Costco Wholesale',
+            'TGT': 'Target Corporation',
+            'LOW': "Lowe's Companies",
+            'DIS': 'Walt Disney Company',
+            'CMCSA': 'Comcast Corporation',
+            'KO': 'Coca-Cola Company',
+            'PEP': 'PepsiCo Inc.',
+            'PM': 'Philip Morris International',
+            'MO': 'Altria Group',
+            'EL': 'Estée Lauder Companies',
+            'CLX': 'Clorox Company',
+            'PG': 'Procter & Gamble',
+            'KMB': 'Kimberly-Clark',
+            'CL': 'Colgate-Palmolive',
+            'CHD': 'Church & Dwight',
+            
+            # Energy
+            'XOM': 'Exxon Mobil Corporation',
+            'CVX': 'Chevron Corporation',
+            'COP': 'ConocoPhillips',
+            'SLB': 'Schlumberger Limited',
+            'EOG': 'EOG Resources',
+            'MPC': 'Marathon Petroleum',
+            'PSX': 'Phillips 66',
+            'VLO': 'Valero Energy',
+            'OXY': 'Occidental Petroleum',
+            'HAL': 'Halliburton Company',
+            
+            # Industrial
+            'BA': 'Boeing Company',
+            'CAT': 'Caterpillar Inc.',
+            'GE': 'General Electric',
+            'HON': 'Honeywell International',
+            'UNP': 'Union Pacific Corporation',
+            'UPS': 'United Parcel Service',
+            'RTX': 'RTX Corporation (Raytheon)',
+            'LMT': 'Lockheed Martin',
+            'DE': 'Deere & Company',
+            'MMM': '3M Company',
+            
+            # ETFs
+            'SPY': 'SPDR S&P 500 ETF',
+            'QQQ': 'Invesco QQQ Trust',
+            'DIA': 'SPDR Dow Jones Industrial Average ETF',
+            'IWM': 'iShares Russell 2000 ETF',
+            'VOO': 'Vanguard S&P 500 ETF',
+            'VTI': 'Vanguard Total Stock Market ETF',
+        }
+        
+        return stocks
+    
+    @staticmethod
+    def search_stock(query: str) -> List[Tuple[str, str]]:
+        """Search for stocks by ticker or name"""
+        if not query:
+            return []
+        
+        stocks = StockSearchHelper.get_stock_database()
+        query = query.upper().strip()
+        results = []
+        
+        # Exact ticker match first
+        if query in stocks:
+            results.append((query, stocks[query]))
+        
+        # Then partial matches
+        for ticker, name in stocks.items():
+            if query != ticker and (query in ticker or query in name.upper()):
+                results.append((ticker, name))
+        
+        return results[:10]  # Return top 10 matches
+    
+    @staticmethod
+    def format_stock_option(ticker: str, name: str) -> str:
+        """Format stock option for display"""
+        return f"{ticker} - {name}"
+
+# =============================================================================
 # AUTHENTICATION SERVICE
 # =============================================================================
 
