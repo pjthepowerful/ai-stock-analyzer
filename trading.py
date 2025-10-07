@@ -774,31 +774,44 @@ def main():
 if __name__ == "__main__":
     main()
 """
-AI Stock Genius - Complete Production Platform
-Advanced Stock Analysis & Trading Platform with AI Intelligence
-Version: 3.0.0
-Author: AI Stock Genius Development Team
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                           AI STOCK GENIUS                                     ║
+║                   Professional Stock Analysis Platform                        ║
+║                                                                              ║
+║  Version: 3.0.0                                                              ║
+║  Author: AI Stock Genius Development Team                                   ║
+║  Description: AI-Powered Stock Analysis & Trading Intelligence Platform     ║
+║  License: Proprietary                                                        ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
+# =============================================================================
+# IMPORTS - STANDARD LIBRARY
+# =============================================================================
+import json
+import time
+import warnings
+from datetime import datetime, timedelta
+from typing import Dict, List, Tuple, Optional
+
+# =============================================================================
+# IMPORTS - THIRD PARTY LIBRARIES
+# =============================================================================
 import streamlit as st
 import yfinance as yf
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from supabase import create_client
-import json
-from typing import Dict, List, Tuple, Optional
-import warnings
-import time
 
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
 warnings.filterwarnings('ignore')
 
-# =============================================================================
-# CONFIGURATION & INITIALIZATION
-# =============================================================================
-
+# Streamlit Page Configuration - Must be first Streamlit command
 st.set_page_config(
     page_title="AI Stock Genius",
     page_icon="🤖",
@@ -817,13 +830,18 @@ st.set_page_config(
 
 @st.cache_resource
 def init_supabase():
-    """Initialize Supabase client with caching"""
+    """
+    Initialize Supabase client with caching
+    
+    Returns:
+        Supabase client instance or None if connection fails
+    """
     try:
         url = st.secrets["supabase"]["url"]
         key = st.secrets["supabase"]["key"]
         return create_client(url, key)
     except Exception as e:
-        st.error(f"Database connection failed: {e}")
+        st.error(f"⚠️ Database connection failed: {e}")
         return None
 
 supabase = init_supabase()
