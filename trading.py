@@ -244,42 +244,34 @@ def load_custom_css():
             font-weight: 700;
         }
         
-        /* Premium Badges with Animation */
+        /* Premium Badges - Cleaner Design */
         .premium-badge {
-            background: linear-gradient(135deg, #ffd700 0%, #ffed4e 50%, #ffd700 100%);
-            background-size: 200% 200%;
-            animation: shimmer 3s ease infinite;
-            color: #000;
-            padding: 0.75rem 1.5rem;
-            border-radius: 50px;
-            font-weight: 900;
-            font-size: 0.85rem;
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+            color: #1e293b;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 0.75rem;
             display: inline-block;
-            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.6),
-                        inset 0 -2px 5px rgba(0, 0, 0, 0.2);
+            text-align: center;
             text-transform: uppercase;
-            letter-spacing: 0.1em;
-            border: 2px solid rgba(255, 255, 255, 0.5);
-        }
-        
-        @keyframes shimmer {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
+            letter-spacing: 0.05em;
+            width: 100%;
         }
         
         .free-badge {
-            background: rgba(148, 163, 184, 0.2);
-            color: rgba(255, 255, 255, 0.9);
-            padding: 0.75rem 1.5rem;
-            border-radius: 50px;
-            font-weight: 800;
-            font-size: 0.85rem;
+            background: rgba(100, 116, 139, 0.3);
+            color: #cbd5e1;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 0.75rem;
             display: inline-block;
-            border: 2px solid rgba(148, 163, 184, 0.4);
+            text-align: center;
             text-transform: uppercase;
-            letter-spacing: 0.1em;
-            backdrop-filter: blur(10px);
+            letter-spacing: 0.05em;
+            border: 1px solid rgba(100, 116, 139, 0.5);
+            width: 100%;
         }
         
         /* Alert Boxes with Glow */
@@ -1613,46 +1605,23 @@ def render_sidebar(is_premium: bool):
     """Render the sidebar navigation"""
     with st.sidebar:
         st.markdown("### 🤖 AI Stock Genius")
-        st.caption(f"👤 {SessionManager.get('user').email}")
         
         st.markdown("---")
         
         if is_premium:
-            st.markdown('<div class="premium-badge">⭐ PREMIUM ACTIVE</div>', unsafe_allow_html=True)
-            sub_end = SessionManager.get('profile', {}).get('subscription_end_date')
-            if sub_end:
-                st.caption(f"Valid until: {sub_end[:10]}")
-            
-            if st.button("Cancel Subscription", use_container_width=True):
-                if DatabaseService.cancel_subscription(SessionManager.get('user').id):
-                    SessionManager.set('profile', DatabaseService.get_user_profile(SessionManager.get('user').id))
-                    st.success("Subscription cancelled")
-                    time.sleep(0.5)
-                    st.rerun()
+            st.markdown('<div class="premium-badge">⭐ PREMIUM</div>', unsafe_allow_html=True)
         else:
-            st.markdown('<div class="free-badge">FREE TIER</div>', unsafe_allow_html=True)
-            st.caption("Upgrade for AI-powered features")
-            
-            if st.button("🚀 Upgrade to Premium - $9.99/mo", use_container_width=True, type="primary"):
-                with st.spinner("Upgrading account..."):
-                    if DatabaseService.upgrade_to_premium(SessionManager.get('user').id):
-                        SessionManager.set('profile', DatabaseService.get_user_profile(SessionManager.get('user').id))
-                        st.balloons()
-                        st.success("Welcome to Premium!")
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error("Upgrade failed. Please try again.")
+            st.markdown('<div class="free-badge">FREE</div>', unsafe_allow_html=True)
         
         st.markdown("---")
         
-        st.markdown("#### 🎯 Navigation")
+        st.markdown("#### Navigation")
         
         pages = {
             'dashboard': '📊 Dashboard',
-            'analysis': '📈 Stock Analysis',
-            'screener': '🔍 Stock Screener',
-            'backtest': '⚡ Backtesting',
+            'analysis': '📈 Analysis',
+            'screener': '🔍 Screener',
+            'backtest': '⚡ Backtest',
             'position_sizer': '📏 Position Sizer',
             'watchlist': '👁️ Watchlist',
             'portfolio': '💼 Portfolio'
@@ -1664,24 +1633,20 @@ def render_sidebar(is_premium: bool):
         
         st.markdown("---")
         
-        with st.expander("✨ Premium Features"):
-            features = [
-                "AI Stock Scoring",
-                "Advanced Charts",
-                "Technical Patterns",
-                "Stock Screener",
-                "Price Predictions",
-                "Position Sizing",
-                "Backtesting Engine",
-                "Unlimited Watchlist",
-                "Portfolio Tracking",
-                "CSV Exports"
-            ]
-            for f in features:
-                icon = "✅" if is_premium else "🔒"
-                st.caption(f"{icon} {f}")
+        if not is_premium:
+            if st.button("🚀 Upgrade to Premium", use_container_width=True, type="primary"):
+                with st.spinner("Upgrading..."):
+                    if DatabaseService.upgrade_to_premium(SessionManager.get('user').id):
+                        SessionManager.set('profile', DatabaseService.get_user_profile(SessionManager.get('user').id))
+                        st.balloons()
+                        st.success("Welcome to Premium!")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error("Upgrade failed. Please try again.")
         
-        st.markdown("---")
+        # Push sign out to bottom
+        st.markdown("<div style='margin-top: auto; padding-top: 2rem;'></div>", unsafe_allow_html=True)
         
         if st.button("🚪 Sign Out", use_container_width=True):
             AuthenticationService.signout()
