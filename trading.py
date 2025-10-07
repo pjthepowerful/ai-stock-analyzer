@@ -131,37 +131,29 @@ def load_custom_css():
             font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
         }
         
-        /* Main App Background - Dynamic Gradient */
+        /* Main App Background - Subtle Static Gradient */
         .stApp {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #4facfe 75%, #00f2fe 100%);
-            background-size: 400% 400%;
-            animation: gradientShift 15s ease infinite;
-        }
-        
-        @keyframes gradientShift {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+            background-attachment: fixed;
         }
         
         /* Glass Morphism Container */
         .main .block-container {
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(15, 23, 42, 0.7);
             backdrop-filter: blur(20px);
-            border-radius: 30px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 20px;
+            border: 1px solid rgba(100, 116, 139, 0.3);
             padding: 2rem;
-            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
         }
         
-        /* Headers with Gradient Text */
+        /* Headers with Better Contrast */
         h1, h2, h3, h4, h5, h6 {
-            background: linear-gradient(135deg, #ffffff 0%, #e0e7ff 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: #f8fafc !important;
             font-weight: 800 !important;
             letter-spacing: -0.03em;
             font-family: 'Space Grotesk', sans-serif;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
         }
         
         h1 {
@@ -185,90 +177,70 @@ def load_custom_css():
             left: 0;
             width: 100px;
             height: 4px;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%);
             border-radius: 2px;
         }
         
         h3 {
             font-size: 1.75rem !important;
-            color: #f0f4ff !important;
+            color: #e2e8f0 !important;
             margin-bottom: 1rem !important;
         }
         
         /* Modern Button Styles */
         .stButton > button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
             color: white;
             border: none;
-            border-radius: 15px;
-            padding: 1rem 2rem;
-            font-weight: 700;
-            font-size: 1rem;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            box-shadow: 0 10px 25px -5px rgba(102, 126, 234, 0.6),
-                        0 0 50px -12px rgba(118, 75, 162, 0.3);
+            border-radius: 12px;
+            padding: 0.875rem 1.75rem;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
             width: 100%;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .stButton > button::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-            transition: left 0.5s;
-        }
-        
-        .stButton > button:hover::before {
-            left: 100%;
+            letter-spacing: 0.5px;
         }
         
         .stButton > button:hover {
-            transform: translateY(-5px) scale(1.02);
-            box-shadow: 0 20px 40px -5px rgba(102, 126, 234, 0.8),
-                        0 0 80px -12px rgba(118, 75, 162, 0.5);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.5);
+            background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
         }
         
         .stButton > button:active {
-            transform: translateY(-2px) scale(0.98);
+            transform: translateY(0);
         }
         
         /* Primary Button Variant */
         .stButton > button[kind="primary"] {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            box-shadow: 0 10px 25px -5px rgba(240, 147, 251, 0.6);
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
         }
         
         .stButton > button[kind="primary"]:hover {
-            box-shadow: 0 20px 40px -5px rgba(240, 147, 251, 0.8);
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
         }
         
         /* Glassmorphic Metrics */
         div[data-testid="stMetricValue"] {
             font-size: 2.5rem;
             font-weight: 900;
-            background: linear-gradient(135deg, #ffffff 0%, #e0e7ff 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            text-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
+            color: #f8fafc;
         }
         
         div[data-testid="stMetricLabel"] {
-            font-size: 0.95rem;
-            color: rgba(255, 255, 255, 0.9);
-            font-weight: 700;
+            font-size: 0.875rem;
+            color: #94a3b8;
+            font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.1em;
+            letter-spacing: 0.05em;
         }
         
         div[data-testid="stMetricDelta"] {
-            font-size: 1.1rem;
+            font-size: 1rem;
             font-weight: 700;
         }
         
@@ -363,11 +335,10 @@ def load_custom_css():
             font-weight: 600;
         }
         
-        /* Sidebar with Gradient */
+        /* Sidebar with Dark Theme */
         section[data-testid="stSidebar"] {
-            background: linear-gradient(180deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%);
-            backdrop-filter: blur(20px);
-            border-right: 2px solid rgba(255, 255, 255, 0.1);
+            background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+            border-right: 1px solid rgba(100, 116, 139, 0.3);
         }
         
         section[data-testid="stSidebar"] > div {
@@ -407,27 +378,25 @@ def load_custom_css():
             border-color: rgba(255, 255, 255, 0.3);
         }
         
-        /* Input Fields with Glow */
+        /* Input Fields with Better Contrast */
         .stTextInput > div > div > input,
         .stNumberInput > div > div > input,
         .stSelectbox > div > div {
-            background: rgba(255, 255, 255, 0.08);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
-            color: #ffffff;
+            background: rgba(30, 41, 59, 0.6);
+            border: 2px solid rgba(100, 116, 139, 0.4);
+            border-radius: 10px;
+            color: #f8fafc;
             font-size: 1rem;
-            padding: 1rem 1.25rem;
+            padding: 0.875rem 1rem;
             transition: all 0.3s ease;
-            font-weight: 600;
-            backdrop-filter: blur(10px);
+            font-weight: 500;
         }
         
         .stTextInput > div > div > input:focus,
         .stNumberInput > div > div > input:focus {
-            border-color: #667eea;
-            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.2),
-                        0 0 20px rgba(102, 126, 234, 0.4);
-            background: rgba(255, 255, 255, 0.12);
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            background: rgba(30, 41, 59, 0.8);
         }
         
         /* DataFrames with Style */
@@ -493,35 +462,34 @@ def load_custom_css():
             border-right-color: #764ba2 !important;
         }
         
+        /* Text Colors - Better Readability */
+        p, span, div {
+            color: #e2e8f0;
+        }
+        
         /* Caption Text */
         .caption {
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 0.95rem;
+            color: #94a3b8;
+            font-size: 0.875rem;
             font-weight: 500;
         }
         
         /* Divider */
         hr {
-            border-color: rgba(255, 255, 255, 0.2);
-            margin: 3rem 0;
-            border-width: 2px;
-        }
-        
-        /* Text Colors */
-        p, span, div {
-            color: rgba(255, 255, 255, 0.95);
+            border-color: rgba(100, 116, 139, 0.3);
+            margin: 2.5rem 0;
+            border-width: 1px;
         }
         
         /* Link Styles */
         a {
-            color: #93c5fd;
+            color: #60a5fa;
             text-decoration: none;
             transition: all 0.3s ease;
         }
         
         a:hover {
-            color: #dbeafe;
-            text-shadow: 0 0 10px rgba(147, 197, 253, 0.5);
+            color: #93c5fd;
         }
     </style>
     """, unsafe_allow_html=True)
