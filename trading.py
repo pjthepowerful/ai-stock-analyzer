@@ -2358,4 +2358,4 @@ class PerformanceAnalytics:
             
         except:
             return {
-                'total_invested': 0,
+                'total_invested': 0,}
