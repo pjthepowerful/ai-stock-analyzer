@@ -784,33 +784,21 @@ def render_footer():
     """Render the footer"""
     st.markdown("---")
     st.markdown("""
-    <div style='text-align: center; padding: 2rem; color: rgba(255, 255, 255, 0.7);'>
-        <p style='font-size: 1.1rem; font-weight: 600;'>🤖 AI Stock Genius Professional Platform</p>
-        <p style='font-size: 0.9rem;'>Powered by Advanced AI & Machine Learning</p>
-        <p style='font-size: 0.85rem;'>© 2025 AI Stock Genius | For educational purposes only</p>
-        <p style='font-size: 0.8rem; margin-top: 1rem;'>⚠️ Investment decisions involve risk. Past performance does not guarantee future results.</p>
+    <div style='text-align: center; padding: 2rem;'>
+        <p style='font-size: 1.1rem; font-weight: 600; color: rgba(255,255,255,0.9);'>AI Stock Genius</p>
+        <p style='font-size: 0.85rem; color: rgba(255,255,255,0.7);'>© 2025 | Educational purposes only</p>
     </div>
     """, unsafe_allow_html=True)
 
-# =============================================================================
-# MAIN APPLICATION ENTRY POINT
-# =============================================================================
-
 def main():
     """Main application entry point"""
-    
-    # Check authentication status
     if not SessionManager.get('authenticated'):
         render_authentication_page()
         st.stop()
     
-    # Get premium status
     is_premium = SessionManager.get('profile', {}).get('is_premium', False)
-    
-    # Render sidebar
     render_sidebar(is_premium)
     
-    # Route to appropriate page
     current_page = SessionManager.get('page', 'dashboard')
     
     if current_page == 'dashboard':
@@ -828,12 +816,7 @@ def main():
     elif current_page == 'portfolio':
         render_portfolio_page(is_premium)
     
-    # Render footer
     render_footer()
-
-# =============================================================================
-# RUN APPLICATION
-# =============================================================================
 
 if __name__ == "__main__":
     main()
