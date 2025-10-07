@@ -384,6 +384,45 @@ def load_custom_css():
             font-weight: 500;
         }
         
+        /* Selectbox specific styling */
+        .stSelectbox > div > div > div {
+            background: rgba(30, 41, 59, 0.6);
+            color: #f8fafc !important;
+        }
+        
+        .stSelectbox [data-baseweb="select"] {
+            background: rgba(30, 41, 59, 0.6);
+        }
+        
+        .stSelectbox [data-baseweb="select"] > div {
+            background: rgba(30, 41, 59, 0.6);
+            color: #f8fafc !important;
+        }
+        
+        /* Selectbox dropdown menu */
+        [data-baseweb="popover"] {
+            background: #1e293b !important;
+        }
+        
+        [data-baseweb="menu"] {
+            background: #1e293b !important;
+        }
+        
+        [role="option"] {
+            background: #1e293b !important;
+            color: #f8fafc !important;
+        }
+        
+        [role="option"]:hover {
+            background: #334155 !important;
+            color: #ffffff !important;
+        }
+        
+        /* Selected value in selectbox */
+        .stSelectbox [data-baseweb="select"] span {
+            color: #f8fafc !important;
+        }
+        
         .stTextInput > div > div > input:focus,
         .stNumberInput > div > div > input:focus {
             border-color: #3b82f6;
