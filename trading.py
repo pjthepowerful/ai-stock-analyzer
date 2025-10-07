@@ -43,7 +43,7 @@ class PerformanceAnalytics:
             total_pnl = total_current - total_invested
             total_pnl_pct = (total_pnl / total_invested * 100) if total_invested > 0 else 0
             
-            return {
+            result = {
                 'total_invested': total_invested,
                 'total_current': total_current,
                 'total_pnl': total_pnl,
@@ -51,9 +51,10 @@ class PerformanceAnalytics:
                 'positions': positions_data,
                 'num_positions': len(positions_data)
             }
+            return result
             
         except:
-            return {
+            result = {
                 'total_invested': 0,
                 'total_current': 0,
                 'total_pnl': 0,
@@ -61,6 +62,7 @@ class PerformanceAnalytics:
                 'positions': [],
                 'num_positions': 0
             }
+            return result
 
 # =============================================================================
 # AUTHENTICATION PAGE
