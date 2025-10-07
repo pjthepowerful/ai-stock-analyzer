@@ -1,837 +1,3 @@
-import json
-import time
-import warnings
-from datetime import datetime, timedelta
-from typing import Dict, List, Tuple, Optional
-# =============================================================================
-# PERFORMANCE ANALYTICS
-# =============================================================================
-
-class PerformanceAnalytics:
-    """Portfolio performance and risk analytics"""
-    
-    @staticmethod
-    def calculate_portfolio_metrics(portfolio: List[Dict]) -> Dict:
-        """Calculate comprehensive portfolio metrics"""
-        try:
-            total_invested = 0
-            total_current = 0
-            positions_data = []
-            
-            for position in portfolio:
-                ticker = position['ticker']
-                shares = position['shares']
-                avg_price = position['average_price']
-                
-                try:
-                    stock = yf.Ticker(ticker)
-                    current_price = stock.history(period='1d')['Close'].iloc[-1]
-                    
-                    invested = shares * avg_price
-                    current_value = shares * current_price
-                    pnl = current_value - invested
-                    pnl_pct = (pnl / invested) * 100
-                    
-                    total_invested += invested
-                    total_current += current_value
-                    
-                    positions_data.append({
-                        'ticker': ticker,
-                        'invested': invested,
-                        'current': current_value,
-                        'pnl': pnl,
-                        'pnl_pct': pnl_pct
-                    })
-                except:
-                    continue
-            
-            total_pnl = total_current - total_invested
-            total_pnl_pct = (total_pnl / total_invested * 100) if total_invested > 0 else 0
-            
-            return {
-                'total_invested': total_invested,
-                'total_current': total_current,
-                'total_pnl': total_pnl,
-                'total_pnl_pct': total_pnl_pct,
-                'positions': positions_data,
-                'num_positions': len(positions_data)
-            }
-            
-        except:
-            return {
-                'total_invested': 0,
-                'total_current': 0,
-                'total_pnl': 0,
-                'total_pnl_pct': 0,
-                'positions': [],
-                'num_positions': 0
-            }
-
-# =============================================================================
-# AUTHENTICATION PAGE
-# =============================================================================
-
-def render_authentication_page():
-    """Render the authentication page"""
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
-    with col2:
-        st.markdown("<div style='text-align: center; margin-top: 4rem;'><h1 style='font-size: 4rem; margin-bottom: 0.5rem;'>🤖 AI Stock Genius</h1></div>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: rgba(255, 255, 255, 0.9); font-size: 1.3rem; margin-bottom: 3rem; font-weight: 600;'>AI-Powered Stock Analysis & Trading Intelligence</p>", unsafe_allow_html=True)
-        
-        tab1, tab2, tab3 = st.tabs(["🔐 Sign In", "✨ Create Account", "🔑 Reset Password"])
-        
-        with tab1:
-            with st.form("signin_form", clear_on_submit=False):
-                st.markdown("### Welcome Back to AI Stock Genius")
-                email = st.text_input("Email Address", key="signin_email", placeholder="your@email.com")
-                password = st.text_input("Password", type="password", key="signin_password", placeholder="Enter your password")
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    remember = st.checkbox("Remember me")
-                
-                submit = st.form_submit_button("Sign In", use_container_width=True, type="primary")
-                
-                if submit:
-                    if not email or not password:
-                        st.error("Please enter both email and password")
-                    else:
-                        with st.spinner("Signing in..."):
-                            success, user, profile = AuthenticationService.signin(email, password)
-                            
-                            if success:
-                                SessionManager.set('authenticated', True)
-                                SessionManager.set('user', user)
-                                SessionManager.set('profile', profile)
-                                st.success("Welcome back to AI Stock Genius!")
-                                time.sleep(0.5)
-                                st.rerun()
-                            else:
-                                st.error("Invalid email or password. Please try again.")
-        
-        with tab2:
-            with st.form("signup_form", clear_on_submit=False):
-                st.markdown("### Join AI Stock Genius")
-                email = st.text_input("Email Address", key="signup_email", placeholder="your@email.com")
-                password = st.text_input("Password", type="password", key="signup_password", placeholder="At least 6 characters")
-                confirm = st.text_input("Confirm Password", type="password", key="confirm_password", placeholder="Re-enter password")
-                
-                agree = st.checkbox("I agree to the Terms of Service and Privacy Policy")
-                
-                submit = st.form_submit_button("Create Account", use_container_width=True, type="primary")
-                
-                if submit:
-                    if not email or not password or not confirm:
-                        st.error("Please fill in all fields")
-                    elif not agree:
-                        st.error("Please agree to the Terms of Service")
-                    elif password != confirm:
-                        st.error("Passwords do not match")
-                    elif len(password) < 6:
-                        st.error("Password must be at least 6 characters")
-                    else:
-                        with st.spinner("Creating account..."):
-                            success, message = AuthenticationService.signup(email, password)
-                            
-                            if success:
-                                st.success(message)
-                                st.info("Please check your email to verify your account, then sign in.")
-                            else:
-                                st.error(message)
-        
-        with tab3:
-            with st.form("reset_form", clear_on_submit=False):
-                st.markdown("### Reset Your Password")
-                st.caption("Enter your email address and we'll send you a link to reset your password.")
-                
-                email = st.text_input("Email Address", key="reset_email", placeholder="your@email.com")
-                
-                submit = st.form_submit_button("Send Reset Link", use_container_width=True, type="primary")
-                
-                if submit:
-                    if not email:
-                        st.error("Please enter your email address")
-                    else:
-                        with st.spinner("Sending reset link..."):
-                            success, message = AuthenticationService.reset_password(email)
-                            
-                            if success:
-                                st.success(message)
-                            else:
-                                st.error(message)
-
-# =============================================================================
-# SIDEBAR
-# =============================================================================
-
-def render_sidebar(is_premium: bool):
-    """Render the sidebar navigation"""
-    with st.sidebar:
-        st.markdown("### 🤖 AI Stock Genius")
-        st.caption(f"👤 {SessionManager.get('user').email}")
-        
-        st.markdown("---")
-        
-        if is_premium:
-            st.markdown('<div class="premium-badge">⭐ PREMIUM ACTIVE</div>', unsafe_allow_html=True)
-            sub_end = SessionManager.get('profile', {}).get('subscription_end_date')
-            if sub_end:
-                st.caption(f"Valid until: {sub_end[:10]}")
-            
-            if st.button("Cancel Subscription", use_container_width=True):
-                if DatabaseService.cancel_subscription(SessionManager.get('user').id):
-                    SessionManager.set('profile', DatabaseService.get_user_profile(SessionManager.get('user').id))
-                    st.success("Subscription cancelled")
-                    time.sleep(0.5)
-                    st.rerun()
-        else:
-            st.markdown('<div class="free-badge">FREE TIER</div>', unsafe_allow_html=True)
-            st.caption("Upgrade for AI-powered features")
-            
-            if st.button("🚀 Upgrade to Premium - $9.99/mo", use_container_width=True, type="primary"):
-                with st.spinner("Upgrading account..."):
-                    if DatabaseService.upgrade_to_premium(SessionManager.get('user').id):
-                        SessionManager.set('profile', DatabaseService.get_user_profile(SessionManager.get('user').id))
-                        st.balloons()
-                        st.success("Welcome to Premium!")
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error("Upgrade failed. Please try again.")
-        
-        st.markdown("---")
-        
-        st.markdown("#### 🎯 Navigation")
-        
-        pages = {
-            'dashboard': '📊 Dashboard',
-            'analysis': '📈 Stock Analysis',
-            'screener': '🔍 Stock Screener',
-            'backtest': '⚡ Backtesting',
-            'position_sizer': '📏 Position Sizer',
-            'watchlist': '👁️ Watchlist',
-            'portfolio': '💼 Portfolio'
-        }
-        
-        for key, label in pages.items():
-            if st.button(label, use_container_width=True, key=f"nav_{key}"):
-                SessionManager.set('page', key)
-        
-        st.markdown("---")
-        
-        with st.expander("✨ Premium Features"):
-            features = [
-                "AI Stock Scoring",
-                "Advanced Charts",
-                "Technical Patterns",
-                "Stock Screener",
-                "Price Predictions",
-                "Position Sizing",
-                "Backtesting Engine",
-                "Unlimited Watchlist",
-                "Portfolio Tracking",
-                "CSV Exports"
-            ]
-            for f in features:
-                icon = "✅" if is_premium else "🔒"
-                st.caption(f"{icon} {f}")
-        
-        st.markdown("---")
-        
-        if st.button("🚪 Sign Out", use_container_width=True):
-            AuthenticationService.signout()
-            st.rerun()
-
-# =============================================================================
-# PAGE RENDERERS
-# =============================================================================
-
-def render_dashboard_page(is_premium: bool):
-    """Render the dashboard page"""
-    st.title("🤖 AI Stock Genius Dashboard")
-    
-    if is_premium:
-        st.markdown('<div class="alert-success">🎉 Welcome back! You have full access to all AI-powered premium features.</div>', unsafe_allow_html=True)
-    else:
-        st.markdown('<div class="alert-info">📢 You are on the free tier. Upgrade to Premium for AI analytics and unlimited features!</div>', unsafe_allow_html=True)
-    
-    st.markdown("### 📊 Quick Stats")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    watchlist = DatabaseService.get_watchlist(SessionManager.get('user').id)
-    portfolio = DatabaseService.get_portfolio(SessionManager.get('user').id)
-    
-    col1.metric("Account Type", "💎 Premium" if is_premium else "🆓 Free")
-    col2.metric("Watchlist Stocks", len(watchlist))
-    col3.metric("Portfolio Positions", len(portfolio))
-    col4.metric("Features Unlocked", "10/10" if is_premium else "3/10")
-    
-    st.markdown("---")
-    
-    st.markdown("### 🚀 Quick Actions")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        if st.button("📈 Analyze a Stock", use_container_width=True, type="primary"):
-            SessionManager.set('page', 'analysis')
-            st.rerun()
-    
-    with col2:
-        if st.button("🔍 Screen Stocks", use_container_width=True):
-            SessionManager.set('page', 'screener')
-            st.rerun()
-    
-    with col3:
-        if st.button("💼 View Portfolio", use_container_width=True):
-            SessionManager.set('page', 'portfolio')
-            st.rerun()
-    
-    st.markdown("---")
-    
-    st.markdown("### 📰 Market Overview")
-    col1, col2, col3 = st.columns(3)
-    
-    try:
-        indices = {'SPY': 'S&P 500', 'QQQ': 'NASDAQ', 'DIA': 'Dow Jones'}
-        for idx, (ticker, name) in enumerate(indices.items()):
-            stock = yf.Ticker(ticker)
-            hist = stock.history(period='2d')
-            if not hist.empty:
-                current = hist['Close'].iloc[-1]
-                prev = hist['Close'].iloc[-2] if len(hist) > 1 else current
-                change = ((current - prev) / prev) * 100
-                
-                if idx == 0:
-                    col1.metric(name, f"${current:.2f}", f"{change:+.2f}%")
-                elif idx == 1:
-                    col2.metric(name, f"${current:.2f}", f"{change:+.2f}%")
-                else:
-                    col3.metric(name, f"${current:.2f}", f"{change:+.2f}%")
-    except:
-        pass
-
-def render_analysis_page(is_premium: bool):
-    """Render the stock analysis page"""
-    st.title("📈 AI-Powered Stock Analysis")
-    
-    col1, col2, col3 = st.columns([3, 2, 1])
-    
-    with col1:
-        ticker = st.text_input("Enter Stock Ticker", value="AAPL", placeholder="e.g., AAPL, TSLA, MSFT").upper()
-    
-    with col2:
-        period = st.selectbox("Time Period", ["1mo", "3mo", "6mo", "1y", "2y", "5y"], index=2)
-    
-    with col3:
-        st.write("")
-        st.write("")
-        analyze_btn = st.button("🔍 Analyze", type="primary")
-    
-    if ticker:
-        try:
-            with st.spinner(f"🤖 AI analyzing {ticker}..."):
-                stock = yf.Ticker(ticker)
-                df = stock.history(period=period)
-                info = stock.info
-                
-                if df.empty:
-                    st.error("Invalid ticker or no data available")
-                else:
-                    df = TechnicalAnalysisEngine.calculate_all_indicators(df)
-                    
-                    price = df['Close'].iloc[-1]
-                    prev = df['Close'].iloc[-2] if len(df) > 1 else price
-                    change_pct = ((price - prev) / prev) * 100
-                    
-                    col1, col2, col3, col4 = st.columns(4)
-                    
-                    col1.metric("Current Price", f"${price:.2f}", f"{change_pct:+.2f}%")
-                    
-                    if is_premium:
-                        ai_analysis = TechnicalAnalysisEngine.calculate_ai_score(df, info)
-                        col2.metric("🤖 AI Score", f"{ai_analysis['score']:.0f}/100", ai_analysis['rating'])
-                    else:
-                        col2.metric("🤖 AI Score", "🔒 Premium")
-                    
-                    volume = info.get('volume', 0)
-                    col3.metric("Volume", f"{volume/1e6:.1f}M")
-                    
-                    market_cap = info.get('marketCap', 0)
-                    col4.metric("Market Cap", f"${market_cap/1e9:.1f}B" if market_cap > 0 else "N/A")
-                    
-                    st.markdown("---")
-                    
-                    st.subheader("📊 Price Chart & Technical Indicators")
-                    
-                    rows = 3 if is_premium else 1
-                    fig = make_subplots(
-                        rows=rows, cols=1,
-                        shared_xaxes=True,
-                        vertical_spacing=0.05,
-                        row_heights=[0.6, 0.2, 0.2] if is_premium else [1]
-                    )
-                    
-                    fig.add_trace(go.Candlestick(
-                        x=df.index,
-                        open=df['Open'],
-                        high=df['High'],
-                        low=df['Low'],
-                        close=df['Close'],
-                        name='Price',
-                        increasing_line_color='#22c55e',
-                        decreasing_line_color='#ef4444'
-                    ), row=1, col=1)
-                    
-                    if is_premium:
-                        fig.add_trace(go.Scatter(x=df.index, y=df['SMA20'], name='SMA 20', line=dict(color='#fbbf24', width=2)), row=1, col=1)
-                        fig.add_trace(go.Scatter(x=df.index, y=df['SMA50'], name='SMA 50', line=dict(color='#f97316', width=2)), row=1, col=1)
-                        fig.add_trace(go.Scatter(x=df.index, y=df['SMA200'], name='SMA 200', line=dict(color='#ef4444', width=2)), row=1, col=1)
-                        
-                        colors = ['#22c55e' if val >= 0 else '#ef4444' for val in df['MACD_Histogram']]
-                        fig.add_trace(go.Bar(x=df.index, y=df['MACD_Histogram'], name='MACD Histogram', marker_color=colors, showlegend=False), row=2, col=1)
-                        fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name='MACD', line=dict(color='#3b82f6', width=2)), row=2, col=1)
-                        fig.add_trace(go.Scatter(x=df.index, y=df['MACD_Signal'], name='Signal', line=dict(color='#f97316', width=2)), row=2, col=1)
-                        
-                        fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], name='RSI', line=dict(color='#8b5cf6', width=2), fill='tozeroy', fillcolor='rgba(139, 92, 246, 0.2)'), row=3, col=1)
-                        fig.add_hline(y=70, line_dash="dash", line_color="#ef4444", row=3, col=1)
-                        fig.add_hline(y=30, line_dash="dash", line_color="#22c55e", row=3, col=1)
-                    
-                    fig.update_layout(
-                        height=800 if is_premium else 500,
-                        template='plotly_dark',
-                        xaxis_rangeslider_visible=False,
-                        showlegend=True,
-                        hovermode='x unified',
-                        paper_bgcolor='rgba(0,0,0,0)',
-                        plot_bgcolor='rgba(0,0,0,0.3)'
-                    )
-                    
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    if is_premium:
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            st.subheader("🤖 AI Analysis")
-                            for signal, sentiment in ai_analysis['signals']:
-                                icon = "🟢" if sentiment == "positive" else "🔴" if sentiment == "negative" else "🟡"
-                                st.caption(f"{icon} {signal}")
-                            
-                            patterns = TechnicalAnalysisEngine.detect_chart_patterns(df)
-                            if patterns:
-                                st.markdown("**📈 Patterns Detected:**")
-                                for pattern, direction in patterns:
-                                    icon = "🚀" if direction == "bullish" else "📉" if direction == "bearish" else "➡️"
-                                    st.caption(f"{icon} {pattern}")
-                        
-                        with col2:
-                            st.subheader("🔮 Price Prediction")
-                            prediction = PredictionEngine.predict_price(df, 30)
-                            if prediction:
-                                st.metric("30-Day Forecast", f"${prediction['predicted_price']:.2f}", f"{prediction['change_pct']:+.2f}%")
-                                st.progress(prediction['confidence'] / 100)
-                                st.caption(f"Confidence: {prediction['confidence']:.1f}% | Trend: {prediction['trend']}")
-                            
-                            st.markdown("**💼 Fundamentals:**")
-                            st.caption(f"P/E Ratio: {info.get('trailingPE', 'N/A')}")
-                            st.caption(f"Dividend Yield: {info.get('dividendYield', 0)*100:.2f}%")
-                            st.caption(f"Profit Margin: {info.get('profitMargins', 0)*100:.2f}%")
-                        
-                        st.markdown("---")
-                        
-                        if st.button(f"⭐ Add {ticker} to Watchlist", use_container_width=True, type="primary"):
-                            if DatabaseService.add_to_watchlist(SessionManager.get('user').id, ticker):
-                                st.success(f"✅ {ticker} added to watchlist!")
-                            else:
-                                st.warning("Already in watchlist")
-                    else:
-                        st.markdown('<div class="alert-info">🔒 Upgrade to Premium for AI analysis, predictions, and pattern detection</div>', unsafe_allow_html=True)
-                        
-        except Exception as e:
-            st.error(f"Error analyzing stock: {e}")
-
-def render_screener_page(is_premium: bool):
-    """Render the stock screener page"""
-    st.title("🔍 AI Stock Screener")
-    
-    if is_premium:
-        with st.expander("🎯 Screening Criteria", expanded=True):
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.markdown("**💵 Price Range**")
-                min_price = st.number_input("Min Price ($)", value=0.0, step=10.0)
-                max_price = st.number_input("Max Price ($)", value=1000.0, step=10.0)
-                
-                st.markdown("**📊 RSI**")
-                min_rsi = st.slider("Min RSI", 0, 100, 0)
-                max_rsi = st.slider("Max RSI", 0, 100, 100)
-            
-            with col2:
-                st.markdown("**💼 Fundamentals**")
-                min_pe = st.number_input("Min P/E", value=0.0)
-                max_pe = st.number_input("Max P/E", value=100.0)
-                min_market_cap = st.number_input("Min Market Cap ($B)", value=0.0)
-            
-            with col3:
-                st.markdown("**📈 Profitability**")
-                min_dividend = st.number_input("Min Dividend (%)", value=0.0)
-                min_profit_margin = st.number_input("Min Profit Margin (%)", value=0.0)
-                
-                sort_by = st.selectbox("Sort By", ["AI_Score", "Price", "Change_6M", "RSI", "PE"])
-        
-        if st.button("🚀 Run AI Screener", type="primary", use_container_width=True):
-            criteria = {
-                'min_price': min_price if min_price > 0 else None,
-                'max_price': max_price if max_price < 1000 else None,
-                'min_rsi': min_rsi if min_rsi > 0 else None,
-                'max_rsi': max_rsi if max_rsi < 100 else None,
-                'min_pe': min_pe if min_pe > 0 else None,
-                'max_pe': max_pe if max_pe < 100 else None,
-                'min_market_cap': min_market_cap if min_market_cap > 0 else None,
-                'min_dividend': min_dividend if min_dividend > 0 else None,
-                'min_profit_margin': min_profit_margin if min_profit_margin > 0 else None
-            }
-            
-            progress = st.progress(0)
-            status = st.empty()
-            
-            def update_progress(pct):
-                progress.progress(pct)
-                status.text(f"🤖 AI Screening... {int(pct * 100)}%")
-            
-            results = StockScreener.screen_stocks(criteria, update_progress)
-            
-            progress.empty()
-            status.empty()
-            
-            if not results.empty:
-                st.success(f"✅ Found {len(results)} stocks matching your criteria!")
-                
-                results = results.sort_values(by=sort_by, ascending=False).reset_index(drop=True)
-                
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Stocks Found", len(results))
-                col2.metric("Avg AI Score", f"{results['AI_Score'].mean():.1f}")
-                col3.metric("Avg P/E", f"{results['PE'].mean():.1f}")
-                
-                display_df = results.copy()
-                display_df['Price'] = display_df['Price'].apply(lambda x: f"${x:.2f}")
-                display_df['Change_6M'] = display_df['Change_6M'].apply(lambda x: f"{x:+.2f}%")
-                display_df['RSI'] = display_df['RSI'].apply(lambda x: f"{x:.2f}")
-                display_df['PE'] = display_df['PE'].apply(lambda x: f"{x:.2f}" if x > 0 else "N/A")
-                display_df['Market_Cap_B'] = display_df['Market_Cap_B'].apply(lambda x: f"${x:.2f}B")
-                display_df['Dividend'] = display_df['Dividend'].apply(lambda x: f"{x:.2f}%")
-                display_df['Profit_Margin'] = display_df['Profit_Margin'].apply(lambda x: f"{x:.2f}%")
-                display_df['AI_Score'] = display_df['AI_Score'].apply(lambda x: f"{x:.0f}/100")
-                
-                st.dataframe(display_df, use_container_width=True, hide_index=True)
-                
-                csv = results.to_csv(index=False)
-                st.download_button("📥 Export Results (CSV)", csv, f"ai_stock_genius_screener_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv", use_container_width=True)
-            else:
-                st.warning("No stocks match your criteria. Try adjusting the filters.")
-    else:
-        st.markdown('<div class="alert-warning">🔒 Stock Screener is a Premium feature! Upgrade to unlock AI-powered stock screening.</div>', unsafe_allow_html=True)
-        if st.button("🚀 Upgrade Now", type="primary", use_container_width=True):
-            with st.spinner("Upgrading..."):
-                if DatabaseService.upgrade_to_premium(SessionManager.get('user').id):
-                    SessionManager.set('profile', DatabaseService.get_user_profile(SessionManager.get('user').id))
-                    st.success("Welcome to Premium!")
-                    st.rerun()
-
-def render_backtest_page(is_premium: bool):
-    """Render the backtesting page"""
-    st.title("⚡ Advanced Backtesting Engine")
-    
-    if is_premium:
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            ticker = st.text_input("Ticker Symbol", "AAPL").upper()
-        with col2:
-            start = st.date_input("Start Date", datetime.now() - timedelta(days=730))
-        with col3:
-            end = st.date_input("End Date", datetime.now())
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            capital = st.number_input("Initial Capital ($)", 10000, step=1000)
-            risk = st.slider("Risk per Trade (%)", 0.5, 5.0, 2.0) / 100
-        with col2:
-            rr = st.slider("Risk/Reward Ratio", 1.0, 5.0, 2.0)
-        
-        if st.button("🚀 Run Backtest", type="primary", use_container_width=True):
-            with st.spinner(f"🤖 AI backtesting {ticker}..."):
-                result = AdvancedTradingStrategy.run_advanced_backtest(ticker, start, end, capital, risk, rr)
-                
-                if result:
-                    st.success("✅ Backtest Complete!")
-                    
-                    col1, col2, col3, col4 = st.columns(4)
-                    col1.metric("Strategy Return", f"{result['total_return']:.2f}%")
-                    col2.metric("Buy & Hold", f"{result['buy_hold_return']:.2f}%")
-                    col3.metric("Alpha", f"{result['alpha']:.2f}%")
-                    col4.metric("Total Trades", result['num_trades'])
-                    
-                    col1, col2, col3, col4 = st.columns(4)
-                    col1.metric("Win Rate", f"{result['win_rate']:.1f}%")
-                    col2.metric("Profit Factor", f"{result['profit_factor']:.2f}")
-                    col3.metric("Sharpe Ratio", f"{result['sharpe_ratio']:.2f}")
-                    col4.metric("Max Drawdown", f"{result['max_drawdown']:.2f}%")
-                    
-                    st.markdown("---")
-                    
-                    fig = go.Figure()
-                    fig.add_trace(go.Scatter(
-                        x=list(range(len(result['equity_curve']))), 
-                        y=result['equity_curve'], 
-                        name='Equity Curve', 
-                        fill='tozeroy',
-                        line=dict(color='#22c55e', width=3)
-                    ))
-                    fig.update_layout(
-                        height=500, 
-                        template='plotly_dark',
-                        title="Equity Curve",
-                        paper_bgcolor='rgba(0,0,0,0)',
-                        plot_bgcolor='rgba(0,0,0,0.3)'
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-                else:
-                    st.error("Backtest failed. Please try different parameters.")
-    else:
-        st.markdown('<div class="alert-warning">🔒 Backtesting Engine is Premium only!</div>', unsafe_allow_html=True)
-
-def render_position_sizer_page(is_premium: bool):
-    """Render the position sizer page"""
-    st.title("📏 AI Position Size Calculator")
-    
-    if is_premium:
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            ticker = st.text_input("Ticker Symbol", "AAPL").upper()
-            account = st.number_input("Account Size ($)", 100000, step=1000)
-            risk = st.slider("Risk per Trade (%)", 0.5, 5.0, 2.0) / 100
-        
-        with col2:
-            method = st.selectbox("Sizing Method", ["Kelly Criterion", "Fixed Risk", "Volatility", "All Methods"])
-            rr = st.slider("Risk/Reward Ratio", 1.0, 5.0, 2.0)
-        
-        if st.button("🤖 Calculate Position Size", type="primary", use_container_width=True):
-            try:
-                stock = yf.Ticker(ticker)
-                hist = stock.history(period='3mo')
-                df = TechnicalAnalysisEngine.calculate_all_indicators(hist)
-                
-                price = df['Close'].iloc[-1]
-                vol = df['Close'].pct_change().std()
-                atr = df['ATR'].iloc[-1]
-                
-                method_map = {"Kelly Criterion": "kelly", "Fixed Risk": "fixed", "Volatility": "volatility", "All Methods": "all"}
-                sizes = PositionSizingEngine.calculate_position_size(account, price, vol, method_map[method], risk)
-                stops = PositionSizingEngine.calculate_stop_loss_take_profit(price, atr, rr)
-                
-                st.markdown("---")
-                st.subheader("Position Sizing Results")
-                if method == "All Methods":
-                    for m, data in sizes.items():
-                        st.write(f"**{m.title()}:** {data['shares']} shares (${data['position_value']:,.0f})")
-                else:
-                    data = sizes[method_map[method]]
-                    col1, col2, col3 = st.columns(3)
-                    col1.metric("Shares to Buy", data['shares'])
-                    col2.metric("Position Value", f"${data['position_value']:,.0f}")
-                    col3.metric("% of Account", f"{data['position_pct']:.1f}%")
-                
-                st.markdown("---")
-                st.subheader("Risk Management Levels")
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Entry Price", f"${stops['entry_price']:.2f}")
-                col2.metric("Stop Loss", f"${stops['stop_loss']:.2f}", f"-{stops['stop_loss_pct']:.1f}%")
-                col3.metric("Take Profit", f"${stops['take_profit']:.2f}", f"+{stops['take_profit_pct']:.1f}%")
-            except Exception as e:
-                st.error(f"Error calculating position size: {e}")
-    else:
-        st.markdown('<div class="alert-warning">🔒 Premium feature</div>', unsafe_allow_html=True)
-
-def render_watchlist_page(is_premium: bool):
-    """Render the watchlist page"""
-    st.title("👁️ Watchlist")
-    
-    if is_premium:
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            new_ticker = st.text_input("Add ticker to watchlist").upper()
-        with col2:
-            st.write("")
-            st.write("")
-            if st.button("Add Stock", type="primary"):
-                if new_ticker:
-                    if DatabaseService.add_to_watchlist(SessionManager.get('user').id, new_ticker):
-                        st.success(f"✅ Added {new_ticker}!")
-                        time.sleep(0.5)
-                        st.rerun()
-                    else:
-                        st.warning("Already in watchlist")
-        
-        st.markdown("---")
-        
-        watchlist = DatabaseService.get_watchlist(SessionManager.get('user').id)
-        
-        if watchlist:
-            st.subheader(f"📋 Your Watchlist ({len(watchlist)} stocks)")
-            
-            for item in watchlist:
-                ticker = item['ticker']
-                try:
-                    stock = yf.Ticker(ticker)
-                    hist = stock.history(period='1d')
-                    
-                    if not hist.empty:
-                        price = hist['Close'].iloc[-1]
-                        
-                        col1, col2, col3 = st.columns([2, 2, 1])
-                        col1.write(f"**{ticker}**")
-                        col2.write(f"${price:.2f}")
-                        if col3.button("Remove", key=ticker):
-                            DatabaseService.remove_from_watchlist(SessionManager.get('user').id, ticker)
-                            st.rerun()
-                except:
-                    col1, col2 = st.columns([4, 1])
-                    col1.write(f"**{ticker}**")
-                    if col2.button("Remove", key=ticker):
-                        DatabaseService.remove_from_watchlist(SessionManager.get('user').id, ticker)
-                        st.rerun()
-        else:
-            st.info("Your watchlist is empty. Add stocks to track them!")
-    else:
-        st.markdown('<div class="alert-warning">🔒 Premium feature</div>', unsafe_allow_html=True)
-
-def render_portfolio_page(is_premium: bool):
-    """Render the portfolio page"""
-    st.title("💼 Portfolio Tracker")
-    
-    if is_premium:
-        with st.expander("➕ Add New Position"):
-            col1, col2, col3 = st.columns(3)
-            ticker = col1.text_input("Ticker Symbol").upper()
-            shares = col2.number_input("Number of Shares", 0.0, step=0.1)
-            price = col3.number_input("Average Price", 0.0, step=0.01)
-            
-            if st.button("Add to Portfolio", type="primary", use_container_width=True):
-                if ticker and shares > 0 and price > 0:
-                    if DatabaseService.add_portfolio_position(SessionManager.get('user').id, ticker, shares, price, datetime.now().date().isoformat()):
-                        st.success(f"✅ Added {shares} shares of {ticker}!")
-                        time.sleep(0.5)
-                        st.rerun()
-                else:
-                    st.error("Please fill in all fields")
-        
-        st.markdown("---")
-        
-        portfolio = DatabaseService.get_portfolio(SessionManager.get('user').id)
-        
-        if portfolio:
-            metrics = PerformanceAnalytics.calculate_portfolio_metrics(portfolio)
-            
-            st.subheader("📊 Portfolio Summary")
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Total Invested", f"${metrics['total_invested']:,.0f}")
-            col2.metric("Current Value", f"${metrics['total_current']:,.0f}")
-            col3.metric("Total P/L", f"${metrics['total_pnl']:,.0f}", f"{metrics['total_pnl_pct']:+.1f}%")
-            
-            st.markdown("---")
-            
-            st.subheader(f"📈 Positions ({len(portfolio)})")
-            
-            for pos in portfolio:
-                ticker = pos['ticker']
-                shares = pos['shares']
-                avg_price = pos['average_price']
-                
-                try:
-                    stock = yf.Ticker(ticker)
-                    current_price = stock.history(period='1d')['Close'].iloc[-1]
-                    pnl = (current_price - avg_price) * shares
-                    pnl_pct = ((current_price - avg_price) / avg_price) * 100
-                    
-                    col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
-                    col1.write(f"**{ticker}**")
-                    col2.write(f"{shares} shares @ ${avg_price:.2f}")
-                    col3.metric("P/L", f"${pnl:,.2f}", f"{pnl_pct:+.1f}%")
-                    if col4.button("Remove", key=ticker):
-                        DatabaseService.remove_portfolio_position(SessionManager.get('user').id, ticker)
-                        st.rerun()
-                except:
-                    col1, col2 = st.columns([4, 1])
-                    col1.write(f"{ticker}: {shares} @ ${avg_price:.2f}")
-                    if col2.button("Remove", key=ticker):
-                        DatabaseService.remove_portfolio_position(SessionManager.get('user').id, ticker)
-                        st.rerun()
-        else:
-            st.info("Your portfolio is empty. Add positions to track performance!")
-    else:
-        st.markdown('<div class="alert-warning">🔒 Premium feature</div>', unsafe_allow_html=True)
-
-def render_footer():
-    """Render the footer"""
-    st.markdown("---")
-    st.markdown("""
-    <div style='text-align: center; padding: 2rem; color: rgba(255, 255, 255, 0.7);'>
-        <p style='font-size: 1.1rem; font-weight: 600;'>🤖 AI Stock Genius Professional Platform</p>
-        <p style='font-size: 0.9rem;'>Powered by Advanced AI & Machine Learning</p>
-        <p style='font-size: 0.85rem;'>© 2025 AI Stock Genius | For educational purposes only</p>
-        <p style='font-size: 0.8rem; margin-top: 1rem;'>⚠️ Investment decisions involve risk. Past performance does not guarantee future results.</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-# =============================================================================
-# MAIN APPLICATION ENTRY POINT
-# =============================================================================
-
-def main():
-    """Main application entry point"""
-    
-    # Check authentication status
-    if not SessionManager.get('authenticated'):
-        render_authentication_page()
-        st.stop()
-    
-    # Get premium status
-    is_premium = SessionManager.get('profile', {}).get('is_premium', False)
-    
-    # Render sidebar
-    render_sidebar(is_premium)
-    
-    # Route to appropriate page
-    current_page = SessionManager.get('page', 'dashboard')
-    
-    if current_page == 'dashboard':
-        render_dashboard_page(is_premium)
-    elif current_page == 'analysis':
-        render_analysis_page(is_premium)
-    elif current_page == 'screener':
-        render_screener_page(is_premium)
-    elif current_page == 'backtest':
-        render_backtest_page(is_premium)
-    elif current_page == 'position_sizer':
-        render_position_sizer_page(is_premium)
-    elif current_page == 'watchlist':
-        render_watchlist_page(is_premium)
-    elif current_page == 'portfolio':
-        render_portfolio_page(is_premium)
-    
-    # Render footer
-    render_footer()
-
-# Run the application
-if __name__ == "__main__":
-    main()
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                           AI STOCK GENIUS                                     ║
@@ -882,6 +48,50 @@ st.set_page_config(
         'About': 'AI-Powered Stock Analysis Platform v3.0'
     }
 )
+
+# =============================================================================
+# SESSION STATE MANAGER
+# =============================================================================
+
+class SessionManager:
+    """Centralized session state management"""
+    
+    @staticmethod
+    def initialize():
+        """Initialize all session state variables"""
+        defaults = {
+            'authenticated': False,
+            'user': None,
+            'profile': None,
+            'page': 'dashboard',
+            'watchlist_cache': None,
+            'portfolio_cache': None,
+            'analysis_cache': {},
+            'screener_results': None,
+            'backtest_results': None,
+            'theme': 'gradient'
+        }
+        
+        for key, value in defaults.items():
+            if key not in st.session_state:
+                st.session_state[key] = value
+    
+    @staticmethod
+    def clear():
+        """Clear all session state"""
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        SessionManager.initialize()
+    
+    @staticmethod
+    def get(key: str, default=None):
+        """Safely get session state value"""
+        return st.session_state.get(key, default)
+    
+    @staticmethod
+    def set(key: str, value):
+        """Safely set session state value"""
+        st.session_state[key] = value
 
 # =============================================================================
 # DATABASE CONNECTION
@@ -1315,50 +525,6 @@ def load_custom_css():
         }
     </style>
     """, unsafe_allow_html=True)
-
-# =============================================================================
-# SESSION STATE MANAGER
-# =============================================================================
-
-class SessionManager:
-    """Centralized session state management"""
-    
-    @staticmethod
-    def initialize():
-        """Initialize all session state variables"""
-        defaults = {
-            'authenticated': False,
-            'user': None,
-            'profile': None,
-            'page': 'dashboard',
-            'watchlist_cache': None,
-            'portfolio_cache': None,
-            'analysis_cache': {},
-            'screener_results': None,
-            'backtest_results': None,
-            'theme': 'gradient'
-        }
-        
-        for key, value in defaults.items():
-            if key not in st.session_state:
-                st.session_state[key] = value
-    
-    @staticmethod
-    def clear():
-        """Clear all session state"""
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        SessionManager.initialize()
-    
-    @staticmethod
-    def get(key: str, default=None):
-        """Safely get session state value"""
-        return st.session_state.get(key, default)
-    
-    @staticmethod
-    def set(key: str, value):
-        """Safely set session state value"""
-        st.session_state[key] = value
 
 # =============================================================================
 # INITIALIZE APPLICATION
@@ -2369,4 +1535,779 @@ class PerformanceAnalytics:
             
         except:
             return {
-                'total_invested': 0,}
+                'total_invested': 0,
+                'total_current': 0,
+                'total_pnl': 0,
+                'total_pnl_pct': 0,
+                'positions': [],
+                'num_positions': 0
+            }
+
+# =============================================================================
+# AUTHENTICATION PAGE
+# =============================================================================
+
+def render_authentication_page():
+    """Render the authentication page"""
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.markdown("<div style='text-align: center; margin-top: 4rem;'><h1 style='font-size: 4rem; margin-bottom: 0.5rem;'>🤖 AI Stock Genius</h1></div>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: rgba(255, 255, 255, 0.9); font-size: 1.3rem; margin-bottom: 3rem; font-weight: 600;'>AI-Powered Stock Analysis & Trading Intelligence</p>", unsafe_allow_html=True)
+        
+        tab1, tab2, tab3 = st.tabs(["🔐 Sign In", "✨ Create Account", "🔑 Reset Password"])
+        
+        with tab1:
+            with st.form("signin_form", clear_on_submit=False):
+                st.markdown("### Welcome Back to AI Stock Genius")
+                email = st.text_input("Email Address", key="signin_email", placeholder="your@email.com")
+                password = st.text_input("Password", type="password", key="signin_password", placeholder="Enter your password")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    remember = st.checkbox("Remember me")
+                
+                submit = st.form_submit_button("Sign In", use_container_width=True, type="primary")
+                
+                if submit:
+                    if not email or not password:
+                        st.error("Please enter both email and password")
+                    else:
+                        with st.spinner("Signing in..."):
+                            success, user, profile = AuthenticationService.signin(email, password)
+                            
+                            if success:
+                                SessionManager.set('authenticated', True)
+                                SessionManager.set('user', user)
+                                SessionManager.set('profile', profile)
+                                st.success("Welcome back to AI Stock Genius!")
+                                time.sleep(0.5)
+                                st.rerun()
+                            else:
+                                st.error("Invalid email or password. Please try again.")
+        
+        with tab2:
+            with st.form("signup_form", clear_on_submit=False):
+                st.markdown("### Join AI Stock Genius")
+                email = st.text_input("Email Address", key="signup_email", placeholder="your@email.com")
+                password = st.text_input("Password", type="password", key="signup_password", placeholder="At least 6 characters")
+                confirm = st.text_input("Confirm Password", type="password", key="confirm_password", placeholder="Re-enter password")
+                
+                agree = st.checkbox("I agree to the Terms of Service and Privacy Policy")
+                
+                submit = st.form_submit_button("Create Account", use_container_width=True, type="primary")
+                
+                if submit:
+                    if not email or not password or not confirm:
+                        st.error("Please fill in all fields")
+                    elif not agree:
+                        st.error("Please agree to the Terms of Service")
+                    elif password != confirm:
+                        st.error("Passwords do not match")
+                    elif len(password) < 6:
+                        st.error("Password must be at least 6 characters")
+                    else:
+                        with st.spinner("Creating account..."):
+                            success, message = AuthenticationService.signup(email, password)
+                            
+                            if success:
+                                st.success(message)
+                                st.info("Please check your email to verify your account, then sign in.")
+                            else:
+                                st.error(message)
+        
+        with tab3:
+            with st.form("reset_form", clear_on_submit=False):
+                st.markdown("### Reset Your Password")
+                st.caption("Enter your email address and we'll send you a link to reset your password.")
+                
+                email = st.text_input("Email Address", key="reset_email", placeholder="your@email.com")
+                
+                submit = st.form_submit_button("Send Reset Link", use_container_width=True, type="primary")
+                
+                if submit:
+                    if not email:
+                        st.error("Please enter your email address")
+                    else:
+                        with st.spinner("Sending reset link..."):
+                            success, message = AuthenticationService.reset_password(email)
+                            
+                            if success:
+                                st.success(message)
+                            else:
+                                st.error(message)
+
+# =============================================================================
+# SIDEBAR
+# =============================================================================
+
+def render_sidebar(is_premium: bool):
+    """Render the sidebar navigation"""
+    with st.sidebar:
+        st.markdown("### 🤖 AI Stock Genius")
+        st.caption(f"👤 {SessionManager.get('user').email}")
+        
+        st.markdown("---")
+        
+        if is_premium:
+            st.markdown('<div class="premium-badge">⭐ PREMIUM ACTIVE</div>', unsafe_allow_html=True)
+            sub_end = SessionManager.get('profile', {}).get('subscription_end_date')
+            if sub_end:
+                st.caption(f"Valid until: {sub_end[:10]}")
+            
+            if st.button("Cancel Subscription", use_container_width=True):
+                if DatabaseService.cancel_subscription(SessionManager.get('user').id):
+                    SessionManager.set('profile', DatabaseService.get_user_profile(SessionManager.get('user').id))
+                    st.success("Subscription cancelled")
+                    time.sleep(0.5)
+                    st.rerun()
+        else:
+            st.markdown('<div class="free-badge">FREE TIER</div>', unsafe_allow_html=True)
+            st.caption("Upgrade for AI-powered features")
+            
+            if st.button("🚀 Upgrade to Premium - $9.99/mo", use_container_width=True, type="primary"):
+                with st.spinner("Upgrading account..."):
+                    if DatabaseService.upgrade_to_premium(SessionManager.get('user').id):
+                        SessionManager.set('profile', DatabaseService.get_user_profile(SessionManager.get('user').id))
+                        st.balloons()
+                        st.success("Welcome to Premium!")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error("Upgrade failed. Please try again.")
+        
+        st.markdown("---")
+        
+        st.markdown("#### 🎯 Navigation")
+        
+        pages = {
+            'dashboard': '📊 Dashboard',
+            'analysis': '📈 Stock Analysis',
+            'screener': '🔍 Stock Screener',
+            'backtest': '⚡ Backtesting',
+            'position_sizer': '📏 Position Sizer',
+            'watchlist': '👁️ Watchlist',
+            'portfolio': '💼 Portfolio'
+        }
+        
+        for key, label in pages.items():
+            if st.button(label, use_container_width=True, key=f"nav_{key}"):
+                SessionManager.set('page', key)
+        
+        st.markdown("---")
+        
+        with st.expander("✨ Premium Features"):
+            features = [
+                "AI Stock Scoring",
+                "Advanced Charts",
+                "Technical Patterns",
+                "Stock Screener",
+                "Price Predictions",
+                "Position Sizing",
+                "Backtesting Engine",
+                "Unlimited Watchlist",
+                "Portfolio Tracking",
+                "CSV Exports"
+            ]
+            for f in features:
+                icon = "✅" if is_premium else "🔒"
+                st.caption(f"{icon} {f}")
+        
+        st.markdown("---")
+        
+        if st.button("🚪 Sign Out", use_container_width=True):
+            AuthenticationService.signout()
+            st.rerun()
+
+# =============================================================================
+# PAGE RENDERERS
+# =============================================================================
+
+def render_dashboard_page(is_premium: bool):
+    """Render the dashboard page"""
+    st.title("🤖 AI Stock Genius Dashboard")
+    
+    if is_premium:
+        st.markdown('<div class="alert-success">🎉 Welcome back! You have full access to all AI-powered premium features.</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="alert-info">📢 You are on the free tier. Upgrade to Premium for AI analytics and unlimited features!</div>', unsafe_allow_html=True)
+    
+    st.markdown("### 📊 Quick Stats")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    watchlist = DatabaseService.get_watchlist(SessionManager.get('user').id)
+    portfolio = DatabaseService.get_portfolio(SessionManager.get('user').id)
+    
+    col1.metric("Account Type", "💎 Premium" if is_premium else "🆓 Free")
+    col2.metric("Watchlist Stocks", len(watchlist))
+    col3.metric("Portfolio Positions", len(portfolio))
+    col4.metric("Features Unlocked", "10/10" if is_premium else "3/10")
+    
+    st.markdown("---")
+    
+    st.markdown("### 🚀 Quick Actions")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("📈 Analyze a Stock", use_container_width=True, type="primary"):
+            SessionManager.set('page', 'analysis')
+            st.rerun()
+    
+    with col2:
+        if st.button("🔍 Screen Stocks", use_container_width=True):
+            SessionManager.set('page', 'screener')
+            st.rerun()
+    
+    with col3:
+        if st.button("💼 View Portfolio", use_container_width=True):
+            SessionManager.set('page', 'portfolio')
+            st.rerun()
+    
+    st.markdown("---")
+    
+    st.markdown("### 📰 Market Overview")
+    col1, col2, col3 = st.columns(3)
+    
+    try:
+        indices = {'SPY': 'S&P 500', 'QQQ': 'NASDAQ', 'DIA': 'Dow Jones'}
+        for idx, (ticker, name) in enumerate(indices.items()):
+            stock = yf.Ticker(ticker)
+            hist = stock.history(period='2d')
+            if not hist.empty:
+                current = hist['Close'].iloc[-1]
+                prev = hist['Close'].iloc[-2] if len(hist) > 1 else current
+                change = ((current - prev) / prev) * 100
+                
+                if idx == 0:
+                    col1.metric(name, f"${current:.2f}", f"{change:+.2f}%")
+                elif idx == 1:
+                    col2.metric(name, f"${current:.2f}", f"{change:+.2f}%")
+                else:
+                    col3.metric(name, f"${current:.2f}", f"{change:+.2f}%")
+    except:
+        pass
+
+def render_analysis_page(is_premium: bool):
+    """Render the stock analysis page"""
+    st.title("📈 AI-Powered Stock Analysis")
+    
+    col1, col2, col3 = st.columns([3, 2, 1])
+    
+    with col1:
+        ticker = st.text_input("Enter Stock Ticker", value="AAPL", placeholder="e.g., AAPL, TSLA, MSFT").upper()
+    
+    with col2:
+        period = st.selectbox("Time Period", ["1mo", "3mo", "6mo", "1y", "2y", "5y"], index=2)
+    
+    with col3:
+        st.write("")
+        st.write("")
+        analyze_btn = st.button("🔍 Analyze", type="primary")
+    
+    if ticker:
+        try:
+            with st.spinner(f"🤖 AI analyzing {ticker}..."):
+                stock = yf.Ticker(ticker)
+                df = stock.history(period=period)
+                info = stock.info
+                
+                if df.empty:
+                    st.error("Invalid ticker or no data available")
+                else:
+                    df = TechnicalAnalysisEngine.calculate_all_indicators(df)
+                    
+                    price = df['Close'].iloc[-1]
+                    prev = df['Close'].iloc[-2] if len(df) > 1 else price
+                    change_pct = ((price - prev) / prev) * 100
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    col1.metric("Current Price", f"${price:.2f}", f"{change_pct:+.2f}%")
+                    
+                    if is_premium:
+                        ai_analysis = TechnicalAnalysisEngine.calculate_ai_score(df, info)
+                        col2.metric("🤖 AI Score", f"{ai_analysis['score']:.0f}/100", ai_analysis['rating'])
+                    else:
+                        col2.metric("🤖 AI Score", "🔒 Premium")
+                    
+                    volume = info.get('volume', 0)
+                    col3.metric("Volume", f"{volume/1e6:.1f}M")
+                    
+                    market_cap = info.get('marketCap', 0)
+                    col4.metric("Market Cap", f"${market_cap/1e9:.1f}B" if market_cap > 0 else "N/A")
+                    
+                    st.markdown("---")
+                    
+                    st.subheader("📊 Price Chart & Technical Indicators")
+                    
+                    rows = 3 if is_premium else 1
+                    fig = make_subplots(
+                        rows=rows, cols=1,
+                        shared_xaxes=True,
+                        vertical_spacing=0.05,
+                        row_heights=[0.6, 0.2, 0.2] if is_premium else [1]
+                    )
+                    
+                    fig.add_trace(go.Candlestick(
+                        x=df.index,
+                        open=df['Open'],
+                        high=df['High'],
+                        low=df['Low'],
+                        close=df['Close'],
+                        name='Price',
+                        increasing_line_color='#22c55e',
+                        decreasing_line_color='#ef4444'
+                    ), row=1, col=1)
+                    
+                    if is_premium:
+                        fig.add_trace(go.Scatter(x=df.index, y=df['SMA20'], name='SMA 20', line=dict(color='#fbbf24', width=2)), row=1, col=1)
+                        fig.add_trace(go.Scatter(x=df.index, y=df['SMA50'], name='SMA 50', line=dict(color='#f97316', width=2)), row=1, col=1)
+                        fig.add_trace(go.Scatter(x=df.index, y=df['SMA200'], name='SMA 200', line=dict(color='#ef4444', width=2)), row=1, col=1)
+                        
+                        colors = ['#22c55e' if val >= 0 else '#ef4444' for val in df['MACD_Histogram']]
+                        fig.add_trace(go.Bar(x=df.index, y=df['MACD_Histogram'], name='MACD Histogram', marker_color=colors, showlegend=False), row=2, col=1)
+                        fig.add_trace(go.Scatter(x=df.index, y=df['MACD'], name='MACD', line=dict(color='#3b82f6', width=2)), row=2, col=1)
+                        fig.add_trace(go.Scatter(x=df.index, y=df['MACD_Signal'], name='Signal', line=dict(color='#f97316', width=2)), row=2, col=1)
+                        
+                        fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], name='RSI', line=dict(color='#8b5cf6', width=2), fill='tozeroy', fillcolor='rgba(139, 92, 246, 0.2)'), row=3, col=1)
+                        fig.add_hline(y=70, line_dash="dash", line_color="#ef4444", row=3, col=1)
+                        fig.add_hline(y=30, line_dash="dash", line_color="#22c55e", row=3, col=1)
+                    
+                    fig.update_layout(
+                        height=800 if is_premium else 500,
+                        template='plotly_dark',
+                        xaxis_rangeslider_visible=False,
+                        showlegend=True,
+                        hovermode='x unified',
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0.3)'
+                    )
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    if is_premium:
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.subheader("🤖 AI Analysis")
+                            for signal, sentiment in ai_analysis['signals']:
+                                icon = "🟢" if sentiment == "positive" else "🔴" if sentiment == "negative" else "🟡"
+                                st.caption(f"{icon} {signal}")
+                            
+                            patterns = TechnicalAnalysisEngine.detect_chart_patterns(df)
+                            if patterns:
+                                st.markdown("**📈 Patterns Detected:**")
+                                for pattern, direction in patterns:
+                                    icon = "🚀" if direction == "bullish" else "📉" if direction == "bearish" else "➡️"
+                                    st.caption(f"{icon} {pattern}")
+                        
+                        with col2:
+                            st.subheader("🔮 Price Prediction")
+                            prediction = PredictionEngine.predict_price(df, 30)
+                            if prediction:
+                                st.metric("30-Day Forecast", f"${prediction['predicted_price']:.2f}", f"{prediction['change_pct']:+.2f}%")
+                                st.progress(prediction['confidence'] / 100)
+                                st.caption(f"Confidence: {prediction['confidence']:.1f}% | Trend: {prediction['trend']}")
+                            
+                            st.markdown("**💼 Fundamentals:**")
+                            st.caption(f"P/E Ratio: {info.get('trailingPE', 'N/A')}")
+                            st.caption(f"Dividend Yield: {info.get('dividendYield', 0)*100:.2f}%")
+                            st.caption(f"Profit Margin: {info.get('profitMargins', 0)*100:.2f}%")
+                        
+                        st.markdown("---")
+                        
+                        if st.button(f"⭐ Add {ticker} to Watchlist", use_container_width=True, type="primary"):
+                            if DatabaseService.add_to_watchlist(SessionManager.get('user').id, ticker):
+                                st.success(f"✅ {ticker} added to watchlist!")
+                            else:
+                                st.warning("Already in watchlist")
+                    else:
+                        st.markdown('<div class="alert-info">🔒 Upgrade to Premium for AI analysis, predictions, and pattern detection</div>', unsafe_allow_html=True)
+                        
+        except Exception as e:
+            st.error(f"Error analyzing stock: {e}")
+
+def render_screener_page(is_premium: bool):
+    """Render the stock screener page"""
+    st.title("🔍 AI Stock Screener")
+    
+    if is_premium:
+        with st.expander("🎯 Screening Criteria", expanded=True):
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown("**💵 Price Range**")
+                min_price = st.number_input("Min Price ($)", value=0.0, step=10.0)
+                max_price = st.number_input("Max Price ($)", value=1000.0, step=10.0)
+                
+                st.markdown("**📊 RSI**")
+                min_rsi = st.slider("Min RSI", 0, 100, 0)
+                max_rsi = st.slider("Max RSI", 0, 100, 100)
+            
+            with col2:
+                st.markdown("**💼 Fundamentals**")
+                min_pe = st.number_input("Min P/E", value=0.0)
+                max_pe = st.number_input("Max P/E", value=100.0)
+                min_market_cap = st.number_input("Min Market Cap ($B)", value=0.0)
+            
+            with col3:
+                st.markdown("**📈 Profitability**")
+                min_dividend = st.number_input("Min Dividend (%)", value=0.0)
+                min_profit_margin = st.number_input("Min Profit Margin (%)", value=0.0)
+                
+                sort_by = st.selectbox("Sort By", ["AI_Score", "Price", "Change_6M", "RSI", "PE"])
+        
+        if st.button("🚀 Run AI Screener", type="primary", use_container_width=True):
+            criteria = {
+                'min_price': min_price if min_price > 0 else None,
+                'max_price': max_price if max_price < 1000 else None,
+                'min_rsi': min_rsi if min_rsi > 0 else None,
+                'max_rsi': max_rsi if max_rsi < 100 else None,
+                'min_pe': min_pe if min_pe > 0 else None,
+                'max_pe': max_pe if max_pe < 100 else None,
+                'min_market_cap': min_market_cap if min_market_cap > 0 else None,
+                'min_dividend': min_dividend if min_dividend > 0 else None,
+                'min_profit_margin': min_profit_margin if min_profit_margin > 0 else None
+            }
+            
+            progress = st.progress(0)
+            status = st.empty()
+            
+            def update_progress(pct):
+                progress.progress(pct)
+                status.text(f"🤖 AI Screening... {int(pct * 100)}%")
+            
+            results = StockScreener.screen_stocks(criteria, update_progress)
+            
+            progress.empty()
+            status.empty()
+            
+            if not results.empty:
+                st.success(f"✅ Found {len(results)} stocks matching your criteria!")
+                
+                results = results.sort_values(by=sort_by, ascending=False).reset_index(drop=True)
+                
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Stocks Found", len(results))
+                col2.metric("Avg AI Score", f"{results['AI_Score'].mean():.1f}")
+                col3.metric("Avg P/E", f"{results['PE'].mean():.1f}")
+                
+                display_df = results.copy()
+                display_df['Price'] = display_df['Price'].apply(lambda x: f"${x:.2f}")
+                display_df['Change_6M'] = display_df['Change_6M'].apply(lambda x: f"{x:+.2f}%")
+                display_df['RSI'] = display_df['RSI'].apply(lambda x: f"{x:.2f}")
+                display_df['PE'] = display_df['PE'].apply(lambda x: f"{x:.2f}" if x > 0 else "N/A")
+                display_df['Market_Cap_B'] = display_df['Market_Cap_B'].apply(lambda x: f"${x:.2f}B")
+                display_df['Dividend'] = display_df['Dividend'].apply(lambda x: f"{x:.2f}%")
+                display_df['Profit_Margin'] = display_df['Profit_Margin'].apply(lambda x: f"{x:.2f}%")
+                display_df['AI_Score'] = display_df['AI_Score'].apply(lambda x: f"{x:.0f}/100")
+                
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+                
+                csv = results.to_csv(index=False)
+                st.download_button("📥 Export Results (CSV)", csv, f"ai_stock_genius_screener_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv", use_container_width=True)
+            else:
+                st.warning("No stocks match your criteria. Try adjusting the filters.")
+    else:
+        st.markdown('<div class="alert-warning">🔒 Stock Screener is a Premium feature! Upgrade to unlock AI-powered stock screening.</div>', unsafe_allow_html=True)
+        if st.button("🚀 Upgrade Now", type="primary", use_container_width=True):
+            with st.spinner("Upgrading..."):
+                if DatabaseService.upgrade_to_premium(SessionManager.get('user').id):
+                    SessionManager.set('profile', DatabaseService.get_user_profile(SessionManager.get('user').id))
+                    st.success("Welcome to Premium!")
+                    st.rerun()
+
+def render_backtest_page(is_premium: bool):
+    """Render the backtesting page"""
+    st.title("⚡ Advanced Backtesting Engine")
+    
+    if is_premium:
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            ticker = st.text_input("Ticker Symbol", "AAPL").upper()
+        with col2:
+            start = st.date_input("Start Date", datetime.now() - timedelta(days=730))
+        with col3:
+            end = st.date_input("End Date", datetime.now())
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            capital = st.number_input("Initial Capital ($)", 10000, step=1000)
+            risk = st.slider("Risk per Trade (%)", 0.5, 5.0, 2.0) / 100
+        with col2:
+            rr = st.slider("Risk/Reward Ratio", 1.0, 5.0, 2.0)
+        
+        if st.button("🚀 Run Backtest", type="primary", use_container_width=True):
+            with st.spinner(f"🤖 AI backtesting {ticker}..."):
+                result = AdvancedTradingStrategy.run_advanced_backtest(ticker, start, end, capital, risk, rr)
+                
+                if result:
+                    st.success("✅ Backtest Complete!")
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    col1.metric("Strategy Return", f"{result['total_return']:.2f}%")
+                    col2.metric("Buy & Hold", f"{result['buy_hold_return']:.2f}%")
+                    col3.metric("Alpha", f"{result['alpha']:.2f}%")
+                    col4.metric("Total Trades", result['num_trades'])
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    col1.metric("Win Rate", f"{result['win_rate']:.1f}%")
+                    col2.metric("Profit Factor", f"{result['profit_factor']:.2f}")
+                    col3.metric("Sharpe Ratio", f"{result['sharpe_ratio']:.2f}")
+                    col4.metric("Max Drawdown", f"{result['max_drawdown']:.2f}%")
+                    
+                    st.markdown("---")
+                    
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(
+                        x=list(range(len(result['equity_curve']))), 
+                        y=result['equity_curve'], 
+                        name='Equity Curve', 
+                        fill='tozeroy',
+                        line=dict(color='#22c55e', width=3)
+                    ))
+                    fig.update_layout(
+                        height=500, 
+                        template='plotly_dark',
+                        title="Equity Curve",
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0.3)'
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.error("Backtest failed. Please try different parameters.")
+    else:
+        st.markdown('<div class="alert-warning">🔒 Backtesting Engine is Premium only!</div>', unsafe_allow_html=True)
+
+def render_position_sizer_page(is_premium: bool):
+    """Render the position sizer page"""
+    st.title("📏 AI Position Size Calculator")
+    
+    if is_premium:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            ticker = st.text_input("Ticker Symbol", "AAPL").upper()
+            account = st.number_input("Account Size ($)", 100000, step=1000)
+            risk = st.slider("Risk per Trade (%)", 0.5, 5.0, 2.0) / 100
+        
+        with col2:
+            method = st.selectbox("Sizing Method", ["Kelly Criterion", "Fixed Risk", "Volatility", "All Methods"])
+            rr = st.slider("Risk/Reward Ratio", 1.0, 5.0, 2.0)
+        
+        if st.button("🤖 Calculate Position Size", type="primary", use_container_width=True):
+            try:
+                stock = yf.Ticker(ticker)
+                hist = stock.history(period='3mo')
+                df = TechnicalAnalysisEngine.calculate_all_indicators(hist)
+                
+                price = df['Close'].iloc[-1]
+                vol = df['Close'].pct_change().std()
+                atr = df['ATR'].iloc[-1]
+                
+                method_map = {"Kelly Criterion": "kelly", "Fixed Risk": "fixed", "Volatility": "volatility", "All Methods": "all"}
+                sizes = PositionSizingEngine.calculate_position_size(account, price, vol, method_map[method], risk)
+                stops = PositionSizingEngine.calculate_stop_loss_take_profit(price, atr, rr)
+                
+                st.markdown("---")
+                st.subheader("Position Sizing Results")
+                if method == "All Methods":
+                    for m, data in sizes.items():
+                        st.write(f"**{m.title()}:** {data['shares']} shares (${data['position_value']:,.0f})")
+                else:
+                    data = sizes[method_map[method]]
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Shares to Buy", data['shares'])
+                    col2.metric("Position Value", f"${data['position_value']:,.0f}")
+                    col3.metric("% of Account", f"{data['position_pct']:.1f}%")
+                
+                st.markdown("---")
+                st.subheader("Risk Management Levels")
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Entry Price", f"${stops['entry_price']:.2f}")
+                col2.metric("Stop Loss", f"${stops['stop_loss']:.2f}", f"-{stops['stop_loss_pct']:.1f}%")
+                col3.metric("Take Profit", f"${stops['take_profit']:.2f}", f"+{stops['take_profit_pct']:.1f}%")
+            except Exception as e:
+                st.error(f"Error calculating position size: {e}")
+    else:
+        st.markdown('<div class="alert-warning">🔒 Premium feature</div>', unsafe_allow_html=True)
+
+def render_watchlist_page(is_premium: bool):
+    """Render the watchlist page"""
+    st.title("👁️ Watchlist")
+    
+    if is_premium:
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            new_ticker = st.text_input("Add ticker to watchlist").upper()
+        with col2:
+            st.write("")
+            st.write("")
+            if st.button("Add Stock", type="primary"):
+                if new_ticker:
+                    if DatabaseService.add_to_watchlist(SessionManager.get('user').id, new_ticker):
+                        st.success(f"✅ Added {new_ticker}!")
+                        time.sleep(0.5)
+                        st.rerun()
+                    else:
+                        st.warning("Already in watchlist")
+        
+        st.markdown("---")
+        
+        watchlist = DatabaseService.get_watchlist(SessionManager.get('user').id)
+        
+        if watchlist:
+            st.subheader(f"📋 Your Watchlist ({len(watchlist)} stocks)")
+            
+            for item in watchlist:
+                ticker = item['ticker']
+                try:
+                    stock = yf.Ticker(ticker)
+                    hist = stock.history(period='1d')
+                    
+                    if not hist.empty:
+                        price = hist['Close'].iloc[-1]
+                        
+                        col1, col2, col3 = st.columns([2, 2, 1])
+                        col1.write(f"**{ticker}**")
+                        col2.write(f"${price:.2f}")
+                        if col3.button("Remove", key=ticker):
+                            DatabaseService.remove_from_watchlist(SessionManager.get('user').id, ticker)
+                            st.rerun()
+                except:
+                    col1, col2 = st.columns([4, 1])
+                    col1.write(f"**{ticker}**")
+                    if col2.button("Remove", key=ticker):
+                        DatabaseService.remove_from_watchlist(SessionManager.get('user').id, ticker)
+                        st.rerun()
+        else:
+            st.info("Your watchlist is empty. Add stocks to track them!")
+    else:
+        st.markdown('<div class="alert-warning">🔒 Premium feature</div>', unsafe_allow_html=True)
+
+def render_portfolio_page(is_premium: bool):
+    """Render the portfolio page"""
+    st.title("💼 Portfolio Tracker")
+    
+    if is_premium:
+        with st.expander("➕ Add New Position"):
+            col1, col2, col3 = st.columns(3)
+            ticker = col1.text_input("Ticker Symbol").upper()
+            shares = col2.number_input("Number of Shares", 0.0, step=0.1)
+            price = col3.number_input("Average Price", 0.0, step=0.01)
+            
+            if st.button("Add to Portfolio", type="primary", use_container_width=True):
+                if ticker and shares > 0 and price > 0:
+                    if DatabaseService.add_portfolio_position(SessionManager.get('user').id, ticker, shares, price, datetime.now().date().isoformat()):
+                        st.success(f"✅ Added {shares} shares of {ticker}!")
+                        time.sleep(0.5)
+                        st.rerun()
+                else:
+                    st.error("Please fill in all fields")
+        
+        st.markdown("---")
+        
+        portfolio = DatabaseService.get_portfolio(SessionManager.get('user').id)
+        
+        if portfolio:
+            metrics = PerformanceAnalytics.calculate_portfolio_metrics(portfolio)
+            
+            st.subheader("📊 Portfolio Summary")
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Total Invested", f"${metrics['total_invested']:,.0f}")
+            col2.metric("Current Value", f"${metrics['total_current']:,.0f}")
+            col3.metric("Total P/L", f"${metrics['total_pnl']:,.0f}", f"{metrics['total_pnl_pct']:+.1f}%")
+            
+            st.markdown("---")
+            
+            st.subheader(f"📈 Positions ({len(portfolio)})")
+            
+            for pos in portfolio:
+                ticker = pos['ticker']
+                shares = pos['shares']
+                avg_price = pos['average_price']
+                
+                try:
+                    stock = yf.Ticker(ticker)
+                    current_price = stock.history(period='1d')['Close'].iloc[-1]
+                    pnl = (current_price - avg_price) * shares
+                    pnl_pct = ((current_price - avg_price) / avg_price) * 100
+                    
+                    col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+                    col1.write(f"**{ticker}**")
+                    col2.write(f"{shares} shares @ ${avg_price:.2f}")
+                    col3.metric("P/L", f"${pnl:,.2f}", f"{pnl_pct:+.1f}%")
+                    if col4.button("Remove", key=ticker):
+                        DatabaseService.remove_portfolio_position(SessionManager.get('user').id, ticker)
+                        st.rerun()
+                except:
+                    col1, col2 = st.columns([4, 1])
+                    col1.write(f"{ticker}: {shares} @ ${avg_price:.2f}")
+                    if col2.button("Remove", key=ticker):
+                        DatabaseService.remove_portfolio_position(SessionManager.get('user').id, ticker)
+                        st.rerun()
+        else:
+            st.info("Your portfolio is empty. Add positions to track performance!")
+    else:
+        st.markdown('<div class="alert-warning">🔒 Premium feature</div>', unsafe_allow_html=True)
+
+def render_footer():
+    """Render the footer"""
+    st.markdown("---")
+    st.markdown("""
+    <div style='text-align: center; padding: 2rem; color: rgba(255, 255, 255, 0.7);'>
+        <p style='font-size: 1.1rem; font-weight: 600;'>🤖 AI Stock Genius Professional Platform</p>
+        <p style='font-size: 0.9rem;'>Powered by Advanced AI & Machine Learning</p>
+        <p style='font-size: 0.85rem;'>© 2025 AI Stock Genius | For educational purposes only</p>
+        <p style='font-size: 0.8rem; margin-top: 1rem;'>⚠️ Investment decisions involve risk. Past performance does not guarantee future results.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+# =============================================================================
+# MAIN APPLICATION ENTRY POINT
+# =============================================================================
+
+def main():
+    """Main application entry point"""
+    
+    # Check authentication status
+    if not SessionManager.get('authenticated'):
+        render_authentication_page()
+        st.stop()
+    
+    # Get premium status
+    is_premium = SessionManager.get('profile', {}).get('is_premium', False)
+    
+    # Render sidebar
+    render_sidebar(is_premium)
+    
+    # Route to appropriate page
+    current_page = SessionManager.get('page', 'dashboard')
+    
+    if current_page == 'dashboard':
+        render_dashboard_page(is_premium)
+    elif current_page == 'analysis':
+        render_analysis_page(is_premium)
+    elif current_page == 'screener':
+        render_screener_page(is_premium)
+    elif current_page == 'backtest':
+        render_backtest_page(is_premium)
+    elif current_page == 'position_sizer':
+        render_position_sizer_page(is_premium)
+    elif current_page == 'watchlist':
+        render_watchlist_page(is_premium)
+    elif current_page == 'portfolio':
+        render_portfolio_page(is_premium)
+    
+    # Render footer
+    render_footer()
+
+# =============================================================================
+# RUN THE APPLICATION
+# =============================================================================
+
+if __name__ == "__main__":
+    main()
