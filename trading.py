@@ -39,7 +39,7 @@ warnings.filterwarnings('ignore')
 # Streamlit Page Configuration - Must be first Streamlit command
 st.set_page_config(
     page_title="AI Stock Genius",
-    page_icon="🤖",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded",
     menu_items={
