@@ -27,14 +27,6 @@ st.markdown("""
     .main {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     }
-    .maintenance-container {
-        text-align: center;
-        padding: 2rem;
-        background: white;
-        border-radius: 20px;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-        margin: 2rem auto;
-    }
     .countdown {
         font-size: 3rem;
         font-weight: bold;
