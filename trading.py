@@ -699,6 +699,17 @@ class StockSearchHelper:
         return stocks
     
     @staticmethod
+    def get_stock_name_from_ticker(ticker: str) -> str:
+        """Get stock name from ticker using Yahoo Finance"""
+        try:
+            stock = yf.Ticker(ticker)
+            info = stock.info
+            name = info.get('longName') or info.get('shortName') or ticker
+            return name
+        except:
+            return ticker
+    
+    @staticmethod
     def search_stock(query: str) -> List[Tuple[str, str]]:
         """Search for stocks by ticker or name"""
         if not query:
@@ -712,10 +723,20 @@ class StockSearchHelper:
         if query in stocks:
             results.append((query, stocks[query]))
         
-        # Then partial matches
+        # Then partial matches in our database
         for ticker, name in stocks.items():
             if query != ticker and (query in ticker or query in name.upper()):
                 results.append((ticker, name))
+        
+        # If no results found in database, try Yahoo Finance lookup
+        if not results and len(query) >= 1:
+            try:
+                # Try as direct ticker
+                name = StockSearchHelper.get_stock_name_from_ticker(query)
+                if name != query:  # If we got a real name back
+                    results.append((query, name))
+            except:
+                pass
         
         return results[:10]  # Return top 10 matches
     
