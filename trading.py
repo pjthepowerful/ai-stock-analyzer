@@ -372,62 +372,79 @@ def load_custom_css():
         
         /* Input Fields with Better Contrast */
         .stTextInput > div > div > input,
-        .stNumberInput > div > div > input,
-        .stSelectbox > div > div {
-            background: rgba(30, 41, 59, 0.6);
-            border: 2px solid rgba(100, 116, 139, 0.4);
-            border-radius: 10px;
-            color: #f8fafc;
-            font-size: 1rem;
-            padding: 0.875rem 1rem;
-            transition: all 0.3s ease;
-            font-weight: 500;
+        .stNumberInput > div > div > input {
+            background: rgba(30, 41, 59, 0.6) !important;
+            border: 2px solid rgba(100, 116, 139, 0.4) !important;
+            border-radius: 10px !important;
+            color: #f8fafc !important;
+            font-size: 1rem !important;
+            padding: 0.875rem 1rem !important;
+            transition: all 0.3s ease !important;
+            font-weight: 500 !important;
         }
         
-        /* Selectbox specific styling */
-        .stSelectbox > div > div > div {
-            background: rgba(30, 41, 59, 0.6);
+        /* Selectbox - Force white text everywhere */
+        .stSelectbox {
             color: #f8fafc !important;
         }
         
-        .stSelectbox [data-baseweb="select"] {
-            background: rgba(30, 41, 59, 0.6);
-        }
-        
-        .stSelectbox [data-baseweb="select"] > div {
-            background: rgba(30, 41, 59, 0.6);
+        .stSelectbox > div {
             color: #f8fafc !important;
         }
         
-        /* Selectbox dropdown menu */
-        [data-baseweb="popover"] {
-            background: #1e293b !important;
+        .stSelectbox div[data-baseweb="select"] {
+            background-color: rgba(30, 41, 59, 0.6) !important;
+            border: 2px solid rgba(100, 116, 139, 0.4) !important;
+            border-radius: 10px !important;
         }
         
-        [data-baseweb="menu"] {
-            background: #1e293b !important;
+        .stSelectbox div[data-baseweb="select"] > div {
+            color: #f8fafc !important;
+            background-color: transparent !important;
         }
         
-        [role="option"] {
-            background: #1e293b !important;
+        .stSelectbox div[data-baseweb="select"] span {
             color: #f8fafc !important;
         }
         
-        [role="option"]:hover {
-            background: #334155 !important;
+        .stSelectbox div[data-baseweb="select"] svg {
+            fill: #f8fafc !important;
+        }
+        
+        /* Dropdown menu styling */
+        div[data-baseweb="popover"] {
+            background-color: #1e293b !important;
+        }
+        
+        ul[role="listbox"] {
+            background-color: #1e293b !important;
+        }
+        
+        li[role="option"] {
+            background-color: #1e293b !important;
+            color: #f8fafc !important;
+        }
+        
+        li[role="option"]:hover {
+            background-color: #334155 !important;
             color: #ffffff !important;
         }
         
-        /* Selected value in selectbox */
-        .stSelectbox [data-baseweb="select"] span {
+        li[role="option"][aria-selected="true"] {
+            background-color: #475569 !important;
+            color: #ffffff !important;
+        }
+        
+        /* Additional selectbox text targeting */
+        .stSelectbox * {
             color: #f8fafc !important;
         }
         
         .stTextInput > div > div > input:focus,
         .stNumberInput > div > div > input:focus {
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-            background: rgba(30, 41, 59, 0.8);
+            border-color: #3b82f6 !important;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+            background: rgba(30, 41, 59, 0.8) !important;
         }
         
         /* DataFrames with Style */
