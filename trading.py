@@ -929,7 +929,6 @@ class DatabaseService:
             supabase.table('watchlists').insert({
                 'user_id': user_id,
                 'ticker': ticker,
-                'notes': notes,
                 'created_at': datetime.now().isoformat()
             }).execute()
             
