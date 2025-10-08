@@ -2370,11 +2370,11 @@ def render_watchlist_page(is_premium: bool):
     if is_premium:
         col1, col2 = st.columns([3, 1])
         with col1:
-            new_ticker = st.text_input("Add ticker to watchlist").upper()
+            new_ticker = st.text_input("Add ticker to watchlist", key="watchlist_add_input").upper()
         with col2:
             st.write("")
             st.write("")
-            if st.button("Add Stock", type="primary"):
+            if st.button("Add Stock", type="primary", key="watchlist_add_btn"):
                 if new_ticker:
                     if DatabaseService.add_to_watchlist(SessionManager.get('user').id, new_ticker):
                         st.success(f"✅ Added {new_ticker}!")
@@ -2390,7 +2390,7 @@ def render_watchlist_page(is_premium: bool):
         if watchlist:
             st.subheader(f"📋 Your Watchlist ({len(watchlist)} stocks)")
             
-            for item in watchlist:
+            for idx, item in enumerate(watchlist):
                 ticker = item['ticker']
                 try:
                     stock = yf.Ticker(ticker)
@@ -2402,13 +2402,13 @@ def render_watchlist_page(is_premium: bool):
                         col1, col2, col3 = st.columns([2, 2, 1])
                         col1.write(f"**{ticker}**")
                         col2.write(f"${price:.2f}")
-                        if col3.button("Remove", key=ticker):
+                        if col3.button("Remove", key=f"watchlist_remove_{ticker}_{idx}"):
                             DatabaseService.remove_from_watchlist(SessionManager.get('user').id, ticker)
                             st.rerun()
                 except:
                     col1, col2 = st.columns([4, 1])
                     col1.write(f"**{ticker}**")
-                    if col2.button("Remove", key=ticker):
+                    if col2.button("Remove", key=f"watchlist_remove_error_{ticker}_{idx}"):
                         DatabaseService.remove_from_watchlist(SessionManager.get('user').id, ticker)
                         st.rerun()
         else:
@@ -2423,11 +2423,11 @@ def render_portfolio_page(is_premium: bool):
     if is_premium:
         with st.expander("➕ Add New Position"):
             col1, col2, col3 = st.columns(3)
-            ticker = col1.text_input("Ticker Symbol").upper()
-            shares = col2.number_input("Number of Shares", 0.0, step=0.1)
-            price = col3.number_input("Average Price", 0.0, step=0.01)
+            ticker = col1.text_input("Ticker Symbol", key="portfolio_ticker_input").upper()
+            shares = col2.number_input("Number of Shares", 0.0, step=0.1, key="portfolio_shares_input")
+            price = col3.number_input("Average Price", 0.0, step=0.01, key="portfolio_price_input")
             
-            if st.button("Add to Portfolio", type="primary", use_container_width=True):
+            if st.button("Add to Portfolio", type="primary", use_container_width=True, key="portfolio_add_btn"):
                 if ticker and shares > 0 and price > 0:
                     if DatabaseService.add_portfolio_position(SessionManager.get('user').id, ticker, shares, price, datetime.now().date().isoformat()):
                         st.success(f"✅ Added {shares} shares of {ticker}!")
@@ -2453,7 +2453,7 @@ def render_portfolio_page(is_premium: bool):
             
             st.subheader(f"📈 Positions ({len(portfolio)})")
             
-            for pos in portfolio:
+            for idx, pos in enumerate(portfolio):
                 ticker = pos['ticker']
                 shares = pos['shares']
                 avg_price = pos['average_price']
@@ -2468,13 +2468,13 @@ def render_portfolio_page(is_premium: bool):
                     col1.write(f"**{ticker}**")
                     col2.write(f"{shares} shares @ ${avg_price:.2f}")
                     col3.metric("P/L", f"${pnl:,.2f}", f"{pnl_pct:+.1f}%")
-                    if col4.button("Remove", key=ticker):
+                    if col4.button("Remove", key=f"portfolio_remove_{ticker}_{idx}"):
                         DatabaseService.remove_portfolio_position(SessionManager.get('user').id, ticker)
                         st.rerun()
                 except:
                     col1, col2 = st.columns([4, 1])
                     col1.write(f"{ticker}: {shares} @ ${avg_price:.2f}")
-                    if col2.button("Remove", key=ticker):
+                    if col2.button("Remove", key=f"portfolio_remove_error_{ticker}_{idx}"):
                         DatabaseService.remove_portfolio_position(SessionManager.get('user').id, ticker)
                         st.rerun()
         else:
