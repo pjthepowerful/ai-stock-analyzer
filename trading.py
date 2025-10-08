@@ -2404,12 +2404,14 @@ def render_watchlist_page(is_premium: bool):
                         col2.write(f"${price:.2f}")
                         if col3.button("Remove", key=f"watchlist_remove_{ticker}_{idx}"):
                             DatabaseService.remove_from_watchlist(SessionManager.get('user').id, ticker)
+                            time.sleep(0.3)
                             st.rerun()
                 except:
                     col1, col2 = st.columns([4, 1])
                     col1.write(f"**{ticker}**")
                     if col2.button("Remove", key=f"watchlist_remove_error_{ticker}_{idx}"):
                         DatabaseService.remove_from_watchlist(SessionManager.get('user').id, ticker)
+                        time.sleep(0.3)
                         st.rerun()
         else:
             st.info("Your watchlist is empty. Add stocks to track them!")
@@ -2470,12 +2472,14 @@ def render_portfolio_page(is_premium: bool):
                     col3.metric("P/L", f"${pnl:,.2f}", f"{pnl_pct:+.1f}%")
                     if col4.button("Remove", key=f"portfolio_remove_{ticker}_{idx}"):
                         DatabaseService.remove_portfolio_position(SessionManager.get('user').id, ticker)
+                        time.sleep(0.3)
                         st.rerun()
                 except:
                     col1, col2 = st.columns([4, 1])
                     col1.write(f"{ticker}: {shares} @ ${avg_price:.2f}")
                     if col2.button("Remove", key=f"portfolio_remove_error_{ticker}_{idx}"):
                         DatabaseService.remove_portfolio_position(SessionManager.get('user').id, ticker)
+                        time.sleep(0.3)
                         st.rerun()
         else:
             st.info("Your portfolio is empty. Add positions to track performance!")
