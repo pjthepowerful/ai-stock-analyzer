@@ -30,8 +30,8 @@ st.markdown("""
     
     .maintenance-container {
         text-align: center;
-        padding: 3rem 2rem;
-        margin: 1rem auto;
+        padding: 1rem 2rem 3rem;
+        margin: 0 auto;
         max-width: 700px;
     }
     
@@ -45,7 +45,8 @@ st.markdown("""
         font-size: 2.5rem;
         font-weight: 800;
         color: white;
-        margin: 1rem 0;
+        margin: 0 0 1rem 0;
+        padding-top: 0;
         line-height: 1.2;
         text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
     }
