@@ -44,16 +44,16 @@ st.markdown("""
     .main-title {
         font-size: 2.5rem;
         font-weight: 800;
-        color: white;
+        color: #1e293b;
         margin: 0 0 1rem 0;
         padding-top: 0;
         line-height: 1.2;
-        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
     }
     
     .subtitle {
         font-size: 1.2rem;
-        color: rgba(255, 255, 255, 0.95);
+        color: #334155;
         margin: 1rem 0 2rem;
         font-weight: 400;
         line-height: 1.6;
@@ -68,28 +68,28 @@ st.markdown("""
     }
     
     .countdown-unit {
-        background: rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.7);
         backdrop-filter: blur(10px);
         border-radius: 20px;
         padding: 1.5rem 1.2rem;
         min-width: 100px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        border: 2px solid rgba(255, 255, 255, 0.2);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border: 2px solid rgba(255, 255, 255, 0.9);
     }
     
     .countdown-number {
         font-size: 3.5rem;
         font-weight: 800;
         display: block;
-        color: white;
+        color: #5b21b6;
         line-height: 1;
         margin-bottom: 0.5rem;
-        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        text-shadow: none;
     }
     
     .countdown-label {
         font-size: 0.875rem;
-        color: rgba(255, 255, 255, 0.9);
+        color: #6b21a8;
         text-transform: uppercase;
         letter-spacing: 1px;
         font-weight: 600;
@@ -98,17 +98,17 @@ st.markdown("""
     .status-badge {
         display: inline-block;
         padding: 0.75rem 1.5rem;
-        background: linear-gradient(135deg, #fef3c7, #fde68a);
+        background: rgba(254, 243, 199, 0.95);
         border-radius: 50px;
         font-size: 0.95rem;
         font-weight: 600;
         color: #92400e;
         margin: 1rem 0;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
     
     .status-badge-success {
-        background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+        background: rgba(209, 250, 229, 0.95);
         color: #065f46;
     }
     
@@ -284,7 +284,7 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 # Footer message
 st.markdown("""
-    <div style="text-align: center; margin-top: 2rem; color: white; font-size: 0.9rem;">
+    <div style="text-align: center; margin-top: 2rem; color: #334155; font-size: 0.9rem;">
         <p>Questions? Concerns? Just want to chat? <br>
         Reach out to our support team - we're always here! 💬</p>
     </div>
