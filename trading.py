@@ -200,9 +200,6 @@ def get_fun_message(time_left):
 # Main content
 st.markdown('<div class="maintenance-container">', unsafe_allow_html=True)
 
-# Animated icon
-st.markdown('<div class="maintenance-icon">🛠️</div>', unsafe_allow_html=True)
-
 # Title and subtitle
 st.markdown('<h1 class="main-title">We\'re making your money moves more awesome!</h1>', unsafe_allow_html=True)
 st.markdown('<p class="subtitle">Brief tune-up in progress — we\'ll be back before the next market move.</p>', unsafe_allow_html=True)
