@@ -31,51 +31,28 @@ st.markdown("""
     .maintenance-container {
         text-align: center;
         padding: 3rem 2rem;
-        background: rgba(255, 255, 255, 0.98);
-        border-radius: 32px;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
         margin: 1rem auto;
         max-width: 700px;
-        backdrop-filter: blur(10px);
-        animation: slideUp 0.6s ease-out;
-    }
-    
-    @keyframes slideUp {
-        from {
-            opacity: 0;
-            transform: translateY(30px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
     }
     
     .maintenance-icon {
         font-size: 6rem;
         margin: 1rem 0;
-        animation: bounce 2s ease-in-out infinite;
         display: inline-block;
-    }
-    
-    @keyframes bounce {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-20px); }
     }
     
     .main-title {
         font-size: 2.5rem;
         font-weight: 800;
-        background: linear-gradient(135deg, #6366f1, #d946ef);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        color: white;
         margin: 1rem 0;
         line-height: 1.2;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
     }
     
     .subtitle {
         font-size: 1.2rem;
-        color: #64748b;
+        color: rgba(255, 255, 255, 0.95);
         margin: 1rem 0 2rem;
         font-weight: 400;
         line-height: 1.6;
@@ -90,34 +67,28 @@ st.markdown("""
     }
     
     .countdown-unit {
-        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(10px);
         border-radius: 20px;
         padding: 1.5rem 1.2rem;
         min-width: 100px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-        border: 2px solid #e2e8f0;
-    }
-    
-    .countdown-unit:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.15);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        border: 2px solid rgba(255, 255, 255, 0.2);
     }
     
     .countdown-number {
         font-size: 3.5rem;
         font-weight: 800;
         display: block;
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        color: white;
         line-height: 1;
         margin-bottom: 0.5rem;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
     }
     
     .countdown-label {
         font-size: 0.875rem;
-        color: #64748b;
+        color: rgba(255, 255, 255, 0.9);
         text-transform: uppercase;
         letter-spacing: 1px;
         font-weight: 600;
@@ -232,8 +203,8 @@ st.markdown('<div class="maintenance-container">', unsafe_allow_html=True)
 st.markdown('<div class="maintenance-icon">🛠️</div>', unsafe_allow_html=True)
 
 # Title and subtitle
-st.markdown('<h1 class="main-title">We\'re Cooking Up Something Great!</h1>', unsafe_allow_html=True)
-st.markdown('<p class="subtitle">Taking a quick break to make your money moves smoother than ever. <br>Think of it as a pit stop in the race to financial freedom! 🏎️💨</p>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-title">We\'re making your money moves more awesome!</h1>', unsafe_allow_html=True)
+st.markdown('<p class="subtitle">Brief tune-up in progress — we\'ll be back before the next market move. 🏎️💨</p>', unsafe_allow_html=True)
 
 # Get time remaining
 time_left = get_time_remaining()
