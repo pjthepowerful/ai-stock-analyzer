@@ -6,67 +6,193 @@ import pytz
 # ============================================
 # MAINTENANCE END TIME - CHANGE THIS!
 # ============================================
-# Set the end time in CST (Central Standard Time)
 CST = pytz.timezone('America/Chicago')
-MAINTENANCE_END = CST.localize(datetime(2025, 10, 10, 22, 0, 0))  # Year, Month, Day, Hour, Minute, Second (CST)
-# Examples:
-# CST.localize(datetime(2025, 10, 7, 14, 0, 0))  = October 7, 2025 at 2:00 PM CST
-# CST.localize(datetime(2025, 12, 25, 9, 0, 0))  = December 25, 2025 at 9:00 AM CST
+MAINTENANCE_END = CST.localize(datetime(2025, 10, 10, 22, 0, 0))
 # ============================================
 
 # Page configuration
 st.set_page_config(
-    page_title="Maintenance Mode",
-    page_icon="🔧",
-    layout="centered"
+    page_title="We'll Be Right Back! 🚀",
+    page_icon="🛠️",
+    layout="centered",
+    initial_sidebar_state="collapsed"
 )
 
-# Custom CSS for styling
+# Custom CSS for smooth, modern design
 st.markdown("""
     <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+    
     .main {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
+        font-family: 'Inter', sans-serif;
     }
+    
     .maintenance-container {
         text-align: center;
-        padding: 2rem;
-        background: white;
-        border-radius: 20px;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-        margin: 2rem auto;
+        padding: 3rem 2rem;
+        background: rgba(255, 255, 255, 0.98);
+        border-radius: 32px;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        margin: 1rem auto;
+        max-width: 700px;
+        backdrop-filter: blur(10px);
+        animation: slideUp 0.6s ease-out;
     }
-    .countdown {
-        font-size: 3rem;
-        font-weight: bold;
-        color: #667eea;
-        margin: 2rem 0;
-        font-family: 'Courier New', monospace;
+    
+    @keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
-    .countdown-unit {
-        display: inline-block;
-        margin: 0 1rem;
-    }
-    .countdown-number {
-        font-size: 4rem;
-        display: block;
-        color: #667eea;
-    }
-    .countdown-label {
-        font-size: 1rem;
-        color: #666;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-    }
+    
     .maintenance-icon {
-        font-size: 5rem;
+        font-size: 6rem;
         margin: 1rem 0;
+        animation: bounce 2s ease-in-out infinite;
+        display: inline-block;
+    }
+    
+    @keyframes bounce {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-20px); }
+    }
+    
+    .main-title {
+        font-size: 2.5rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #6366f1, #d946ef);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin: 1rem 0;
+        line-height: 1.2;
+    }
+    
+    .subtitle {
+        font-size: 1.2rem;
+        color: #64748b;
+        margin: 1rem 0 2rem;
+        font-weight: 400;
+        line-height: 1.6;
+    }
+    
+    .countdown-container {
+        display: flex;
+        justify-content: center;
+        gap: 1.5rem;
+        margin: 2.5rem 0;
+        flex-wrap: wrap;
+    }
+    
+    .countdown-unit {
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        border-radius: 20px;
+        padding: 1.5rem 1.2rem;
+        min-width: 100px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        border: 2px solid #e2e8f0;
+    }
+    
+    .countdown-unit:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.15);
+    }
+    
+    .countdown-number {
+        font-size: 3.5rem;
+        font-weight: 800;
+        display: block;
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        line-height: 1;
+        margin-bottom: 0.5rem;
+    }
+    
+    .countdown-label {
+        font-size: 0.875rem;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-weight: 600;
+    }
+    
+    .status-badge {
+        display: inline-block;
+        padding: 0.75rem 1.5rem;
+        background: linear-gradient(135deg, #fef3c7, #fde68a);
+        border-radius: 50px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #92400e;
+        margin: 1rem 0;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    
+    .status-badge-success {
+        background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+        color: #065f46;
+    }
+    
+    .progress-container {
+        margin: 2rem 0;
+        padding: 0 1rem;
+    }
+    
+    .fun-facts {
+        background: #f8fafc;
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin: 2rem 0;
+        border: 2px solid #e2e8f0;
+    }
+    
+    .fun-facts h4 {
+        color: #6366f1;
+        font-weight: 700;
+        margin-bottom: 1rem;
+        font-size: 1.1rem;
+    }
+    
+    .fun-facts ul {
+        text-align: left;
+        color: #475569;
+        line-height: 1.8;
+    }
+    
+    .fun-facts li {
+        margin: 0.5rem 0;
+    }
+    
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Improve Streamlit elements */
+    .stProgress > div > div > div > div {
+        background: linear-gradient(90deg, #6366f1, #8b5cf6, #d946ef);
+        border-radius: 10px;
+        height: 12px;
+    }
+    
+    .stExpander {
+        border: 2px solid #e2e8f0;
+        border-radius: 16px;
+        background: #f8fafc;
     }
     </style>
 """, unsafe_allow_html=True)
 
 def get_time_remaining():
     """Calculate time remaining until maintenance ends"""
-    now = datetime.now(CST)  # Get current time in CST
+    now = datetime.now(CST)
     remaining = MAINTENANCE_END - now
     
     if remaining.total_seconds() <= 0:
@@ -84,36 +210,52 @@ def get_time_remaining():
         'total_seconds': remaining.total_seconds()
     }
 
+# Fun messages based on time remaining
+def get_fun_message(time_left):
+    if time_left is None:
+        return "🎉 We're back, baby!"
+    elif time_left['total_seconds'] < 300:  # Less than 5 minutes
+        return "⚡ Almost there! Grab a coffee, we're in the final stretch!"
+    elif time_left['total_seconds'] < 1800:  # Less than 30 minutes
+        return "🚀 Finishing touches being applied... greatness incoming!"
+    elif time_left['hours'] < 1:
+        return "⏰ Shouldn't be long now! Perfect time for a quick snack break!"
+    elif time_left['hours'] < 3:
+        return "🛠️ Our digital elves are working their magic!"
+    else:
+        return "🎨 Taking our time to make everything perfect for you!"
+
 # Main content
 st.markdown('<div class="maintenance-container">', unsafe_allow_html=True)
 
-# Icon
-st.markdown('<div class="maintenance-icon">🔧</div>', unsafe_allow_html=True)
+# Animated icon
+st.markdown('<div class="maintenance-icon">🛠️</div>', unsafe_allow_html=True)
 
-# Title
-st.title("🚧 System Maintenance")
-
-# Description
-st.markdown("""
-### 
-
-We know you will miss us during this downtime, but we will be back
-""")
+# Title and subtitle
+st.markdown('<h1 class="main-title">We\'re Cooking Up Something Great!</h1>', unsafe_allow_html=True)
+st.markdown('<p class="subtitle">Taking a quick break to make your money moves smoother than ever. <br>Think of it as a pit stop in the race to financial freedom! 🏎️💨</p>', unsafe_allow_html=True)
 
 # Get time remaining
 time_left = get_time_remaining()
 
+# Fun message
+fun_message = get_fun_message(time_left)
+
 if time_left is None:
     st.markdown(
-        '<div class="countdown">✅ Maintenance Complete!</div>',
+        '<div class="status-badge status-badge-success">✅ We\'re Back Online!</div>',
         unsafe_allow_html=True
     )
-    st.success("System is now online. Please refresh the page.")
+    st.balloons()
+    st.success("🎊 Maintenance complete! Hit that refresh button and let's get back to business!")
     st.progress(1.0)
 else:
-    # Display countdown with styled boxes
+    # Status badge with fun message
+    st.markdown(f'<div class="status-badge">{fun_message}</div>', unsafe_allow_html=True)
+    
+    # Countdown timer
     st.markdown(f"""
-        <div class="countdown">
+        <div class="countdown-container">
             <div class="countdown-unit">
                 <span class="countdown-number">{time_left['days']:02d}</span>
                 <span class="countdown-label">Days</span>
@@ -133,31 +275,51 @@ else:
         </div>
     """, unsafe_allow_html=True)
     
-    # Status message
-    if time_left['days'] > 0:
-        st.info(f"⏱️ Estimated completion: {time_left['days']} days, {time_left['hours']} hours")
-    elif time_left['hours'] > 0:
-        st.info(f"⏱️ Estimated completion: {time_left['hours']} hours, {time_left['minutes']} minutes")
-    else:
-        st.warning(f"⏱️ Almost done: {time_left['minutes']} minutes, {time_left['seconds']} seconds")
-    
-    # Update progress bar (inverse progress - starts at 100% and goes down)
-    total_maintenance_seconds = 2.5 * 3600  # 2.5 hours in seconds
+    # Progress bar
+    total_maintenance_seconds = 2.5 * 3600
     progress = max(0.0, min(1.0, (time_left['total_seconds'] / total_maintenance_seconds)))
-    st.progress(max(0.0, min(1.0, 1.0 - progress)))
+    st.markdown('<div class="progress-container">', unsafe_allow_html=True)
+    st.progress(max(0.01, min(1.0, 1.0 - progress)))
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# Information
-with st.expander("ℹ️ What's happening?"):
-    st.write("""
-    - **UI Improvements** - Making the look better
-    - **Quality of life updates & bug fixes** - Making your life easier
-    - **Watchlist and Portfolio** - Adding exciting functionality
-    """)
+# What's happening section
+with st.expander("🎯 What's Being Upgraded?"):
+    st.markdown("""
+    <div class="fun-facts">
+        <ul>
+            <li>🎨 <b>Sleeker Interface</b> - Making everything prettier and easier to navigate</li>
+            <li>🧠 <b>Smarter Tools</b> - New algorithms to help you make better money moves</li>
+            <li>⚡ <b>Faster Performance</b> - Because waiting is so last season</li>
+            <li>🔒 <b>Enhanced Security</b> - Your data is getting an extra layer of protection</li>
+            <li>🎉 <b>Surprise Features</b> - We've got some goodies we can't wait to show you!</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+
+# Fun facts while you wait
+with st.expander("💡 Did You Know? (Fun Facts While You Wait)"):
+    st.markdown("""
+    <div class="fun-facts">
+        <ul>
+            <li>☕ The average person spends 1 year of their life waiting for web pages to load</li>
+            <li>🎵 Spotify has over 100 million songs. You could listen for 247 years straight!</li>
+            <li>🚀 NASA's internet speed is 91 GB/s. This maintenance would take 0.001 seconds there</li>
+            <li>🐝 A honey bee visits about 2,000 flowers per day. Talk about productivity!</li>
+            <li>💪 You're doing great! Thanks for your patience while we level up! 🙌</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# Auto-refresh every second
+# Footer message
+st.markdown("""
+    <div style="text-align: center; margin-top: 2rem; color: white; font-size: 0.9rem;">
+        <p>Questions? Concerns? Just want to chat? <br>
+        Reach out to our support team - we're always here! 💬</p>
+    </div>
+""", unsafe_allow_html=True)
+
+# Auto-refresh
 time.sleep(1)
 st.rerun()
-
-
