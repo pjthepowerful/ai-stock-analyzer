@@ -117,15 +117,15 @@ st.markdown("""
     }
     
     .fun-facts {
-        background: #f8fafc;
+        background: transparent;
         border-radius: 16px;
         padding: 1.5rem;
         margin: 2rem 0;
-        border: 2px solid #e2e8f0;
+        border: none;
     }
     
     .fun-facts h4 {
-        color: #6366f1;
+        color: white;
         font-weight: 700;
         margin-bottom: 1rem;
         font-size: 1.1rem;
@@ -133,7 +133,7 @@ st.markdown("""
     
     .fun-facts ul {
         text-align: left;
-        color: #475569;
+        color: rgba(255, 255, 255, 0.9);
         line-height: 1.8;
     }
     
@@ -154,9 +154,10 @@ st.markdown("""
     }
     
     .stExpander {
-        border: 2px solid #e2e8f0;
+        border: 2px solid rgba(255, 255, 255, 0.2);
         border-radius: 16px;
-        background: #f8fafc;
+        background: rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(10px);
     }
     </style>
 """, unsafe_allow_html=True)
