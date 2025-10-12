@@ -1633,8 +1633,12 @@ def render_footer():
 # RUN THE APPLICATION
 # =============================================================================
 
-# Initialize and run when script loads
-main()
+# Don't call main at module level - let Streamlit handle it
+try:
+    main()
+except AttributeError:
+    # If st.session_state isn't ready, Streamlit will re-run
+    pass
 # IMPORTS
 # =============================================================================
 import json
