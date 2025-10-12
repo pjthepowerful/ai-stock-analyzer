@@ -1661,38 +1661,51 @@ class SessionManager:
     @staticmethod
     def initialize():
         """Initialize all session state variables"""
-        defaults = {
-            'authenticated': False,
-            'user': None,
-            'profile': None,
-            'page': 'home',
-            'beginner_mode': True,  # Default to beginner-friendly
-            'onboarding_complete': False,
-            'onboarding_step': 0,
-            'show_onboarding': True,
-            'demo_ticker': 'AAPL',
-            'watchlist_cache': None,
-            'portfolio_cache': None,
-            'theme': 'dark'
-        }
-        
-        for key, value in defaults.items():
-            if key not in st.session_state:
-                st.session_state[key] = value
+        try:
+            defaults = {
+                'authenticated': False,
+                'user': None,
+                'profile': None,
+                'page': 'home',
+                'beginner_mode': True,  # Default to beginner-friendly
+                'onboarding_complete': False,
+                'onboarding_step': 0,
+                'show_onboarding': True,
+                'demo_ticker': 'AAPL',
+                'watchlist_cache': None,
+                'portfolio_cache': None,
+                'theme': 'dark'
+            }
+            
+            for key, value in defaults.items():
+                if key not in st.session_state:
+                    st.session_state[key] = value
+        except Exception as e:
+            # If session state isn't ready yet, that's okay
+            pass
     
     @staticmethod
     def get(key: str, default=None):
-        return st.session_state.get(key, default)
+        try:
+            return st.session_state.get(key, default)
+        except:
+            return default
     
     @staticmethod
     def set(key: str, value):
-        st.session_state[key] = value
+        try:
+            st.session_state[key] = value
+        except:
+            pass
     
     @staticmethod
     def clear():
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        SessionManager.initialize()
+        try:
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            SessionManager.initialize()
+        except:
+            pass
 
 # =============================================================================
 # DATABASE CONNECTION
