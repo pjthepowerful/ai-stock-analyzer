@@ -1439,7 +1439,7 @@ def render_help_page():
 def main():
     """Main application entry point"""
     
-    # Initialize session state
+    # Initialize session state first
     SessionManager.initialize()
     
     # Check authentication
@@ -1618,8 +1618,8 @@ def render_footer():
 # RUN THE APPLICATION
 # =============================================================================
 
-if __name__ == "__main__":
-    main()
+# Initialize and run when script loads
+main()
 # IMPORTS
 # =============================================================================
 import json
