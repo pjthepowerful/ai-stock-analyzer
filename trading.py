@@ -1625,14 +1625,14 @@ def render_footer():
         <p style='font-size: 0.8rem; margin-top: 1rem;'>⚠️ Investment decisions involve risk. Past performance does not guarantee future results.</p>
     </div>
     """, unsafe_allow_html=True)
-
+load_custom_css()
 # =============================================================================
 # RUN THE APPLICATION
 # =============================================================================
 
 if __name__ == "__main__":
     # Initialize session state using SessionManager
-
+    SessionManager.initialize()
     
     # Check authentication
     if not SessionManager.get('authenticated', False):
