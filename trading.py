@@ -1616,6 +1616,8 @@ def render_footer():
 # =============================================================================
 
 if __name__ == "__main__":
+    # Initialize session state before running main
+    SessionManager.initialize()
     main()
 # IMPORTS
 # =============================================================================
@@ -1969,7 +1971,7 @@ def load_custom_css():
     </style>
     """, unsafe_allow_html=True)
 
-# Initialize
+# Initialize CSS and Session State
 load_custom_css()
 SessionManager.initialize()
 
