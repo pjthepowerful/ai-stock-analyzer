@@ -1630,63 +1630,49 @@ def render_footer():
 # RUN THE APPLICATION
 # =============================================================================
 
-# Initialize session state at module level - safe way
-for key, default_value in [
-    ('authenticated', False),
-    ('user', None),
-    ('profile', None),
-    ('page', 'home'),
-    ('beginner_mode', True),
-    ('onboarding_complete', False),
-    ('onboarding_step', 0),
-    ('show_onboarding', True),
-    ('demo_ticker', 'AAPL'),
-    ('watchlist_cache', None),
-    ('portfolio_cache', None),
-    ('theme', 'dark')
-]:
-    if key not in st.session_state:
-        st.session_state[key] = default_value
-
-# Check authentication
-if not st.session_state['authenticated']:
-    render_auth_page()
-    st.stop()
-
-# Check if onboarding needed
-if st.session_state['show_onboarding'] and not st.session_state['onboarding_complete']:
-    render_onboarding()
-    st.stop()
-
-# Get user profile
-profile = st.session_state.get('profile', {})
-if profile is None:
-    profile = {}
-is_premium = profile.get('is_premium', False)
-
-# Render sidebar
-render_sidebar(is_premium)
-
-# Route to appropriate page
-current_page = st.session_state.get('page', 'home')
-
-if current_page == 'home':
-    render_home_page(is_premium)
-elif current_page == 'analyze':
-    render_analyze_page(is_premium)
-elif current_page == 'mystocks':
-    render_mystocks_page(is_premium)
-elif current_page == 'help':
-    render_help_page()
-elif current_page == 'backtest':
-    render_backtest_page(is_premium)
-elif current_page == 'position':
-    render_position_page(is_premium)
-else:
-    render_home_page(is_premium)
-
-# Footer
-render_footer()
+if __name__ == "__main__":
+    # Initialize session state using SessionManager
+    SessionManager.initialize()
+    
+    # Check authentication
+    if not SessionManager.get('authenticated', False):
+        render_auth_page()
+        st.stop()
+    
+    # Check if onboarding needed
+    if SessionManager.get('show_onboarding', False) and not SessionManager.get('onboarding_complete', False):
+        render_onboarding()
+        st.stop()
+    
+    # Get user profile
+    profile = SessionManager.get('profile', {})
+    if profile is None:
+        profile = {}
+    is_premium = profile.get('is_premium', False)
+    
+    # Render sidebar
+    render_sidebar(is_premium)
+    
+    # Route to appropriate page
+    current_page = SessionManager.get('page', 'home')
+    
+    if current_page == 'home':
+        render_home_page(is_premium)
+    elif current_page == 'analyze':
+        render_analyze_page(is_premium)
+    elif current_page == 'mystocks':
+        render_mystocks_page(is_premium)
+    elif current_page == 'help':
+        render_help_page()
+    elif current_page == 'backtest':
+        render_backtest_page(is_premium)
+    elif current_page == 'position':
+        render_position_page(is_premium)
+    else:
+        render_home_page(is_premium)
+    
+    # Footer
+    render_footer()
 # IMPORTS
 # =============================================================================
 import json
