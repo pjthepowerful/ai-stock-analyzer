@@ -1439,28 +1439,43 @@ def render_help_page():
 def main():
     """Main application entry point"""
     
-    # Initialize session state first
-    SessionManager.initialize()
+    # Initialize session state - safe check
+    try:
+        if 'authenticated' not in st.session_state:
+            st.session_state.authenticated = False
+            st.session_state.user = None
+            st.session_state.profile = None
+            st.session_state.page = 'home'
+            st.session_state.beginner_mode = True
+            st.session_state.onboarding_complete = False
+            st.session_state.onboarding_step = 0
+            st.session_state.show_onboarding = True
+            st.session_state.demo_ticker = 'AAPL'
+            st.session_state.watchlist_cache = None
+            st.session_state.portfolio_cache = None
+            st.session_state.theme = 'dark'
+    except:
+        pass
     
     # Check authentication
-    if not SessionManager.get('authenticated'):
+    if not st.session_state.get('authenticated', False):
         render_auth_page()
         st.stop()
     
     # Check if onboarding needed
-    if SessionManager.get('show_onboarding') and not SessionManager.get('onboarding_complete'):
+    if st.session_state.get('show_onboarding', False) and not st.session_state.get('onboarding_complete', False):
         render_onboarding()
         st.stop()
     
     # Get user profile
-    profile = SessionManager.get('profile', {})
+    profile = st.session_state.get('profile', {})
     is_premium = profile.get('is_premium', False)
     
     # Render sidebar
     render_sidebar(is_premium)
     
     # Route to appropriate page
-    current_page = SessionManager.get('page', 'home')
+    current_page = st.session_state.get('page', 'home')
     
     if current_page == 'home':
         render_home_page(is_premium)
@@ -1661,51 +1676,48 @@ class SessionManager:
     @staticmethod
     def initialize():
         """Initialize all session state variables"""
-        try:
-            defaults = {
-                'authenticated': False,
-                'user': None,
-                'profile': None,
-                'page': 'home',
-                'beginner_mode': True,  # Default to beginner-friendly
-                'onboarding_complete': False,
-                'onboarding_step': 0,
-                'show_onboarding': True,
-                'demo_ticker': 'AAPL',
-                'watchlist_cache': None,
-                'portfolio_cache': None,
-                'theme': 'dark'
-            }
-            
-            for key, value in defaults.items():
-                if key not in st.session_state:
-                    st.session_state[key] = value
-        except Exception as e:
-            # If session state isn't ready yet, that's okay
-            pass
+        # Check if session_state is available
+        if not hasattr(st, 'session_state'):
+            return
+        
+        defaults = {
+            'authenticated': False,
+            'user': None,
+            'profile': None,
+            'page': 'home',
+            'beginner_mode': True,  # Default to beginner-friendly
+            'onboarding_complete': False,
+            'onboarding_step': 0,
+            'show_onboarding': True,
+            'demo_ticker': 'AAPL',
+            'watchlist_cache': None,
+            'portfolio_cache': None,
+            'theme': 'dark'
+        }
+        
+        for key, value in defaults.items():
+            if key not in st.session_state:
+                st.session_state[key] = value
     
     @staticmethod
     def get(key: str, default=None):
-        try:
-            return st.session_state.get(key, default)
-        except:
+        if not hasattr(st, 'session_state'):
             return default
+        return st.session_state.get(key, default)
     
     @staticmethod
     def set(key: str, value):
-        try:
-            st.session_state[key] = value
-        except:
-            pass
+        if not hasattr(st, 'session_state'):
+            return
+        st.session_state[key] = value
     
     @staticmethod
     def clear():
-        try:
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            SessionManager.initialize()
-        except:
-            pass
+        if not hasattr(st, 'session_state'):
+            return
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        SessionManager.initialize()
 
 # =============================================================================
 # DATABASE CONNECTION
