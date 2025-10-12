@@ -7,7 +7,7 @@ import pytz
 # MAINTENANCE END TIME - CHANGE THIS!
 # ============================================
 CST = pytz.timezone('America/Chicago')
-MAINTENANCE_END = CST.localize(datetime(2025, 10, 11, 22, 0, 0))
+MAINTENANCE_END = CST.localize(datetime(2025, 10, 12, 22, 0, 0))
 # ============================================
 
 # Page configuration
