@@ -1632,7 +1632,7 @@ def render_footer():
 
 if __name__ == "__main__":
     # Initialize session state using SessionManager
-    SessionManager.initialize()
+
     
     # Check authentication
     if not SessionManager.get('authenticated', False):
