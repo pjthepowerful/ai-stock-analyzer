@@ -1630,8 +1630,8 @@ def render_footer():
 # RUN THE APPLICATION
 # =============================================================================
 
-if __name__ == "__main__":
-    main()
+# Call main - Streamlit will have session_state ready
+main()
 # IMPORTS
 # =============================================================================
 import json
