@@ -1,3 +1,30 @@
+# IMPORTS
+# =============================================================================
+import json
+import time
+import warnings
+from datetime import datetime, timedelta
+from typing import Dict, List, Tuple, Optional
+
+import streamlit as st
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from supabase import create_client
+
+warnings.filterwarnings('ignore')
+
+# =============================================================================
+# PAGE CONFIGURATION
+# =============================================================================
+st.set_page_config(
+    page_title="AI Stock Genius",
+    page_icon="🤖",
+    layout="wide",
+    ...
+)
 # =============================================================================
 # RUN THE APPLICATION
 # =============================================================================
