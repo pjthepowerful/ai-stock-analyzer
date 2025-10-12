@@ -1439,13 +1439,6 @@ def render_help_page():
 def main():
     """Main application entry point"""
     
-    # Check if session_state is available
-    try:
-        _ = st.session_state
-    except AttributeError:
-        st.error("Session state not available. Please refresh the page.")
-        return
-    
     # Initialize session state - safe check
     if 'authenticated' not in st.session_state:
         st.session_state.authenticated = False
@@ -1637,7 +1630,8 @@ def render_footer():
 # RUN THE APPLICATION
 # =============================================================================
 
-main()
+if __name__ == "__main__":
+    main()
 # IMPORTS
 # =============================================================================
 import json
