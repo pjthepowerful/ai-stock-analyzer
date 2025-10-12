@@ -1439,23 +1439,27 @@ def render_help_page():
 def main():
     """Main application entry point"""
     
-    # Initialize session state - safe check
+    # Check if session_state is available
     try:
-        if 'authenticated' not in st.session_state:
-            st.session_state.authenticated = False
-            st.session_state.user = None
-            st.session_state.profile = None
-            st.session_state.page = 'home'
-            st.session_state.beginner_mode = True
-            st.session_state.onboarding_complete = False
-            st.session_state.onboarding_step = 0
-            st.session_state.show_onboarding = True
-            st.session_state.demo_ticker = 'AAPL'
-            st.session_state.watchlist_cache = None
-            st.session_state.portfolio_cache = None
-            st.session_state.theme = 'dark'
-    except:
-        pass
+        _ = st.session_state
+    except AttributeError:
+        st.error("Session state not available. Please refresh the page.")
+        return
+    
+    # Initialize session state - safe check
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+        st.session_state.user = None
+        st.session_state.profile = None
+        st.session_state.page = 'home'
+        st.session_state.beginner_mode = True
+        st.session_state.onboarding_complete = False
+        st.session_state.onboarding_step = 0
+        st.session_state.show_onboarding = True
+        st.session_state.demo_ticker = 'AAPL'
+        st.session_state.watchlist_cache = None
+        st.session_state.portfolio_cache = None
+        st.session_state.theme = 'dark'
     
     # Check authentication
     if not st.session_state.get('authenticated', False):
@@ -1633,12 +1637,7 @@ def render_footer():
 # RUN THE APPLICATION
 # =============================================================================
 
-# Don't call main at module level - let Streamlit handle it
-try:
-    main()
-except AttributeError:
-    # If st.session_state isn't ready, Streamlit will re-run
-    pass
+main()
 # IMPORTS
 # =============================================================================
 import json
