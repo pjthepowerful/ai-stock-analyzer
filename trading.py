@@ -1439,6 +1439,9 @@ def render_help_page():
 def main():
     """Main application entry point"""
     
+    # Initialize session state
+    SessionManager.initialize()
+    
     # Check authentication
     if not SessionManager.get('authenticated'):
         render_auth_page()
@@ -1616,8 +1619,6 @@ def render_footer():
 # =============================================================================
 
 if __name__ == "__main__":
-    # Initialize session state before running main
-    SessionManager.initialize()
     main()
 # IMPORTS
 # =============================================================================
@@ -1971,8 +1972,7 @@ def load_custom_css():
     </style>
     """, unsafe_allow_html=True)
 
-# Initialize CSS and Session State
+# Load custom CSS
 load_custom_css()
-SessionManager.initialize()
 
 # =============================================================================
