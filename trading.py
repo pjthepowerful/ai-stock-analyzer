@@ -245,7 +245,7 @@ class DatabaseService:
     """Handle all database operations"""
     
     @staticmethod
-    def get_user_profile(user_id: str) -> Dict:
+    def get_user_profile(user_id: str):
         try:
             if supabase is None:
                 return {'id': user_id, 'is_premium': False}
@@ -257,7 +257,7 @@ class DatabaseService:
             return {'id': user_id, 'is_premium': False}
     
     @staticmethod
-    def upgrade_to_premium(user_id: str) -> bool:
+    def upgrade_to_premium(user_id: str):
         try:
             if supabase is None:
                 return False
@@ -274,7 +274,7 @@ class DatabaseService:
             return False
     
     @staticmethod
-    def get_watchlist(user_id: str) -> List[Dict]:
+    def get_watchlist(user_id: str):
         try:
             if supabase is None:
                 return []
@@ -284,7 +284,7 @@ class DatabaseService:
             return []
     
     @staticmethod
-    def add_to_watchlist(user_id: str, ticker: str) -> bool:
+    def add_to_watchlist(user_id: str, ticker: str):
         try:
             if supabase is None:
                 return False
@@ -301,7 +301,7 @@ class DatabaseService:
             return False
     
     @staticmethod
-    def remove_from_watchlist(user_id: str, ticker: str) -> bool:
+    def remove_from_watchlist(user_id: str, ticker: str):
         try:
             if supabase is None:
                 return False
@@ -311,7 +311,7 @@ class DatabaseService:
             return False
     
     @staticmethod
-    def get_portfolio(user_id: str) -> List[Dict]:
+    def get_portfolio(user_id: str):
         try:
             if supabase is None:
                 return []
@@ -321,7 +321,7 @@ class DatabaseService:
             return []
     
     @staticmethod
-    def add_portfolio_position(user_id: str, ticker: str, shares: float, avg_price: float, purchase_date: str) -> bool:
+    def add_portfolio_position(user_id: str, ticker: str, shares: float, avg_price: float, purchase_date: str):
         try:
             if supabase is None:
                 return False
@@ -350,7 +350,7 @@ class DatabaseService:
             return False
     
     @staticmethod
-    def remove_portfolio_position(user_id: str, ticker: str) -> bool:
+    def remove_portfolio_position(user_id: str, ticker: str):
         try:
             if supabase is None:
                 return False
