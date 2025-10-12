@@ -39,7 +39,7 @@ class StockSearchHelper:
     """Helper for searching stocks by name or ticker using yfinance"""
     
     @staticmethod
-    @st.cache_data(ttl=3600)
+    @st.cache_data
     def search_stock(query: str) -> List[Tuple[str, str]]:
         """
         Search for stocks by ticker or company name using yfinance
