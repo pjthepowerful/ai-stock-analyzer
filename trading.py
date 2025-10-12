@@ -366,7 +366,7 @@ class TechnicalAnalysisEngine:
     """Advanced technical analysis"""
     
     @staticmethod
-    def calculate_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
+    def calculate_all_indicators(df):
         try:
             # RSI (Stock Temperature)
             delta = df['Close'].diff()
@@ -409,7 +409,7 @@ class TechnicalAnalysisEngine:
             return df
     
     @staticmethod
-    def calculate_ai_score(df: pd.DataFrame, info: Dict) -> Dict:
+    def calculate_ai_score(df, info):
         """Calculate AI-based Stock Health Score"""
         score = 50
         signals = []
@@ -508,7 +508,7 @@ class SentimentAnalyzer:
     """Mock sentiment analysis (placeholder for FinBERT/API integration)"""
     
     @staticmethod
-    def analyze_sentiment(ticker: str) -> Dict:
+    def analyze_sentiment(ticker: str):
         """Analyze market sentiment for a stock"""
         # This is a placeholder - in production, integrate FinBERT or news API
         import random
@@ -550,7 +550,7 @@ class PriceForecaster:
     """AI-powered price prediction"""
     
     @staticmethod
-    def predict_price(df: pd.DataFrame, days: int = 30) -> Optional[Dict]:
+    def predict_price(df, days: int = 30):
         """Predict future price using simple linear regression"""
         try:
             if len(df) < 60:
