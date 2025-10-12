@@ -209,7 +209,7 @@ class AuthenticationService:
             return False, f"Signup error: {error_msg}"
     
     @staticmethod
-    def signin(email: str, password: str) -> Tuple[bool, Optional[any], Optional[Dict]]:
+    def signin(email: str, password: str) -> Tuple[bool, Optional[Any], Optional[Dict]]:
         try:
             if not email or not password:
                 return False, None, None
