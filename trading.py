@@ -39,7 +39,7 @@ class StockSearchHelper:
     """Helper for searching stocks by name or ticker using yfinance"""
     
     @staticmethod
-    def search_stock(query: str) -> List[Tuple[str, str]]:
+    def search_stock(query: str):
         """
         Search for stocks by ticker or company name using yfinance
         Returns list of (ticker, name) tuples
@@ -141,7 +141,7 @@ class StockSearchHelper:
         return results
     
     @staticmethod
-    def get_stock_info(ticker: str) -> Optional[Dict]:
+    def get_stock_info(ticker: str):
         """Get detailed stock information"""
         try:
             stock = yf.Ticker(ticker)
@@ -185,7 +185,7 @@ class AuthenticationService:
     """Handle all authentication operations"""
     
     @staticmethod
-    def signup(email: str, password: str) -> Tuple[bool, str]:
+    def signup(email: str, password: str):
         try:
             if not email or not password:
                 return False, "Email and password are required"
@@ -209,7 +209,7 @@ class AuthenticationService:
             return False, f"Signup error: {error_msg}"
     
     @staticmethod
-    def signin(email: str, password: str) -> Tuple[bool, Optional[Any], Optional[Dict]]:
+    def signin(email: str, password: str):
         try:
             if not email or not password:
                 return False, None, None
