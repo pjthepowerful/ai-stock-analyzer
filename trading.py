@@ -17,13 +17,32 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-try:
-    from supabase import create_client
-    SUPABASE_AVAILABLE = True
-except:
-    SUPABASE_AVAILABLE = False
+from supabase import create_client
 
 warnings.filterwarnings('ignore')
+
+# Initialize Supabase
+@st.cache_resource
+def init_supabase():
+    try:
+        url = st.secrets["supabase"]["url"]
+        key = st.secrets["supabase"]["key"]
+        return create_client(url, key)
+    except Exception as e:
+        st.error(f"⚠️ Supabase connection failed: {e}")
+        return None
+
+supabase = init_supabase()
+
+# Initialize News API
+@st.cache_resource
+def get_news_api_key():
+    try:
+        return st.secrets.get("NEWS_API_KEY", None)
+    except:
+        return None
+
+NEWS_API_KEY = get_news_api_key()
 
 # PAGE CONFIGURATION
 st.set_page_config(
@@ -111,24 +130,65 @@ SessionManager.initialize()
 # DATABASE (Mock for demo)
 class DatabaseService:
     @staticmethod
+    def get_user_profile(user_id):
+        if not supabase:
+            return {'id': user_id, 'is_premium': False}
+        try:
+            result = supabase.table('user_profiles').select('*').eq('id', user_id).single().execute()
+            if result.data:
+                return result.data
+            return {'id': user_id, 'is_premium': False}
+        except:
+            return {'id': user_id, 'is_premium': False}
+    
+    @staticmethod
     def get_watchlist(user_id):
-        return SessionManager.get('watchlist', [])
+        if not supabase:
+            return SessionManager.get('watchlist', [])
+        try:
+            result = supabase.table('watchlists').select('*').eq('user_id', user_id).execute()
+            return result.data if result.data else []
+        except:
+            return []
     
     @staticmethod
     def add_to_watchlist(user_id, ticker):
-        watchlist = SessionManager.get('watchlist', [])
-        if ticker not in [w.get('ticker') for w in watchlist]:
-            watchlist.append({'ticker': ticker})
-            SessionManager.set('watchlist', watchlist)
+        if not supabase:
+            watchlist = SessionManager.get('watchlist', [])
+            if ticker not in [w.get('ticker') for w in watchlist]:
+                watchlist.append({'ticker': ticker})
+                SessionManager.set('watchlist', watchlist)
+                return True
+            return False
+        
+        try:
+            # Check if already exists
+            existing = supabase.table('watchlists').select('ticker').eq('user_id', user_id).eq('ticker', ticker).execute()
+            if existing.data:
+                return False
+            
+            # Insert new
+            supabase.table('watchlists').insert({
+                'user_id': user_id,
+                'ticker': ticker
+            }).execute()
             return True
-        return False
+        except:
+            return False
     
     @staticmethod
     def remove_from_watchlist(user_id, ticker):
-        watchlist = SessionManager.get('watchlist', [])
-        watchlist = [w for w in watchlist if w.get('ticker') != ticker]
-        SessionManager.set('watchlist', watchlist)
-        return True
+        if not supabase:
+            watchlist = SessionManager.get('watchlist', [])
+            watchlist = [w for w in watchlist if w.get('ticker') != ticker]
+            SessionManager.set('watchlist', watchlist)
+            return True
+        
+        try:
+            supabase.table('watchlists').delete().eq('user_id', user_id).eq('ticker', ticker).execute()
+            return True
+        except:
+            return False
 
 # STOCK SEARCH
 class StockSearchHelper:
@@ -164,8 +224,144 @@ class StockSearchHelper:
             name = name[:47] + "..."
         return f"{ticker} - {name}"
 
-# TECHNICAL ANALYSIS
-class TechnicalAnalysisEngine:
+# SENTIMENT ANALYSIS WITH NEWS API
+class SentimentAnalyzer:
+    """Real sentiment analysis using News API"""
+    
+    @staticmethod
+    def analyze_sentiment(ticker: str, company_name: str = None):
+        """Analyze market sentiment for a stock using real news"""
+        
+        if not NEWS_API_KEY:
+            # Fallback to placeholder
+            return SentimentAnalyzer._get_placeholder_sentiment()
+        
+        try:
+            import requests
+            from datetime import datetime, timedelta
+            
+            # Search query - use company name if available
+            query = company_name if company_name else ticker
+            
+            # Get news from last 7 days
+            from_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+            
+            url = f"https://newsapi.org/v2/everything"
+            params = {
+                'q': query,
+                'from': from_date,
+                'sortBy': 'relevancy',
+                'language': 'en',
+                'apiKey': NEWS_API_KEY,
+                'pageSize': 20
+            }
+            
+            response = requests.get(url, params=params, timeout=10)
+            
+            if response.status_code != 200:
+                return SentimentAnalyzer._get_placeholder_sentiment()
+            
+            data = response.json()
+            articles = data.get('articles', [])
+            
+            if not articles:
+                return {
+                    'score': 0,
+                    'text': "😐 Neutral",
+                    'drivers': ["No recent news found"],
+                    'sources': "0 articles analyzed",
+                    'articles': []
+                }
+            
+            # Simple sentiment analysis based on keywords
+            positive_keywords = ['surge', 'gain', 'profit', 'beat', 'upgrade', 'growth', 
+                               'success', 'record', 'rise', 'bullish', 'outperform', 'strong']
+            negative_keywords = ['fall', 'loss', 'miss', 'downgrade', 'decline', 'weak',
+                               'concern', 'drop', 'bearish', 'underperform', 'risk']
+            
+            sentiment_scores = []
+            positive_news = []
+            negative_news = []
+            
+            for article in articles[:15]:  # Analyze top 15 articles
+                title = (article.get('title', '') + ' ' + article.get('description', '')).lower()
+                
+                pos_count = sum(1 for word in positive_keywords if word in title)
+                neg_count = sum(1 for word in negative_keywords if word in title)
+                
+                if pos_count > neg_count:
+                    score = 0.5 + (pos_count * 0.2)
+                    sentiment_scores.append(min(score, 1.0))
+                    if len(positive_news) < 3:
+                        positive_news.append(article.get('title', '')[:80])
+                elif neg_count > pos_count:
+                    score = -0.5 - (neg_count * 0.2)
+                    sentiment_scores.append(max(score, -1.0))
+                    if len(negative_news) < 3:
+                        negative_news.append(article.get('title', '')[:80])
+                else:
+                    sentiment_scores.append(0)
+            
+            # Calculate average sentiment
+            avg_sentiment = sum(sentiment_scores) / len(sentiment_scores) if sentiment_scores else 0
+            
+            # Determine sentiment text and drivers
+            if avg_sentiment > 0.3:
+                sentiment_text = "😊 Positive"
+                drivers = [f"✅ {news}" for news in positive_news[:3]]
+                if not drivers:
+                    drivers = ["✅ Generally positive market sentiment"]
+            elif avg_sentiment < -0.3:
+                sentiment_text = "😟 Negative"
+                drivers = [f"⚠️ {news}" for news in negative_news[:3]]
+                if not drivers:
+                    drivers = ["⚠️ Some market concerns present"]
+            else:
+                sentiment_text = "😐 Neutral"
+                drivers = ["➡️ Mixed market opinions", "➡️ Balanced news coverage"]
+            
+            return {
+                'score': avg_sentiment,
+                'text': sentiment_text,
+                'drivers': drivers,
+                'sources': f"{len(articles)} news articles analyzed",
+                'articles': articles[:5]  # Return top 5 articles
+            }
+            
+        except Exception as e:
+            print(f"Sentiment analysis error: {e}")
+            return SentimentAnalyzer._get_placeholder_sentiment()
+    
+    @staticmethod
+    def _get_placeholder_sentiment():
+        """Fallback placeholder sentiment"""
+        import random
+        sentiment_score = random.uniform(-0.5, 0.8)
+        
+        if sentiment_score > 0.5:
+            return {
+                'score': sentiment_score,
+                'text': "😊 Positive",
+                'drivers': ["✅ Configure NEWS_API_KEY for real sentiment"],
+                'sources': "Demo mode",
+                'articles': []
+            }
+        elif sentiment_score > 0:
+            return {
+                'score': sentiment_score,
+                'text': "😐 Neutral",
+                'drivers': ["➡️ Configure NEWS_API_KEY for real sentiment"],
+                'sources': "Demo mode",
+                'articles': []
+            }
+        else:
+            return {
+                'score': sentiment_score,
+                'text': "😟 Negative",
+                'drivers': ["⚠️ Configure NEWS_API_KEY for real sentiment"],
+                'sources': "Demo mode",
+                'articles': []
+            }
     @staticmethod
     def calculate_all_indicators(df):
         try:
@@ -192,20 +388,87 @@ def render_auth_page():
         st.markdown("<h1 style='text-align: center;'>🤖 AI Stock Genius</h1>", unsafe_allow_html=True)
         st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 1.2rem;'>Beginner-Friendly Stock Analysis</p>", unsafe_allow_html=True)
         
-        st.info("👋 **Demo Mode** - Click 'Try Demo' to explore without signing up!")
+        tab1, tab2 = st.tabs(["🔐 Sign In", "✨ Create Account"])
         
-        if st.button("🚀 Try Demo", use_container_width=True, type="primary"):
-            SessionManager.set('authenticated', True)
-            SessionManager.set('demo_mode', True)
-            st.rerun()
+        with tab1:
+            with st.form("signin_form"):
+                st.markdown("### Welcome Back")
+                email = st.text_input("Email", placeholder="your@email.com")
+                password = st.text_input("Password", type="password")
+                submit = st.form_submit_button("Sign In", use_container_width=True, type="primary")
+                
+                if submit:
+                    if not email or not password:
+                        st.error("Please enter both email and password")
+                    elif not supabase:
+                        st.error("Database connection unavailable")
+                    else:
+                        try:
+                            with st.spinner("Signing in..."):
+                                response = supabase.auth.sign_in_with_password({
+                                    "email": email,
+                                    "password": password
+                                })
+                                
+                                if response.user:
+                                    SessionManager.set('authenticated', True)
+                                    SessionManager.set('user', response.user)
+                                    
+                                    # Get user profile
+                                    profile = DatabaseService.get_user_profile(response.user.id)
+                                    SessionManager.set('profile', profile)
+                                    SessionManager.set('demo_mode', False)
+                                    
+                                    st.success("Welcome back!")
+                                    time.sleep(0.5)
+                                    st.rerun()
+                                else:
+                                    st.error("Invalid credentials")
+                        except Exception as e:
+                            st.error(f"Sign in failed: {str(e)}")
         
-        st.markdown("<p style='text-align: center; margin-top: 2rem;'>or sign in with your account</p>", unsafe_allow_html=True)
+        with tab2:
+            with st.form("signup_form"):
+                st.markdown("### Join AI Stock Genius")
+                email = st.text_input("Email", placeholder="your@email.com", key="signup_email")
+                password = st.text_input("Password", type="password", placeholder="Min 6 characters", key="signup_pass")
+                confirm = st.text_input("Confirm Password", type="password", key="confirm_pass")
+                agree = st.checkbox("I agree to Terms of Service")
+                submit = st.form_submit_button("Create Account", use_container_width=True, type="primary")
+                
+                if submit:
+                    if not email or not password:
+                        st.error("All fields required")
+                    elif not agree:
+                        st.error("Please agree to Terms of Service")
+                    elif password != confirm:
+                        st.error("Passwords don't match")
+                    elif len(password) < 6:
+                        st.error("Password must be at least 6 characters")
+                    elif not supabase:
+                        st.error("Database connection unavailable")
+                    else:
+                        try:
+                            with st.spinner("Creating account..."):
+                                response = supabase.auth.sign_up({
+                                    "email": email,
+                                    "password": password
+                                })
+                                
+                                if response.user:
+                                    st.success("✅ Account created! Please check your email to verify.")
+                                    st.info("After verifying your email, you can sign in.")
+                                else:
+                                    st.error("Failed to create account")
+                        except Exception as e:
+                            error_msg = str(e)
+                            if "already registered" in error_msg.lower():
+                                st.error("This email is already registered. Please sign in.")
+                            else:
+                                st.error(f"Signup failed: {error_msg}")
         
-        with st.form("signin_form"):
-            email = st.text_input("Email", placeholder="your@email.com")
-            password = st.text_input("Password", type="password")
-            if st.form_submit_button("Sign In", use_container_width=True):
-                st.info("Authentication coming soon! Use Demo Mode for now.")
+        st.markdown("---")
+        st.info("👋 **Want to try first?** Sign up is free and takes 30 seconds!")
 
 # SIDEBAR
 def render_sidebar(is_premium):
@@ -215,6 +478,10 @@ def render_sidebar(is_premium):
         
         if SessionManager.get('demo_mode'):
             st.markdown('<div class="premium-badge">🎮 DEMO MODE</div>', unsafe_allow_html=True)
+        elif is_premium:
+            st.markdown('<div class="premium-badge">⭐ PREMIUM</div>', unsafe_allow_html=True)
+        else:
+            st.info("🆓 Free Account")
         
         st.markdown("---")
         st.markdown("#### Navigation")
@@ -233,8 +500,16 @@ def render_sidebar(is_premium):
         
         st.markdown("---")
         
-        if st.button("🚪 Exit Demo" if SessionManager.get('demo_mode') else "🚪 Sign Out", use_container_width=True):
+        if st.button("🚪 Sign Out", use_container_width=True):
+            if supabase:
+                try:
+                    supabase.auth.sign_out()
+                except:
+                    pass
+            
             SessionManager.set('authenticated', False)
+            SessionManager.set('user', None)
+            SessionManager.set('profile', None)
             st.rerun()
 
 # HOME PAGE
@@ -336,11 +611,46 @@ def render_analyze_page(is_premium):
                 )
                 st.plotly_chart(fig, use_container_width=True)
                 
+                # Sentiment Analysis Section (if premium or news API available)
+                if is_premium or NEWS_API_KEY:
+                    st.markdown("---")
+                    st.markdown("### 🧠 AI Market Sentiment")
+                    
+                    with st.spinner("Analyzing news and market sentiment..."):
+                        sentiment = SentimentAnalyzer.analyze_sentiment(ticker, company_name)
+                    
+                    col1, col2 = st.columns([1, 2])
+                    
+                    with col1:
+                        st.markdown(f"<h2 style='text-align: center;'>{sentiment['text']}</h2>", unsafe_allow_html=True)
+                        st.caption(f"Sentiment Score: {sentiment['score']:.2f}")
+                        st.caption(f"📊 {sentiment['sources']}")
+                    
+                    with col2:
+                        st.markdown("**Key Drivers:**")
+                        for driver in sentiment['drivers']:
+                            st.markdown(driver)
+                    
+                    # Show recent news articles if available
+                    if sentiment.get('articles'):
+                        with st.expander("📰 Recent News Articles"):
+                            for article in sentiment['articles']:
+                                st.markdown(f"**{article.get('title', 'No title')}**")
+                                st.caption(f"Source: {article.get('source', {}).get('name', 'Unknown')} | {article.get('publishedAt', '')[:10]}")
+                                if article.get('url'):
+                                    st.markdown(f"[Read more]({article['url']})")
+                                st.markdown("---")
+                
+                st.markdown("---")
+                
                 # Action buttons
                 col1, col2 = st.columns(2)
                 with col1:
+                    user = SessionManager.get('user')
+                    user_id = user.id if user else 'demo'
+                    
                     if st.button(f"⭐ Add {ticker} to Watchlist", use_container_width=True, type="primary"):
-                        if DatabaseService.add_to_watchlist('demo', ticker):
+                        if DatabaseService.add_to_watchlist(user_id, ticker):
                             st.success(f"✅ {ticker} added to watchlist!")
                             time.sleep(1)
                             st.rerun()
@@ -356,6 +666,10 @@ def render_mystocks_page(is_premium):
     
     st.markdown("### 👁️ Your Watchlist")
     
+    # Get user ID
+    user = SessionManager.get('user')
+    user_id = user.id if user else 'demo'
+    
     with st.expander("➕ Add Stock to Watchlist"):
         search = st.text_input("Search stock", placeholder="e.g., Apple, TSLA")
         
@@ -367,14 +681,16 @@ def render_mystocks_page(is_premium):
                 
                 if st.button("Add to Watchlist", type="primary"):
                     ticker = selected.split(" - ")[0].strip()
-                    if DatabaseService.add_to_watchlist('demo', ticker):
+                    if DatabaseService.add_to_watchlist(user_id, ticker):
                         st.success(f"✅ {ticker} added!")
                         time.sleep(0.5)
                         st.rerun()
+                    else:
+                        st.warning("Already in watchlist")
     
     st.markdown("---")
     
-    watchlist = DatabaseService.get_watchlist('demo')
+    watchlist = DatabaseService.get_watchlist(user_id)
     
     if watchlist:
         st.markdown(f"**{len(watchlist)} stocks in your watchlist**")
@@ -397,12 +713,15 @@ def render_mystocks_page(is_premium):
                                 st.markdown(f"**{ticker}**")
                                 st.metric("Price", f"${price:.2f}")
                                 if st.button("Remove", key=f"rm_{ticker}_{i}_{j}"):
-                                    DatabaseService.remove_from_watchlist('demo', ticker)
+                                    DatabaseService.remove_from_watchlist(user_id, ticker)
                                     st.rerun()
                     except:
                         with col:
                             st.markdown(f"**{ticker}**")
                             st.caption("Data unavailable")
+                            if st.button("Remove", key=f"rm_{ticker}_{i}_{j}"):
+                                DatabaseService.remove_from_watchlist(user_id, ticker)
+                                st.rerun()
     else:
         st.info("Your watchlist is empty. Add stocks to track them!")
 
