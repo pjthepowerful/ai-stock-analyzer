@@ -900,8 +900,9 @@ def render_analyze_page(is_premium):
                     
                     with col2:
                         st.markdown("**Key Drivers:**")
-                        for driver in sentiment['drivers']:
-                            st.markdown(driver)
+                        for signal, signal_type in ai_analysis['signals']:
+                            icon = "🟢" if signal_type == "positive" else "🔴" if signal_type == "negative" else "🟡"
+                            st.markdown(f"{icon} {signal}")
                     
                     if sentiment.get('articles'):
                         with st.expander("📰 Recent News Articles"):
@@ -1407,35 +1408,6 @@ def render_screener_page(is_premium):
 
 
 
-# MAIN
-def main():
-    SessionManager.initialize()
-    
-    if not SessionManager.get('authenticated', False):
-        render_auth_page()
-        return
-    
-    profile = SessionManager.get('profile', {})
-    is_premium = profile.get('is_premium', False)
-    
-    render_sidebar(is_premium)
-    
-    page = SessionManager.get('page', 'home')
-    
-    if page == 'home':
-        render_home_page(is_premium)
-    elif page == 'analyze':
-        render_analyze_page(is_premium)
-    elif page == 'mystocks':
-        render_mystocks_page(is_premium)
-    elif page == 'screener':
-        render_screener_page(is_premium)
-    elif page == 'backtest':
-        render_backtest_page(is_premium)
-    elif page == 'position':
-        render_position_page(is_premium)
-    elif page == 'help':
-        render_help_page()
 # MAIN
 def main():
     SessionManager.initialize()
