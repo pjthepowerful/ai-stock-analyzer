@@ -1518,13 +1518,13 @@ for signal, sentiment in ai_analysis['signals']:
                             line=dict(color='#f97316', width=2)
                         ))
                 
-                fig.update_layout(
-                    height=500,
-                    template='plotly_dark',
-                    title=f"{chart_type} - {ticker}",
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0.3)',
-                    xaxis_rangeslider_visible=False
+                        fig.update_layout(
+                            height=500,
+                            template='plotly_dark',
+                            title=f"{chart_type} - {ticker}",
+                            paper_bgcolor='rgba(0,0,0,0)',
+                            plot_bgcolor='rgba(0,0,0,0.3)',
+                            xaxis_rangeslider_visible=False
                 )
                 st.plotly_chart(fig, use_container_width=True)
                 
