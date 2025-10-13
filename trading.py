@@ -737,6 +737,10 @@ def render_sidebar(is_premium):
             SessionManager.set('page', 'mystocks')
             st.rerun()
         
+        if st.button("🔍 Stock Screener", use_container_width=True):
+            SessionManager.set('page', 'screener')
+            st.rerun()
+        
         # Advanced Tools
         beginner_mode = SessionManager.get('beginner_mode', True)
         if not beginner_mode:
@@ -1258,6 +1262,150 @@ def render_help_page():
     st.markdown("### 🤝 Need More Help?")
     st.info("Check out our video tutorials or contact support@aistockgenius.com")
 
+# STOCK SCREENER PAGE
+def render_screener_page(is_premium):
+    st.title("🔍 Stock Screener")
+    
+    if not is_premium:
+        st.warning("🔒 Advanced Stock Screening is a Premium feature!")
+        if st.button("🚀 Upgrade to Premium", type="primary", use_container_width=True):
+            user = SessionManager.get('user')
+            if user and DatabaseService.upgrade_to_premium(user.id):
+                SessionManager.set('profile', DatabaseService.get_user_profile(user.id))
+                st.success("Welcome to Premium!")
+                st.rerun()
+        return
+    
+    st.markdown("### Find Stocks That Match Your Criteria")
+    
+    # Screening criteria
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("**Price Range**")
+        min_price = st.number_input("Min Price ($)", 0, 10000, 0)
+        max_price = st.number_input("Max Price ($)", 0, 10000, 1000)
+    
+    with col2:
+        st.markdown("**Market Cap**")
+        market_cap = st.selectbox("Size", ["Any", "Small Cap (<$2B)", "Mid Cap ($2B-$10B)", "Large Cap (>$10B)"])
+    
+    with col3:
+        st.markdown("**Sector**")
+        sector = st.selectbox("Sector", [
+            "Any", "Technology", "Healthcare", "Finance", 
+            "Consumer", "Energy", "Industrial"
+        ])
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**Technical Indicators**")
+        rsi_filter = st.checkbox("RSI < 30 (Oversold)")
+        volume_filter = st.checkbox("High Volume (>1M)")
+    
+    with col2:
+        st.markdown("**Fundamentals**")
+        pe_filter = st.checkbox("P/E Ratio < 25")
+        profitable = st.checkbox("Profitable (Profit Margin > 0)")
+    
+    if st.button("🔍 Run Screen", type="primary", use_container_width=True):
+        with st.spinner("Screening stocks..."):
+            try:
+                # Sample stock universe for screening
+                stock_universe = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'TSLA', 'AMD']
+                
+                results = []
+                
+                for ticker in stock_universe:
+                    try:
+                        stock = yf.Ticker(ticker)
+                        info = stock.info
+                        hist = stock.history(period='1mo')
+                        
+                        if hist.empty:
+                            continue
+                        
+                        price = hist['Close'].iloc[-1]
+                        
+                        # Apply filters
+                        if price < min_price or price > max_price:
+                            continue
+                        
+                        # Market cap filter
+                        mkt_cap = info.get('marketCap', 0)
+                        if market_cap == "Small Cap (<$2B)" and mkt_cap >= 2e9:
+                            continue
+                        elif market_cap == "Mid Cap ($2B-$10B)" and (mkt_cap < 2e9 or mkt_cap >= 10e9):
+                            continue
+                        elif market_cap == "Large Cap (>$10B)" and mkt_cap < 10e9:
+                            continue
+                        
+                        # Sector filter
+                        if sector != "Any" and info.get('sector', '') != sector:
+                            continue
+                        
+                        # Technical filters
+                        if rsi_filter:
+                            df_tech = TechnicalAnalysisEngine.calculate_all_indicators(hist)
+                            if df_tech['RSI'].iloc[-1] >= 30:
+                                continue
+                        
+                        if volume_filter:
+                            if info.get('volume', 0) < 1e6:
+                                continue
+                        
+                        # Fundamental filters
+                        if pe_filter:
+                            pe = info.get('trailingPE', 999)
+                            if pe >= 25:
+                                continue
+                        
+                        if profitable:
+                            profit_margin = info.get('profitMargins', -1)
+                            if profit_margin <= 0:
+                                continue
+                        
+                        # Add to results
+                        results.append({
+                            'ticker': ticker,
+                            'name': info.get('longName', ticker),
+                            'price': price,
+                            'market_cap': mkt_cap,
+                            'sector': info.get('sector', 'N/A'),
+                            'pe': info.get('trailingPE', 'N/A')
+                        })
+                    except:
+                        continue
+                
+                # Display results
+                st.markdown("---")
+                
+                if results:
+                    st.success(f"✅ Found {len(results)} stocks matching your criteria")
+                    
+                    for result in results:
+                        with st.container():
+                            col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+                            
+                            col1.markdown(f"**{result['ticker']}**")
+                            col1.caption(result['name'][:30])
+                            
+                            col2.metric("Price", f"${result['price']:.2f}")
+                            col3.metric("Market Cap", f"${result['market_cap']/1e9:.1f}B")
+                            
+                            if col4.button("Analyze", key=f"analyze_{result['ticker']}"):
+                                SessionManager.set('page', 'analyze')
+                                st.rerun()
+                            
+                            st.markdown("---")
+                else:
+                    st.info("No stocks found matching your criteria. Try adjusting filters.")
+                    
+            except Exception as e:
+                st.error(f"Screening error: {str(e)}")
+
+
 
 # MAIN
 def main():
@@ -1280,6 +1428,8 @@ def main():
         render_analyze_page(is_premium)
     elif page == 'mystocks':
         render_mystocks_page(is_premium)
+    elif page == 'screener':
+        render_screener_page(is_premium)
     elif page == 'backtest':
         render_backtest_page(is_premium)
     elif page == 'position':
@@ -1296,27 +1446,85 @@ markdown("#### 📋 AI Analysis")
                     
                     st.markdown("---")
                 
-                # Chart
+                # Create different chart types
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=df.index,
-                    y=df['Close'],
-                    name='Price',
-                    line=dict(color='#3b82f6', width=3),
-                    fill='tozeroy',
-                    fillcolor='rgba(59, 130, 246, 0.1)'
-                ))
                 
-                if is_premium and 'SMA20' in df.columns and 'SMA50' in df.columns:
-                    fig.add_trace(go.Scatter(x=df.index, y=df['SMA20'], name='20-day MA', line=dict(color='#fbbf24', width=2)))
-                    fig.add_trace(go.Scatter(x=df.index, y=df['SMA50'], name='50-day MA', line=dict(color='#f97316', width=2)))
+                if chart_type == "Line Chart":
+                    fig.add_trace(go.Scatter(
+                        x=df.index,
+                        y=df['Close'],
+                        name='Price',
+                        line=dict(color='#3b82f6', width=3)
+                    ))
+                
+                elif chart_type == "Candlestick":
+                    fig.add_trace(go.Candlestick(
+                        x=df.index,
+                        open=df['Open'],
+                        high=df['High'],
+                        low=df['Low'],
+                        close=df['Close'],
+                        name='Price',
+                        increasing_line_color='#10b981',
+                        decreasing_line_color='#ef4444'
+                    ))
+                
+                elif chart_type == "Area Chart":
+                    fig.add_trace(go.Scatter(
+                        x=df.index,
+                        y=df['Close'],
+                        name='Price',
+                        line=dict(color='#3b82f6', width=2),
+                        fill='tozeroy',
+                        fillcolor='rgba(59, 130, 246, 0.3)'
+                    ))
+                
+                elif chart_type == "OHLC":
+                    fig.add_trace(go.Ohlc(
+                        x=df.index,
+                        open=df['Open'],
+                        high=df['High'],
+                        low=df['Low'],
+                        close=df['Close'],
+                        name='Price',
+                        increasing_line_color='#10b981',
+                        decreasing_line_color='#ef4444'
+                    ))
+                
+                elif chart_type == "Mountain Chart":
+                    fig.add_trace(go.Scatter(
+                        x=df.index,
+                        y=df['Close'],
+                        name='Price',
+                        line=dict(color='#10b981', width=0),
+                        fill='tozeroy',
+                        fillcolor='rgba(16, 185, 129, 0.4)'
+                    ))
+                
+                # Add indicators if premium
+                if is_premium and chart_type in ["Line Chart", "Area Chart", "Mountain Chart"]:
+                    if 'SMA20' in df.columns and not df['SMA20'].isna().all():
+                        fig.add_trace(go.Scatter(
+                            x=df.index, 
+                            y=df['SMA20'], 
+                            name='20-day MA', 
+                            line=dict(color='#fbbf24', width=2)
+                        ))
+                    if 'SMA50' in df.columns and not df['SMA50'].isna().all():
+                        fig.add_trace(go.Scatter(
+                            x=df.index, 
+                            y=df['SMA50'], 
+                            name='50-day MA', 
+                            line=dict(color='#f97316', width=2)
+                        ))
                 
                 fig.update_layout(
                     height=500,
                     template='plotly_dark',
-                    title="Price History (6 months)",
+                    title=f"{chart_type} - {ticker}",
                     paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0.3)'
+                    plot_bgcolor='rgba(0,0,0,0.3)',
+                    xaxis_rangeslider_visible=False
                 )
                 st.plotly_chart(fig, use_container_width=True)
                 
