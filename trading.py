@@ -1602,8 +1602,8 @@ for signal, sentiment in ai_analysis['signals']:
                                 st.markdown("---")
                 
                 # Company fundamentals
-                st.markdown("---")
-                st.markdown("### 📊 Company Fundamentals")
+                    st.markdown("---")
+                    st.markdown("### 📊 Company Fundamentals")
                 
                 col1, col2, col3, col4 = st.columns(4)
                 
