@@ -1643,6 +1643,6 @@ for signal, sentiment in ai_analysis['signals']:
                         if st.button("📊 View Full Analysis", use_container_width=True):
                             st.info("Full detailed report coming soon!")
                 
-        except Exception as e:
+    except Exception as e:
             st.error(f"Error analyzing {ticker}: {str(e)}")
             st.info("Please check the ticker symbol and try again.")
