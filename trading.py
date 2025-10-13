@@ -1444,12 +1444,12 @@ for signal, sentiment in ai_analysis['signals']:
     icon = "🟢" if sentiment == "positive" else "🔴" if sentiment == "negative" else "🟡"
     st.markdown(f"{icon} {signal}")
                     
-                    st.markdown("---")
+    st.markdown("---")
                 
                 # Create different chart types
-                fig = go.Figure()
+    fig = go.Figure()
                 
-                if chart_type == "Line Chart":
+    if chart_type == "Line Chart":
                     fig.add_trace(go.Scatter(
                         x=df.index,
                         y=df['Close'],
