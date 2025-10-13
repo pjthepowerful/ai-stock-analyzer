@@ -1457,7 +1457,7 @@ for signal, sentiment in ai_analysis['signals']:
                         line=dict(color='#3b82f6', width=3)
                     ))
                 
-                elif chart_type == "Candlestick":
+    elif chart_type == "Candlestick":
                     fig.add_trace(go.Candlestick(
                         x=df.index,
                         open=df['Open'],
@@ -1469,7 +1469,7 @@ for signal, sentiment in ai_analysis['signals']:
                         decreasing_line_color='#ef4444'
                     ))
                 
-                elif chart_type == "Area Chart":
+    elif chart_type == "Area Chart":
                     fig.add_trace(go.Scatter(
                         x=df.index,
                         y=df['Close'],
@@ -1479,7 +1479,7 @@ for signal, sentiment in ai_analysis['signals']:
                         fillcolor='rgba(59, 130, 246, 0.3)'
                     ))
                 
-                elif chart_type == "OHLC":
+    elif chart_type == "OHLC":
                     fig.add_trace(go.Ohlc(
                         x=df.index,
                         open=df['Open'],
@@ -1491,7 +1491,7 @@ for signal, sentiment in ai_analysis['signals']:
                         decreasing_line_color='#ef4444'
                     ))
                 
-                elif chart_type == "Mountain Chart":
+    elif chart_type == "Mountain Chart":
                     fig.add_trace(go.Scatter(
                         x=df.index,
                         y=df['Close'],
