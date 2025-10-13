@@ -1591,7 +1591,6 @@ for signal, sentiment in ai_analysis['signals']:
                         for driver in sentiment['drivers']:
                             st.markdown(driver)
                     
-                    # Display news articles if available
                     if sentiment.get('articles'):
                         with st.expander("📰 Recent News Articles"):
                             for article in sentiment['articles']:
@@ -1601,35 +1600,33 @@ for signal, sentiment in ai_analysis['signals']:
                                     st.markdown(f"[Read more]({article['url']})")
                                 st.markdown("---")
                 
-                # Company fundamentals
-                    st.markdown("---")
-                    st.markdown("### 📊 Company Fundamentals")
+                st.markdown("---")
+                st.markdown("### 📊 Company Fundamentals")
                 
-                    col1, col2, col3, col4 = st.columns(4)
+                col1, col2, col3, col4 = st.columns(4)
                 
-                    with col1:
-                        st.metric("P/E Ratio", f"{info.get('trailingPE', 'N/A'):.2f}" if isinstance(info.get('trailingPE'), (int, float)) else "N/A")
-                        st.metric("Forward P/E", f"{info.get('forwardPE', 'N/A'):.2f}" if isinstance(info.get('forwardPE'), (int, float)) else "N/A")
+                with col1:
+                    st.metric("P/E Ratio", f"{info.get('trailingPE', 'N/A'):.2f}" if isinstance(info.get('trailingPE'), (int, float)) else "N/A")
+                    st.metric("Forward P/E", f"{info.get('forwardPE', 'N/A'):.2f}" if isinstance(info.get('forwardPE'), (int, float)) else "N/A")
                 
-                    with col2:
-                        st.metric("EPS", f"${info.get('trailingEps', 'N/A'):.2f}" if isinstance(info.get('trailingEps'), (int, float)) else "N/A")
-                        st.metric("Profit Margin", f"{info.get('profitMargins', 0)*100:.1f}%" if info.get('profitMargins') else "N/A")
+                with col2:
+                    st.metric("EPS", f"${info.get('trailingEps', 'N/A'):.2f}" if isinstance(info.get('trailingEps'), (int, float)) else "N/A")
+                    st.metric("Profit Margin", f"{info.get('profitMargins', 0)*100:.1f}%" if info.get('profitMargins') else "N/A")
                 
-                    with col3:
-                        st.metric("Revenue", f"${info.get('totalRevenue', 0)/1e9:.1f}B" if info.get('totalRevenue') else "N/A")
-                        st.metric("Revenue Growth", f"{info.get('revenueGrowth', 0)*100:.1f}%" if info.get('revenueGrowth') else "N/A")
+                with col3:
+                    st.metric("Revenue", f"${info.get('totalRevenue', 0)/1e9:.1f}B" if info.get('totalRevenue') else "N/A")
+                    st.metric("Revenue Growth", f"{info.get('revenueGrowth', 0)*100:.1f}%" if info.get('revenueGrowth') else "N/A")
                 
-                    with col4:
-                        st.metric("Dividend Yield", f"{info.get('dividendYield', 0)*100:.2f}%" if info.get('dividendYield') else "N/A")
-                        st.metric("Beta", f"{info.get('beta', 'N/A'):.2f}" if isinstance(info.get('beta'), (int, float)) else "N/A")
+                with col4:
+                    st.metric("Dividend Yield", f"{info.get('dividendYield', 0)*100:.2f}%" if info.get('dividendYield') else "N/A")
+                    st.metric("Beta", f"{info.get('beta', 'N/A'):.2f}" if isinstance(info.get('beta'), (int, float)) else "N/A")
                 
-                # Action buttons
-                    st.markdown("---")
-                    col1, col2 = st.columns(2)
+                st.markdown("---")
+                col1, col2 = st.columns(2)
                 
-                    with col1:
-                        user = SessionManager.get('user')
-                        user_id = user.id if user else 'demo'
+                with col1:
+                    user = SessionManager.get('user')
+                    user_id = user.id if user else 'demo'
                     
                     if st.button(f"⭐ Add {ticker} to Watchlist", use_container_width=True, type="primary"):
                         if DatabaseService.add_to_watchlist(user_id, ticker):
@@ -1639,10 +1636,10 @@ for signal, sentiment in ai_analysis['signals']:
                         else:
                             st.warning("Already in watchlist")
                 
-                    with col2:
-                        if st.button("📊 View Full Analysis", use_container_width=True):
-                            st.info("Full detailed report coming soon!")
-                
+                with col2:
+                    if st.button("📊 View Full Analysis", use_container_width=True):
+                        st.info("Full detailed report coming soon!")
+        
         except Exception as e:
             st.error(f"Error analyzing {ticker}: {str(e)}")
             st.info("Please check the ticker symbol and try again.")
