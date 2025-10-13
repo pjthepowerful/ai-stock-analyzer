@@ -1639,9 +1639,9 @@ for signal, sentiment in ai_analysis['signals']:
                         else:
                             st.warning("Already in watchlist")
                 
-                with col2:
-                    if st.button("📊 View Full Analysis", use_container_width=True):
-                        st.info("Full detailed report coming soon!")
+                    with col2:
+                        if st.button("📊 View Full Analysis", use_container_width=True):
+                            st.info("Full detailed report coming soon!")
                 
         except Exception as e:
             st.error(f"Error analyzing {ticker}: {str(e)}")
