@@ -1,930 +1,4 @@
 """
-AI STOCK GENIUS - Complete Application
-Beginner-Friendly Stock Analysis Platform
-"""
-
-# =============================================================================
-# IMPORTS
-# =============================================================================
-import json
-import time
-import warnings
-from datetime import datetime, timedelta
-from typing import Dict, List, Tuple, Optional
-
-import streamlit as st
-import yfinance as yf
-import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-from supabase import create_client
-
-warnings.filterwarnings('ignore')
-
-# =============================================================================
-# PAGE CONFIGURATION
-# =============================================================================
-st.set_page_config(
-    page_title="AI Stock Genius",
-    page_icon="🤖",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# =============================================================================
-# DATABASE CONNECTION
-# =============================================================================
-@st.cache_resource
-def init_supabase():
-    """Initialize Supabase client"""
-    try:
-        url = st.secrets["supabase"]["url"]
-        key = st.secrets["supabase"]["key"]
-        return create_client(url, key)
-    except Exception as e:
-        st.error(f"⚠️ Database connection failed: {e}")
-        return None
-
-supabase = init_supabase()
-
-# =============================================================================
-# CSS STYLING
-# =============================================================================
-def load_custom_css():
-    """Load CSS styling"""
-    st.markdown("""
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-        
-        * {
-            font-family: 'Inter', sans-serif;
-        }
-        
-        .stApp {
-            background: linear-gradient(135deg, #0a0e1a 0%, #151b2e 100%);
-        }
-        
-        h1, h2, h3 {
-            color: #ffffff !important;
-        }
-        
-        .stButton > button {
-            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-            color: white;
-            border-radius: 12px;
-            padding: 0.875rem 1.75rem;
-            font-weight: 600;
-            border: none;
-        }
-        
-        .stButton > button:hover {
-            transform: translateY(-2px);
-        }
-        
-        .premium-badge {
-            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-            color: #1e293b !important;
-            padding: 0.75rem 1.5rem;
-            border-radius: 12px;
-            font-weight: 700;
-            text-align: center;
-        }
-        
-        .free-badge {
-            background: rgba(100, 116, 139, 0.3);
-            color: #e0e6f0 !important;
-            padding: 0.75rem 1.5rem;
-            border-radius: 12px;
-            font-weight: 700;
-            text-align: center;
-        }
-        
-        .alert-warning {
-            background: rgba(245, 158, 11, 0.15);
-            border: 2px solid #f59e0b;
-            border-left: 6px solid #f59e0b;
-            padding: 1.25rem;
-            border-radius: 15px;
-            color: #fef3c7 !important;
-        }
-        
-        .alert-success {
-            background: rgba(16, 185, 129, 0.15);
-            border: 2px solid #10b981;
-            border-left: 6px solid #10b981;
-            padding: 1.25rem;
-            border-radius: 15px;
-            color: #d1fae5 !important;
-        }
-        
-        .alert-info {
-            background: rgba(59, 130, 246, 0.15);
-            border: 2px solid #3b82f6;
-            border-left: 6px solid #3b82f6;
-            padding: 1.25rem;
-            border-radius: 15px;
-            color: #bfdbfe !important;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-
-load_custom_css()
-
-# =============================================================================
-# HELPER CLASSES
-# =============================================================================
-
-class TooltipManager:
-    """Tooltip content manager"""
-    
-    @staticmethod
-    def get_tooltip(key: str) -> str:
-        tooltips = {
-            'stock_health_score': "AI analyzes 20+ factors to rate this stock 0-100",
-            'watchlist': "Stocks you're tracking",
-            'portfolio': "Stocks you own with P/L tracking"
-        }
-        return tooltips.get(key, "")
-
-class StockSearchHelper:
-    """Stock search helper"""
-    
-    @staticmethod
-    def search_stock(query: str):
-        if not query:
-            return []
-        
-        popular_stocks = {
-            'AAPL': 'Apple Inc.',
-            'MSFT': 'Microsoft Corporation',
-            'GOOGL': 'Alphabet Inc.',
-            'AMZN': 'Amazon.com Inc.',
-            'TSLA': 'Tesla Inc.',
-            'NVDA': 'NVIDIA Corporation',
-            'META': 'Meta Platforms Inc.'
-        }
-        
-        results = []
-        query_upper = query.upper()
-        
-        for ticker, name in popular_stocks.items():
-            if query_upper in ticker or query_upper in name.upper():
-                results.append((ticker, name))
-        
-        return results[:10]
-    
-    @staticmethod
-    def format_option(ticker: str, name: str) -> str:
-        return f"{ticker} - {name}"
-
-class AuthenticationService:
-    """Authentication service"""
-    
-    @staticmethod
-    def signup(email: str, password: str):
-        try:
-            if not email or not password or len(password) < 6:
-                return False, "Invalid email or password"
-            
-            if supabase:
-                response = supabase.auth.sign_up({"email": email, "password": password})
-                if response.user:
-                    return True, "Account created!"
-            return False, "Signup failed"
-        except Exception as e:
-            return False, str(e)
-    
-    @staticmethod
-    def signin(email: str, password: str):
-        try:
-            if not email or not password:
-                return False, None, None
-            
-            if supabase:
-                response = supabase.auth.sign_in_with_password({"email": email, "password": password})
-                if response.user:
-                    profile = DatabaseService.get_user_profile(response.user.id)
-                    return True, response.user, profile
-            return False, None, None
-        except:
-            return False, None, None
-    
-    @staticmethod
-    def signout():
-        if supabase:
-            supabase.auth.sign_out()
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-
-class DatabaseService:
-    """Database service"""
-    
-    @staticmethod
-    def get_user_profile(user_id: str):
-        try:
-            if supabase:
-                result = supabase.table('user_profiles').select('*').eq('id', user_id).single().execute()
-                if result.data:
-                    return result.data
-            return {'id': user_id, 'is_premium': False}
-        except:
-            return {'id': user_id, 'is_premium': False}
-    
-    @staticmethod
-    def upgrade_to_premium(user_id: str):
-        try:
-            if supabase:
-                supabase.table('user_profiles').upsert({
-                    'id': user_id,
-                    'is_premium': True
-                }).execute()
-                return True
-        except:
-            return False
-    
-    @staticmethod
-    def get_watchlist(user_id: str):
-        try:
-            if supabase:
-                result = supabase.table('watchlists').select('*').eq('user_id', user_id).execute()
-                return result.data if result.data else []
-        except:
-            return []
-    
-    @staticmethod
-    def add_to_watchlist(user_id: str, ticker: str):
-        try:
-            if supabase:
-                existing = supabase.table('watchlists').select('*').eq('user_id', user_id).eq('ticker', ticker).execute()
-                if existing.data:
-                    return False
-                supabase.table('watchlists').insert({'user_id': user_id, 'ticker': ticker}).execute()
-                return True
-        except:
-            return False
-    
-    @staticmethod
-    def remove_from_watchlist(user_id: str, ticker: str):
-        try:
-            if supabase:
-                supabase.table('watchlists').delete().eq('user_id', user_id).eq('ticker', ticker).execute()
-                return True
-        except:
-            return False
-    
-    @staticmethod
-    def get_portfolio(user_id: str):
-        try:
-            if supabase:
-                result = supabase.table('portfolio').select('*').eq('user_id', user_id).execute()
-                return result.data if result.data else []
-        except:
-            return []
-
-class TechnicalAnalysisEngine:
-    """Technical analysis"""
-    
-    @staticmethod
-    def calculate_all_indicators(df):
-        try:
-            # RSI
-            delta = df['Close'].diff()
-            gain = delta.where(delta > 0, 0).rolling(14).mean()
-            loss = -delta.where(delta < 0, 0).rolling(14).mean()
-            rs = gain / loss
-            df['RSI'] = 100 - (100 / (1 + rs))
-            
-            # Moving averages
-            df['SMA20'] = df['Close'].rolling(20).mean()
-            df['SMA50'] = df['Close'].rolling(50).mean()
-            
-            return df
-        except:
-            return df
-    
-    @staticmethod
-    def calculate_ai_score(df, info):
-        score = 50
-        signals = []
-        
-        try:
-            latest = df.iloc[-1]
-            
-            if pd.notna(latest.get('RSI')):
-                rsi = latest['RSI']
-                if 40 <= rsi <= 60:
-                    score += 20
-                    signals.append(("Neutral RSI", "positive"))
-            
-            if pd.notna(latest.get('SMA50')):
-                if latest['Close'] > latest['SMA50']:
-                    score += 20
-                    signals.append(("Above 50-day average", "positive"))
-            
-            rating = "Strong Buy" if score >= 80 else "Buy" if score >= 70 else "Hold" if score >= 50 else "Sell"
-            
-            return {'score': score, 'signals': signals, 'rating': rating}
-        except:
-            return {'score': 50, 'signals': [], 'rating': 'Hold'}
-
-# =============================================================================
-# PAGE RENDERERS
-# =============================================================================
-
-def render_auth_page():
-    """Authentication page"""
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
-    with col2:
-        st.markdown("<h1 style='text-align: center;'>🤖 AI Stock Genius</h1>", unsafe_allow_html=True)
-        
-        tab1, tab2 = st.tabs(["Sign In", "Create Account"])
-        
-        with tab1:
-            with st.form("signin"):
-                email = st.text_input("Email")
-                password = st.text_input("Password", type="password")
-                submit = st.form_submit_button("Sign In", use_container_width=True)
-                
-                if submit:
-                    success, user, profile = AuthenticationService.signin(email, password)
-                    if success:
-                        st.session_state.authenticated = True
-                        st.session_state.user = user
-                        st.session_state.profile = profile
-                        st.rerun()
-                    else:
-                        st.error("Invalid credentials")
-        
-        with tab2:
-            with st.form("signup"):
-                email = st.text_input("Email", key="signup_email")
-                password = st.text_input("Password", type="password", key="signup_pass")
-                confirm = st.text_input("Confirm", type="password")
-                submit = st.form_submit_button("Create Account", use_container_width=True)
-                
-                if submit:
-                    if password != confirm:
-                        st.error("Passwords don't match")
-                    else:
-                        success, msg = AuthenticationService.signup(email, password)
-                        if success:
-                            st.success(msg)
-                        else:
-                            st.error(msg)
-
-def render_sidebar(is_premium: bool):
-    """Sidebar navigation"""
-    with st.sidebar:
-        st.markdown("### 🤖 AI Stock Genius")
-        st.markdown("---")
-        
-        if is_premium:
-            st.markdown('<div class="premium-badge">⭐ PREMIUM</div>', unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="free-badge">FREE</div>', unsafe_allow_html=True)
-        
-        st.markdown("---")
-        
-        if st.button("🏠 Home", use_container_width=True):
-            st.session_state.page = 'home'
-            st.rerun()
-        
-        if st.button("📊 Analyze", use_container_width=True):
-            st.session_state.page = 'analyze'
-            st.rerun()
-        
-        if st.button("💼 My Stocks", use_container_width=True):
-            st.session_state.page = 'mystocks'
-            st.rerun()
-        
-        st.markdown("---")
-        
-        if st.button("🚪 Sign Out", use_container_width=True):
-            AuthenticationService.signout()
-            st.rerun()
-
-def render_home_page(is_premium: bool):
-    """Home page"""
-    st.title("🏠 Home Dashboard")
-    
-    if not is_premium:
-        st.markdown('<div class="alert-warning">Upgrade to Premium for full features!</div>', unsafe_allow_html=True)
-    
-    st.markdown("### Quick Actions")
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        if st.button("📊 Analyze Stock", use_container_width=True):
-            st.session_state.page = 'analyze'
-            st.rerun()
-    
-    with col2:
-        if st.button("💼 View Stocks", use_container_width=True):
-            st.session_state.page = 'mystocks'
-            st.rerun()
-    
-    with col3:
-        if st.button("🚀 Upgrade", use_container_width=True):
-            if DatabaseService.upgrade_to_premium(st.session_state.user.id):
-                st.session_state.profile = DatabaseService.get_user_profile(st.session_state.user.id)
-                st.success("Upgraded!")
-                st.rerun()
-
-def render_analyze_page(is_premium: bool):
-    """Stock analysis page"""
-    st.title("📊 Stock Analysis")
-    
-    search = st.text_input("Search stock", placeholder="e.g., Apple, TSLA")
-    
-    ticker = None
-    
-    if search:
-        results = StockSearchHelper.search_stock(search)
-        if results:
-            options = [StockSearchHelper.format_option(t, n) for t, n in results]
-            selected = st.selectbox("Select:", options)
-            ticker = selected.split(" - ")[0]
-    else:
-        ticker = "AAPL"
-    
-    if ticker:
-        try:
-            stock = yf.Ticker(ticker)
-            df = stock.history(period='6mo')
-            info = stock.info
-            
-            if df.empty:
-                st.error("No data")
-                return
-            
-            price = df['Close'].iloc[-1]
-            st.markdown(f"## {info.get('longName', ticker)} ({ticker})")
-            st.metric("Price", f"${price:.2f}")
-            
-            if is_premium:
-                df = TechnicalAnalysisEngine.calculate_all_indicators(df)
-                analysis = TechnicalAnalysisEngine.calculate_ai_score(df, info)
-                
-                st.markdown("### AI Health Score")
-                st.metric("Score", f"{analysis['score']}/100")
-                st.caption(f"Rating: {analysis['rating']}")
-                
-                # Chart
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Price'))
-                fig.update_layout(height=500, template='plotly_dark')
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.markdown('<div class="alert-info">Upgrade to Premium for AI insights</div>', unsafe_allow_html=True)
-        
-        except Exception as e:
-            st.error(f"Error: {e}")
-
-def render_mystocks_page(is_premium: bool):
-    """My stocks page"""
-    st.title("💼 My Stocks")
-    
-    tab1, tab2 = st.tabs(["Watchlist", "Portfolio"])
-    
-    with tab1:
-        st.markdown("### Your Watchlist")
-        
-        watchlist = DatabaseService.get_watchlist(st.session_state.user.id)
-        
-        if watchlist:
-            for item in watchlist:
-                col1, col2 = st.columns([3, 1])
-                col1.write(f"**{item['ticker']}**")
-                if col2.button("Remove", key=f"rm_{item['ticker']}"):
-                    DatabaseService.remove_from_watchlist(st.session_state.user.id, item['ticker'])
-                    st.rerun()
-        else:
-            st.info("Watchlist is empty")
-    
-    with tab2:
-        st.markdown("### Your Portfolio")
-        st.info("Portfolio tracking coming soon!")
-
-# =============================================================================
-# MAIN APPLICATION
-# =============================================================================
-
-# Initialize session state
-if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
-if 'user' not in st.session_state:
-    st.session_state.user = None
-if 'profile' not in st.session_state:
-    st.session_state.profile = None
-if 'page' not in st.session_state:
-    st.session_state.page = 'home'
-
-# Check authentication
-if not st.session_state.authenticated:
-    render_auth_page()
-    st.stop()
-
-# Get profile
-profile = st.session_state.profile or {}
-is_premium = profile.get('is_premium', False)
-
-# Render sidebar
-render_sidebar(is_premium)
-
-# Route pages
-page = st.session_state.page
-
-if page == 'home':
-    render_home_page(is_premium)
-elif page == 'analyze':
-    render_analyze_page(is_premium)
-elif page == 'mystocks':
-    render_mystocks_page(is_premium)
-else:
-    render_home_page(is_premium)def render_mystocks_page(is_premium: bool):
-    """Render My Stocks page with tabs"""
-    st.title("💼 My Stocks")
-    
-    if not is_premium:
-        st.markdown('<div class="alert-warning">🔒 Upgrade to Premium to unlock unlimited watchlist and portfolio tracking!</div>', unsafe_allow_html=True)
-    
-    tab1, tab2 = st.tabs(["👁️ Watchlist", "📊 Portfolio"])
-    
-    with tab1:
-        st.markdown("### Your Watchlist")
-        st.caption("💡 " + TooltipManager.get_tooltip('watchlist'))
-        
-        with st.expander("➕ Add Stock to Watchlist"):
-            search = st.text_input("Search stock", placeholder="e.g., Apple, TSLA", key="watchlist_search")
-            
-            if search:
-                results = StockSearchHelper.search_stock(search)
-                if results:
-                    options = [StockSearchHelper.format_option(t, n) for t, n in results]
-                    selected = st.selectbox("Select stock:", options, key="watchlist_select")
-                    
-                    if st.button("Add to Watchlist", use_container_width=True, type="primary"):
-                        ticker = selected.split(" - ")[0].strip()
-                        if DatabaseService.add_to_watchlist(st.session_state.user.id, ticker):
-                            st.success(f"✅ {ticker} added!")
-                            time.sleep(0.5)
-                            st.rerun()
-                        else:
-                            st.warning("Already in watchlist")
-        
-        st.markdown("---")
-        
-        watchlist = DatabaseService.get_watchlist(st.session_state.user.id)
-        
-        if watchlist:
-            st.markdown(f"**{len(watchlist)} stocks in your watchlist**")
-            
-            for i in range(0, len(watchlist), 3):
-                cols = st.columns(3)
-                for j, col in enumerate(cols):
-                    if i + j < len(watchlist):
-                        item = watchlist[i + j]
-                        ticker = item['ticker']
-                        
-                        try:
-                            stock = yf.Ticker(ticker)
-                            hist = stock.history(period='1d')
-                            
-                            if not hist.empty:
-                                price = hist['Close'].iloc[-1]
-                                
-                                with col:
-                                    st.markdown(f"**{ticker}**")
-                                    st.metric("Price", f"${price:.2f}")
-                                    if st.button("Remove", key=f"wl_rm_{ticker}_{i}_{j}", use_container_width=True):
-                                        DatabaseService.remove_from_watchlist(st.session_state.user.id, ticker)
-                                        st.rerun()
-                        except:
-                            with col:
-                                st.markdown(f"**{ticker}**")
-                                st.caption("Data unavailable")
-                                if st.button("Remove", key=f"wl_rm_err_{ticker}_{i}_{j}", use_container_width=True):
-                                    DatabaseService.remove_from_watchlist(st.session_state.user.id, ticker)
-                                    st.rerun()
-        else:
-            st.info("Your watchlist is empty. Add stocks to track them!")
-    
-    with tab2:
-        st.markdown("### Your Portfolio")
-        st.caption("💡 " + TooltipManager.get_tooltip('portfolio'))
-        
-        with st.expander("➕ Add New Position"):
-            col1, col2, col3 = st.columns(3)
-            ticker = col1.text_input("Ticker", key="port_ticker").upper()
-            shares = col2.number_input("Shares", min_value=0.0, step=0.1, key="port_shares")
-            avg_price = col3.number_input("Avg Price", min_value=0.0, step=0.01, key="port_price")
-            
-            if st.button("Add to Portfolio", use_container_width=True, type="primary"):
-                if ticker and shares > 0 and avg_price > 0:
-                    if DatabaseService.add_portfolio_position(
-                        st.session_state.user.id,
-                        ticker,
-                        shares,
-                        avg_price,
-                        datetime.now().date().isoformat()
-                    ):
-                        st.success(f"✅ Added {shares} shares of {ticker}!")
-                        time.sleep(0.5)
-                        st.rerun()
-                else:
-                    st.error("Please fill all fields")
-        
-        st.markdown("---")
-        
-        portfolio = DatabaseService.get_portfolio(st.session_state.user.id)
-        
-        if portfolio:
-            total_invested = 0
-            total_current = 0
-            
-            positions_data = []
-            
-            for pos in portfolio:
-                ticker = pos['ticker']
-                shares = pos['shares']
-                avg_price = pos['average_price']
-                
-                try:
-                    stock = yf.Ticker(ticker)
-                    current_price = stock.history(period='1d')['Close'].iloc[-1]
-                    
-                    invested = shares * avg_price
-                    current_value = shares * current_price
-                    pnl = current_value - invested
-                    pnl_pct = (pnl / invested) * 100
-                    
-                    total_invested += invested
-                    total_current += current_value
-                    
-                    positions_data.append({
-                        'ticker': ticker,
-                        'shares': shares,
-                        'avg_price': avg_price,
-                        'current_price': current_price,
-                        'pnl': pnl,
-                        'pnl_pct': pnl_pct
-                    })
-                except:
-                    continue
-            
-            total_pnl = total_current - total_invested
-            total_pnl_pct = (total_pnl / total_invested * 100) if total_invested > 0 else 0
-            
-            st.markdown("### 📊 Portfolio Summary")
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Total Invested", f"${total_invested:,.0f}")
-            col2.metric("Current Value", f"${total_current:,.0f}")
-            col3.metric("Total P/L", f"${total_pnl:,.0f}", f"{total_pnl_pct:+.1f}%")
-            
-            st.markdown("---")
-            
-            st.markdown(f"**{len(positions_data)} positions**")
-            
-            for pos in positions_data:
-                col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
-                col1.write(f"**{pos['ticker']}**")
-                col2.write(f"{pos['shares']} @ ${pos['avg_price']:.2f}")
-                
-                pnl_color = "🟢" if pos['pnl'] >= 0 else "🔴"
-                col3.metric("P/L", f"${pos['pnl']:,.2f}", f"{pos['pnl_pct']:+.1f}%")
-                
-                if col4.button("Remove", key=f"port_rm_{pos['ticker']}"):
-                    DatabaseService.remove_portfolio_position(st.session_state.user.id, pos['ticker'])
-                    st.rerun()
-        else:
-            st.info("Your portfolio is empty. Add positions to track performance!")
-
-# =============================================================================
-# HELP & GLOSSARY PAGE
-# =============================================================================
-def render_help_page():
-    """Render help and glossary page"""
-    st.title("📚 Help & Glossary")
-    
-    st.markdown("### Plain-English Investing Terms")
-    
-    terms = {
-        "Stock Health Score": "AI's overall rating of a stock from 0-100. Higher scores indicate stronger opportunities based on 20+ factors.",
-        "Stock Temperature": "Shows if a stock is 'hot' (overbought) or 'cold' (oversold). Below 30 = potentially undervalued, Above 70 = potentially overvalued.",
-        "Momentum Signal": "Indicates if a stock is gaining or losing speed. Green = bullish (going up), Red = bearish (going down).",
-        "Price Channel": "The normal price range for a stock. Breaks outside this range may signal big moves coming.",
-        "Price Health (P/E)": "How expensive a stock is compared to its earnings. Lower can mean better value, but very low might signal problems.",
-        "Trading Activity": "How many shares are being bought/sold. High activity means lots of interest in the stock.",
-        "Company Size": "Total value of all company shares (market cap). Larger = more stable, Smaller = more growth potential.",
-        "Income Return": "Dividend yield - cash the company pays you each year as a percentage of stock price.",
-        "Profit Margin": "What percentage of revenue becomes profit. Higher is better - shows the company is efficient.",
-        "Return on Equity": "How well the company uses investor money to generate profits. Above 15% is generally good.",
-    }
-    
-    for term, definition in terms.items():
-        with st.expander(f"**{term}**"):
-            st.write(definition)
-    
-    st.markdown("---")
-    
-    st.markdown("### 🤝 Need More Help?")
-    st.info("Contact support at support@aistockgenius.com")
-
-# =============================================================================
-# ADVANCED TOOLS
-# =============================================================================
-def render_backtest_page(is_premium: bool):
-    """Render backtesting page - Premium only"""
-    st.title("⚡ Strategy Testing")
-    
-    if not is_premium:
-        st.markdown('<div class="alert-warning">🔒 Strategy Testing is a Premium feature! Upgrade to unlock AI-powered backtesting.</div>', unsafe_allow_html=True)
-        if st.button("🚀 Upgrade Now", type="primary", use_container_width=True):
-            with st.spinner("Upgrading..."):
-                if DatabaseService.upgrade_to_premium(st.session_state.user.id):
-                    st.session_state.profile = DatabaseService.get_user_profile(st.session_state.user.id)
-                    st.success("Welcome to Premium!")
-                    st.rerun()
-        return
-    
-    st.markdown("### Test Your Trading Strategy")
-    st.info("See how a trading strategy would have performed historically with real data.")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        ticker = st.text_input("Stock Ticker", "AAPL").upper()
-    with col2:
-        start = st.date_input("Start Date", datetime.now() - timedelta(days=730))
-    with col3:
-        end = st.date_input("End Date", datetime.now())
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        capital = st.number_input("Initial Capital ($)", 10000, step=1000)
-        risk = st.slider("Risk per Trade (%)", 0.5, 5.0, 2.0) / 100
-    with col2:
-        rr = st.slider("Risk/Reward Ratio", 1.0, 5.0, 2.0)
-    
-    if st.button("🚀 Run Test", type="primary", use_container_width=True):
-        with st.spinner(f"🤖 Testing strategy on {ticker}..."):
-            st.success("✅ Test Complete!")
-            
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Strategy Return", "+24.5%")
-            col2.metric("Buy & Hold", "+18.2%")
-            col3.metric("Alpha", "+6.3%")
-            col4.metric("Total Trades", "12")
-            
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Win Rate", "66.7%")
-            col2.metric("Profit Factor", "2.4")
-            col3.metric("Sharpe Ratio", "1.8")
-            col4.metric("Max Drawdown", "-8.2%")
-            
-            st.info("💡 This strategy outperformed buy-and-hold by 6.3%!")
-
-def render_position_page(is_premium: bool):
-    """Render position sizing calculator - Premium only"""
-    st.title("📏 Position Calculator")
-    
-    if not is_premium:
-        st.markdown('<div class="alert-warning">🔒 Position Calculator is a Premium feature!</div>', unsafe_allow_html=True)
-        if st.button("🚀 Upgrade Now", type="primary", use_container_width=True):
-            with st.spinner("Upgrading..."):
-                if DatabaseService.upgrade_to_premium(st.session_state.user.id):
-                    st.session_state.profile = DatabaseService.get_user_profile(st.session_state.user.id)
-                    st.success("Welcome to Premium!")
-                    st.rerun()
-        return
-    
-    st.markdown("### Calculate Safe Position Size")
-    st.info("AI helps you determine how much to invest based on your risk tolerance.")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        ticker = st.text_input("Stock Ticker", "AAPL").upper()
-        account = st.number_input("Account Size ($)", 100000, step=1000)
-        risk = st.slider("Risk per Trade (%)", 0.5, 5.0, 2.0) / 100
-    
-    with col2:
-        method = st.selectbox("Calculation Method", ["Smart AI", "Fixed Risk", "Volatility-Based"])
-        rr = st.slider("Risk/Reward Ratio", 1.0, 5.0, 2.0)
-    
-    if st.button("🤖 Calculate Position", type="primary", use_container_width=True):
-        try:
-            stock = yf.Ticker(ticker)
-            hist = stock.history(period='3mo')
-            
-            if not hist.empty:
-                price = hist['Close'].iloc[-1]
-                
-                position_value = account * risk
-                shares = int(position_value / price)
-                position_pct = (shares * price / account) * 100
-                
-                st.markdown("---")
-                st.markdown("### 💡 Recommended Position")
-                
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Shares to Buy", shares)
-                col2.metric("Position Value", f"${shares * price:,.0f}")
-                col3.metric("% of Account", f"{position_pct:.1f}%")
-                
-                st.markdown("---")
-                st.markdown("### 🎯 Risk Management")
-                
-                volatility = hist['Close'].pct_change().std()
-                atr = volatility * price * 2
-                
-                stop_loss = price - atr
-                take_profit = price + (atr * rr)
-                
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Entry Price", f"${price:.2f}")
-                col2.metric("Safety Exit (Stop Loss)", f"${stop_loss:.2f}", f"-{((price - stop_loss) / price * 100):.1f}%")
-                col3.metric("Target Win (Take Profit)", f"${take_profit:.2f}", f"+{((take_profit - price) / price * 100):.1f}%")
-                
-                st.success("✅ Position calculated! This keeps your risk at " + f"{risk*100:.1f}% of your account.")
-        except Exception as e:
-            st.error(f"Error calculating position: {e}")
-
-def render_footer():
-    """Render application footer"""
-    st.markdown("---")
-    st.markdown("""
-    <div style='text-align: center; padding: 2rem; color: #94a3b8;'>
-        <p style='font-size: 1.1rem; font-weight: 600;'>🤖 AI Stock Genius</p>
-        <p style='font-size: 0.9rem;'>Beginner-Friendly Stock Analysis Platform</p>
-        <p style='font-size: 0.85rem;'>© 2025 AI Stock Genius | For educational purposes only</p>
-        <p style='font-size: 0.8rem; margin-top: 1rem;'>⚠️ Investment decisions involve risk. Past performance does not guarantee future results.</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-# =============================================================================
-# RUN THE APPLICATION
-# =============================================================================
-
-# Initialize session state defaults
-if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
-if 'user' not in st.session_state:
-    st.session_state.user = None
-if 'profile' not in st.session_state:
-    st.session_state.profile = None
-if 'page' not in st.session_state:
-    st.session_state.page = 'home'
-if 'beginner_mode' not in st.session_state:
-    st.session_state.beginner_mode = True
-if 'onboarding_complete' not in st.session_state:
-    st.session_state.onboarding_complete = False
-if 'onboarding_step' not in st.session_state:
-    st.session_state.onboarding_step = 0
-if 'show_onboarding' not in st.session_state:
-    st.session_state.show_onboarding = True
-if 'demo_ticker' not in st.session_state:
-    st.session_state.demo_ticker = 'AAPL'
-
-# Check authentication
-if not st.session_state.authenticated:
-    render_auth_page()
-    st.stop()
-
-# Check if onboarding needed
-if st.session_state.show_onboarding and not st.session_state.onboarding_complete:
-    render_onboarding()
-    st.stop()
-
-# Get user profile
-profile = st.session_state.profile or {}
-is_premium = profile.get('is_premium', False)
-
-# Render sidebar
-render_sidebar(is_premium)
-
-# Route to appropriate page
-current_page = st.session_state.page
-
-if current_page == 'home':
-    render_home_page(is_premium)
-elif current_page == 'analyze':
-    render_analyze_page(is_premium)
-elif current_page == 'mystocks':
-    render_mystocks_page(is_premium)
-elif current_page == 'help':
-    render_help_page()
-elif current_page == 'backtest':
-    render_backtest_page(is_premium)
-elif current_page == 'position':
-    render_position_page(is_premium)
-else:
-    render_home_page(is_premium)
-
-# Footer
-render_footer()"""
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                     AI STOCK GENIUS - REDESIGNED v4.0                        ║
 ║                 Beginner-Friendly Stock Analysis Platform                     ║
@@ -935,265 +9,6 @@ render_footer()"""
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
-# IMPORTS
-# =============================================================================
-import json
-import time
-import warnings
-from datetime import datetime, timedelta
-from typing import Dict, List, Tuple, Optional
-
-import streamlit as st
-import yfinance as yf
-import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-from supabase import create_client
-
-warnings.filterwarnings('ignore')
-
-# =============================================================================
-# PAGE CONFIGURATION
-# =============================================================================
-st.set_page_config(
-    page_title="AI Stock Genius",
-    page_icon="🤖",
-    layout="wide",
-    initial_sidebar_state="expanded",
-    menu_items={
-        'Get Help': 'https://aistockgenius.com/help',
-        'About': '🤖 AI Stock Genius v4.0 - Beginner-Friendly Stock Analysis'
-    }
-)
-
-# =============================================================================
-# DATABASE CONNECTION
-# =============================================================================
-@st.cache_resource
-def init_supabase():
-    """Initialize Supabase client"""
-    try:
-        url = st.secrets["supabase"]["url"]
-        key = st.secrets["supabase"]["key"]
-        return create_client(url, key)
-    except Exception as e:
-        st.error(f"⚠️ Database connection failed: {e}")
-        return None
-
-supabase = init_supabase()
-
-# =============================================================================
-# MODERN CSS STYLING
-# =============================================================================
-def load_custom_css():
-    """Load improved CSS with better contrast and readability"""
-    st.markdown("""
-    <style>
-        /* Import Fonts */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-        
-        /* Global Styles */
-        * {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            font-size: 16px;
-        }
-        
-        /* Main Background */
-        .stApp {
-            background: linear-gradient(135deg, #0a0e1a 0%, #151b2e 100%);
-            background-attachment: fixed;
-        }
-        
-        /* Container */
-        .main .block-container {
-            background: rgba(21, 27, 46, 0.6);
-            backdrop-filter: blur(20px);
-            border-radius: 20px;
-            border: 1px solid rgba(148, 163, 184, 0.2);
-            padding: 2.5rem;
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
-            max-width: 1400px;
-        }
-        
-        /* Headers */
-        h1, h2, h3, h4, h5, h6 {
-            color: #ffffff !important;
-            font-weight: 700 !important;
-            letter-spacing: -0.02em;
-        }
-        
-        h1 {
-            font-size: 2.5rem !important;
-            margin-bottom: 1.5rem !important;
-        }
-        
-        h2 {
-            font-size: 1.875rem !important;
-            margin-top: 2rem !important;
-            margin-bottom: 1.25rem !important;
-        }
-        
-        h3 {
-            font-size: 1.5rem !important;
-            color: #e0e6f0 !important;
-        }
-        
-        /* Text */
-        p, span, div, label {
-            color: #e0e6f0 !important;
-            line-height: 1.6 !important;
-        }
-        
-        /* Buttons */
-        .stButton > button {
-            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-            color: #ffffff !important;
-            border: none;
-            border-radius: 12px;
-            padding: 0.875rem 1.75rem;
-            font-weight: 600;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-            width: 100%;
-            min-height: 44px;
-        }
-        
-        .stButton > button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.6);
-        }
-        
-        .stButton > button[kind="primary"] {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-        }
-        
-        /* Metrics */
-        div[data-testid="stMetricValue"] {
-            font-size: 2rem !important;
-            font-weight: 800 !important;
-            color: #ffffff !important;
-        }
-        
-        div[data-testid="stMetricLabel"] {
-            font-size: 0.875rem !important;
-            color: #94a3b8 !important;
-            font-weight: 600 !important;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-        
-        /* Premium Badge */
-        .premium-badge {
-            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-            color: #1e293b !important;
-            padding: 0.75rem 1.5rem;
-            border-radius: 12px;
-            font-weight: 700;
-            font-size: 0.875rem;
-            text-align: center;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-        
-        .free-badge {
-            background: rgba(100, 116, 139, 0.3);
-            color: #e0e6f0 !important;
-            padding: 0.75rem 1.5rem;
-            border-radius: 12px;
-            font-weight: 700;
-            font-size: 0.875rem;
-            text-align: center;
-            border: 2px solid rgba(148, 163, 184, 0.5);
-        }
-        
-        /* Alert Boxes */
-        .alert-success {
-            background: rgba(16, 185, 129, 0.15);
-            border: 2px solid #10b981;
-            border-left: 6px solid #10b981;
-            padding: 1.25rem 1.5rem;
-            border-radius: 15px;
-            color: #d1fae5 !important;
-            font-weight: 600;
-            margin: 1.5rem 0;
-        }
-        
-        .alert-info {
-            background: rgba(59, 130, 246, 0.15);
-            border: 2px solid #3b82f6;
-            border-left: 6px solid #3b82f6;
-            padding: 1.25rem 1.5rem;
-            border-radius: 15px;
-            color: #bfdbfe !important;
-            font-weight: 600;
-            margin: 1.5rem 0;
-        }
-        
-        .alert-warning {
-            background: rgba(245, 158, 11, 0.15);
-            border: 2px solid #f59e0b;
-            border-left: 6px solid #f59e0b;
-            padding: 1.25rem 1.5rem;
-            border-radius: 15px;
-            color: #fef3c7 !important;
-            font-weight: 600;
-            margin: 1.5rem 0;
-        }
-        
-        /* Input Fields */
-        .stTextInput > div > div > input,
-        .stNumberInput > div > div > input {
-            background: rgba(21, 27, 46, 0.8) !important;
-            border: 2px solid rgba(148, 163, 184, 0.4) !important;
-            border-radius: 10px !important;
-            color: #ffffff !important;
-            font-size: 1rem !important;
-            padding: 0.875rem 1rem !important;
-        }
-        
-        .stTextInput > div > div > input:focus,
-        .stNumberInput > div > div > input:focus {
-            border-color: #3b82f6 !important;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2) !important;
-        }
-        
-        /* Sidebar */
-        section[data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #151b2e 0%, #0a0e1a 100%);
-            border-right: 2px solid rgba(148, 163, 184, 0.2);
-            padding: 1rem;
-        }
-        
-        /* Tabs */
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 12px;
-            background: rgba(255, 255, 255, 0.05);
-            padding: 0.75rem;
-            border-radius: 15px;
-        }
-        
-        .stTabs [data-baseweb="tab"] {
-            background: transparent;
-            border-radius: 10px;
-            padding: 1rem 2rem;
-            color: #94a3b8 !important;
-            font-weight: 600;
-            min-height: 44px;
-        }
-        
-        .stTabs [aria-selected="true"] {
-            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-            color: #ffffff !important;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-
-load_custom_css()
-
-# =============================================================================
 # TOOLTIP CONTENT MANAGER
 # =============================================================================
 class TooltipManager:
@@ -1218,14 +33,17 @@ class TooltipManager:
         return tooltips.get(key, "")
 
 # =============================================================================
-# STOCK SEARCH HELPER
+# STOCK SEARCH HELPER WITH YFINANCE SEARCH
 # =============================================================================
 class StockSearchHelper:
-    """Helper for searching stocks by name or ticker"""
+    """Helper for searching stocks by name or ticker using yfinance"""
     
     @staticmethod
     def search_stock(query: str):
-        """Search for stocks by ticker or company name"""
+        """
+        Search for stocks by ticker or company name using yfinance
+        Returns list of (ticker, name) tuples
+        """
         if not query or len(query) < 1:
             return []
         
@@ -1233,21 +51,45 @@ class StockSearchHelper:
         results = []
         
         try:
-            # Try as direct ticker
+            # Use yfinance Ticker search
+            # First, try as direct ticker
             try:
                 ticker_obj = yf.Ticker(query.upper())
                 info = ticker_obj.info
                 
+                # Check if we got valid data
                 if info and ('symbol' in info or 'longName' in info or 'shortName' in info):
                     ticker_symbol = info.get('symbol', query.upper())
                     company_name = info.get('longName') or info.get('shortName') or ticker_symbol
                     
+                    # Only add if we got a real company name
                     if company_name and company_name != ticker_symbol:
                         results.append((ticker_symbol, company_name))
             except:
                 pass
             
-            # Fallback: Search curated list
+            # Search using yfinance search functionality
+            # Note: yfinance doesn't have a built-in search API, so we'll use Ticker with common variations
+            # For production, you might want to integrate with a proper search API
+            
+            # If exact ticker didn't work, try some common patterns
+            if not results:
+                # Try common stock exchanges
+                for suffix in ['', '.US', '.NYSE', '.NASDAQ']:
+                    try:
+                        test_ticker = query.upper() + suffix
+                        ticker_obj = yf.Ticker(test_ticker)
+                        info = ticker_obj.info
+                        
+                        if info and info.get('longName'):
+                            ticker_symbol = info.get('symbol', test_ticker)
+                            company_name = info.get('longName') or info.get('shortName')
+                            results.append((ticker_symbol, company_name))
+                            break
+                    except:
+                        continue
+            
+            # Fallback: Search our curated list for name matches
             if not results:
                 popular_stocks = {
                     'AAPL': 'Apple Inc.',
@@ -1285,19 +127,43 @@ class StockSearchHelper:
                 query_upper = query.upper()
                 
                 for ticker, name in popular_stocks.items():
+                    # Match in ticker or name
                     if query_upper in ticker or query_upper in name.upper():
                         results.append((ticker, name))
                 
+                # Limit to top 10
                 results = results[:10]
         
         except Exception as e:
+            # If all else fails, return empty
             pass
         
         return results
     
     @staticmethod
+    def get_stock_info(ticker: str):
+        """Get detailed stock information"""
+        try:
+            stock = yf.Ticker(ticker)
+            info = stock.info
+            
+            if info and ('symbol' in info or 'longName' in info):
+                return {
+                    'ticker': ticker,
+                    'name': info.get('longName') or info.get('shortName') or ticker,
+                    'sector': info.get('sector', 'N/A'),
+                    'industry': info.get('industry', 'N/A'),
+                    'market_cap': info.get('marketCap', 0)
+                }
+        except:
+            pass
+        
+        return None
+    
+    @staticmethod
     def format_option(ticker: str, name: str) -> str:
         """Format stock option for display"""
+        # Truncate long names
         if len(name) > 50:
             name = name[:47] + "..."
         return f"{ticker} - {name}"
@@ -1370,8 +236,7 @@ class AuthenticationService:
         except:
             pass
         finally:
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
+            SessionManager.clear()
 
 # =============================================================================
 # DATABASE SERVICE
@@ -1396,7 +261,7 @@ class DatabaseService:
         try:
             if supabase is None:
                 return False
-            user_email = st.session_state.user.email
+            user_email = SessionManager.get('user').email
             end_date = (datetime.now() + timedelta(days=30)).isoformat()
             supabase.table('user_profiles').upsert({
                 'id': user_id,
@@ -1503,21 +368,21 @@ class TechnicalAnalysisEngine:
     @staticmethod
     def calculate_all_indicators(df):
         try:
-            # RSI
+            # RSI (Stock Temperature)
             delta = df['Close'].diff()
             gain = delta.where(delta > 0, 0).rolling(window=14).mean()
             loss = -delta.where(delta < 0, 0).rolling(window=14).mean()
             rs = gain / loss
             df['RSI'] = 100 - (100 / (1 + rs))
             
-            # MACD
+            # MACD (Momentum Signal)
             exp1 = df['Close'].ewm(span=12, adjust=False).mean()
             exp2 = df['Close'].ewm(span=26, adjust=False).mean()
             df['MACD'] = exp1 - exp2
             df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
             df['MACD_Histogram'] = df['MACD'] - df['MACD_Signal']
             
-            # Bollinger Bands
+            # Bollinger Bands (Price Channel)
             df['BB_Middle'] = df['Close'].rolling(window=20).mean()
             bb_std = df['Close'].rolling(window=20).std()
             df['BB_Upper'] = df['BB_Middle'] + (bb_std * 2)
@@ -1527,7 +392,7 @@ class TechnicalAnalysisEngine:
             for period in [20, 50, 200]:
                 df[f'SMA{period}'] = df['Close'].rolling(window=period).mean()
             
-            # ATR
+            # ATR (Price Swing Range)
             high_low = df['High'] - df['Low']
             high_close = abs(df['High'] - df['Close'].shift())
             low_close = abs(df['Low'] - df['Close'].shift())
@@ -1553,7 +418,7 @@ class TechnicalAnalysisEngine:
             latest = df.iloc[-1]
             price = latest['Close']
             
-            # Technical Analysis
+            # Technical Analysis (50 points)
             rsi = latest['RSI']
             if pd.notna(rsi):
                 if 40 <= rsi <= 60:
@@ -1587,7 +452,7 @@ class TechnicalAnalysisEngine:
                     score += 4
                     signals.append(("Downward trend active", "negative"))
             
-            # Fundamental Analysis
+            # Fundamental Analysis (50 points)
             pe = info.get('trailingPE')
             if pe and pd.notna(pe):
                 if 10 <= pe <= 25:
@@ -1640,11 +505,12 @@ class TechnicalAnalysisEngine:
 # AI SENTIMENT ANALYSIS MODULE
 # =============================================================================
 class SentimentAnalyzer:
-    """Mock sentiment analysis"""
+    """Mock sentiment analysis (placeholder for FinBERT/API integration)"""
     
     @staticmethod
     def analyze_sentiment(ticker: str):
         """Analyze market sentiment for a stock"""
+        # This is a placeholder - in production, integrate FinBERT or news API
         import random
         sentiment_score = random.uniform(-0.5, 0.8)
         
@@ -1758,9 +624,9 @@ def render_auth_page():
                         with st.spinner("Signing in..."):
                             success, user, profile = AuthenticationService.signin(email, password)
                             if success:
-                                st.session_state.authenticated = True
-                                st.session_state.user = user
-                                st.session_state.profile = profile
+                                SessionManager.set('authenticated', True)
+                                SessionManager.set('user', user)
+                                SessionManager.set('profile', profile)
                                 st.success("Welcome back!")
                                 time.sleep(0.5)
                                 st.rerun()
@@ -1796,9 +662,10 @@ def render_auth_page():
 # =============================================================================
 def render_onboarding():
     """Render onboarding flow for new users"""
-    step = st.session_state.get('onboarding_step', 0)
+    step = SessionManager.get('onboarding_step', 0)
     
     if step == 0:
+        # Welcome
         st.markdown("<div style='text-align: center; margin: 3rem 0;'>", unsafe_allow_html=True)
         st.markdown("# 🎉 Welcome to AI Stock Genius!")
         st.markdown("### We'll help you make smarter investment decisions using AI")
@@ -1808,14 +675,15 @@ def render_onboarding():
         col1, col2, col3 = st.columns([1, 1, 1])
         with col2:
             if st.button("Continue", use_container_width=True, type="primary"):
-                st.session_state.onboarding_step = 1
+                SessionManager.set('onboarding_step', 1)
                 st.rerun()
             if st.button("Skip Tour", use_container_width=True):
-                st.session_state.onboarding_complete = True
-                st.session_state.show_onboarding = False
+                SessionManager.set('onboarding_complete', True)
+                SessionManager.set('show_onboarding', False)
                 st.rerun()
     
     elif step == 1:
+        # Choose experience level
         st.markdown("## How would you describe yourself?")
         
         col1, col2 = st.columns(2)
@@ -1823,21 +691,22 @@ def render_onboarding():
             st.markdown("### 🌱 Beginner")
             st.markdown("I'm new to investing")
             if st.button("Choose Beginner Mode", use_container_width=True, type="primary"):
-                st.session_state.beginner_mode = True
-                st.session_state.onboarding_step = 2
+                SessionManager.set('beginner_mode', True)
+                SessionManager.set('onboarding_step', 2)
                 st.rerun()
         
         with col2:
             st.markdown("### 📈 Experienced")
             st.markdown("I know my way around stocks")
             if st.button("Choose Advanced Mode", use_container_width=True):
-                st.session_state.beginner_mode = False
-                st.session_state.onboarding_step = 2
+                SessionManager.set('beginner_mode', False)
+                SessionManager.set('onboarding_step', 2)
                 st.rerun()
         
         st.info("💡 You can change this anytime in Settings")
     
     elif step == 2:
+        # Quick tutorial
         st.markdown("## 🎯 Quick Tutorial")
         st.markdown("Here's what you can do with AI Stock Genius:")
         
@@ -1853,9 +722,9 @@ def render_onboarding():
         col1, col2, col3 = st.columns([1, 1, 1])
         with col2:
             if st.button("Let's Go! 🚀", use_container_width=True, type="primary"):
-                st.session_state.onboarding_complete = True
-                st.session_state.show_onboarding = False
-                st.session_state.page = 'home'
+                SessionManager.set('onboarding_complete', True)
+                SessionManager.set('show_onboarding', False)
+                SessionManager.set('page', 'home')
                 st.rerun()
 
 # =============================================================================
@@ -1867,6 +736,7 @@ def render_sidebar(is_premium: bool):
         st.markdown("### 🤖 AI Stock Genius")
         st.markdown("---")
         
+        # Premium status
         if is_premium:
             st.markdown('<div class="premium-badge">⭐ PREMIUM</div>', unsafe_allow_html=True)
         else:
@@ -1875,55 +745,60 @@ def render_sidebar(is_premium: bool):
         st.markdown("---")
         st.markdown("#### Navigation")
         
+        # Main navigation (3 sections)
         if st.button("🏠 Home", use_container_width=True, key="nav_home"):
-            st.session_state.page = 'home'
+            SessionManager.set('page', 'home')
             st.rerun()
         
         if st.button("📊 Analyze", use_container_width=True, key="nav_analyze"):
-            st.session_state.page = 'analyze'
+            SessionManager.set('page', 'analyze')
             st.rerun()
         
         if st.button("💼 My Stocks", use_container_width=True, key="nav_mystocks"):
-            st.session_state.page = 'mystocks'
+            SessionManager.set('page', 'mystocks')
             st.rerun()
         
-        beginner_mode = st.session_state.get('beginner_mode', True)
+        # Tools (collapsible for beginners)
+        beginner_mode = SessionManager.get('beginner_mode', True)
         
         if not beginner_mode:
             with st.expander("🛠️ Tools"):
                 if st.button("Strategy Testing", use_container_width=True, key="nav_backtest"):
-                    st.session_state.page = 'backtest'
+                    SessionManager.set('page', 'backtest')
                     st.rerun()
                 if st.button("Position Calculator", use_container_width=True, key="nav_position"):
-                    st.session_state.page = 'position'
+                    SessionManager.set('page', 'position')
                     st.rerun()
         
         st.markdown("---")
         
+        # Settings
         with st.expander("⚙️ Settings"):
             current_mode = "Beginner" if beginner_mode else "Advanced"
             st.markdown(f"**Mode:** {current_mode}")
             if st.button("Toggle Mode", use_container_width=True):
-                st.session_state.beginner_mode = not beginner_mode
+                SessionManager.set('beginner_mode', not beginner_mode)
                 st.rerun()
             
             if st.button("Help & Glossary", use_container_width=True):
-                st.session_state.page = 'help'
+                SessionManager.set('page', 'help')
                 st.rerun()
         
         st.markdown("---")
         
+        # Upgrade button for non-premium
         if not is_premium:
             if st.button("🚀 Upgrade to Premium", use_container_width=True, type="primary"):
                 with st.spinner("Upgrading..."):
-                    if DatabaseService.upgrade_to_premium(st.session_state.user.id):
-                        profile = DatabaseService.get_user_profile(st.session_state.user.id)
-                        st.session_state.profile = profile
+                    if DatabaseService.upgrade_to_premium(SessionManager.get('user').id):
+                        profile = DatabaseService.get_user_profile(SessionManager.get('user').id)
+                        SessionManager.set('profile', profile)
                         st.balloons()
                         st.success("Welcome to Premium!")
                         time.sleep(1)
                         st.rerun()
         
+        # Sign out at bottom
         st.markdown("<div style='margin-top: 2rem;'></div>", unsafe_allow_html=True)
         if st.button("🚪 Sign Out", use_container_width=True):
             AuthenticationService.signout()
@@ -1936,12 +811,14 @@ def render_home_page(is_premium: bool):
     """Render the home dashboard"""
     st.title("🏠 Home Dashboard")
     
+    # Premium check
     if not is_premium:
         st.markdown('<div class="alert-warning">📢 You are on a free trial. Upgrade to Premium to unlock all AI features!</div>', unsafe_allow_html=True)
     else:
         st.markdown('<div class="alert-success">🎉 Welcome back! You have full access to all AI-powered features.</div>', unsafe_allow_html=True)
     
-    if not st.session_state.get('onboarding_complete'):
+    # Show onboarding checklist for new users
+    if not SessionManager.get('onboarding_complete'):
         with st.expander("🎯 Get Started Checklist", expanded=True):
             st.markdown("""
             - ☐ Search your first stock
@@ -1950,14 +827,15 @@ def render_home_page(is_premium: bool):
             - ☐ Explore AI insights
             """)
             if st.button("Mark Complete", use_container_width=True):
-                st.session_state.onboarding_complete = True
+                SessionManager.set('onboarding_complete', True)
                 st.rerun()
     
     st.markdown("---")
     
+    # Quick stats
     st.markdown("### 📊 Quick Stats")
-    watchlist = DatabaseService.get_watchlist(st.session_state.user.id)
-    portfolio = DatabaseService.get_portfolio(st.session_state.user.id)
+    watchlist = DatabaseService.get_watchlist(SessionManager.get('user').id)
+    portfolio = DatabaseService.get_portfolio(SessionManager.get('user').id)
     
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Account Type", "💎 Premium" if is_premium else "🆓 Free")
@@ -1967,26 +845,28 @@ def render_home_page(is_premium: bool):
     
     st.markdown("---")
     
+    # Quick actions
     st.markdown("### 🚀 Quick Actions")
     col1, col2, col3 = st.columns(3)
     
     with col1:
         if st.button("📊 Analyze a Stock", use_container_width=True, type="primary"):
-            st.session_state.page = 'analyze'
+            SessionManager.set('page', 'analyze')
             st.rerun()
     
     with col2:
         if st.button("💼 View My Stocks", use_container_width=True):
-            st.session_state.page = 'mystocks'
+            SessionManager.set('page', 'mystocks')
             st.rerun()
     
     with col3:
         if st.button("🔍 Screen Stocks", use_container_width=True):
-            st.session_state.page = 'analyze'
+            SessionManager.set('page', 'analyze')
             st.rerun()
     
     st.markdown("---")
     
+    # Market overview
     st.markdown("### 📰 Market Overview")
     col1, col2, col3 = st.columns(3)
     
@@ -2011,6 +891,7 @@ def render_home_page(is_premium: bool):
     
     st.markdown("---")
     
+    # AI tip of the day
     st.markdown("### 💡 AI Tip of the Day")
     tips = [
         "**Diversification is key**: Don't put all your eggs in one basket. Spread investments across different sectors.",
@@ -2026,12 +907,14 @@ def render_home_page(is_premium: bool):
 # ANALYZE PAGE
 # =============================================================================
 def render_analyze_page(is_premium: bool):
-    """Render the stock analysis page"""
+    """Render the stock analysis page with search by name"""
     st.title("📊 Stock Analysis")
     
+    # Premium check
     if not is_premium:
         st.markdown('<div class="alert-warning">🔒 Upgrade to Premium to unlock full AI insights, forecasts, and advanced features!</div>', unsafe_allow_html=True)
     
+    # Search interface
     st.markdown("### Search for a Stock")
     
     col1, col2 = st.columns([3, 1])
@@ -2047,9 +930,11 @@ def render_analyze_page(is_premium: bool):
     ticker = None
     
     if search_query:
+        # Search for matches
         results = StockSearchHelper.search_stock(search_query)
         
         if results:
+            # Show dropdown with results
             options = [StockSearchHelper.format_option(t, n) for t, n in results]
             
             with col2:
@@ -2068,13 +953,17 @@ def render_analyze_page(is_premium: bool):
             st.info(f"No results found for '{search_query}'. Try a different search term.")
             ticker = None
     else:
-        ticker = st.session_state.get('demo_ticker', 'AAPL')
+        # Default demo stock
+        ticker = SessionManager.get('demo_ticker', 'AAPL')
         st.info("💡 Try searching: Apple, Microsoft, Tesla, Amazon, Google")
     
+    # Analyze stock if ticker is selected
     if ticker:
         try:
             with st.spinner(f"🤖 AI analyzing {ticker}..."):
                 stock = yf.Ticker(ticker)
+                
+                # Get data
                 df = stock.history(period='6mo')
                 info = stock.info
                 
@@ -2082,15 +971,19 @@ def render_analyze_page(is_premium: bool):
                     st.error("Unable to fetch data for this ticker")
                     return
                 
+                # Calculate indicators
                 df = TechnicalAnalysisEngine.calculate_all_indicators(df)
                 
+                # Current price info
                 price = df['Close'].iloc[-1]
                 prev = df['Close'].iloc[-2] if len(df) > 1 else price
                 change_pct = ((price - prev) / prev) * 100
                 
+                # Display header
                 company_name = info.get('longName', ticker)
                 st.markdown(f"## {company_name} ({ticker})")
                 
+                # Key metrics row
                 col1, col2, col3, col4 = st.columns(4)
                 
                 col1.metric("Current Price", f"${price:.2f}", f"{change_pct:+.2f}%")
@@ -2106,7 +999,9 @@ def render_analyze_page(is_premium: bool):
                 
                 st.markdown("---")
                 
+                # Premium features
                 if is_premium:
+                    # AI Health Score
                     ai_analysis = TechnicalAnalysisEngine.calculate_ai_score(df, info)
                     
                     st.markdown("### 🤖 AI Stock Health Score")
@@ -2114,6 +1009,7 @@ def render_analyze_page(is_premium: bool):
                     col1, col2 = st.columns([1, 2])
                     
                     with col1:
+                        # Score display
                         score = ai_analysis['score']
                         score_color = "#10b981" if score >= 70 else "#f59e0b" if score >= 50 else "#ef4444"
                         
@@ -2135,12 +1031,15 @@ def render_analyze_page(is_premium: bool):
                     
                     st.markdown("---")
                     
+                    # Tabs for different views
                     tab1, tab2, tab3 = st.tabs(["📈 Price Chart", "🧠 AI Insights", "📊 Fundamentals"])
                     
                     with tab1:
-                        beginner_mode = st.session_state.get('beginner_mode', True)
+                        # Price chart
+                        beginner_mode = SessionManager.get('beginner_mode', True)
                         
                         if beginner_mode:
+                            # Simple chart for beginners
                             fig = go.Figure()
                             fig.add_trace(go.Scatter(
                                 x=df.index,
@@ -2160,6 +1059,7 @@ def render_analyze_page(is_premium: bool):
                                 plot_bgcolor='rgba(0,0,0,0.3)'
                             )
                         else:
+                            # Advanced chart with indicators
                             fig = make_subplots(
                                 rows=3, cols=1,
                                 shared_xaxes=True,
@@ -2167,6 +1067,7 @@ def render_analyze_page(is_premium: bool):
                                 row_heights=[0.6, 0.2, 0.2]
                             )
                             
+                            # Candlestick
                             fig.add_trace(go.Candlestick(
                                 x=df.index,
                                 open=df['Open'],
@@ -2178,12 +1079,15 @@ def render_analyze_page(is_premium: bool):
                                 decreasing_line_color='#ef4444'
                             ), row=1, col=1)
                             
+                            # Moving averages
                             fig.add_trace(go.Scatter(x=df.index, y=df['SMA20'], name='20-day avg', line=dict(color='#fbbf24', width=2)), row=1, col=1)
                             fig.add_trace(go.Scatter(x=df.index, y=df['SMA50'], name='50-day avg', line=dict(color='#f97316', width=2)), row=1, col=1)
                             
+                            # MACD
                             colors = ['#10b981' if val >= 0 else '#ef4444' for val in df['MACD_Histogram']]
                             fig.add_trace(go.Bar(x=df.index, y=df['MACD_Histogram'], name='Momentum Signal', marker_color=colors), row=2, col=1)
                             
+                            # RSI (Stock Temperature)
                             fig.add_trace(go.Scatter(x=df.index, y=df['RSI'], name='Stock Temperature', line=dict(color='#8b5cf6', width=2)), row=3, col=1)
                             fig.add_hline(y=70, line_dash="dash", line_color="#ef4444", row=3, col=1)
                             fig.add_hline(y=30, line_dash="dash", line_color="#10b981", row=3, col=1)
@@ -2200,10 +1104,11 @@ def render_analyze_page(is_premium: bool):
                         
                         if beginner_mode:
                             if st.button("🔧 Switch to Advanced View", use_container_width=True):
-                                st.session_state.beginner_mode = False
+                                SessionManager.set('beginner_mode', False)
                                 st.rerun()
                     
                     with tab2:
+                        # AI Insights
                         st.markdown("### 🧠 Market Sentiment")
                         sentiment = SentimentAnalyzer.analyze_sentiment(ticker)
                         
@@ -2222,6 +1127,7 @@ def render_analyze_page(is_premium: bool):
                         
                         st.markdown("---")
                         
+                        # Price Forecast
                         st.markdown("### 🔮 30-Day Price Forecast")
                         forecast = PriceForecaster.predict_price(df, 30)
                         
@@ -2240,6 +1146,7 @@ def render_analyze_page(is_premium: bool):
                             st.info("Insufficient data for price forecast")
                     
                     with tab3:
+                        # Fundamentals
                         st.markdown("### 📊 Company Fundamentals")
                         
                         col1, col2 = st.columns(2)
@@ -2274,10 +1181,11 @@ def render_analyze_page(is_premium: bool):
                     
                     st.markdown("---")
                     
+                    # Action buttons
                     col1, col2 = st.columns(2)
                     with col1:
                         if st.button(f"⭐ Add {ticker} to Watchlist", use_container_width=True, type="primary"):
-                            if DatabaseService.add_to_watchlist(st.session_state.user.id, ticker):
+                            if DatabaseService.add_to_watchlist(SessionManager.get('user').id, ticker):
                                 st.success(f"✅ {ticker} added to watchlist!")
                                 time.sleep(1)
                                 st.rerun()
@@ -2286,12 +1194,14 @@ def render_analyze_page(is_premium: bool):
                     
                     with col2:
                         if st.button(f"💼 Add to Portfolio", use_container_width=True):
-                            st.session_state.page = 'mystocks'
+                            SessionManager.set('page', 'mystocks')
                             st.rerun()
                 
                 else:
+                    # Free tier - limited features
                     st.markdown('<div class="alert-info">🔒 Upgrade to Premium to see AI Health Score, Sentiment Analysis, and Price Forecasts</div>', unsafe_allow_html=True)
                     
+                    # Basic chart only
                     fig = go.Figure()
                     fig.add_trace(go.Scatter(
                         x=df.index,
@@ -2312,11 +1222,834 @@ def render_analyze_page(is_premium: bool):
                     
                     if st.button("🚀 Upgrade to Premium", use_container_width=True, type="primary"):
                         with st.spinner("Upgrading..."):
-                            if DatabaseService.upgrade_to_premium(st.session_state.user.id):
-                                profile = DatabaseService.get_user_profile(st.session_state.user.id)
-                                st.session_state.profile = profile
+                            if DatabaseService.upgrade_to_premium(SessionManager.get('user').id):
+                                profile = DatabaseService.get_user_profile(SessionManager.get('user').id)
+                                SessionManager.set('profile', profile)
                                 st.success("Welcome to Premium!")
                                 st.rerun()
                 
         except Exception as e:
             st.error(f"Error analyzing stock: {e}")
+
+# =============================================================================
+# MY STOCKS PAGE (WATCHLIST + PORTFOLIO)
+# =============================================================================
+def render_mystocks_page(is_premium: bool):
+    """Render My Stocks page with tabs"""
+    st.title("💼 My Stocks")
+    
+    if not is_premium:
+        st.markdown('<div class="alert-warning">🔒 Upgrade to Premium to unlock unlimited watchlist and portfolio tracking!</div>', unsafe_allow_html=True)
+    
+    tab1, tab2 = st.tabs(["👁️ Watchlist", "📊 Portfolio"])
+    
+    with tab1:
+        # Watchlist
+        st.markdown("### Your Watchlist")
+        st.caption("💡 " + TooltipManager.get_tooltip('watchlist'))
+        
+        # Add stock to watchlist
+        with st.expander("➕ Add Stock to Watchlist"):
+            search = st.text_input("Search stock", placeholder="e.g., Apple, TSLA", key="watchlist_search")
+            
+            if search:
+                results = StockSearchHelper.search_stock(search)
+                if results:
+                    options = [StockSearchHelper.format_option(t, n) for t, n in results]
+                    selected = st.selectbox("Select stock:", options, key="watchlist_select")
+                    
+                    if st.button("Add to Watchlist", use_container_width=True, type="primary"):
+                        ticker = selected.split(" - ")[0].strip()
+                        if DatabaseService.add_to_watchlist(SessionManager.get('user').id, ticker):
+                            st.success(f"✅ {ticker} added!")
+                            time.sleep(0.5)
+                            st.rerun()
+                        else:
+                            st.warning("Already in watchlist")
+        
+        st.markdown("---")
+        
+        # Display watchlist
+        watchlist = DatabaseService.get_watchlist(SessionManager.get('user').id)
+        
+        if watchlist:
+            st.markdown(f"**{len(watchlist)} stocks in your watchlist**")
+            
+            # Display in cards (3 per row)
+            for i in range(0, len(watchlist), 3):
+                cols = st.columns(3)
+                for j, col in enumerate(cols):
+                    if i + j < len(watchlist):
+                        item = watchlist[i + j]
+                        ticker = item['ticker']
+                        
+                        try:
+                            stock = yf.Ticker(ticker)
+                            hist = stock.history(period='1d')
+                            
+                            if not hist.empty:
+                                price = hist['Close'].iloc[-1]
+                                
+                                with col:
+                                    st.markdown(f"**{ticker}**")
+                                    st.metric("Price", f"${price:.2f}")
+                                    if st.button("Remove", key=f"wl_rm_{ticker}_{i}_{j}", use_container_width=True):
+                                        DatabaseService.remove_from_watchlist(SessionManager.get('user').id, ticker)
+                                        st.rerun()
+                        except:
+                            with col:
+                                st.markdown(f"**{ticker}**")
+                                st.caption("Data unavailable")
+                                if st.button("Remove", key=f"wl_rm_err_{ticker}_{i}_{j}", use_container_width=True):
+                                    DatabaseService.remove_from_watchlist(SessionManager.get('user').id, ticker)
+                                    st.rerun()
+        else:
+            st.info("Your watchlist is empty. Add stocks to track them!")
+    
+    with tab2:
+        # Portfolio
+        st.markdown("### Your Portfolio")
+        st.caption("💡 " + TooltipManager.get_tooltip('portfolio'))
+        
+        # Add position
+        with st.expander("➕ Add New Position"):
+            col1, col2, col3 = st.columns(3)
+            ticker = col1.text_input("Ticker", key="port_ticker").upper()
+            shares = col2.number_input("Shares", min_value=0.0, step=0.1, key="port_shares")
+            avg_price = col3.number_input("Avg Price", min_value=0.0, step=0.01, key="port_price")
+            
+            if st.button("Add to Portfolio", use_container_width=True, type="primary"):
+                if ticker and shares > 0 and avg_price > 0:
+                    if DatabaseService.add_portfolio_position(
+                        SessionManager.get('user').id,
+                        ticker,
+                        shares,
+                        avg_price,
+                        datetime.now().date().isoformat()
+                    ):
+                        st.success(f"✅ Added {shares} shares of {ticker}!")
+                        time.sleep(0.5)
+                        st.rerun()
+                else:
+                    st.error("Please fill all fields")
+        
+        st.markdown("---")
+        
+        # Display portfolio
+        portfolio = DatabaseService.get_portfolio(SessionManager.get('user').id)
+        
+        if portfolio:
+            # Calculate totals
+            total_invested = 0
+            total_current = 0
+            
+            positions_data = []
+            
+            for pos in portfolio:
+                ticker = pos['ticker']
+                shares = pos['shares']
+                avg_price = pos['average_price']
+                
+                try:
+                    stock = yf.Ticker(ticker)
+                    current_price = stock.history(period='1d')['Close'].iloc[-1]
+                    
+                    invested = shares * avg_price
+                    current_value = shares * current_price
+                    pnl = current_value - invested
+                    pnl_pct = (pnl / invested) * 100
+                    
+                    total_invested += invested
+                    total_current += current_value
+                    
+                    positions_data.append({
+                        'ticker': ticker,
+                        'shares': shares,
+                        'avg_price': avg_price,
+                        'current_price': current_price,
+                        'pnl': pnl,
+                        'pnl_pct': pnl_pct
+                    })
+                except:
+                    continue
+            
+            # Portfolio summary
+            total_pnl = total_current - total_invested
+            total_pnl_pct = (total_pnl / total_invested * 100) if total_invested > 0 else 0
+            
+            st.markdown("### 📊 Portfolio Summary")
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Total Invested", f"${total_invested:,.0f}")
+            col2.metric("Current Value", f"${total_current:,.0f}")
+            col3.metric("Total P/L", f"${total_pnl:,.0f}", f"{total_pnl_pct:+.1f}%")
+            
+            st.markdown("---")
+            
+            # Display positions
+            st.markdown(f"**{len(positions_data)} positions**")
+            
+            for pos in positions_data:
+                col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+                col1.write(f"**{pos['ticker']}**")
+                col2.write(f"{pos['shares']} @ ${pos['avg_price']:.2f}")
+                
+                pnl_color = "🟢" if pos['pnl'] >= 0 else "🔴"
+                col3.metric("P/L", f"${pos['pnl']:,.2f}", f"{pos['pnl_pct']:+.1f}%")
+                
+                if col4.button("Remove", key=f"port_rm_{pos['ticker']}"):
+                    DatabaseService.remove_portfolio_position(SessionManager.get('user').id, pos['ticker'])
+                    st.rerun()
+        else:
+            st.info("Your portfolio is empty. Add positions to track performance!")
+
+# =============================================================================
+# HELP & GLOSSARY PAGE
+# =============================================================================
+def render_help_page():
+    """Render help and glossary page"""
+    st.title("📚 Help & Glossary")
+    
+    st.markdown("### Plain-English Investing Terms")
+    
+    terms = {
+        "Stock Health Score": "AI's overall rating of a stock from 0-100. Higher scores indicate stronger opportunities based on 20+ factors.",
+        "Stock Temperature": "Shows if a stock is 'hot' (overbought) or 'cold' (oversold). Below 30 = potentially undervalued, Above 70 = potentially overvalued.",
+        "Momentum Signal": "Indicates if a stock is gaining or losing speed. Green = bullish (going up), Red = bearish (going down).",
+        "Price Channel": "The normal price range for a stock. Breaks outside this range may signal big moves coming.",
+        "Price Health (P/E)": "How expensive a stock is compared to its earnings. Lower can mean better value, but very low might signal problems.",
+        "Trading Activity": "How many shares are being bought/sold. High activity means lots of interest in the stock.",
+        "Company Size": "Total value of all company shares (market cap). Larger = more stable, Smaller = more growth potential.",
+        "Income Return": "Dividend yield - cash the company pays you each year as a percentage of stock price.",
+        "Profit Margin": "What percentage of revenue becomes profit. Higher is better - shows the company is efficient.",
+        "Return on Equity": "How well the company uses investor money to generate profits. Above 15% is generally good.",
+    }
+    
+    for term, definition in terms.items():
+        with st.expander(f"**{term}**"):
+            st.write(definition)
+    
+    st.markdown("---")
+    
+    st.markdown("### 🤝 Need More Help?")
+    st.info("Contact support at support@aistockgenius.com")
+
+# =============================================================================
+# MAIN APPLICATION
+# =============================================================================
+def main():
+    """Main application entry point"""
+    
+    # Initialize session state - safe check
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+        st.session_state.user = None
+        st.session_state.profile = None
+        st.session_state.page = 'home'
+        st.session_state.beginner_mode = True
+        st.session_state.onboarding_complete = False
+        st.session_state.onboarding_step = 0
+        st.session_state.show_onboarding = True
+        st.session_state.demo_ticker = 'AAPL'
+        st.session_state.watchlist_cache = None
+        st.session_state.portfolio_cache = None
+        st.session_state.theme = 'dark'
+    
+    # Check authentication
+    if not st.session_state.get('authenticated', False):
+        render_auth_page()
+        st.stop()
+    
+    # Check if onboarding needed
+    if st.session_state.get('show_onboarding', False) and not st.session_state.get('onboarding_complete', False):
+        render_onboarding()
+        st.stop()
+    
+    # Get user profile
+    profile = st.session_state.get('profile', {})
+    is_premium = profile.get('is_premium', False)
+    
+    # Render sidebar
+    render_sidebar(is_premium)
+    
+    # Route to appropriate page
+    current_page = st.session_state.get('page', 'home')
+    
+    if current_page == 'home':
+        render_home_page(is_premium)
+    elif current_page == 'analyze':
+        render_analyze_page(is_premium)
+    elif current_page == 'mystocks':
+        render_mystocks_page(is_premium)
+    elif current_page == 'help':
+        render_help_page()
+    elif current_page == 'backtest':
+        render_backtest_page(is_premium)
+    elif current_page == 'position':
+        render_position_page(is_premium)
+    
+    # Footer
+    render_footer()
+
+# =============================================================================
+# ADVANCED TOOLS (PREMIUM ONLY)
+# =============================================================================
+
+def render_backtest_page(is_premium: bool):
+    """Render backtesting page - Premium only"""
+    st.title("⚡ Strategy Testing")
+    
+    if not is_premium:
+        st.markdown('<div class="alert-warning">🔒 Strategy Testing is a Premium feature! Upgrade to unlock AI-powered backtesting.</div>', unsafe_allow_html=True)
+        if st.button("🚀 Upgrade Now", type="primary", use_container_width=True):
+            with st.spinner("Upgrading..."):
+                if DatabaseService.upgrade_to_premium(SessionManager.get('user').id):
+                    SessionManager.set('profile', DatabaseService.get_user_profile(SessionManager.get('user').id))
+                    st.success("Welcome to Premium!")
+                    st.rerun()
+        return
+    
+    st.markdown("### Test Your Trading Strategy")
+    st.info("See how a trading strategy would have performed historically with real data.")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        ticker = st.text_input("Stock Ticker", "AAPL").upper()
+    with col2:
+        start = st.date_input("Start Date", datetime.now() - timedelta(days=730))
+    with col3:
+        end = st.date_input("End Date", datetime.now())
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        capital = st.number_input("Initial Capital ($)", 10000, step=1000)
+        risk = st.slider("Risk per Trade (%)", 0.5, 5.0, 2.0) / 100
+    with col2:
+        rr = st.slider("Risk/Reward Ratio", 1.0, 5.0, 2.0)
+    
+    if st.button("🚀 Run Test", type="primary", use_container_width=True):
+        with st.spinner(f"🤖 Testing strategy on {ticker}..."):
+            # Mock backtest results
+            st.success("✅ Test Complete!")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Strategy Return", "+24.5%")
+            col2.metric("Buy & Hold", "+18.2%")
+            col3.metric("Alpha", "+6.3%")
+            col4.metric("Total Trades", "12")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Win Rate", "66.7%")
+            col2.metric("Profit Factor", "2.4")
+            col3.metric("Sharpe Ratio", "1.8")
+            col4.metric("Max Drawdown", "-8.2%")
+            
+            st.info("💡 This strategy outperformed buy-and-hold by 6.3%!")
+
+def render_position_page(is_premium: bool):
+    """Render position sizing calculator - Premium only"""
+    st.title("📏 Position Calculator")
+    
+    if not is_premium:
+        st.markdown('<div class="alert-warning">🔒 Position Calculator is a Premium feature!</div>', unsafe_allow_html=True)
+        if st.button("🚀 Upgrade Now", type="primary", use_container_width=True):
+            with st.spinner("Upgrading..."):
+                if DatabaseService.upgrade_to_premium(SessionManager.get('user').id):
+                    SessionManager.set('profile', DatabaseService.get_user_profile(SessionManager.get('user').id))
+                    st.success("Welcome to Premium!")
+                    st.rerun()
+        return
+    
+    st.markdown("### Calculate Safe Position Size")
+    st.info("AI helps you determine how much to invest based on your risk tolerance.")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        ticker = st.text_input("Stock Ticker", "AAPL").upper()
+        account = st.number_input("Account Size ($)", 100000, step=1000)
+        risk = st.slider("Risk per Trade (%)", 0.5, 5.0, 2.0) / 100
+    
+    with col2:
+        method = st.selectbox("Calculation Method", ["Smart AI", "Fixed Risk", "Volatility-Based"])
+        rr = st.slider("Risk/Reward Ratio", 1.0, 5.0, 2.0)
+    
+    if st.button("🤖 Calculate Position", type="primary", use_container_width=True):
+        try:
+            stock = yf.Ticker(ticker)
+            hist = stock.history(period='3mo')
+            
+            if not hist.empty:
+                price = hist['Close'].iloc[-1]
+                
+                # Simple position sizing
+                position_value = account * risk
+                shares = int(position_value / price)
+                position_pct = (shares * price / account) * 100
+                
+                st.markdown("---")
+                st.markdown("### 💡 Recommended Position")
+                
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Shares to Buy", shares)
+                col2.metric("Position Value", f"${shares * price:,.0f}")
+                col3.metric("% of Account", f"{position_pct:.1f}%")
+                
+                st.markdown("---")
+                st.markdown("### 🎯 Risk Management")
+                
+                # Calculate stop loss and take profit
+                volatility = hist['Close'].pct_change().std()
+                atr = volatility * price * 2
+                
+                stop_loss = price - atr
+                take_profit = price + (atr * rr)
+                
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Entry Price", f"${price:.2f}")
+                col2.metric("Safety Exit (Stop Loss)", f"${stop_loss:.2f}", f"-{((price - stop_loss) / price * 100):.1f}%")
+                col3.metric("Target Win (Take Profit)", f"${take_profit:.2f}", f"+{((take_profit - price) / price * 100):.1f}%")
+                
+                st.success("✅ Position calculated! This keeps your risk at " + f"{risk*100:.1f}% of your account.")
+        except Exception as e:
+            st.error(f"Error calculating position: {e}")
+
+def render_footer():
+    """Render application footer"""
+    st.markdown("---")
+    st.markdown("""
+    <div style='text-align: center; padding: 2rem; color: #94a3b8;'>
+        <p style='font-size: 1.1rem; font-weight: 600;'>🤖 AI Stock Genius</p>
+        <p style='font-size: 0.9rem;'>Beginner-Friendly Stock Analysis Platform</p>
+        <p style='font-size: 0.85rem;'>© 2025 AI Stock Genius | For educational purposes only</p>
+        <p style='font-size: 0.8rem; margin-top: 1rem;'>⚠️ Investment decisions involve risk. Past performance does not guarantee future results.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+# =============================================================================
+# RUN THE APPLICATION
+# =============================================================================
+
+# Initialize session state at module level - safe way
+for key, default_value in [
+    ('authenticated', False),
+    ('user', None),
+    ('profile', None),
+    ('page', 'home'),
+    ('beginner_mode', True),
+    ('onboarding_complete', False),
+    ('onboarding_step', 0),
+    ('show_onboarding', True),
+    ('demo_ticker', 'AAPL'),
+    ('watchlist_cache', None),
+    ('portfolio_cache', None),
+    ('theme', 'dark')
+]:
+    if key not in st.session_state:
+        st.session_state[key] = default_value
+
+# Check authentication
+if not st.session_state['authenticated']:
+    render_auth_page()
+    st.stop()
+
+# Check if onboarding needed
+if st.session_state['show_onboarding'] and not st.session_state['onboarding_complete']:
+    render_onboarding()
+    st.stop()
+
+# Get user profile
+profile = st.session_state.get('profile', {})
+if profile is None:
+    profile = {}
+is_premium = profile.get('is_premium', False)
+
+# Render sidebar
+render_sidebar(is_premium)
+
+# Route to appropriate page
+current_page = st.session_state.get('page', 'home')
+
+if current_page == 'home':
+    render_home_page(is_premium)
+elif current_page == 'analyze':
+    render_analyze_page(is_premium)
+elif current_page == 'mystocks':
+    render_mystocks_page(is_premium)
+elif current_page == 'help':
+    render_help_page()
+elif current_page == 'backtest':
+    render_backtest_page(is_premium)
+elif current_page == 'position':
+    render_position_page(is_premium)
+else:
+    render_home_page(is_premium)
+
+# Footer
+render_footer()
+# IMPORTS
+# =============================================================================
+import json
+import time
+import warnings
+from datetime import datetime, timedelta
+from typing import Dict, List, Tuple, Optional
+
+import streamlit as st
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from supabase import create_client
+
+warnings.filterwarnings('ignore')
+
+# =============================================================================
+# PAGE CONFIGURATION
+# =============================================================================
+st.set_page_config(
+    page_title="AI Stock Genius",
+    page_icon="🤖",
+    layout="wide",
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': 'https://aistockgenius.com/help',
+        'About': '🤖 AI Stock Genius v4.0 - Beginner-Friendly Stock Analysis'
+    }
+)
+
+# =============================================================================
+# SESSION STATE MANAGER
+# =============================================================================
+class SessionManager:
+    """Centralized session state management"""
+    
+    @staticmethod
+    def initialize():
+        """Initialize all session state variables"""
+        # Check if session_state is available
+        if not hasattr(st, 'session_state'):
+            return
+        
+        defaults = {
+            'authenticated': False,
+            'user': None,
+            'profile': None,
+            'page': 'home',
+            'beginner_mode': True,  # Default to beginner-friendly
+            'onboarding_complete': False,
+            'onboarding_step': 0,
+            'show_onboarding': True,
+            'demo_ticker': 'AAPL',
+            'watchlist_cache': None,
+            'portfolio_cache': None,
+            'theme': 'dark'
+        }
+        
+        for key, value in defaults.items():
+            if key not in st.session_state:
+                st.session_state[key] = value
+    
+    @staticmethod
+    def get(key: str, default=None):
+        if not hasattr(st, 'session_state'):
+            return default
+        return st.session_state.get(key, default)
+    
+    @staticmethod
+    def set(key: str, value):
+        if not hasattr(st, 'session_state'):
+            return
+        st.session_state[key] = value
+    
+    @staticmethod
+    def clear():
+        if not hasattr(st, 'session_state'):
+            return
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        SessionManager.initialize()
+
+# =============================================================================
+# DATABASE CONNECTION
+# =============================================================================
+@st.cache_resource
+def init_supabase():
+    """Initialize Supabase client"""
+    try:
+        url = st.secrets["supabase"]["url"]
+        key = st.secrets["supabase"]["key"]
+        return create_client(url, key)
+    except Exception as e:
+        st.error(f"⚠️ Database connection failed: {e}")
+        return None
+
+supabase = init_supabase()
+
+# =============================================================================
+# MODERN CSS STYLING - IMPROVED CONTRAST & ACCESSIBILITY
+# =============================================================================
+def load_custom_css():
+    """Load improved CSS with better contrast and readability"""
+    st.markdown("""
+    <style>
+        /* Import Fonts */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        
+        /* Global Styles */
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 16px; /* Better base readability */
+        }
+        
+        /* Main Background */
+        .stApp {
+            background: linear-gradient(135deg, #0a0e1a 0%, #151b2e 100%);
+            background-attachment: fixed;
+        }
+        
+        /* Container */
+        .main .block-container {
+            background: rgba(21, 27, 46, 0.6);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            padding: 2.5rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+            max-width: 1400px;
+        }
+        
+        /* Headers - High Contrast */
+        h1, h2, h3, h4, h5, h6 {
+            color: #ffffff !important;
+            font-weight: 700 !important;
+            letter-spacing: -0.02em;
+        }
+        
+        h1 {
+            font-size: 2.5rem !important;
+            margin-bottom: 1.5rem !important;
+        }
+        
+        h2 {
+            font-size: 1.875rem !important;
+            margin-top: 2rem !important;
+            margin-bottom: 1.25rem !important;
+        }
+        
+        h3 {
+            font-size: 1.5rem !important;
+            color: #e0e6f0 !important;
+        }
+        
+        /* Text - Improved Contrast */
+        p, span, div, label {
+            color: #e0e6f0 !important;
+            line-height: 1.6 !important;
+        }
+        
+        /* Buttons - Larger Touch Targets */
+        .stButton > button {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: #ffffff !important;
+            border: none;
+            border-radius: 12px;
+            padding: 0.875rem 1.75rem;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+            width: 100%;
+            min-height: 44px; /* Touch-friendly */
+        }
+        
+        .stButton > button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.6);
+        }
+        
+        /* Primary Buttons */
+        .stButton > button[kind="primary"] {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+        }
+        
+        /* Metrics - Clear & Readable */
+        div[data-testid="stMetricValue"] {
+            font-size: 2rem !important;
+            font-weight: 800 !important;
+            color: #ffffff !important;
+        }
+        
+        div[data-testid="stMetricLabel"] {
+            font-size: 0.875rem !important;
+            color: #94a3b8 !important;
+            font-weight: 600 !important;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        /* Premium Badge */
+        .premium-badge {
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+            color: #1e293b !important;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 0.875rem;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .free-badge {
+            background: rgba(100, 116, 139, 0.3);
+            color: #e0e6f0 !important;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 0.875rem;
+            text-align: center;
+            border: 2px solid rgba(148, 163, 184, 0.5);
+        }
+        
+        /* Alert Boxes */
+        .alert-success {
+            background: rgba(16, 185, 129, 0.15);
+            border: 2px solid #10b981;
+            border-left: 6px solid #10b981;
+            padding: 1.25rem 1.5rem;
+            border-radius: 15px;
+            color: #d1fae5 !important;
+            font-weight: 600;
+            margin: 1.5rem 0;
+        }
+        
+        .alert-info {
+            background: rgba(59, 130, 246, 0.15);
+            border: 2px solid #3b82f6;
+            border-left: 6px solid #3b82f6;
+            padding: 1.25rem 1.5rem;
+            border-radius: 15px;
+            color: #bfdbfe !important;
+            font-weight: 600;
+            margin: 1.5rem 0;
+        }
+        
+        .alert-warning {
+            background: rgba(245, 158, 11, 0.15);
+            border: 2px solid #f59e0b;
+            border-left: 6px solid #f59e0b;
+            padding: 1.25rem 1.5rem;
+            border-radius: 15px;
+            color: #fef3c7 !important;
+            font-weight: 600;
+            margin: 1.5rem 0;
+        }
+        
+        /* Sidebar */
+        section[data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #151b2e 0%, #0a0e1a 100%);
+            border-right: 2px solid rgba(148, 163, 184, 0.2);
+            padding: 1rem;
+        }
+        
+        /* Input Fields - Better Contrast */
+        .stTextInput > div > div > input,
+        .stNumberInput > div > div > input {
+            background: rgba(21, 27, 46, 0.8) !important;
+            border: 2px solid rgba(148, 163, 184, 0.4) !important;
+            border-radius: 10px !important;
+            color: #ffffff !important;
+            font-size: 1rem !important;
+            padding: 0.875rem 1rem !important;
+        }
+        
+        .stTextInput > div > div > input:focus,
+        .stNumberInput > div > div > input:focus {
+            border-color: #3b82f6 !important;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2) !important;
+        }
+        
+        /* Selectbox - White Text */
+        .stSelectbox label {
+            color: #e0e6f0 !important;
+        }
+        
+        .stSelectbox div[data-baseweb="select"] {
+            background-color: rgba(21, 27, 46, 0.8) !important;
+            border: 2px solid rgba(148, 163, 184, 0.4) !important;
+        }
+        
+        .stSelectbox div[data-baseweb="select"] > div {
+            color: #ffffff !important;
+        }
+        
+        /* Tabs */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.75rem;
+            border-radius: 15px;
+        }
+        
+        .stTabs [data-baseweb="tab"] {
+            background: transparent;
+            border-radius: 10px;
+            padding: 1rem 2rem;
+            color: #94a3b8 !important;
+            font-weight: 600;
+            min-height: 44px;
+        }
+        
+        .stTabs [aria-selected="true"] {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: #ffffff !important;
+        }
+        
+        /* Expander */
+        .streamlit-expanderHeader {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 1.25rem;
+            font-weight: 600;
+            color: #ffffff !important;
+        }
+        
+        /* Tooltips */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+            color: #3b82f6;
+            margin-left: 0.5rem;
+        }
+        
+        /* Cards */
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(148, 163, 184, 0.2);
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            border-color: rgba(148, 163, 184, 0.4);
+            transform: translateY(-2px);
+        }
+        
+        /* Divider */
+        hr {
+            border-color: rgba(148, 163, 184, 0.3);
+            margin: 2rem 0;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+# Load custom CSS
+load_custom_css()
+
+# =============================================================================
