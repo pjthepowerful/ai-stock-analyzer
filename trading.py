@@ -1436,210 +1436,36 @@ def main():
         render_position_page(is_premium)
     elif page == 'help':
         render_help_page()
+# MAIN
+def main():
+    SessionManager.initialize()
+    
+    if not SessionManager.get('authenticated', False):
+        render_auth_page()
+        return
+    
+    profile = SessionManager.get('profile', {})
+    is_premium = profile.get('is_premium', False)
+    
+    render_sidebar(is_premium)
+    
+    page = SessionManager.get('page', 'home')
+    
+    if page == 'home':
+        render_home_page(is_premium)
+    elif page == 'analyze':
+        render_analyze_page(is_premium)
+    elif page == 'mystocks':
+        render_mystocks_page(is_premium)
+    elif page == 'screener':
+        render_screener_page(is_premium)
+    elif page == 'backtest':
+        render_backtest_page(is_premium)
+    elif page == 'position':
+        render_position_page(is_premium)
+    elif page == 'help':
+        render_help_page()
 
 # RUN
-main()
-markdown("#### 📋 AI Analysis")
-for signal, sentiment in ai_analysis['signals']:
-    icon = "🟢" if sentiment == "positive" else "🔴" if sentiment == "negative" else "🟡"
-    st.markdown(f"{icon} {signal}")
-                    
-    st.markdown("---")
-                
-                # Create different chart types
-    fig = go.Figure()
-                
-    if chart_type == "Line Chart":
-                    fig.add_trace(go.Scatter(
-                        x=df.index,
-                        y=df['Close'],
-                        name='Price',
-                        line=dict(color='#3b82f6', width=3)
-                    ))
-                
-    elif chart_type == "Candlestick":
-                    fig.add_trace(go.Candlestick(
-                        x=df.index,
-                        open=df['Open'],
-                        high=df['High'],
-                        low=df['Low'],
-                        close=df['Close'],
-                        name='Price',
-                        increasing_line_color='#10b981',
-                        decreasing_line_color='#ef4444'
-                    ))
-                
-    elif chart_type == "Area Chart":
-                    fig.add_trace(go.Scatter(
-                        x=df.index,
-                        y=df['Close'],
-                        name='Price',
-                        line=dict(color='#3b82f6', width=2),
-                        fill='tozeroy',
-                        fillcolor='rgba(59, 130, 246, 0.3)'
-                    ))
-                
-    elif chart_type == "OHLC":
-                    fig.add_trace(go.Ohlc(
-                        x=df.index,
-                        open=df['Open'],
-                        high=df['High'],
-                        low=df['Low'],
-                        close=df['Close'],
-                        name='Price',
-                        increasing_line_color='#10b981',
-                        decreasing_line_color='#ef4444'
-                    ))
-                
-    elif chart_type == "Mountain Chart":
-                    fig.add_trace(go.Scatter(
-                        x=df.index,
-                        y=df['Close'],
-                        name='Price',
-                        line=dict(color='#10b981', width=0),
-                        fill='tozeroy',
-                        fillcolor='rgba(16, 185, 129, 0.4)'
-                    ))
-                
-                # Add indicators if premium
-    if is_premium and chart_type in ["Line Chart", "Area Chart", "Mountain Chart"]:
-                    if 'SMA20' in df.columns and not df['SMA20'].isna().all():
-                        fig.add_trace(go.Scatter(
-                            x=df.index, 
-                            y=df['SMA20'], 
-                            name='20-day MA', 
-                            line=dict(color='#fbbf24', width=2)
-                        ))
-    if 'SMA50' in df.columns and not df['SMA50'].isna().all():
-                        fig.add_trace(go.Scatter(
-                            x=df.index, 
-                            y=df['SMA50'], 
-                            name='50-day MA', 
-                            line=dict(color='#f97316', width=2)
-                        ))
-                
-                        fig.update_layout(
-                            height=500,
-                            template='plotly_dark',
-                            title=f"{chart_type} - {ticker}",
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            plot_bgcolor='rgba(0,0,0,0.3)',
-                            xaxis_rangeslider_visible=False
-                )
-                        st.plotly_chart(fig, use_container_width=True)
-                
-                # Advanced chart option for experienced users
-    if not SessionManager.get('beginner_mode', True) and is_premium:
-                    if st.checkbox("Show Advanced Chart"):
-                        fig_advanced = make_subplots(
-                            rows=2, cols=1,
-                            shared_xaxes=True,
-                            vertical_spacing=0.05,
-                            row_heights=[0.7, 0.3]
-                        )
-                        
-                        # Candlestick
-                        fig_advanced.add_trace(go.Candlestick(
-                            x=df.index,
-                            open=df['Open'],
-                            high=df['High'],
-                            low=df['Low'],
-                            close=df['Close'],
-                            name='Price',
-                            increasing_line_color='#10b981',
-                            decreasing_line_color='#ef4444'
-                        ), row=1, col=1)
-                        
-                        # Moving averages
-                        if 'SMA20' in df.columns:
-                            fig_advanced.add_trace(go.Scatter(x=df.index, y=df['SMA20'], name='SMA20', line=dict(color='#fbbf24')), row=1, col=1)
-                        if 'SMA50' in df.columns:
-                            fig_advanced.add_trace(go.Scatter(x=df.index, y=df['SMA50'], name='SMA50', line=dict(color='#f97316')), row=1, col=1)
-                        
-                        # RSI
-                        if 'RSI' in df.columns:
-                            fig_advanced.add_trace(go.Scatter(x=df.index, y=df['RSI'], name='RSI', line=dict(color='#8b5cf6')), row=2, col=1)
-                            fig_advanced.add_hline(y=70, line_dash="dash", line_color="#ef4444", row=2, col=1)
-                            fig_advanced.add_hline(y=30, line_dash="dash", line_color="#10b981", row=2, col=1)
-                        
-                        fig_advanced.update_layout(
-                            height=700,
-                            template='plotly_dark',
-                            xaxis_rangeslider_visible=False,
-                            paper_bgcolor='rgba(0,0,0,0)',
-                            plot_bgcolor='rgba(0,0,0,0.3)'
-                        )
-                        st.plotly_chart(fig_advanced, use_container_width=True)
-                
-                # Sentiment Analysis (Premium or News API)
-                        if is_premium or NEWS_API_KEY:
-                            st.markdown("---")
-                            st.markdown("### 🧠 AI Market Sentiment")
-                    
-                    with st.spinner("Analyzing news and market sentiment..."):
-                        sentiment = SentimentAnalyzer.analyze_sentiment(ticker, company_name)
-                    
-                    col1, col2 = st.columns([1, 2])
-                    
-                    with col1:
-                        st.markdown(f"<h2 style='text-align: center;'>{sentiment['text']}</h2>", unsafe_allow_html=True)
-                        st.caption(f"Sentiment Score: {sentiment['score']:.2f}")
-                        st.caption(f"📊 {sentiment['sources']}")
-                    
-                    with col2:
-                        st.markdown("**Key Sentiment Drivers:**")
-                        for driver in sentiment['drivers']:
-                            st.markdown(driver)
-                    
-                    if sentiment.get('articles'):
-                        with st.expander("📰 Recent News Articles"):
-                            for article in sentiment['articles']:
-                                st.markdown(f"**{article.get('title', 'No title')}**")
-                                st.caption(f"Source: {article.get('source', {}).get('name', 'Unknown')} | {article.get('publishedAt', '')[:10]}")
-                                if article.get('url'):
-                                    st.markdown(f"[Read more]({article['url']})")
-                                st.markdown("---")
-                
-                st.markdown("---")
-                st.markdown("### 📊 Company Fundamentals")
-                
-                col1, col2, col3, col4 = st.columns(4)
-                
-                with col1:
-                    st.metric("P/E Ratio", f"{info.get('trailingPE', 'N/A'):.2f}" if isinstance(info.get('trailingPE'), (int, float)) else "N/A")
-                    st.metric("Forward P/E", f"{info.get('forwardPE', 'N/A'):.2f}" if isinstance(info.get('forwardPE'), (int, float)) else "N/A")
-                
-                with col2:
-                    st.metric("EPS", f"${info.get('trailingEps', 'N/A'):.2f}" if isinstance(info.get('trailingEps'), (int, float)) else "N/A")
-                    st.metric("Profit Margin", f"{info.get('profitMargins', 0)*100:.1f}%" if info.get('profitMargins') else "N/A")
-                
-                with col3:
-                    st.metric("Revenue", f"${info.get('totalRevenue', 0)/1e9:.1f}B" if info.get('totalRevenue') else "N/A")
-                    st.metric("Revenue Growth", f"{info.get('revenueGrowth', 0)*100:.1f}%" if info.get('revenueGrowth') else "N/A")
-                
-                with col4:
-                    st.metric("Dividend Yield", f"{info.get('dividendYield', 0)*100:.2f}%" if info.get('dividendYield') else "N/A")
-                    st.metric("Beta", f"{info.get('beta', 'N/A'):.2f}" if isinstance(info.get('beta'), (int, float)) else "N/A")
-                
-                st.markdown("---")
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    user = SessionManager.get('user')
-                    user_id = user.id if user else 'demo'
-                    
-                    if st.button(f"⭐ Add {ticker} to Watchlist", use_container_width=True, type="primary"):
-                        if DatabaseService.add_to_watchlist(user_id, ticker):
-                            st.success(f"✅ {ticker} added to watchlist!")
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            st.warning("Already in watchlist")
-                
-                with col2:
-                    if st.button("📊 View Full Analysis", use_container_width=True):
-                        st.info("Full detailed report coming soon!")
-        
-        except Exception as e:
-            st.error(f"Error analyzing {ticker}: {str(e)}")
-            st.info("Please check the ticker symbol and try again.")
+if __name__ == "__main__":
+    main()
