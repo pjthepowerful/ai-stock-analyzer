@@ -1572,9 +1572,9 @@ for signal, sentiment in ai_analysis['signals']:
                         st.plotly_chart(fig_advanced, use_container_width=True)
                 
                 # Sentiment Analysis (Premium or News API)
-                if is_premium or NEWS_API_KEY:
-                    st.markdown("---")
-                    st.markdown("### 🧠 AI Market Sentiment")
+                        if is_premium or NEWS_API_KEY:
+                            st.markdown("---")
+                            st.markdown("### 🧠 AI Market Sentiment")
                     
                     with st.spinner("Analyzing news and market sentiment..."):
                         sentiment = SentimentAnalyzer.analyze_sentiment(ticker, company_name)
