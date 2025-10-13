@@ -1440,9 +1440,9 @@ def main():
 # RUN
 main()
 markdown("#### 📋 AI Analysis")
-    for signal, sentiment in ai_analysis['signals']:
-        icon = "🟢" if sentiment == "positive" else "🔴" if sentiment == "negative" else "🟡"
-        st.markdown(f"{icon} {signal}")
+for signal, sentiment in ai_analysis['signals']:
+    icon = "🟢" if sentiment == "positive" else "🔴" if sentiment == "negative" else "🟡"
+    st.markdown(f"{icon} {signal}")
                     
                     st.markdown("---")
                 
