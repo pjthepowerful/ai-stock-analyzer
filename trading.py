@@ -1624,12 +1624,12 @@ for signal, sentiment in ai_analysis['signals']:
                         st.metric("Beta", f"{info.get('beta', 'N/A'):.2f}" if isinstance(info.get('beta'), (int, float)) else "N/A")
                 
                 # Action buttons
-                st.markdown("---")
-                col1, col2 = st.columns(2)
+                    st.markdown("---")
+                    col1, col2 = st.columns(2)
                 
-                with col1:
-                    user = SessionManager.get('user')
-                    user_id = user.id if user else 'demo'
+                    with col1:
+                        user = SessionManager.get('user')
+                        user_id = user.id if user else 'demo'
                     
                     if st.button(f"⭐ Add {ticker} to Watchlist", use_container_width=True, type="primary"):
                         if DatabaseService.add_to_watchlist(user_id, ticker):
