@@ -1526,7 +1526,7 @@ for signal, sentiment in ai_analysis['signals']:
                             plot_bgcolor='rgba(0,0,0,0.3)',
                             xaxis_rangeslider_visible=False
                 )
-                            st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, use_container_width=True)
                 
                 # Advanced chart option for experienced users
     if not SessionManager.get('beginner_mode', True) and is_premium:
