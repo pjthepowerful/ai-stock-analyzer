@@ -903,15 +903,6 @@ def render_analyze_page(is_premium):
                         for signal, signal_type in ai_analysis['signals']:
                             icon = "🟢" if signal_type == "positive" else "🔴" if signal_type == "negative" else "🟡"
                             st.markdown(f"{icon} {signal}")
-                    
-                    if sentiment.get('articles'):
-                        with st.expander("📰 Recent News Articles"):
-                            for article in sentiment['articles']:
-                                st.markdown(f"**{article.get('title', 'No title')}**")
-                                st.caption(f"Source: {article.get('source', {}).get('name', 'Unknown')} | {article.get('publishedAt', '')[:10]}")
-                                if article.get('url'):
-                                    st.markdown(f"[Read more]({article['url']})")
-                                st.markdown("---")
                 
                 # Price Forecast (Premium only)
                 if is_premium:
@@ -953,7 +944,6 @@ def render_analyze_page(is_premium):
                 
         except Exception as e:
             st.error(f"Error: {str(e)}")
-
 # MY STOCKS PAGE
 def render_mystocks_page(is_premium):
     st.title("💼 My Stocks")
