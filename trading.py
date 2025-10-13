@@ -1502,7 +1502,7 @@ for signal, sentiment in ai_analysis['signals']:
                     ))
                 
                 # Add indicators if premium
-                if is_premium and chart_type in ["Line Chart", "Area Chart", "Mountain Chart"]:
+        if is_premium and chart_type in ["Line Chart", "Area Chart", "Mountain Chart"]:
                     if 'SMA20' in df.columns and not df['SMA20'].isna().all():
                         fig.add_trace(go.Scatter(
                             x=df.index, 
@@ -1510,7 +1510,7 @@ for signal, sentiment in ai_analysis['signals']:
                             name='20-day MA', 
                             line=dict(color='#fbbf24', width=2)
                         ))
-                    if 'SMA50' in df.columns and not df['SMA50'].isna().all():
+        if 'SMA50' in df.columns and not df['SMA50'].isna().all():
                         fig.add_trace(go.Scatter(
                             x=df.index, 
                             y=df['SMA50'], 
@@ -1529,7 +1529,7 @@ for signal, sentiment in ai_analysis['signals']:
                 st.plotly_chart(fig, use_container_width=True)
                 
                 # Advanced chart option for experienced users
-                if not SessionManager.get('beginner_mode', True) and is_premium:
+        if not SessionManager.get('beginner_mode', True) and is_premium:
                     if st.checkbox("Show Advanced Chart"):
                         fig_advanced = make_subplots(
                             rows=2, cols=1,
