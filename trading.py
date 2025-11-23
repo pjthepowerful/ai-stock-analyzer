@@ -558,7 +558,8 @@ def render_login():
             new_email = st.text_input("Email", key="signup_email")
             new_pass = st.text_input("Password", type="password", key="signup_pass")
             confirm = st.text_input("Confirm Password", type="password", key="confirm_pass")
-            account_size = st.number_input("Initial Account Size", 1000, 10000000, 50000, 1000)
+            
+            st.info("💡 Default account size: $50,000 (you can update this later in Settings)")
             
             if st.button("✨ Create Account", use_container_width=True, type="primary"):
                 if new_user and new_email and new_pass and confirm:
@@ -569,7 +570,7 @@ def render_login():
                     elif AuthSystem.user_exists(new_user):
                         st.error("❌ Username taken")
                     else:
-                        if AuthSystem.create_user(new_user, new_pass, new_email, account_size):
+                        if AuthSystem.create_user(new_user, new_pass, new_email, Config.DEFAULT_ACCOUNT_SIZE):
                             st.success("✅ Account created! Please login.")
                             time.sleep(2)
                             st.rerun()
@@ -607,6 +608,7 @@ def render_sidebar():
             ("📊 Analyze", 'analyze'),
             ("💼 Portfolio", 'portfolio'),
             ("📚 Guide", 'guide'),
+            ("⚙️ Settings", 'settings'),
         ]
         
         for label, page in pages:
@@ -629,7 +631,14 @@ def render_sidebar():
 def render_scanner():
     st.title("🔍 Earnings Play Scanner")
     
-    col1, col2, col3 = st.columns(3)
+    st.markdown("""
+    <div class='info-box'>
+        <p><strong>💡 How it works:</strong> Our AI analyzes stocks across 4 categories (Historical Performance, 
+        Growth Metrics, Technical Setup, Fundamentals) to give each stock a 0-100 score.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         min_score = st.slider("Minimum Score", 0, 100, 65, 5)
@@ -638,51 +647,122 @@ def render_scanner():
         sector = st.selectbox("Sector", ["All", "Technology", "Consumer", "Finance"])
     
     with col3:
-        sort_by = st.selectbox("Sort By", ["score", "price"])
+        sort_by = st.selectbox("Sort By", ["score", "price", "ticker"])
     
-    if st.button("🔍 Scan", type="primary", use_container_width=True):
-        with st.spinner("Scanning..."):
-            tickers = StockDB.get_all_tickers()
-            results = []
+    with col4:
+        max_results = st.selectbox("Max Results", [5, 10, 15, 20], index=1)
+    
+    if st.button("🚀 Scan for Opportunities", type="primary", use_container_width=True):
+        with st.spinner("Scanning stocks..."):
+            # Filter tickers by sector
+            if sector == "All":
+                tickers = StockDB.get_all_tickers()
+            else:
+                tickers = [t for t, d in StockDB.STOCKS.items() if d.get('sector') == sector]
             
-            for ticker in tickers:
-                df = get_stock_data(ticker, '1y')
-                info = get_stock_info(ticker)
+            results = []
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            for idx, ticker in enumerate(tickers):
+                # Update progress
+                progress = (idx + 1) / len(tickers)
+                progress_bar.progress(progress)
+                status_text.text(f"Analyzing {ticker}... ({idx + 1}/{len(tickers)})")
                 
-                if df is not None and not df.empty:
-                    score_data = ScoringEngine.calculate_score(ticker, df, info)
+                try:
+                    df = get_stock_data(ticker, '1y')
+                    info = get_stock_info(ticker)
                     
-                    if score_data['score'] >= min_score:
-                        next_date, days = estimate_next_earnings_date(ticker)
+                    if df is not None and not df.empty:
+                        score_data = ScoringEngine.calculate_score(ticker, df, info)
                         
-                        results.append({
-                            'ticker': ticker,
-                            'score': score_data['score'],
-                            'rating': score_data['rating'],
-                            'color': score_data['color'],
-                            'price': df['Close'].iloc[-1],
-                            'days': days
-                        })
+                        if score_data['score'] >= min_score:
+                            next_date, days = estimate_next_earnings_date(ticker)
+                            
+                            results.append({
+                                'ticker': ticker,
+                                'name': StockDB.STOCKS.get(ticker, {}).get('name', ticker),
+                                'score': score_data['score'],
+                                'rating': score_data['rating'],
+                                'color': score_data['color'],
+                                'price': df['Close'].iloc[-1],
+                                'days': days
+                            })
+                except Exception as e:
+                    st.caption(f"⚠️ Could not load {ticker}")
+                    continue
+            
+            # Clear progress indicators
+            progress_bar.empty()
+            status_text.empty()
+            
+            # Sort results
+            if sort_by == "score":
+                results.sort(key=lambda x: x['score'], reverse=True)
+            elif sort_by == "price":
+                results.sort(key=lambda x: x['price'])
+            elif sort_by == "ticker":
+                results.sort(key=lambda x: x['ticker'])
+            
+            # Limit results
+            results = results[:max_results]
             
             if results:
-                st.success(f"✅ Found {len(results)} stocks")
+                st.success(f"✅ Found {len(results)} stocks scoring ≥ {min_score}")
+                st.markdown("---")
                 
                 for r in results:
-                    col1, col2, col3, col4, col5 = st.columns([2, 2, 1, 1, 1])
+                    col1, col2, col3, col4, col5, col6 = st.columns([2, 2, 1, 1, 1, 1])
                     
                     col1.markdown(f"**{r['ticker']}**")
-                    col2.markdown(f"<p style='color: {r['color']}; font-weight: 700;'>{r['score']} - {r['rating']}</p>", unsafe_allow_html=True)
-                    col3.metric("Price", f"${r['price']:.2f}")
-                    col4.write(f"📅 {r['days']}d")
+                    col1.caption(r['name'][:40])
                     
-                    if col5.button("Analyze", key=f"analyze_{r['ticker']}"):
+                    col2.markdown(f"""
+                    <div style='padding: 0.5rem; background: rgba{tuple(int(r['color'][i:i+2], 16) for i in (1, 3, 5)) + (0.1,)}; 
+                                border-radius: 8px; text-align: center;'>
+                        <p style='color: {r['color']}; font-weight: 700; margin: 0; font-size: 1.2rem;'>{r['score']}</p>
+                        <p style='color: #94a3b8; margin: 0; font-size: 0.75rem;'>{r['rating']}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    col3.metric("Price", f"${r['price']:.2f}")
+                    
+                    # Earnings countdown
+                    days = r['days']
+                    if days <= 7:
+                        earn_color = "#ef4444"
+                        earn_icon = "🔥"
+                    elif days <= 14:
+                        earn_color = "#f59e0b"
+                        earn_icon = "⚡"
+                    else:
+                        earn_color = "#3b82f6"
+                        earn_icon = "📅"
+                    
+                    col4.markdown(f"<p style='color: {earn_color}; font-weight: 700; text-align: center;'>{earn_icon}<br>{days}d</p>", unsafe_allow_html=True)
+                    
+                    if col5.button("Analyze", key=f"analyze_{r['ticker']}", use_container_width=True):
                         st.session_state.selected_ticker = r['ticker']
                         st.session_state.page = 'analyze'
                         st.rerun()
                     
+                    # Quick add to watchlist
+                    user = st.session_state.user
+                    if r['ticker'] in user.watchlist:
+                        col6.markdown("⭐")
+                    else:
+                        if col6.button("➕", key=f"add_{r['ticker']}", help="Add to watchlist"):
+                            user.watchlist.append(r['ticker'])
+                            AuthSystem.save_user(user)
+                            st.rerun()
+                    
                     st.markdown("---")
             else:
-                st.info("No stocks found. Try lowering minimum score.")
+                st.warning(f"No stocks found with score ≥ {min_score}. Try lowering the minimum score or selecting a different sector.")
+                
+                if st.button("Reset Filters", type="primary"):
+                    st.rerun()
 
 # ============================================================================
 # ANALYZE PAGE
@@ -826,23 +906,65 @@ def render_portfolio():
         st.markdown("### ⭐ Watchlist")
         
         for ticker in user.watchlist:
-            col1, col2, col3 = st.columns([2, 1, 1])
+            try:
+                col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
+                
+                # Get basic info
+                stock_info = StockDB.STOCKS.get(ticker, {})
+                
+                col1.markdown(f"**{ticker}**")
+                col1.caption(stock_info.get('name', 'Unknown'))
+                
+                # Get earnings date
+                next_date, days = estimate_next_earnings_date(ticker)
+                
+                if days <= 7:
+                    earn_color = "#ef4444"
+                    earn_icon = "🔥"
+                elif days <= 14:
+                    earn_color = "#f59e0b"
+                    earn_icon = "⚡"
+                else:
+                    earn_color = "#3b82f6"
+                    earn_icon = "📅"
+                
+                col2.markdown(f"<p style='color: {earn_color}; font-weight: 600;'>{earn_icon} Earnings in {days} days</p>", unsafe_allow_html=True)
+                
+                if col3.button("Analyze", key=f"wl_{ticker}"):
+                    st.session_state.selected_ticker = ticker
+                    st.session_state.page = 'analyze'
+                    st.rerun()
+                
+                if col4.button("Remove", key=f"rm_{ticker}"):
+                    user.watchlist.remove(ticker)
+                    AuthSystem.save_user(user)
+                    st.rerun()
+                
+                st.markdown("---")
             
-            col1.markdown(f"**{ticker}**")
-            
-            if col2.button("Analyze", key=f"wl_{ticker}"):
-                st.session_state.selected_ticker = ticker
-                st.session_state.page = 'analyze'
-                st.rerun()
-            
-            if col3.button("Remove", key=f"rm_{ticker}"):
-                user.watchlist.remove(ticker)
-                AuthSystem.save_user(user)
-                st.rerun()
-            
-            st.markdown("---")
+            except Exception as e:
+                st.warning(f"⚠️ Error loading {ticker}: {str(e)}")
+                if st.button(f"Remove {ticker}", key=f"rm_err_{ticker}"):
+                    user.watchlist.remove(ticker)
+                    AuthSystem.save_user(user)
+                    st.rerun()
     else:
-        st.info("Watchlist empty. Add stocks from scanner or analysis page.")
+        st.markdown("""
+        <div class='info-box'>
+            <h3>📝 Your watchlist is empty</h3>
+            <p>Add stocks from the Scanner or Analysis page to track them here.</p>
+            <p><strong>How to add stocks:</strong></p>
+            <ol>
+                <li>Go to Scanner and find high-scoring stocks</li>
+                <li>Click "Analyze" on any stock</li>
+                <li>Click "Add to Watchlist" button at the bottom</li>
+            </ol>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("🔍 Go to Scanner", type="primary", use_container_width=True):
+            st.session_state.page = 'scanner'
+            st.rerun()
 
 # ============================================================================
 # GUIDE PAGE
@@ -928,6 +1050,112 @@ def render_guide():
     """)
 
 # ============================================================================
+# SETTINGS PAGE
+# ============================================================================
+
+def render_settings():
+    st.title("⚙️ Settings")
+    
+    user = st.session_state.user
+    
+    tabs = st.tabs(["👤 Account", "🎯 Trading Preferences"])
+    
+    with tabs[0]:
+        st.markdown("### Account Settings")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### Profile Information")
+            st.text_input("Username", value=user.username, disabled=True)
+            st.text_input("Email", value=user.email, disabled=True)
+            st.text_input("Member Since", value=user.created_at.strftime('%B %d, %Y'), disabled=True)
+        
+        with col2:
+            st.markdown("#### Account Balance")
+            st.metric("Current Balance", f"${user.account_size:,.0f}")
+            
+            new_balance = st.number_input(
+                "Update Account Size ($)",
+                min_value=1000,
+                max_value=10000000,
+                value=int(user.account_size),
+                step=1000,
+                help="Set your actual trading account size for accurate position sizing"
+            )
+            
+            if new_balance != user.account_size:
+                if st.button("💾 Update Balance", type="primary"):
+                    user.account_size = new_balance
+                    AuthSystem.save_user(user)
+                    st.success("✅ Account balance updated!")
+                    time.sleep(1)
+                    st.rerun()
+        
+        st.markdown("---")
+        
+        st.markdown("### Statistics")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Watchlist Stocks", len(user.watchlist))
+        col2.metric("Total Trades", len(user.trade_history))
+        col3.metric("Active Days", (datetime.now() - user.created_at).days)
+    
+    with tabs[1]:
+        st.markdown("### Trading Preferences")
+        
+        settings = user.settings
+        
+        st.markdown("#### Risk Management")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            default_stop = st.slider(
+                "Default Stop Loss (%)",
+                5, 25, 
+                int(settings.get('default_stop_loss', 0.15) * 100),
+                help="Default stop loss percentage for all trades"
+            )
+        
+        with col2:
+            risk_per_trade = st.slider(
+                "Risk Per Trade (%)",
+                1, 5,
+                int(settings.get('risk_per_trade', 0.02) * 100),
+                help="Maximum percentage of account to risk per trade"
+            )
+        
+        st.markdown("---")
+        
+        st.markdown("#### Display Preferences")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            show_hints = st.checkbox(
+                "Show helpful hints",
+                value=settings.get('show_hints', True)
+            )
+        
+        with col2:
+            compact_view = st.checkbox(
+                "Compact view mode",
+                value=settings.get('compact_view', False)
+            )
+        
+        st.markdown("---")
+        
+        if st.button("💾 Save Preferences", type="primary", use_container_width=True):
+            user.settings['default_stop_loss'] = default_stop / 100
+            user.settings['risk_per_trade'] = risk_per_trade / 100
+            user.settings['show_hints'] = show_hints
+            user.settings['compact_view'] = compact_view
+            AuthSystem.save_user(user)
+            st.success("✅ Preferences saved!")
+            time.sleep(1)
+            st.rerun()
+
+# ============================================================================
 # MAIN APP
 # ============================================================================
 
@@ -948,6 +1176,8 @@ def main():
         render_portfolio()
     elif page == 'guide':
         render_guide()
+    elif page == 'settings':
+        render_settings()
     else:
         render_scanner()
 
