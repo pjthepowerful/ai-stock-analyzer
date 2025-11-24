@@ -1,8 +1,6 @@
 streamlit
 yfinance
-tensorflow-cpu==2.13.0
 scikit-learn
 pandas
-numpy<2.0
+numpy
 plotly
-protobuf==3.20.3
