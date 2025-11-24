@@ -1,1353 +1,752 @@
-"""
-EARNINGS TRADER PRO - COMPLETE ENHANCED EDITION
-Full-featured earnings trading platform with login, portfolio tracking, and AI analysis
-"""
-
-import json
-import time
-import warnings
-import hashlib
-from datetime import datetime, timedelta
-from typing import Dict, List, Tuple, Optional, Any
-from dataclasses import dataclass, asdict
-from pathlib import Path
-
 import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-
+from datetime import datetime, timedelta
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+from sklearn.preprocessing import MinMaxScaler
+import warnings
 warnings.filterwarnings('ignore')
 
-# ============================================================================
-# CONFIGURATION
-# ============================================================================
-
-class Config:
-    PAGE_TITLE = "Earnings Trader Pro"
-    PAGE_ICON = "📈"
-    LAYOUT = "wide"
-    
-    SCORE_EXCEPTIONAL = 85
-    SCORE_STRONG = 75
-    SCORE_GOOD = 65
-    SCORE_MODERATE = 55
-    
-    MAX_POSITION_EXCEPTIONAL = 0.10
-    MAX_POSITION_STRONG = 0.07
-    MAX_POSITION_GOOD = 0.05
-    MAX_POSITION_MODERATE = 0.03
-    
-    DEFAULT_ACCOUNT_SIZE = 50000
-    USER_DATA_DIR = Path("/tmp/earnings_trader_users")
-    
-    @classmethod
-    def ensure_user_dir(cls):
-        cls.USER_DATA_DIR.mkdir(exist_ok=True)
-
-Config.ensure_user_dir()
-
+# Page configuration
 st.set_page_config(
-    page_title=Config.PAGE_TITLE,
-    page_icon=Config.PAGE_ICON,
-    layout=Config.LAYOUT,
-    initial_sidebar_state="expanded"
+    page_title="AI Stock Predictor Pro",
+    page_icon="📈",
+    layout="wide"
 )
 
-# ============================================================================
-# ENHANCED CSS
-# ============================================================================
-
+# Custom CSS
 st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap');
-    
-    * { font-family: 'Inter', sans-serif; }
-    
-    .stApp { 
-        background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0f1419 100%);
-    }
-    
-    .main .block-container {
-        background: rgba(20, 25, 45, 0.7);
-        backdrop-filter: blur(30px);
-        border-radius: 24px;
-        padding: 3rem;
-        max-width: 1600px;
-        border: 1px solid rgba(99, 102, 241, 0.1);
-    }
-    
-    h1 {
-        background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+    <style>
+    .main-header {
+        font-size: 3rem;
+        font-weight: bold;
+        background: linear-gradient(90deg, #1f77b4, #2ca02c);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        font-weight: 800 !important;
-    }
-    
-    .stButton > button {
-        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-        color: white !important;
-        border: none;
-        border-radius: 14px;
-        padding: 0.85rem 2rem;
-        font-weight: 700;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 16px rgba(79, 70, 229, 0.3);
-    }
-    
-    .stButton > button:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 24px rgba(79, 70, 229, 0.5);
-    }
-    
-    .score-card {
-        background: linear-gradient(135deg, rgba(79, 70, 229, 0.15) 0%, rgba(124, 58, 237, 0.15) 100%);
-        border: 2px solid rgba(99, 102, 241, 0.4);
-        border-radius: 20px;
-        padding: 3rem;
         text-align: center;
-        box-shadow: 0 8px 32px rgba(79, 70, 229, 0.2);
+        margin-bottom: 2rem;
     }
-    
-    .login-container {
-        max-width: 450px;
-        margin: 5rem auto;
-        padding: 3rem;
-        background: rgba(30, 35, 60, 0.8);
-        backdrop-filter: blur(20px);
-        border-radius: 24px;
-        border: 1px solid rgba(99, 102, 241, 0.3);
-        box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+    .metric-positive {
+        color: #2ca02c;
+        font-weight: bold;
     }
-    
-    .recommendation-box {
-        background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%);
-        border-left: 5px solid #10b981;
-        padding: 2rem;
-        border-radius: 12px;
-        margin: 1.5rem 0;
+    .metric-negative {
+        color: #d62728;
+        font-weight: bold;
     }
-    
-    .warning-box {
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.15) 100%);
-        border-left: 5px solid #ef4444;
-        padding: 2rem;
-        border-radius: 12px;
-        margin: 1.5rem 0;
-    }
-    
     .info-box {
-        background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.15) 100%);
-        border-left: 5px solid #3b82f6;
-        padding: 2rem;
-        border-radius: 12px;
-        margin: 1.5rem 0;
+        background-color: #e7f3ff;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        border-left: 4px solid #1f77b4;
+        margin: 1rem 0;
     }
-</style>
+    </style>
 """, unsafe_allow_html=True)
 
-# ============================================================================
-# USER AUTHENTICATION
-# ============================================================================
+st.markdown('<p class="main-header">🤖 AI Stock Price Predictor Pro</p>', unsafe_allow_html=True)
+st.markdown("### Neural Network Stock Prediction with Backtesting & Multi-Stock Analysis")
 
-@dataclass
-class User:
-    username: str
-    password_hash: str
-    email: str
-    created_at: datetime
-    account_size: float
-    watchlist: List[str]
-    trade_history: List[Dict]
-    settings: Dict
-    
-    def to_dict(self):
-        data = asdict(self)
-        data['created_at'] = data['created_at'].isoformat()
-        return data
-    
-    @classmethod
-    def from_dict(cls, data: Dict):
-        data['created_at'] = datetime.fromisoformat(data['created_at'])
-        return cls(**data)
+# Sidebar
+st.sidebar.header("⚙️ Configuration")
+mode = st.sidebar.radio("Select Mode:", 
+    ["📊 Single Stock Analysis", 
+     "⚔️ Compare Multiple Stocks", 
+     "🔙 Backtest Strategy"])
 
-class AuthSystem:
-    @staticmethod
-    def hash_password(password: str) -> str:
-        return hashlib.sha256(password.encode()).hexdigest()
-    
-    @staticmethod
-    def get_user_file(username: str) -> Path:
-        return Config.USER_DATA_DIR / f"{username}.json"
-    
-    @staticmethod
-    def user_exists(username: str) -> bool:
-        return AuthSystem.get_user_file(username).exists()
-    
-    @staticmethod
-    def create_user(username: str, password: str, email: str, account_size: float) -> bool:
-        if AuthSystem.user_exists(username):
-            return False
-        
-        user = User(
-            username=username,
-            password_hash=AuthSystem.hash_password(password),
-            email=email,
-            created_at=datetime.now(),
-            account_size=account_size,
-            watchlist=[],
-            trade_history=[],
-            settings={'default_stop_loss': 0.15, 'risk_per_trade': 0.02}
-        )
-        
-        with open(AuthSystem.get_user_file(username), 'w') as f:
-            json.dump(user.to_dict(), f, indent=2)
-        
-        return True
-    
-    @staticmethod
-    def authenticate(username: str, password: str) -> Optional[User]:
-        if not AuthSystem.user_exists(username):
-            return None
-        
-        with open(AuthSystem.get_user_file(username), 'r') as f:
-            user_data = json.load(f)
-        
-        user = User.from_dict(user_data)
-        
-        if user.password_hash == AuthSystem.hash_password(password):
-            return user
-        return None
-    
-    @staticmethod
-    def save_user(user: User):
-        with open(AuthSystem.get_user_file(user.username), 'w') as f:
-            json.dump(user.to_dict(), f, indent=2)
+# ==========================================
+# HELPER FUNCTIONS
+# ==========================================
 
-# ============================================================================
-# SESSION STATE
-# ============================================================================
-
-def init_session_state():
-    defaults = {
-        'authenticated': False,
-        'user': None,
-        'page': 'scanner',
-        'selected_ticker': None,
-    }
-    
-    for key, value in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
-
-init_session_state()
-
-# ============================================================================
-# DATA SERVICES
-# ============================================================================
-
-@st.cache_data(ttl=300)
-def get_stock_data(ticker: str, period: str = '1y') -> Optional[pd.DataFrame]:
+@st.cache_data(ttl=3600)
+def download_stock_data(ticker, period="3mo", interval="1d"):
+    """Download stock data from Yahoo Finance"""
     try:
         stock = yf.Ticker(ticker)
-        df = stock.history(period=period)
-        return df if not df.empty else None
-    except:
-        return None
+        data = stock.history(period=period, interval=interval)
+        info = stock.info
+        if len(data) > 0:
+            return data, info, None
+        else:
+            return None, None, f"No data found for {ticker}"
+    except Exception as e:
+        return None, None, str(e)
 
-@st.cache_data(ttl=300)
-def get_stock_info(ticker: str) -> Dict[str, Any]:
-    try:
-        return yf.Ticker(ticker).info
-    except:
-        return {}
+def prepare_data(data, sequence_length=50, test_size=0.2):
+    """Prepare data for neural network training"""
+    prices = data['Close'].values.reshape(-1, 1)
+    
+    # Normalize prices
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    scaled_prices = scaler.fit_transform(prices)
+    
+    # Create sequences
+    X, y = [], []
+    for i in range(sequence_length, len(scaled_prices)):
+        X.append(scaled_prices[i-sequence_length:i, 0])
+        y.append(scaled_prices[i, 0])
+    
+    X = np.array(X)
+    y = np.array(y)
+    X = X.reshape(X.shape[0], X.shape[1], 1)
+    
+    # Split into train and test
+    split = int((1 - test_size) * len(X))
+    X_train, X_test = X[:split], X[split:]
+    y_train, y_test = y[:split], y[split:]
+    
+    return X_train, X_test, y_train, y_test, scaler, prices
 
-def estimate_next_earnings_date(ticker: str) -> Tuple[Optional[datetime], int]:
-    ticker_hash = sum(ord(c) for c in ticker)
-    base_days = 7 + (ticker_hash % 40)
-    estimated_date = datetime.now() + timedelta(days=base_days)
-    return estimated_date, base_days
+def build_model(sequence_length, neurons=50):
+    """Build the neural network model"""
+    model = keras.Sequential([
+        layers.LSTM(neurons, return_sequences=True, input_shape=(sequence_length, 1)),
+        layers.Dropout(0.2),
+        layers.LSTM(neurons, return_sequences=False),
+        layers.Dropout(0.2),
+        layers.Dense(25, activation='relu'),
+        layers.Dense(1)
+    ])
+    model.compile(optimizer='adam', loss='mean_squared_error', metrics=['mae'])
+    return model
 
-# ============================================================================
-# STOCK DATABASE
-# ============================================================================
+def train_model(model, X_train, y_train, epochs=20, batch_size=32):
+    """Train the model"""
+    history = model.fit(
+        X_train, y_train,
+        batch_size=batch_size,
+        epochs=epochs,
+        verbose=0,
+        validation_split=0.1
+    )
+    return history
 
-class StockDB:
-    STOCKS = {
-        'AAPL': {'name': 'Apple Inc.', 'sector': 'Technology', 'cap': 'Mega'},
-        'MSFT': {'name': 'Microsoft', 'sector': 'Technology', 'cap': 'Mega'},
-        'GOOGL': {'name': 'Alphabet', 'sector': 'Technology', 'cap': 'Mega'},
-        'AMZN': {'name': 'Amazon', 'sector': 'Technology', 'cap': 'Mega'},
-        'META': {'name': 'Meta', 'sector': 'Technology', 'cap': 'Mega'},
-        'NVDA': {'name': 'NVIDIA', 'sector': 'Technology', 'cap': 'Large'},
-        'TSLA': {'name': 'Tesla', 'sector': 'Technology', 'cap': 'Large'},
-        'AMD': {'name': 'AMD', 'sector': 'Technology', 'cap': 'Large'},
-        'NFLX': {'name': 'Netflix', 'sector': 'Technology', 'cap': 'Large'},
-        'DIS': {'name': 'Disney', 'sector': 'Consumer', 'cap': 'Large'},
-        'NKE': {'name': 'Nike', 'sector': 'Consumer', 'cap': 'Large'},
-        'SBUX': {'name': 'Starbucks', 'sector': 'Consumer', 'cap': 'Large'},
-        'JPM': {'name': 'JPMorgan', 'sector': 'Finance', 'cap': 'Large'},
-        'BAC': {'name': 'Bank of America', 'sector': 'Finance', 'cap': 'Large'},
-        'V': {'name': 'Visa', 'sector': 'Finance', 'cap': 'Large'},
+def predict_future(model, last_sequence, scaler, steps=10):
+    """Predict future prices"""
+    predictions = []
+    current_sequence = last_sequence.copy()
+    
+    for _ in range(steps):
+        pred = model.predict(current_sequence.reshape(1, -1, 1), verbose=0)
+        predictions.append(pred[0, 0])
+        current_sequence = np.append(current_sequence[1:], pred[0, 0])
+    
+    predictions = scaler.inverse_transform(np.array(predictions).reshape(-1, 1))
+    return predictions.flatten()
+
+def calculate_metrics(y_true, y_pred):
+    """Calculate prediction accuracy metrics"""
+    mae = np.mean(np.abs(y_true - y_pred))
+    mse = np.mean((y_true - y_pred) ** 2)
+    rmse = np.sqrt(mse)
+    mape = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
+    direction_accuracy = np.mean((np.diff(y_true.flatten()) > 0) == (np.diff(y_pred.flatten()) > 0)) * 100
+    return mae, rmse, mape, direction_accuracy
+
+def backtest_strategy(data, model, scaler, sequence_length, initial_capital=10000):
+    """
+    Backtest a trading strategy using the AI predictions
+    Strategy: Buy when AI predicts price will go up, Sell when it predicts down
+    """
+    prices = data['Close'].values
+    scaled_prices = scaler.transform(prices.reshape(-1, 1))
+    
+    # Portfolio tracking
+    capital = initial_capital
+    shares = 0
+    portfolio_value = []
+    trades = []
+    positions = []  # Track when we're in/out of market
+    
+    # Start after we have enough data for sequence
+    for i in range(sequence_length, len(scaled_prices) - 1):
+        current_price = prices[i]
+        
+        # Get sequence and predict next price
+        sequence = scaled_prices[i-sequence_length:i]
+        pred_scaled = model.predict(sequence.reshape(1, sequence_length, 1), verbose=0)
+        pred_price = scaler.inverse_transform(pred_scaled)[0, 0]
+        
+        # Trading logic
+        if pred_price > current_price * 1.002:  # Predict 0.2% increase
+            # BUY signal
+            if shares == 0 and capital > current_price:
+                shares = capital / current_price
+                capital = 0
+                trades.append(('BUY', i, current_price, shares))
+                positions.append(1)
+        
+        elif pred_price < current_price * 0.998:  # Predict 0.2% decrease
+            # SELL signal
+            if shares > 0:
+                capital = shares * current_price
+                trades.append(('SELL', i, current_price, shares))
+                shares = 0
+                positions.append(0)
+        else:
+            positions.append(1 if shares > 0 else 0)
+        
+        # Calculate portfolio value
+        if shares > 0:
+            portfolio_value.append(shares * current_price)
+        else:
+            portfolio_value.append(capital)
+    
+    # Close any open position at the end
+    if shares > 0:
+        final_price = prices[-1]
+        capital = shares * final_price
+        trades.append(('SELL', len(prices)-1, final_price, shares))
+        shares = 0
+    
+    final_value = capital
+    total_return = ((final_value - initial_capital) / initial_capital) * 100
+    
+    # Buy and hold comparison
+    buy_hold_shares = initial_capital / prices[sequence_length]
+    buy_hold_value = buy_hold_shares * prices[-1]
+    buy_hold_return = ((buy_hold_value - initial_capital) / initial_capital) * 100
+    
+    return {
+        'final_value': final_value,
+        'total_return': total_return,
+        'trades': trades,
+        'portfolio_value': portfolio_value,
+        'buy_hold_return': buy_hold_return,
+        'buy_hold_value': buy_hold_value,
+        'num_trades': len(trades),
+        'positions': positions
     }
-    
-    @classmethod
-    def search(cls, query: str) -> List[Tuple[str, Dict]]:
-        query = query.upper()
-        return [(t, d) for t, d in cls.STOCKS.items() 
-                if query in t or query in d['name'].upper()][:20]
-    
-    @classmethod
-    def get_all_tickers(cls) -> List[str]:
-        return list(cls.STOCKS.keys())
 
-# ============================================================================
-# SCORING ENGINE
-# ============================================================================
+# ==========================================
+# MODE 1: SINGLE STOCK ANALYSIS
+# ==========================================
 
-class ScoringEngine:
-    @staticmethod
-    def calculate_score(ticker: str, df: pd.DataFrame, info: Dict) -> Dict[str, Any]:
-        score = 0
-        signals = []
-        breakdown = {}
+if mode == "📊 Single Stock Analysis":
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Stock Settings")
+    ticker = st.sidebar.text_input("Enter Stock Ticker:", value="AAPL").upper()
+    period = st.sidebar.selectbox("Historical Data Period:", ["1mo", "3mo", "6mo", "1y", "2y"], index=1)
+    interval = st.sidebar.selectbox("Data Interval:", ["1d", "1h"], index=0)
+    
+    st.sidebar.subheader("AI Settings")
+    sequence_length = st.sidebar.slider("Sequence Length (Lookback):", 20, 100, 50)
+    prediction_steps = st.sidebar.slider("Predict Next N Steps:", 5, 30, 10)
+    epochs = st.sidebar.slider("Training Epochs:", 10, 50, 20)
+    neurons = st.sidebar.slider("Neural Network Size:", 25, 100, 50)
+    
+    if st.sidebar.button("🚀 Analyze Stock", type="primary"):
+        with st.spinner(f"📥 Downloading {ticker} data..."):
+            data, info, error = download_stock_data(ticker, period, interval)
         
-        # Historical Performance (30 points)
-        hist_score, hist_sigs = ScoringEngine._score_historical(df)
-        score += hist_score
-        signals.extend(hist_sigs)
-        breakdown['Historical'] = hist_score
-        
-        # Growth (25 points)
-        growth_score, growth_sigs = ScoringEngine._score_growth(info)
-        score += growth_score
-        signals.extend(growth_sigs)
-        breakdown['Growth'] = growth_score
-        
-        # Technical (25 points)
-        tech_score, tech_sigs = ScoringEngine._score_technical(df)
-        score += tech_score
-        signals.extend(tech_sigs)
-        breakdown['Technical'] = tech_score
-        
-        # Fundamentals (20 points)
-        fund_score, fund_sigs = ScoringEngine._score_fundamentals(info)
-        score += fund_score
-        signals.extend(fund_sigs)
-        breakdown['Fundamentals'] = fund_score
-        
-        # Determine rating
-        if score >= Config.SCORE_EXCEPTIONAL:
-            rating = "EXCEPTIONAL"
-            color = "#10b981"
-        elif score >= Config.SCORE_STRONG:
-            rating = "STRONG"
-            color = "#3b82f6"
-        elif score >= Config.SCORE_GOOD:
-            rating = "GOOD"
-            color = "#8b5cf6"
-        elif score >= Config.SCORE_MODERATE:
-            rating = "MODERATE"
-            color = "#f59e0b"
+        if error:
+            st.error(f"❌ Error: {error}")
         else:
-            rating = "WEAK"
-            color = "#ef4444"
-        
-        return {
-            'score': score,
-            'rating': rating,
-            'color': color,
-            'signals': signals,
-            'breakdown': breakdown
-        }
-    
-    @staticmethod
-    def _score_historical(df: pd.DataFrame) -> Tuple[int, List]:
-        if len(df) < 60:
-            return 15, [("⚠️ Limited historical data", "neutral")]
-        
-        score = 0
-        signals = []
-        
-        returns_3m = (df['Close'].iloc[-1] / df['Close'].iloc[-60] - 1)
-        
-        if returns_3m > 0.20:
-            score += 20
-            signals.append(("✅ Excellent 3-month performance", "positive"))
-        elif returns_3m > 0.10:
-            score += 15
-            signals.append(("✅ Strong 3-month performance", "positive"))
-        elif returns_3m > 0:
-            score += 10
-            signals.append(("✅ Positive momentum", "positive"))
-        
-        if len(df) >= 120:
-            returns_6m = (df['Close'].iloc[-1] / df['Close'].iloc[-120] - 1)
-            if returns_6m > 0.30:
-                score += 10
-                signals.append(("✅ Outstanding 6-month trend", "positive"))
-        
-        return min(score, 30), signals
-    
-    @staticmethod
-    def _score_growth(info: Dict) -> Tuple[int, List]:
-        score = 0
-        signals = []
-        
-        rev_growth = info.get('revenueGrowth')
-        if rev_growth:
-            if rev_growth > 0.25:
-                score += 15
-                signals.append(("✅ Exceptional revenue growth >25%", "positive"))
-            elif rev_growth > 0.15:
-                score += 10
-                signals.append(("✅ Strong revenue growth", "positive"))
-            elif rev_growth > 0:
-                score += 5
-                signals.append(("✅ Positive growth", "positive"))
-        
-        earn_growth = info.get('earningsGrowth')
-        if earn_growth and earn_growth > 0.20:
-            score += 10
-            signals.append(("✅ Strong earnings growth", "positive"))
-        
-        return min(score, 25), signals
-    
-    @staticmethod
-    def _score_technical(df: pd.DataFrame) -> Tuple[int, List]:
-        if len(df) < 50:
-            return 12, [("⚠️ Limited technical data", "neutral")]
-        
-        score = 0
-        signals = []
-        
-        price = df['Close'].iloc[-1]
-        sma20 = df['Close'].rolling(20).mean().iloc[-1]
-        sma50 = df['Close'].rolling(50).mean().iloc[-1]
-        
-        if pd.notna(sma20) and pd.notna(sma50):
-            if price > sma20 > sma50:
-                score += 15
-                signals.append(("✅ Strong uptrend - above MAs", "positive"))
-            elif price > sma20:
-                score += 10
-                signals.append(("✅ Above 20-day MA", "positive"))
-        
-        # RSI
-        delta = df['Close'].diff()
-        gain = delta.where(delta > 0, 0).rolling(14).mean()
-        loss = -delta.where(delta < 0, 0).rolling(14).mean()
-        rsi = 100 - (100 / (1 + gain / loss))
-        current_rsi = rsi.iloc[-1]
-        
-        if pd.notna(current_rsi) and 40 <= current_rsi <= 65:
-            score += 10
-            signals.append(("✅ RSI in optimal zone", "positive"))
-        
-        return min(score, 25), signals
-    
-    @staticmethod
-    def _score_fundamentals(info: Dict) -> Tuple[int, List]:
-        score = 0
-        signals = []
-        
-        margin = info.get('profitMargins')
-        if margin and margin > 0.15:
-            score += 10
-            signals.append(("✅ Strong profit margins", "positive"))
-        
-        pe = info.get('trailingPE')
-        if pe and 10 <= pe <= 30:
-            score += 10
-            signals.append(("✅ Reasonable valuation", "positive"))
-        
-        return min(score, 20), signals
-
-# ============================================================================
-# RISK CALCULATOR
-# ============================================================================
-
-class RiskCalc:
-    @staticmethod
-    def calculate_position(score: int, account_size: float, price: float) -> Dict:
-        if score >= Config.SCORE_EXCEPTIONAL:
-            risk_pct = 0.03
-            max_pos = Config.MAX_POSITION_EXCEPTIONAL
-        elif score >= Config.SCORE_STRONG:
-            risk_pct = 0.025
-            max_pos = Config.MAX_POSITION_STRONG
-        elif score >= Config.SCORE_GOOD:
-            risk_pct = 0.02
-            max_pos = Config.MAX_POSITION_GOOD
-        elif score >= Config.SCORE_MODERATE:
-            risk_pct = 0.01
-            max_pos = Config.MAX_POSITION_MODERATE
-        else:
-            return {'recommendation': 'DO NOT TRADE'}
-        
-        risk_amount = account_size * risk_pct
-        stop_loss_pct = 0.15
-        risk_per_share = price * stop_loss_pct
-        shares = int(risk_amount / risk_per_share)
-        
-        max_shares = int((account_size * max_pos) / price)
-        shares = min(shares, max_shares)
-        
-        position_value = shares * price
-        stop_loss = price * 0.85
-        target_1 = price * 1.12
-        target_2 = price * 1.20
-        target_3 = price * 1.35
-        
-        return {
-            'recommendation': 'TRADE',
-            'shares': shares,
-            'position_value': position_value,
-            'position_pct': (position_value / account_size) * 100,
-            'entry': price,
-            'stop_loss': stop_loss,
-            'target_1': target_1,
-            'target_2': target_2,
-            'target_3': target_3,
-            'max_loss': shares * risk_per_share,
-            'potential_gain': shares * (target_2 - price)
-        }
-
-# ============================================================================
-# LOGIN PAGE
-# ============================================================================
-
-def render_login():
-    st.markdown("""
-    <div style='text-align: center; margin-bottom: 3rem;'>
-        <h1 style='font-size: 3.5rem;'>📈 Earnings Trader Pro</h1>
-        <p style='font-size: 1.2rem; color: #94a3b8;'>AI-Powered Earnings Trading Platform</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
-    with col2:
-        st.markdown("<div class='login-container'>", unsafe_allow_html=True)
-        
-        tab1, tab2 = st.tabs(["🔐 Login", "📝 Sign Up"])
-        
-        with tab1:
-            st.markdown("### Welcome Back")
-            username = st.text_input("Username", key="login_user")
-            password = st.text_input("Password", type="password", key="login_pass")
+            st.success(f"✅ Downloaded {len(data)} data points for {ticker}")
             
-            if st.button("🚀 Login", use_container_width=True, type="primary"):
-                if username and password:
-                    user = AuthSystem.authenticate(username, password)
-                    if user:
-                        st.session_state.authenticated = True
-                        st.session_state.user = user
-                        st.success("✅ Login successful!")
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error("❌ Invalid credentials")
-                else:
-                    st.warning("⚠️ Enter username and password")
-        
-        with tab2:
-            st.markdown("### Create Account")
-            new_user = st.text_input("Username", key="signup_user")
-            new_email = st.text_input("Email", key="signup_email")
-            new_pass = st.text_input("Password", type="password", key="signup_pass")
-            confirm = st.text_input("Confirm Password", type="password", key="confirm_pass")
-            
-            st.info("💡 Default account size: $50,000 (you can update this later in Settings)")
-            
-            if st.button("✨ Create Account", use_container_width=True, type="primary"):
-                if new_user and new_email and new_pass and confirm:
-                    if new_pass != confirm:
-                        st.error("❌ Passwords don't match")
-                    elif len(new_pass) < 6:
-                        st.error("❌ Password must be 6+ characters")
-                    elif AuthSystem.user_exists(new_user):
-                        st.error("❌ Username taken")
-                    else:
-                        if AuthSystem.create_user(new_user, new_pass, new_email, Config.DEFAULT_ACCOUNT_SIZE):
-                            st.success("✅ Account created! Please login.")
-                            time.sleep(2)
-                            st.rerun()
-                else:
-                    st.warning("⚠️ Fill all fields")
-        
-        st.markdown("</div>", unsafe_allow_html=True)
-
-# ============================================================================
-# SIDEBAR
-# ============================================================================
-
-def render_sidebar():
-    with st.sidebar:
-        user = st.session_state.user
-        
-        st.markdown(f"""
-        <div style='background: rgba(79, 70, 229, 0.2); padding: 1.5rem; border-radius: 16px; margin-bottom: 1.5rem;'>
-            <h3 style='margin: 0; color: #fff;'>👤 {user.username}</h3>
-            <p style='margin: 0.5rem 0 0 0; color: #94a3b8;'>{user.email}</p>
-            <div style='margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(99, 102, 241, 0.2);'>
-                <p style='margin: 0; color: #10b981; font-size: 1.3rem; font-weight: 700;'>
-                    ${user.account_size:,.0f}
-                </p>
-                <p style='margin: 0; color: #64748b; font-size: 0.85rem;'>Account Balance</p>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("---")
-        st.markdown("#### 🧭 Navigation")
-        
-        pages = [
-            ("🔍 Scanner", 'scanner'),
-            ("📊 Analyze", 'analyze'),
-            ("💼 Portfolio", 'portfolio'),
-            ("📚 Guide", 'guide'),
-            ("⚙️ Settings", 'settings'),
-        ]
-        
-        for label, page in pages:
-            if st.button(label, use_container_width=True, 
-                        type="primary" if st.session_state.page == page else None):
-                st.session_state.page = page
-                st.rerun()
-        
-        st.markdown("---")
-        
-        if st.button("🚪 Logout", use_container_width=True):
-            st.session_state.authenticated = False
-            st.session_state.user = None
-            st.rerun()
-
-# ============================================================================
-# SCANNER PAGE
-# ============================================================================
-
-def render_scanner():
-    st.title("🔍 Earnings Play Scanner")
-    
-    st.markdown("""
-    <div class='info-box'>
-        <p><strong>💡 How it works:</strong> Our AI analyzes stocks across 4 categories (Historical Performance, 
-        Growth Metrics, Technical Setup, Fundamentals) to give each stock a 0-100 score.</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        min_score = st.slider("Minimum Score", 0, 100, 65, 5)
-    
-    with col2:
-        sector = st.selectbox("Sector", ["All", "Technology", "Consumer", "Finance"])
-    
-    with col3:
-        sort_by = st.selectbox("Sort By", ["score", "price", "ticker"])
-    
-    with col4:
-        max_results = st.selectbox("Max Results", [5, 10, 15, 20], index=1)
-    
-    if st.button("🚀 Scan for Opportunities", type="primary", use_container_width=True):
-        with st.spinner("Scanning stocks..."):
-            # Filter tickers by sector
-            if sector == "All":
-                tickers = StockDB.get_all_tickers()
-            else:
-                tickers = [t for t, d in StockDB.STOCKS.items() if d.get('sector') == sector]
-            
-            results = []
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
-            for idx, ticker in enumerate(tickers):
-                # Update progress
-                progress = (idx + 1) / len(tickers)
-                progress_bar.progress(progress)
-                status_text.text(f"Analyzing {ticker}... ({idx + 1}/{len(tickers)})")
-                
-                try:
-                    df = get_stock_data(ticker, '1y')
-                    info = get_stock_info(ticker)
-                    
-                    if df is not None and not df.empty:
-                        score_data = ScoringEngine.calculate_score(ticker, df, info)
-                        
-                        if score_data['score'] >= min_score:
-                            next_date, days = estimate_next_earnings_date(ticker)
-                            
-                            results.append({
-                                'ticker': ticker,
-                                'name': StockDB.STOCKS.get(ticker, {}).get('name', ticker),
-                                'score': score_data['score'],
-                                'rating': score_data['rating'],
-                                'color': score_data['color'],
-                                'price': df['Close'].iloc[-1],
-                                'days': days
-                            })
-                except Exception as e:
-                    st.caption(f"⚠️ Could not load {ticker}")
-                    continue
-            
-            # Clear progress indicators
-            progress_bar.empty()
-            status_text.empty()
-            
-            # Sort results
-            if sort_by == "score":
-                results.sort(key=lambda x: x['score'], reverse=True)
-            elif sort_by == "price":
-                results.sort(key=lambda x: x['price'])
-            elif sort_by == "ticker":
-                results.sort(key=lambda x: x['ticker'])
-            
-            # Limit results
-            results = results[:max_results]
-            
-            if results:
-                st.success(f"✅ Found {len(results)} stocks scoring ≥ {min_score}")
-                st.markdown("---")
-                
-                for r in results:
-                    col1, col2, col3, col4, col5, col6 = st.columns([2, 2, 1, 1, 1, 1])
-                    
-                    col1.markdown(f"**{r['ticker']}**")
-                    col1.caption(r['name'][:40])
-                    
-                    col2.markdown(f"""
-                    <div style='padding: 0.5rem; background: rgba{tuple(int(r['color'][i:i+2], 16) for i in (1, 3, 5)) + (0.1,)}; 
-                                border-radius: 8px; text-align: center;'>
-                        <p style='color: {r['color']}; font-weight: 700; margin: 0; font-size: 1.2rem;'>{r['score']}</p>
-                        <p style='color: #94a3b8; margin: 0; font-size: 0.75rem;'>{r['rating']}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    col3.metric("Price", f"${r['price']:.2f}")
-                    
-                    # Earnings countdown
-                    days = r['days']
-                    if days <= 7:
-                        earn_color = "#ef4444"
-                        earn_icon = "🔥"
-                    elif days <= 14:
-                        earn_color = "#f59e0b"
-                        earn_icon = "⚡"
-                    else:
-                        earn_color = "#3b82f6"
-                        earn_icon = "📅"
-                    
-                    col4.markdown(f"<p style='color: {earn_color}; font-weight: 700; text-align: center;'>{earn_icon}<br>{days}d</p>", unsafe_allow_html=True)
-                    
-                    if col5.button("Analyze", key=f"analyze_{r['ticker']}", use_container_width=True):
-                        st.session_state.selected_ticker = r['ticker']
-                        st.session_state.page = 'analyze'
-                        st.rerun()
-                    
-                    # Quick add to watchlist
-                    user = st.session_state.user
-                    if r['ticker'] in user.watchlist:
-                        col6.markdown("⭐")
-                    else:
-                        if col6.button("➕", key=f"add_{r['ticker']}", help="Add to watchlist"):
-                            user.watchlist.append(r['ticker'])
-                            AuthSystem.save_user(user)
-                            st.rerun()
-                    
-                    st.markdown("---")
-            else:
-                st.warning(f"No stocks found with score ≥ {min_score}. Try lowering the minimum score or selecting a different sector.")
-                
-                if st.button("Reset Filters", type="primary"):
-                    st.rerun()
-
-# ============================================================================
-# ANALYZE PAGE
-# ============================================================================
-
-def render_analyze():
-    st.title("📊 Deep Stock Analysis")
-    
-    col1, col2 = st.columns([4, 1])
-    
-    with col1:
-        search = st.text_input("Search stock", 
-                              value=st.session_state.selected_ticker or "",
-                              placeholder="Enter ticker (e.g., AAPL, MSFT, GOOGL)")
-    
-    with col2:
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("🔄 Clear", use_container_width=True):
-            st.session_state.selected_ticker = None
-            st.rerun()
-    
-    ticker = None
-    if search:
-        results = StockDB.search(search)
-        if results:
-            options = [f"{t} - {d['name']}" for t, d in results]
-            selected = st.selectbox("Select stock:", options, label_visibility="collapsed")
-            if selected:
-                ticker = selected.split(" - ")[0]
-        else:
-            st.warning(f"⚠️ '{search}' not found in database. Available stocks: {', '.join(list(StockDB.STOCKS.keys())[:10])}...")
-    
-    if ticker:
-        with st.spinner(f"Analyzing {ticker}..."):
-            try:
-                df = get_stock_data(ticker, '1y')
-                info = get_stock_info(ticker)
-                
-                if df is None or df.empty:
-                    st.error("❌ Unable to fetch data for this stock. Please try another ticker or check your internet connection.")
-                    return
-                
-                score_data = ScoringEngine.calculate_score(ticker, df, info)
-                price = df['Close'].iloc[-1]
-                next_date, days = estimate_next_earnings_date(ticker)
-                stock_info = StockDB.STOCKS.get(ticker, {})
-                
-                # Header with company info
-                col1, col2 = st.columns([3, 1])
-                
+            # Stock info
+            if info:
+                st.subheader(f"📌 {info.get('longName', ticker)}")
+                col1, col2, col3, col4 = st.columns(4)
                 with col1:
-                    st.markdown(f"## {info.get('longName', stock_info.get('name', ticker))}")
-                    st.markdown(f"**{ticker}** • {stock_info.get('sector', 'N/A')} Sector • {stock_info.get('cap', 'N/A')} Cap")
-                
+                    current_price = data['Close'].iloc[-1]
+                    price_change = data['Close'].iloc[-1] - data['Close'].iloc[-2]
+                    price_change_pct = (price_change / data['Close'].iloc[-2]) * 100
+                    st.metric("Current Price", f"${current_price:.2f}", 
+                             f"{price_change:+.2f} ({price_change_pct:+.2f}%)")
                 with col2:
-                    # Add to watchlist
-                    user = st.session_state.user
-                    if ticker in user.watchlist:
-                        if st.button("⭐ In Watchlist", use_container_width=True):
-                            user.watchlist.remove(ticker)
-                            AuthSystem.save_user(user)
-                            st.success("Removed from watchlist")
-                            time.sleep(0.5)
-                            st.rerun()
-                    else:
-                        if st.button("➕ Add to Watchlist", use_container_width=True, type="primary"):
-                            user.watchlist.append(ticker)
-                            AuthSystem.save_user(user)
-                            st.success("Added to watchlist!")
-                            time.sleep(0.5)
-                            st.rerun()
+                    st.metric("Market Cap", f"${info.get('marketCap', 0)/1e9:.2f}B")
+                with col3:
+                    st.metric("52W High", f"${info.get('fiftyTwoWeekHigh', 0):.2f}")
+                with col4:
+                    st.metric("52W Low", f"${info.get('fiftyTwoWeekLow', 0):.2f}")
+            
+            # Prepare data
+            with st.spinner("🔧 Preparing data..."):
+                X_train, X_test, y_train, y_test, scaler, all_prices = prepare_data(
+                    data, sequence_length, test_size=0.2
+                )
+            
+            st.info(f"📊 Training: {len(X_train)} sequences | Testing: {len(X_test)} sequences")
+            
+            # Build and train model
+            with st.spinner("🧠 Building and training neural network..."):
+                model = build_model(sequence_length, neurons)
                 
-                # Earnings banner
-                if days <= 7:
-                    st.markdown(f"""
-                    <div class='warning-box'>
-                        <h3>🔥 URGENT: Earnings in {days} days!</h3>
-                        <p style='font-size: 1.1rem;'><strong>Date:</strong> {next_date.strftime('%A, %B %d, %Y')}</p>
-                        <p style='margin-top: 1rem;'><strong>Action:</strong> Perfect entry timing! Consider entering position NOW if score is strong.</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                elif days <= 14:
-                    st.markdown(f"""
-                    <div class='info-box'>
-                        <h3>⚡ Earnings in {days} days</h3>
-                        <p><strong>Date:</strong> {next_date.strftime('%A, %B %d, %Y')}</p>
-                        <p>Good timing window. Optimal entry: 2-5 days before earnings.</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.info(f"📅 Next Earnings: ~{days} days away ({next_date.strftime('%B %d, %Y')})")
+                progress_bar = st.progress(0)
+                status_text = st.empty()
                 
-                # Key metrics
-                col1, col2, col3, col4, col5 = st.columns(5)
-                col1.metric("Price", f"${price:.2f}")
-                
-                market_cap = info.get('marketCap', 0)
-                if market_cap > 0:
-                    col2.metric("Market Cap", f"${market_cap/1e9:.1f}B")
-                else:
-                    col2.metric("Market Cap", "N/A")
-                
-                pe = info.get('trailingPE')
-                col3.metric("P/E Ratio", f"{pe:.2f}" if pe else "N/A")
-                
-                high_52 = info.get('fiftyTwoWeekHigh', 0)
-                col4.metric("52W High", f"${high_52:.2f}" if high_52 else "N/A")
-                
-                low_52 = info.get('fiftyTwoWeekLow', 0)
-                col5.metric("52W Low", f"${low_52:.2f}" if low_52 else "N/A")
-                
-                st.markdown("---")
-                
-                # Score display
-                col1, col2 = st.columns([1, 2])
-                
-                with col1:
-                    st.markdown(f"""
-                    <div class='score-card'>
-                        <h1 style='font-size: 5rem; color: {score_data['color']}; margin: 0;'>{score_data['score']}</h1>
-                        <p style='font-size: 2rem; color: {score_data['color']}; margin: 0.5rem 0; font-weight: 800;'>{score_data['rating']}</p>
-                        <p style='font-size: 0.9rem; color: #94a3b8;'>out of 100</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                with col2:
-                    st.markdown("### 🎯 Key Signals")
-                    
-                    # Categorize signals
-                    positive_signals = [s for s in score_data['signals'] if s[1] == "positive"]
-                    neutral_signals = [s for s in score_data['signals'] if s[1] == "neutral"]
-                    negative_signals = [s for s in score_data['signals'] if s[1] == "negative"]
-                    
-                    if positive_signals:
-                        st.markdown("**✅ Bullish Signals:**")
-                        for signal, _ in positive_signals[:5]:  # Limit to 5
-                            st.markdown(f"<p style='color: #10b981; font-weight: 600; margin: 0.3rem 0;'>{signal}</p>", unsafe_allow_html=True)
-                    
-                    if negative_signals:
-                        st.markdown("**❌ Bearish Signals:**")
-                        for signal, _ in negative_signals[:3]:  # Limit to 3
-                            st.markdown(f"<p style='color: #ef4444; font-weight: 600; margin: 0.3rem 0;'>{signal}</p>", unsafe_allow_html=True)
-                    
-                    if neutral_signals:
-                        with st.expander("⚠️ View Neutral Signals"):
-                            for signal, _ in neutral_signals:
-                                st.markdown(f"<p style='color: #f59e0b; margin: 0.3rem 0;'>{signal}</p>", unsafe_allow_html=True)
-                
-                st.markdown("---")
-                
-                # Score breakdown
-                st.markdown("### 📊 Score Breakdown")
-                
-                categories = list(score_data['breakdown'].keys())
-                values = list(score_data['breakdown'].values())
-                
-                # Create color scale
-                colors = []
-                for v in values:
-                    if v >= 20:
-                        colors.append('#10b981')
-                    elif v >= 15:
-                        colors.append('#3b82f6')
-                    elif v >= 10:
-                        colors.append('#f59e0b')
-                    else:
-                        colors.append('#ef4444')
-                
-                fig = go.Figure(data=[
-                    go.Bar(
-                        y=categories,
-                        x=values,
-                        orientation='h',
-                        marker=dict(color=colors),
-                        text=values,
-                        textposition='auto',
+                for epoch in range(epochs):
+                    history = model.fit(
+                        X_train, y_train,
+                        batch_size=32,
+                        epochs=1,
+                        verbose=0,
+                        validation_split=0.1
                     )
-                ])
+                    progress = (epoch + 1) / epochs
+                    progress_bar.progress(progress)
+                    status_text.text(f"Training... Epoch {epoch+1}/{epochs} - Loss: {history.history['loss'][0]:.6f}")
                 
-                fig.update_layout(
-                    height=300,
-                    template="plotly_dark",
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    margin=dict(l=20, r=20, t=20, b=20),
-                    xaxis_title="Points",
-                    showlegend=False
+                progress_bar.empty()
+                status_text.empty()
+            
+            st.success("✅ Training complete!")
+            
+            # Make predictions on test data
+            test_predictions = model.predict(X_test, verbose=0)
+            test_predictions_prices = scaler.inverse_transform(test_predictions)
+            y_test_actual = scaler.inverse_transform(y_test.reshape(-1, 1))
+            
+            # Calculate accuracy
+            mae, rmse, mape, direction_acc = calculate_metrics(y_test_actual, test_predictions_prices)
+            
+            st.subheader("📈 Model Performance Metrics")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Mean Absolute Error", f"${mae:.2f}")
+            with col2:
+                st.metric("RMSE", f"${rmse:.2f}")
+            with col3:
+                st.metric("Price Accuracy", f"{100 - mape:.1f}%")
+            with col4:
+                st.metric("Direction Accuracy", f"{direction_acc:.1f}%")
+            
+            # Plot test predictions
+            st.subheader("📊 AI Predictions vs Actual Prices (Test Data)")
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                y=y_test_actual.flatten(), 
+                name="Actual Prices", 
+                line=dict(color='#2ca02c', width=3)
+            ))
+            fig.add_trace(go.Scatter(
+                y=test_predictions_prices.flatten(), 
+                name="AI Predictions", 
+                line=dict(color='#ff7f0e', width=2, dash='dash')
+            ))
+            fig.update_layout(
+                height=450, 
+                xaxis_title="Time Steps", 
+                yaxis_title="Price ($)", 
+                hovermode='x unified',
+                legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Predict future
+            st.subheader("🔮 Future Price Predictions")
+            last_sequence = scaler.transform(all_prices[-sequence_length:].reshape(-1, 1)).flatten()
+            future_predictions = predict_future(model, last_sequence, scaler, prediction_steps)
+            
+            # Create future dates
+            last_date = data.index[-1]
+            if interval == "1d":
+                future_dates = pd.date_range(start=last_date + timedelta(days=1), periods=prediction_steps, freq='B')
+            else:
+                future_dates = pd.date_range(start=last_date + timedelta(hours=1), periods=prediction_steps, freq='H')
+            
+            # Display predictions
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                fig_future = go.Figure()
+                
+                # Historical prices
+                fig_future.add_trace(go.Scatter(
+                    x=data.index[-50:], 
+                    y=data['Close'].iloc[-50:], 
+                    name="Historical", 
+                    line=dict(color='#1f77b4', width=2)
+                ))
+                
+                # Future predictions
+                fig_future.add_trace(go.Scatter(
+                    x=future_dates, 
+                    y=future_predictions, 
+                    name="Predicted", 
+                    line=dict(color='#d62728', width=3, dash='dot'),
+                    mode='lines+markers'
+                ))
+                
+                fig_future.update_layout(
+                    height=400,
+                    title="Price Forecast",
+                    xaxis_title="Date",
+                    yaxis_title="Price ($)",
+                    hovermode='x unified'
+                )
+                st.plotly_chart(fig_future, use_container_width=True)
+            
+            with col2:
+                st.markdown("**Predicted Prices:**")
+                pred_df = pd.DataFrame({
+                    'Step': range(1, prediction_steps + 1),
+                    'Date': future_dates.strftime('%Y-%m-%d'),
+                    'Price': [f"${p:.2f}" for p in future_predictions],
+                    'Change': [f"{((future_predictions[i] - current_price) / current_price * 100):+.2f}%" 
+                              for i in range(len(future_predictions))]
+                })
+                st.dataframe(pred_df, hide_index=True, use_container_width=True)
+                
+                expected_return = ((future_predictions[-1] - current_price) / current_price) * 100
+                if expected_return > 0:
+                    st.success(f"📈 Expected Return: +{expected_return:.2f}%")
+                else:
+                    st.error(f"📉 Expected Return: {expected_return:.2f}%")
+
+# ==========================================
+# MODE 2: COMPARE MULTIPLE STOCKS
+# ==========================================
+
+elif mode == "⚔️ Compare Multiple Stocks":
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Stock List")
+    
+    default_tickers = "AAPL,MSFT,GOOGL,TSLA,NVDA"
+    tickers_input = st.sidebar.text_area(
+        "Enter tickers (comma-separated):", 
+        value=default_tickers
+    )
+    tickers = [t.strip().upper() for t in tickers_input.split(',')]
+    
+    period = st.sidebar.selectbox("Data Period:", ["1mo", "3mo", "6mo"], index=1)
+    st.sidebar.subheader("AI Settings")
+    sequence_length = st.sidebar.slider("Sequence Length:", 20, 80, 40)
+    prediction_steps = st.sidebar.slider("Prediction Steps:", 5, 20, 10)
+    epochs = st.sidebar.slider("Training Epochs:", 10, 30, 15)
+    
+    if st.sidebar.button("⚔️ Compare Stocks", type="primary"):
+        results = []
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        for idx, ticker in enumerate(tickers):
+            status_text.text(f"Analyzing {ticker}... ({idx + 1}/{len(tickers)})")
+            
+            data, info, error = download_stock_data(ticker, period, "1d")
+            
+            if error or len(data) < sequence_length + 20:
+                st.warning(f"⚠️ Skipping {ticker}: Insufficient data")
+                continue
+            
+            try:
+                # Prepare and train
+                X_train, X_test, y_train, y_test, scaler, all_prices = prepare_data(
+                    data, sequence_length, test_size=0.2
                 )
                 
-                st.plotly_chart(fig, use_container_width=True)
+                model = build_model(sequence_length, neurons=40)
+                model.fit(X_train, y_train, batch_size=32, epochs=epochs, verbose=0, validation_split=0.1)
                 
-                st.markdown("---")
+                # Evaluate
+                test_predictions = model.predict(X_test, verbose=0)
+                test_predictions_prices = scaler.inverse_transform(test_predictions)
+                y_test_actual = scaler.inverse_transform(y_test.reshape(-1, 1))
+                mae, rmse, mape, direction_acc = calculate_metrics(y_test_actual, test_predictions_prices)
                 
-                # Position sizing
-                st.markdown("### 💰 Position Sizing & Risk Management")
+                # Future predictions
+                last_sequence = scaler.transform(all_prices[-sequence_length:].reshape(-1, 1)).flatten()
+                future_preds = predict_future(model, last_sequence, scaler, prediction_steps)
                 
-                user = st.session_state.user
-                calc = RiskCalc.calculate_position(score_data['score'], user.account_size, price)
+                current_price = data['Close'].iloc[-1]
+                predicted_price = future_preds[-1]
+                expected_return = ((predicted_price - current_price) / current_price) * 100
                 
-                if calc['recommendation'] == 'DO NOT TRADE':
-                    st.markdown("""
-                    <div class='warning-box'>
-                        <h3>⛔ Do Not Trade</h3>
-                        <p><strong>Reason:</strong> Score too low - does not meet minimum criteria (55+)</p>
-                        <p>This stock needs a higher score to justify taking a position. Look for stocks scoring 65+ for better odds.</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.markdown(f"""
-                    <div class='recommendation-box'>
-                        <h3>✅ Trade Approved</h3>
-                        <p>Score of {score_data['score']} meets minimum criteria. Position sizing calculated based on your account size of ${user.account_size:,.0f}.</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    col1, col2, col3, col4 = st.columns(4)
-                    col1.metric("Shares to Buy", f"{calc['shares']:,}", help="Number of shares based on risk management")
-                    col2.metric("Position Value", f"${calc['position_value']:,.0f}", help="Total cost of position")
-                    col3.metric("% of Account", f"{calc['position_pct']:.1f}%", help="Position size as percentage of account")
-                    col4.metric("Max Loss", f"${calc['max_loss']:,.0f}", help="Maximum loss if stop is hit")
-                    
-                    st.markdown("---")
-                    
-                    st.markdown("#### 🎯 Entry & Exit Levels")
-                    
-                    col1, col2, col3, col4 = st.columns(4)
-                    col1.metric("Entry Price", f"${calc['entry']:.2f}", help="Current price - use limit order")
-                    col2.metric("Stop Loss", f"${calc['stop_loss']:.2f}", 
-                               delta=f"-15%", delta_color="inverse", help="Exit if price drops to this level")
-                    col3.metric("Target 1 (50%)", f"${calc['target_1']:.2f}", 
-                               delta=f"+{((calc['target_1']/calc['entry']-1)*100):.1f}%", help="First profit target")
-                    col4.metric("Target 2 (30%)", f"${calc['target_2']:.2f}", 
-                               delta=f"+{((calc['target_2']/calc['entry']-1)*100):.1f}%", help="Second profit target")
-                    
-                    st.markdown("---")
-                    
-                    # Trading plan
-                    st.markdown("### 📋 Trading Plan")
-                    
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.markdown("""
-                        <div class='info-box'>
-                            <h4>📥 Entry Plan</h4>
-                            <p><strong>Timing:</strong> 2-5 days before earnings</p>
-                            <p><strong>Order Type:</strong> Limit order at ${:.2f}</p>
-                            <p><strong>Shares:</strong> {} shares</p>
-                            <p><strong>Stop Loss:</strong> Set at ${:.2f} immediately</p>
-                        </div>
-                        """.format(calc['entry'], calc['shares'], calc['stop_loss']), unsafe_allow_html=True)
-                    
-                    with col2:
-                        st.markdown("""
-                        <div class='info-box'>
-                            <h4>📤 Exit Plan</h4>
-                            <p><strong>Target 1:</strong> ${:.2f} - Sell 50%</p>
-                            <p><strong>Target 2:</strong> ${:.2f} - Sell 30%</p>
-                            <p><strong>Target 3:</strong> ${:.2f} - Trail 20%</p>
-                            <p><strong>Stop:</strong> Exit ALL at ${:.2f}</p>
-                        </div>
-                        """.format(calc['target_1'], calc['target_2'], calc['target_3'], calc['stop_loss']), unsafe_allow_html=True)
-                    
-                    # Risk/Reward
-                    rr_ratio = calc['potential_gain'] / calc['max_loss'] if calc['max_loss'] > 0 else 0
-                    
-                    st.info(f"**Risk/Reward Ratio:** 1:{rr_ratio:.1f} - For every $1 you risk, potential to gain ${rr_ratio:.1f}")
-            
+                results.append({
+                    'Ticker': ticker,
+                    'Name': info.get('longName', ticker)[:30] if info else ticker,
+                    'Current Price': current_price,
+                    'Predicted Price': predicted_price,
+                    'Expected Return (%)': expected_return,
+                    'Accuracy (%)': 100 - mape,
+                    'Direction Acc (%)': direction_acc,
+                    'MAE': mae
+                })
+                
             except Exception as e:
-                st.error(f"❌ Error analyzing {ticker}: {str(e)}")
-                st.info("Please try another stock or refresh the page.")
-    else:
-        st.markdown("""
-        <div class='info-box'>
-            <h3>👋 Welcome to Stock Analysis</h3>
-            <p>Search for any stock above to get a comprehensive analysis including:</p>
-            <ul>
-                <li>🎯 AI-powered scoring (0-100 points)</li>
-                <li>📊 Technical and fundamental analysis</li>
-                <li>💰 Automatic position sizing</li>
-                <li>📅 Earnings countdown</li>
-                <li>🎯 Entry and exit recommendations</li>
-            </ul>
-            <p><strong>Popular stocks:</strong> AAPL, MSFT, GOOGL, AMZN, NVDA, TSLA, META</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if st.button("🔍 Go to Scanner", type="primary", use_container_width=True):
-            st.session_state.page = 'scanner'
-            st.rerun()
-
-# ============================================================================
-# PORTFOLIO PAGE
-# ============================================================================
-
-def render_portfolio():
-    st.title("💼 Portfolio")
-    
-    user = st.session_state.user
-    
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Account", f"${user.account_size:,.0f}")
-    col2.metric("Watchlist", len(user.watchlist))
-    col3.metric("Trades", len(user.trade_history))
-    
-    st.markdown("---")
-    
-    if user.watchlist:
-        st.markdown("### ⭐ Watchlist")
-        
-        for ticker in user.watchlist:
-            try:
-                col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
-                
-                # Get basic info
-                stock_info = StockDB.STOCKS.get(ticker, {})
-                
-                col1.markdown(f"**{ticker}**")
-                col1.caption(stock_info.get('name', 'Unknown'))
-                
-                # Get earnings date
-                next_date, days = estimate_next_earnings_date(ticker)
-                
-                if days <= 7:
-                    earn_color = "#ef4444"
-                    earn_icon = "🔥"
-                elif days <= 14:
-                    earn_color = "#f59e0b"
-                    earn_icon = "⚡"
-                else:
-                    earn_color = "#3b82f6"
-                    earn_icon = "📅"
-                
-                col2.markdown(f"<p style='color: {earn_color}; font-weight: 600;'>{earn_icon} Earnings in {days} days</p>", unsafe_allow_html=True)
-                
-                if col3.button("Analyze", key=f"wl_{ticker}"):
-                    st.session_state.selected_ticker = ticker
-                    st.session_state.page = 'analyze'
-                    st.rerun()
-                
-                if col4.button("Remove", key=f"rm_{ticker}"):
-                    user.watchlist.remove(ticker)
-                    AuthSystem.save_user(user)
-                    st.rerun()
-                
-                st.markdown("---")
+                st.warning(f"⚠️ Error analyzing {ticker}: {str(e)}")
             
-            except Exception as e:
-                st.warning(f"⚠️ Error loading {ticker}: {str(e)}")
-                if st.button(f"Remove {ticker}", key=f"rm_err_{ticker}"):
-                    user.watchlist.remove(ticker)
-                    AuthSystem.save_user(user)
-                    st.rerun()
-    else:
-        st.markdown("""
-        <div class='info-box'>
-            <h3>📝 Your watchlist is empty</h3>
-            <p>Add stocks from the Scanner or Analysis page to track them here.</p>
-            <p><strong>How to add stocks:</strong></p>
-            <ol>
-                <li>Go to Scanner and find high-scoring stocks</li>
-                <li>Click "Analyze" on any stock</li>
-                <li>Click "Add to Watchlist" button at the bottom</li>
-            </ol>
-        </div>
-        """, unsafe_allow_html=True)
+            progress_bar.progress((idx + 1) / len(tickers))
         
-        if st.button("🔍 Go to Scanner", type="primary", use_container_width=True):
-            st.session_state.page = 'scanner'
-            st.rerun()
+        progress_bar.empty()
+        status_text.empty()
+        
+        if results:
+            st.success(f"✅ Successfully analyzed {len(results)} stocks!")
+            
+            # Create results dataframe
+            df_results = pd.DataFrame(results)
+            df_results = df_results.sort_values('Expected Return (%)', ascending=False)
+            
+            # Display top picks
+            st.subheader("🏆 Top Stock Picks (by Expected Return)")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            for idx, row in df_results.head(3).iterrows():
+                with [col1, col2, col3][df_results.head(3).index.get_loc(idx)]:
+                    st.markdown(f"### #{df_results.index.get_loc(idx) + 1} {row['Ticker']}")
+                    st.metric("Expected Return", f"{row['Expected Return (%)']:.2f}%")
+                    st.metric("Current Price", f"${row['Current Price']:.2f}")
+                    st.metric("Predicted Price", f"${row['Predicted Price']:.2f}")
+                    st.metric("Accuracy", f"{row['Accuracy (%)']:.1f}%")
+            
+            # Full comparison table
+            st.subheader("📊 Complete Comparison")
+            
+            # Style the dataframe
+            def highlight_returns(val):
+                if isinstance(val, (int, float)):
+                    color = 'background-color: #d4edda' if val > 0 else 'background-color: #f8d7da'
+                    return color
+                return ''
+            
+            styled_df = df_results.style.format({
+                'Current Price': '${:.2f}',
+                'Predicted Price': '${:.2f}',
+                'Expected Return (%)': '{:+.2f}%',
+                'Accuracy (%)': '{:.1f}%',
+                'Direction Acc (%)': '{:.1f}%',
+                'MAE': '${:.2f}'
+            }).applymap(highlight_returns, subset=['Expected Return (%)'])
+            
+            st.dataframe(styled_df, use_container_width=True, hide_index=True)
+            
+            # Visualization
+            st.subheader("📈 Expected Returns Comparison")
+            fig = go.Figure()
+            
+            colors = ['#2ca02c' if x > 0 else '#d62728' for x in df_results['Expected Return (%)']]
+            
+            fig.add_trace(go.Bar(
+                x=df_results['Ticker'],
+                y=df_results['Expected Return (%)'],
+                marker_color=colors,
+                text=df_results['Expected Return (%)'].apply(lambda x: f'{x:+.2f}%'),
+                textposition='outside'
+            ))
+            
+            fig.update_layout(
+                height=400,
+                xaxis_title="Stock",
+                yaxis_title="Expected Return (%)",
+                showlegend=False
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Investment recommendation
+            best_stock = df_results.iloc[0]
+            if best_stock['Expected Return (%)'] > 5:
+                st.success(f"💡 **Top Recommendation**: {best_stock['Ticker']} shows the highest expected return of {best_stock['Expected Return (%)']:.2f}% with {best_stock['Accuracy (%)']:.1f}% prediction accuracy!")
+            else:
+                st.info("💡 **Note**: Current market conditions show modest expected returns across analyzed stocks.")
 
-# ============================================================================
-# GUIDE PAGE
-# ============================================================================
+# ==========================================
+# MODE 3: BACKTEST STRATEGY
+# ==========================================
 
-def render_guide():
-    st.title("📚 Strategy Guide")
+elif mode == "🔙 Backtest Strategy":
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Backtest Settings")
+    ticker = st.sidebar.text_input("Enter Stock Ticker:", value="AAPL").upper()
+    period = st.sidebar.selectbox("Backtest Period:", ["3mo", "6mo", "1y", "2y"], index=2)
+    initial_capital = st.sidebar.number_input("Initial Capital ($):", min_value=1000, value=10000, step=1000)
+    
+    st.sidebar.subheader("AI Settings")
+    sequence_length = st.sidebar.slider("Sequence Length:", 20, 80, 50)
+    epochs = st.sidebar.slider("Training Epochs:", 10, 30, 20)
     
     st.markdown("""
-    ## Complete Earnings Trading Strategy
+    <div class="info-box">
+    <strong>📖 How Backtesting Works:</strong><br>
+    The AI predicts whether the price will go up or down. If it predicts up by >0.2%, we BUY. 
+    If it predicts down by >0.2%, we SELL. We track the portfolio value over time and compare 
+    it to a simple "buy and hold" strategy.
+    </div>
+    """, unsafe_allow_html=True)
     
-    ### The System
-    
-    Our AI-powered platform analyzes 100+ data points to identify high-probability earnings plays.
-    
-    ### Score Categories
-    
-    **85-100 (EXCEPTIONAL):** Maximum confidence - full position
-    
-    **75-84 (STRONG):** High confidence - standard position
-    
-    **65-74 (GOOD):** Good setup - moderate position
-    
-    **55-64 (MODERATE):** Cautious - small position
-    
-    **Below 55:** Pass
-    
-    ### Entry Timing
-    
-    **Optimal: 2-5 days before earnings (sweet spot: 3 days)**
-    
-    - Capture full move (pre-run + post-gap)
-    - Better entry prices
-    - Time to adjust if needed
-    
-    ### Exit Strategy
-    
-    **Target 1 (50%): +10-15%**
-    - Lock in profits
-    - Reduce risk
-    
-    **Target 2 (30%): +18-25%**
-    - Capture momentum
-    - Trail remaining
-    
-    **Target 3 (20%): +30%+**
-    - Let winners run
-    - 5% trailing stop
-    
-    ### Risk Management
-    
-    **Position Sizing:**
-    - Based on score (1-3% risk per trade)
-    - Max 10% of account per position
-    - Max 30% in all earnings plays
-    
-    **Stop Loss:**
-    - Always 15% below entry
-    - Set immediately after entry
-    - NEVER move or remove
-    
-    ### Golden Rules
-    
-    1. Never risk more than you can afford to lose
-    2. Always use stop losses
-    3. Take partial profits early
-    4. Let winners run with trailing stops
-    5. Keep detailed trade logs
-    6. Follow the system
-    
-    ### Expected Results
-    
-    With discipline:
-    - Win Rate: 55-65%
-    - Avg Win: +12-18%
-    - Avg Loss: -8-12%
-    - Profit Factor: 1.6-2.2
-    - Monthly ROI: 4-10%
-    
-    ### Remember
-    
-    "Your first loss is your best loss. Don't hope, don't pray, just exit when wrong."
-    """)
-
-# ============================================================================
-# SETTINGS PAGE
-# ============================================================================
-
-def render_settings():
-    st.title("⚙️ Settings")
-    
-    user = st.session_state.user
-    
-    tabs = st.tabs(["👤 Account", "🎯 Trading Preferences"])
-    
-    with tabs[0]:
-        st.markdown("### Account Settings")
+    if st.sidebar.button("🔙 Run Backtest", type="primary"):
+        with st.spinner(f"📥 Downloading {ticker} data..."):
+            data, info, error = download_stock_data(ticker, period, "1d")
         
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("#### Profile Information")
-            st.text_input("Username", value=user.username, disabled=True)
-            st.text_input("Email", value=user.email, disabled=True)
-            st.text_input("Member Since", value=user.created_at.strftime('%B %d, %Y'), disabled=True)
-        
-        with col2:
-            st.markdown("#### Account Balance")
-            st.metric("Current Balance", f"${user.account_size:,.0f}")
+        if error:
+            st.error(f"❌ Error: {error}")
+        elif len(data) < sequence_length + 50:
+            st.error(f"❌ Insufficient data. Need at least {sequence_length + 50} data points.")
+        else:
+            st.success(f"✅ Downloaded {len(data)} days of data for {ticker}")
             
-            new_balance = st.number_input(
-                "Update Account Size ($)",
-                min_value=1000,
-                max_value=10000000,
-                value=int(user.account_size),
-                step=1000,
-                help="Set your actual trading account size for accurate position sizing"
+            # Display stock info
+            if info:
+                st.subheader(f"📌 {info.get('longName', ticker)}")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Current Price", f"${data['Close'].iloc[-1]:.2f}")
+                with col2:
+                    st.metric("Start Price", f"${data['Close'].iloc[0]:.2f}")
+                with col3:
+                    period_return = ((data['Close'].iloc[-1] - data['Close'].iloc[0]) / data['Close'].iloc[0]) * 100
+                    st.metric("Period Return", f"{period_return:+.2f}%")
+            
+            # Prepare data and train model
+            with st.spinner("🧠 Training AI model for backtesting..."):
+                X_train, X_test, y_train, y_test, scaler, all_prices = prepare_data(
+                    data, sequence_length, test_size=0.1
+                )
+                
+                model = build_model(sequence_length, neurons=50)
+                
+                progress_bar = st.progress(0)
+                for epoch in range(epochs):
+                    model.fit(X_train, y_train, batch_size=32, epochs=1, verbose=0, validation_split=0.1)
+                    progress_bar.progress((epoch + 1) / epochs)
+                progress_bar.empty()
+            
+            st.success("✅ Model trained! Running backtest...")
+            
+            # Run backtest
+            with st.spinner("📊 Simulating trades..."):
+                backtest_results = backtest_strategy(data, model, scaler, sequence_length, initial_capital)
+            
+            # Display results
+            st.subheader("💰 Backtest Results")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("Final Portfolio Value", 
+                         f"${backtest_results['final_value']:.2f}",
+                         f"{backtest_results['total_return']:+.2f}%")
+            
+            with col2:
+                st.metric("Buy & Hold Value", 
+                         f"${backtest_results['buy_hold_value']:.2f}",
+                         f"{backtest_results['buy_hold_return']:+.2f}%")
+            
+            with col3:
+                outperformance = backtest_results['total_return'] - backtest_results['buy_hold_return']
+                st.metric("Outperformance", 
+                         f"{outperformance:+.2f}%",
+                         "vs Buy & Hold")
+            
+            with col4:
+                st.metric("Number of Trades", backtest_results['num_trades'])
+            
+            # Performance comparison
+            st.subheader("📈 Strategy Performance vs Buy & Hold")
+            
+            fig = go.Figure()
+            
+            # AI Strategy portfolio value
+            fig.add_trace(go.Scatter(
+                x=data.index[sequence_length:-1],
+                y=backtest_results['portfolio_value'],
+                name='AI Trading Strategy',
+                line=dict(color='#ff7f0e', width=3),
+                fill='tozeroy',
+                fillcolor='rgba(255, 127, 14, 0.1)'
+            ))
+            
+            # Buy and hold comparison
+            buy_hold_values = []
+            buy_hold_shares = initial_capital / data['Close'].iloc[sequence_length]
+            for i in range(sequence_length, len(data) - 1):
+                buy_hold_values.append(buy_hold_shares * data['Close'].iloc[i])
+            
+            fig.add_trace(go.Scatter(
+                x=data.index[sequence_length:-1],
+                y=buy_hold_values,
+                name='Buy & Hold Strategy',
+                line=dict(color='#1f77b4', width=2, dash='dash')
+            ))
+            
+            fig.update_layout(
+                height=450,
+                xaxis_title="Date",
+                yaxis_title="Portfolio Value ($)",
+                hovermode='x unified',
+                legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
             )
             
-            if new_balance != user.account_size:
-                if st.button("💾 Update Balance", type="primary"):
-                    user.account_size = new_balance
-                    AuthSystem.save_user(user)
-                    st.success("✅ Account balance updated!")
-                    time.sleep(1)
-                    st.rerun()
-        
-        st.markdown("---")
-        
-        st.markdown("### Statistics")
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Watchlist Stocks", len(user.watchlist))
-        col2.metric("Total Trades", len(user.trade_history))
-        col3.metric("Active Days", (datetime.now() - user.created_at).days)
-    
-    with tabs[1]:
-        st.markdown("### Trading Preferences")
-        
-        settings = user.settings
-        
-        st.markdown("#### Risk Management")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            default_stop = st.slider(
-                "Default Stop Loss (%)",
-                5, 25, 
-                int(settings.get('default_stop_loss', 0.15) * 100),
-                help="Default stop loss percentage for all trades"
-            )
-        
-        with col2:
-            risk_per_trade = st.slider(
-                "Risk Per Trade (%)",
-                1, 5,
-                int(settings.get('risk_per_trade', 0.02) * 100),
-                help="Maximum percentage of account to risk per trade"
-            )
-        
-        st.markdown("---")
-        
-        st.markdown("#### Display Preferences")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            show_hints = st.checkbox(
-                "Show helpful hints",
-                value=settings.get('show_hints', True)
-            )
-        
-        with col2:
-            compact_view = st.checkbox(
-                "Compact view mode",
-                value=settings.get('compact_view', False)
-            )
-        
-        st.markdown("---")
-        
-        if st.button("💾 Save Preferences", type="primary", use_container_width=True):
-            user.settings['default_stop_loss'] = default_stop / 100
-            user.settings['risk_per_trade'] = risk_per_trade / 100
-            user.settings['show_hints'] = show_hints
-            user.settings['compact_view'] = compact_view
-            AuthSystem.save_user(user)
-            st.success("✅ Preferences saved!")
-            time.sleep(1)
-            st.rerun()
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Trade history
+            st.subheader("📋 Trade History")
+            
+            if backtest_results['trades']:
+                trades_df = pd.DataFrame(backtest_results['trades'], 
+                                        columns=['Action', 'Index', 'Price', 'Shares'])
+                trades_df['Date'] = [data.index[int(idx)] for idx in trades_df['Index']]
+                trades_df['Value'] = trades_df['Price'] * trades_df['Shares']
+                trades_df = trades_df[['Date', 'Action', 'Price', 'Shares', 'Value']]
+                
+                trades_df['Price'] = trades_df['Price'].apply(lambda x: f"${x:.2f}")
+                trades_df['Shares'] = trades_df['Shares'].apply(lambda x: f"{x:.4f}")
+                trades_df['Value'] = trades_df['Value'].apply(lambda x: f"${x:.2f}")
+                
+                st.dataframe(trades_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No trades were executed during the backtest period.")
+            
+            # Performance summary
+            st.subheader("📊 Performance Summary")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("**AI Trading Strategy:**")
+                profit_loss = backtest_results['final_value'] - initial_capital
+                st.write(f"- Initial Capital: ${initial_capital:,.2f}")
+                st.write(f"- Final Value: ${backtest_results['final_value']:,.2f}")
+                st.write(f"- Profit/Loss: ${profit_loss:+,.2f}")
+                st.write(f"- Return: {backtest_results['total_return']:+.2f}%")
+                st.write(f"- Total Trades: {backtest_results['num_trades']}")
+            
+            with col2:
+                st.markdown("**Buy & Hold Strategy:**")
+                bh_profit = backtest_results['buy_hold_value'] - initial_capital
+                st.write(f"- Initial Capital: ${initial_capital:,.2f}")
+                st.write(f"- Final Value: ${backtest_results['buy_hold_value']:,.2f}")
+                st.write(f"- Profit/Loss: ${bh_profit:+,.2f}")
+                st.write(f"- Return: {backtest_results['buy_hold_return']:+.2f}%")
+                st.write(f"- Total Trades: 2 (Buy at start, Hold)")
+            
+            # Verdict
+            if backtest_results['total_return'] > backtest_results['buy_hold_return']:
+                st.success(f"🎉 **The AI strategy outperformed Buy & Hold by {outperformance:.2f}%!**")
+            elif backtest_results['total_return'] > 0:
+                st.info(f"📊 **The AI strategy was profitable but underperformed Buy & Hold by {abs(outperformance):.2f}%**")
+            else:
+                st.warning(f"⚠️ **The AI strategy resulted in a loss. Buy & Hold performed better by {abs(outperformance):.2f}%**")
+            
+            st.markdown("""
+            ---
+            **⚠️ Disclaimer:** Past performance does not guarantee future results. This backtest does not account for:
+            - Transaction fees and commissions
+            - Slippage (difference between expected and actual trade prices)
+            - Market impact of large orders
+            - Real-world execution delays
+            
+            Always do your own research and consult with financial advisors before making investment decisions.
+            """)
 
-# ============================================================================
-# MAIN APP
-# ============================================================================
+# Footer
+st.sidebar.markdown("---")
+st.sidebar.markdown("""
+### 📚 About This App
+This AI-powered stock predictor uses:
+- **LSTM Neural Networks** for time series prediction
+- **Real market data** from Yahoo Finance
+- **Backtesting** to validate strategies
 
-def main():
-    if not st.session_state.authenticated:
-        render_login()
-        return
-    
-    render_sidebar()
-    
-    page = st.session_state.page
-    
-    if page == 'scanner':
-        render_scanner()
-    elif page == 'analyze':
-        render_analyze()
-    elif page == 'portfolio':
-        render_portfolio()
-    elif page == 'guide':
-        render_guide()
-    elif page == 'settings':
-        render_settings()
-    else:
-        render_scanner()
+**⚠️ Disclaimer:** This is for educational purposes only. 
+Not financial advice!
+""")
 
-if __name__ == "__main__":
-    main()
+st.sidebar.markdown("---")
+st.sidebar.info("💡 **Tip:** Try different sequence lengths and epochs to optimize predictions!")
