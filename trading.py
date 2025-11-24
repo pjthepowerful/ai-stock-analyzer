@@ -769,122 +769,290 @@ def render_scanner():
 # ============================================================================
 
 def render_analyze():
-    st.title("📊 Stock Analysis")
+    st.title("📊 Deep Stock Analysis")
     
-    search = st.text_input("Search stock", 
-                          value=st.session_state.selected_ticker or "",
-                          placeholder="Enter ticker (e.g., AAPL)")
+    col1, col2 = st.columns([4, 1])
+    
+    with col1:
+        search = st.text_input("Search stock", 
+                              value=st.session_state.selected_ticker or "",
+                              placeholder="Enter ticker (e.g., AAPL, MSFT, GOOGL)")
+    
+    with col2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("🔄 Clear", use_container_width=True):
+            st.session_state.selected_ticker = None
+            st.rerun()
     
     ticker = None
     if search:
         results = StockDB.search(search)
         if results:
             options = [f"{t} - {d['name']}" for t, d in results]
-            selected = st.selectbox("Select:", options)
+            selected = st.selectbox("Select stock:", options, label_visibility="collapsed")
             if selected:
                 ticker = selected.split(" - ")[0]
+        else:
+            st.warning(f"⚠️ '{search}' not found in database. Available stocks: {', '.join(list(StockDB.STOCKS.keys())[:10])}...")
     
     if ticker:
         with st.spinner(f"Analyzing {ticker}..."):
-            df = get_stock_data(ticker, '1y')
-            info = get_stock_info(ticker)
-            
-            if df is None or df.empty:
-                st.error("Unable to fetch data")
-                return
-            
-            score_data = ScoringEngine.calculate_score(ticker, df, info)
-            price = df['Close'].iloc[-1]
-            next_date, days = estimate_next_earnings_date(ticker)
-            
-            # Header
-            st.markdown(f"## {info.get('longName', ticker)}")
-            
-            # Earnings banner
-            if days <= 7:
-                st.markdown(f"""
-                <div class='warning-box'>
-                    <h3>🔥 Earnings in {days} days!</h3>
-                    <p>Date: {next_date.strftime('%B %d, %Y')}</p>
-                    <p><strong>URGENT: Perfect entry timing!</strong></p>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.info(f"📅 Next Earnings: ~{days} days away")
-            
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Price", f"${price:.2f}")
-            col2.metric("Market Cap", f"${info.get('marketCap', 0)/1e9:.1f}B")
-            col3.metric("P/E", f"{info.get('trailingPE', 0):.2f}" if info.get('trailingPE') else "N/A")
-            
-            st.markdown("---")
-            
-            # Score display
-            col1, col2 = st.columns([1, 2])
-            
-            with col1:
-                st.markdown(f"""
-                <div class='score-card'>
-                    <h1 style='font-size: 5rem; color: {score_data['color']};'>{score_data['score']}</h1>
-                    <p style='font-size: 2rem; color: {score_data['color']};'>{score_data['rating']}</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col2:
-                st.markdown("### 🎯 Key Signals")
-                for signal, sig_type in score_data['signals']:
-                    if sig_type == "positive":
-                        st.markdown(f"<p style='color: #10b981; font-weight: 600;'>{signal}</p>", unsafe_allow_html=True)
-                    elif sig_type == "negative":
-                        st.markdown(f"<p style='color: #ef4444; font-weight: 600;'>{signal}</p>", unsafe_allow_html=True)
-                    else:
-                        st.markdown(f"<p style='color: #f59e0b; font-weight: 600;'>{signal}</p>", unsafe_allow_html=True)
-            
-            st.markdown("---")
-            
-            # Position sizing
-            st.markdown("### 💰 Position Sizing")
-            
-            user = st.session_state.user
-            calc = RiskCalc.calculate_position(score_data['score'], user.account_size, price)
-            
-            if calc['recommendation'] == 'DO NOT TRADE':
-                st.markdown("""
-                <div class='warning-box'>
-                    <h3>⛔ Do Not Trade</h3>
-                    <p>Score too low - does not meet minimum criteria</p>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown("""
-                <div class='recommendation-box'>
-                    <h3>✅ Recommended Position</h3>
-                </div>
-                """, unsafe_allow_html=True)
+            try:
+                df = get_stock_data(ticker, '1y')
+                info = get_stock_info(ticker)
                 
-                col1, col2, col3, col4 = st.columns(4)
-                col1.metric("Shares", f"{calc['shares']:,}")
-                col2.metric("Position", f"${calc['position_value']:,.0f}")
-                col3.metric("% of Account", f"{calc['position_pct']:.1f}%")
-                col4.metric("Max Loss", f"${calc['max_loss']:,.0f}")
+                if df is None or df.empty:
+                    st.error("❌ Unable to fetch data for this stock. Please try another ticker or check your internet connection.")
+                    return
+                
+                score_data = ScoringEngine.calculate_score(ticker, df, info)
+                price = df['Close'].iloc[-1]
+                next_date, days = estimate_next_earnings_date(ticker)
+                stock_info = StockDB.STOCKS.get(ticker, {})
+                
+                # Header with company info
+                col1, col2 = st.columns([3, 1])
+                
+                with col1:
+                    st.markdown(f"## {info.get('longName', stock_info.get('name', ticker))}")
+                    st.markdown(f"**{ticker}** • {stock_info.get('sector', 'N/A')} Sector • {stock_info.get('cap', 'N/A')} Cap")
+                
+                with col2:
+                    # Add to watchlist
+                    user = st.session_state.user
+                    if ticker in user.watchlist:
+                        if st.button("⭐ In Watchlist", use_container_width=True):
+                            user.watchlist.remove(ticker)
+                            AuthSystem.save_user(user)
+                            st.success("Removed from watchlist")
+                            time.sleep(0.5)
+                            st.rerun()
+                    else:
+                        if st.button("➕ Add to Watchlist", use_container_width=True, type="primary"):
+                            user.watchlist.append(ticker)
+                            AuthSystem.save_user(user)
+                            st.success("Added to watchlist!")
+                            time.sleep(0.5)
+                            st.rerun()
+                
+                # Earnings banner
+                if days <= 7:
+                    st.markdown(f"""
+                    <div class='warning-box'>
+                        <h3>🔥 URGENT: Earnings in {days} days!</h3>
+                        <p style='font-size: 1.1rem;'><strong>Date:</strong> {next_date.strftime('%A, %B %d, %Y')}</p>
+                        <p style='margin-top: 1rem;'><strong>Action:</strong> Perfect entry timing! Consider entering position NOW if score is strong.</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                elif days <= 14:
+                    st.markdown(f"""
+                    <div class='info-box'>
+                        <h3>⚡ Earnings in {days} days</h3>
+                        <p><strong>Date:</strong> {next_date.strftime('%A, %B %d, %Y')}</p>
+                        <p>Good timing window. Optimal entry: 2-5 days before earnings.</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.info(f"📅 Next Earnings: ~{days} days away ({next_date.strftime('%B %d, %Y')})")
+                
+                # Key metrics
+                col1, col2, col3, col4, col5 = st.columns(5)
+                col1.metric("Price", f"${price:.2f}")
+                
+                market_cap = info.get('marketCap', 0)
+                if market_cap > 0:
+                    col2.metric("Market Cap", f"${market_cap/1e9:.1f}B")
+                else:
+                    col2.metric("Market Cap", "N/A")
+                
+                pe = info.get('trailingPE')
+                col3.metric("P/E Ratio", f"{pe:.2f}" if pe else "N/A")
+                
+                high_52 = info.get('fiftyTwoWeekHigh', 0)
+                col4.metric("52W High", f"${high_52:.2f}" if high_52 else "N/A")
+                
+                low_52 = info.get('fiftyTwoWeekLow', 0)
+                col5.metric("52W Low", f"${low_52:.2f}" if low_52 else "N/A")
                 
                 st.markdown("---")
                 
-                col1, col2, col3, col4 = st.columns(4)
-                col1.metric("Entry", f"${calc['entry']:.2f}")
-                col2.metric("Stop Loss", f"${calc['stop_loss']:.2f}")
-                col3.metric("Target 1", f"${calc['target_1']:.2f}")
-                col4.metric("Target 2", f"${calc['target_2']:.2f}")
+                # Score display
+                col1, col2 = st.columns([1, 2])
                 
-                # Add to watchlist
+                with col1:
+                    st.markdown(f"""
+                    <div class='score-card'>
+                        <h1 style='font-size: 5rem; color: {score_data['color']}; margin: 0;'>{score_data['score']}</h1>
+                        <p style='font-size: 2rem; color: {score_data['color']}; margin: 0.5rem 0; font-weight: 800;'>{score_data['rating']}</p>
+                        <p style='font-size: 0.9rem; color: #94a3b8;'>out of 100</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                with col2:
+                    st.markdown("### 🎯 Key Signals")
+                    
+                    # Categorize signals
+                    positive_signals = [s for s in score_data['signals'] if s[1] == "positive"]
+                    neutral_signals = [s for s in score_data['signals'] if s[1] == "neutral"]
+                    negative_signals = [s for s in score_data['signals'] if s[1] == "negative"]
+                    
+                    if positive_signals:
+                        st.markdown("**✅ Bullish Signals:**")
+                        for signal, _ in positive_signals[:5]:  # Limit to 5
+                            st.markdown(f"<p style='color: #10b981; font-weight: 600; margin: 0.3rem 0;'>{signal}</p>", unsafe_allow_html=True)
+                    
+                    if negative_signals:
+                        st.markdown("**❌ Bearish Signals:**")
+                        for signal, _ in negative_signals[:3]:  # Limit to 3
+                            st.markdown(f"<p style='color: #ef4444; font-weight: 600; margin: 0.3rem 0;'>{signal}</p>", unsafe_allow_html=True)
+                    
+                    if neutral_signals:
+                        with st.expander("⚠️ View Neutral Signals"):
+                            for signal, _ in neutral_signals:
+                                st.markdown(f"<p style='color: #f59e0b; margin: 0.3rem 0;'>{signal}</p>", unsafe_allow_html=True)
+                
                 st.markdown("---")
-                if st.button("⭐ Add to Watchlist", use_container_width=True, type="primary"):
-                    if ticker not in user.watchlist:
-                        user.watchlist.append(ticker)
-                        AuthSystem.save_user(user)
-                        st.success(f"Added {ticker} to watchlist!")
+                
+                # Score breakdown
+                st.markdown("### 📊 Score Breakdown")
+                
+                categories = list(score_data['breakdown'].keys())
+                values = list(score_data['breakdown'].values())
+                
+                # Create color scale
+                colors = []
+                for v in values:
+                    if v >= 20:
+                        colors.append('#10b981')
+                    elif v >= 15:
+                        colors.append('#3b82f6')
+                    elif v >= 10:
+                        colors.append('#f59e0b')
                     else:
-                        st.info("Already in watchlist")
+                        colors.append('#ef4444')
+                
+                fig = go.Figure(data=[
+                    go.Bar(
+                        y=categories,
+                        x=values,
+                        orientation='h',
+                        marker=dict(color=colors),
+                        text=values,
+                        textposition='auto',
+                    )
+                ])
+                
+                fig.update_layout(
+                    height=300,
+                    template="plotly_dark",
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    margin=dict(l=20, r=20, t=20, b=20),
+                    xaxis_title="Points",
+                    showlegend=False
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                st.markdown("---")
+                
+                # Position sizing
+                st.markdown("### 💰 Position Sizing & Risk Management")
+                
+                user = st.session_state.user
+                calc = RiskCalc.calculate_position(score_data['score'], user.account_size, price)
+                
+                if calc['recommendation'] == 'DO NOT TRADE':
+                    st.markdown("""
+                    <div class='warning-box'>
+                        <h3>⛔ Do Not Trade</h3>
+                        <p><strong>Reason:</strong> Score too low - does not meet minimum criteria (55+)</p>
+                        <p>This stock needs a higher score to justify taking a position. Look for stocks scoring 65+ for better odds.</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+                    <div class='recommendation-box'>
+                        <h3>✅ Trade Approved</h3>
+                        <p>Score of {score_data['score']} meets minimum criteria. Position sizing calculated based on your account size of ${user.account_size:,.0f}.</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    col1.metric("Shares to Buy", f"{calc['shares']:,}", help="Number of shares based on risk management")
+                    col2.metric("Position Value", f"${calc['position_value']:,.0f}", help="Total cost of position")
+                    col3.metric("% of Account", f"{calc['position_pct']:.1f}%", help="Position size as percentage of account")
+                    col4.metric("Max Loss", f"${calc['max_loss']:,.0f}", help="Maximum loss if stop is hit")
+                    
+                    st.markdown("---")
+                    
+                    st.markdown("#### 🎯 Entry & Exit Levels")
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    col1.metric("Entry Price", f"${calc['entry']:.2f}", help="Current price - use limit order")
+                    col2.metric("Stop Loss", f"${calc['stop_loss']:.2f}", 
+                               delta=f"-15%", delta_color="inverse", help="Exit if price drops to this level")
+                    col3.metric("Target 1 (50%)", f"${calc['target_1']:.2f}", 
+                               delta=f"+{((calc['target_1']/calc['entry']-1)*100):.1f}%", help="First profit target")
+                    col4.metric("Target 2 (30%)", f"${calc['target_2']:.2f}", 
+                               delta=f"+{((calc['target_2']/calc['entry']-1)*100):.1f}%", help="Second profit target")
+                    
+                    st.markdown("---")
+                    
+                    # Trading plan
+                    st.markdown("### 📋 Trading Plan")
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown("""
+                        <div class='info-box'>
+                            <h4>📥 Entry Plan</h4>
+                            <p><strong>Timing:</strong> 2-5 days before earnings</p>
+                            <p><strong>Order Type:</strong> Limit order at ${:.2f}</p>
+                            <p><strong>Shares:</strong> {} shares</p>
+                            <p><strong>Stop Loss:</strong> Set at ${:.2f} immediately</p>
+                        </div>
+                        """.format(calc['entry'], calc['shares'], calc['stop_loss']), unsafe_allow_html=True)
+                    
+                    with col2:
+                        st.markdown("""
+                        <div class='info-box'>
+                            <h4>📤 Exit Plan</h4>
+                            <p><strong>Target 1:</strong> ${:.2f} - Sell 50%</p>
+                            <p><strong>Target 2:</strong> ${:.2f} - Sell 30%</p>
+                            <p><strong>Target 3:</strong> ${:.2f} - Trail 20%</p>
+                            <p><strong>Stop:</strong> Exit ALL at ${:.2f}</p>
+                        </div>
+                        """.format(calc['target_1'], calc['target_2'], calc['target_3'], calc['stop_loss']), unsafe_allow_html=True)
+                    
+                    # Risk/Reward
+                    rr_ratio = calc['potential_gain'] / calc['max_loss'] if calc['max_loss'] > 0 else 0
+                    
+                    st.info(f"**Risk/Reward Ratio:** 1:{rr_ratio:.1f} - For every $1 you risk, potential to gain ${rr_ratio:.1f}")
+            
+            except Exception as e:
+                st.error(f"❌ Error analyzing {ticker}: {str(e)}")
+                st.info("Please try another stock or refresh the page.")
+    else:
+        st.markdown("""
+        <div class='info-box'>
+            <h3>👋 Welcome to Stock Analysis</h3>
+            <p>Search for any stock above to get a comprehensive analysis including:</p>
+            <ul>
+                <li>🎯 AI-powered scoring (0-100 points)</li>
+                <li>📊 Technical and fundamental analysis</li>
+                <li>💰 Automatic position sizing</li>
+                <li>📅 Earnings countdown</li>
+                <li>🎯 Entry and exit recommendations</li>
+            </ul>
+            <p><strong>Popular stocks:</strong> AAPL, MSFT, GOOGL, AMZN, NVDA, TSLA, META</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("🔍 Go to Scanner", type="primary", use_container_width=True):
+            st.session_state.page = 'scanner'
+            st.rerun()
 
 # ============================================================================
 # PORTFOLIO PAGE
