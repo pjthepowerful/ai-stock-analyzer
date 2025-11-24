@@ -5,34 +5,35 @@ import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import warnings
+import random
+import time
+import json
+import os
 warnings.filterwarnings('ignore')
 
-# Import TensorFlow/Keras for REAL AI (Neural Networks)
+# Import TensorFlow/Keras
 try:
     import tensorflow as tf
     from tensorflow import keras
     from tensorflow.keras import layers
-    from tensorflow.keras.models import Sequential
-    from tensorflow.keras.layers import LSTM, Dense, Dropout
     from sklearn.preprocessing import MinMaxScaler
     NEURAL_NETWORK_AVAILABLE = True
 except ImportError:
     NEURAL_NETWORK_AVAILABLE = False
-    st.error("⚠️ TensorFlow not available. Install with: pip install tensorflow")
 
-st.set_page_config(page_title="LSTM AI Stock Predictor", page_icon="🧠", layout="wide")
+st.set_page_config(page_title="AI Stock Predictor", page_icon="🧠", layout="wide")
 
-# Header
+# Custom CSS
 st.markdown("""
     <style>
     .main-header {
         font-size: 3.5rem;
         font-weight: bold;
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         text-align: center;
-        margin-bottom: 1rem;
+        margin-bottom: 0.5rem;
     }
     .sub-header {
         text-align: center;
@@ -43,24 +44,99 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<p class="main-header">🧠 LSTM Neural Network Stock Predictor</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-header">Deep Learning AI • Real Neural Networks • Like ChatGPT for Stocks</p>', unsafe_allow_html=True)
+# ==========================================
+# GLOBAL STATE - AUTO-TRAINS ON EACH RUN
+# ==========================================
 
-# Info banner
-st.info("🔥 **This uses REAL AI**: LSTM Neural Networks - the same technology behind ChatGPT and advanced sequence prediction!")
+# ==========================================
+# PERSISTENT STORAGE (CLOUD)
+# ==========================================
 
-# Sidebar
-st.sidebar.header("⚙️ Neural Network Settings")
+STATE_FILE = '/tmp/evolution_state.json'
 
-mode = st.sidebar.radio("Select Mode:", 
-    ["🧠 Single Stock (LSTM)", 
-     "⚔️ Compare Stocks (LSTM)", 
-     "🔙 Backtest Strategy (LSTM)"])
+def save_evolution_state():
+    """Save evolution progress to cloud storage"""
+    state = {
+        'evolved_config': st.session_state.evolved_config,
+        'evolution_stats': st.session_state.evolution_stats,
+        'saved_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    try:
+        with open(STATE_FILE, 'w') as f:
+            json.dump(state, f, indent=2)
+        return True
+    except Exception as e:
+        print(f"Error saving state: {e}")
+        return False
 
-# Helper Functions
+def load_evolution_state():
+    """Load evolution progress from cloud storage"""
+    try:
+        if os.path.exists(STATE_FILE):
+            with open(STATE_FILE, 'r') as f:
+                state = json.load(f)
+            return state
+        return None
+    except Exception as e:
+        print(f"Error loading state: {e}")
+        return None
+
+# ==========================================
+# GLOBAL STATE - AUTO-TRAINS ON EACH RUN
+# ==========================================
+
+# Try to load saved state first
+if 'state_loaded' not in st.session_state:
+    saved_state = load_evolution_state()
+    if saved_state:
+        st.session_state.evolved_config = saved_state.get('evolved_config', {
+            'neurons_layer1': 50,
+            'neurons_layer2': 50,
+            'dropout': 0.2,
+            'lookback': 50,
+            'generation': 0,
+            'fitness': 0,
+            'training_stocks': 'Initializing...',
+            'last_updated': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+        st.session_state.evolution_stats = saved_state.get('evolution_stats', {
+            'total_tested': 0,
+            'best_fitness_history': [],
+            'current_generation': 0,
+            'last_train_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+        st.session_state.state_loaded = True
+        st.session_state.auto_train_done = True  # Don't auto-train if we loaded state
+    else:
+        # Initialize fresh
+        st.session_state.evolved_config = {
+            'neurons_layer1': 50,
+            'neurons_layer2': 50,
+            'dropout': 0.2,
+            'lookback': 50,
+            'generation': 0,
+            'fitness': 0,
+            'training_stocks': 'Initializing...',
+            'last_updated': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        st.session_state.evolution_stats = {
+            'total_tested': 0,
+            'best_fitness_history': [],
+            'current_generation': 0,
+            'last_train_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        st.session_state.state_loaded = True
+        st.session_state.auto_train_done = False
+
+if 'auto_train_done' not in st.session_state:
+    st.session_state.auto_train_done = False
+
+# ==========================================
+# HELPER FUNCTIONS
+# ==========================================
+
 @st.cache_data(ttl=3600)
 def download_stock_data(ticker, period="3mo", interval="1d"):
-    """Download stock data"""
     try:
         stock = yf.Ticker(ticker)
         data = stock.history(period=period, interval=interval)
@@ -71,580 +147,547 @@ def download_stock_data(ticker, period="3mo", interval="1d"):
     except Exception as e:
         return None, None, str(e)
 
-def create_lstm_sequences(data, sequence_length=60):
-    """Create sequences for LSTM neural network"""
+def create_sequences(data, lookback=50):
     prices = data['Close'].values.reshape(-1, 1)
-    
-    # Normalize data (neural networks need this)
     scaler = MinMaxScaler(feature_range=(0, 1))
     scaled_data = scaler.fit_transform(prices)
     
     X, y = [], []
-    for i in range(sequence_length, len(scaled_data)):
-        X.append(scaled_data[i-sequence_length:i, 0])
+    for i in range(lookback, len(scaled_data)):
+        X.append(scaled_data[i-lookback:i, 0])
         y.append(scaled_data[i, 0])
     
     X = np.array(X)
     y = np.array(y)
-    
-    # Reshape for LSTM [samples, time steps, features]
     X = X.reshape(X.shape[0], X.shape[1], 1)
     
     return X, y, scaler
 
-def build_lstm_model(sequence_length, neurons=50):
-    """
-    Build LSTM Neural Network
-    
-    LSTM = Long Short-Term Memory
-    - Type of Recurrent Neural Network (RNN)
-    - Designed for sequence data (like stock prices over time)
-    - Has "memory" of past patterns
-    - Same tech used in ChatGPT for language
-    """
-    model = Sequential([
-        # First LSTM layer - learns patterns in sequences
-        LSTM(neurons, return_sequences=True, input_shape=(sequence_length, 1)),
-        Dropout(0.2),  # Prevents overfitting
-        
-        # Second LSTM layer - learns deeper patterns
-        LSTM(neurons, return_sequences=False),
-        Dropout(0.2),
-        
-        # Dense layers - combines learned patterns
-        Dense(25, activation='relu'),
-        
-        # Output layer - predicts next price
-        Dense(1)
+def build_lstm_model(lookback, config):
+    model = keras.Sequential([
+        layers.LSTM(config['neurons_layer1'], return_sequences=True, input_shape=(lookback, 1)),
+        layers.Dropout(config['dropout']),
+        layers.LSTM(config['neurons_layer2'], return_sequences=False),
+        layers.Dropout(config['dropout']),
+        layers.Dense(25, activation='relu'),
+        layers.Dense(1)
     ])
     
-    # Adam optimizer - smart learning algorithm
-    model.compile(optimizer='adam', loss='mean_squared_error', metrics=['mae'])
-    
+    model.compile(optimizer='adam', loss='mse', metrics=['mae'])
     return model
 
-def predict_future_lstm(model, last_sequence, scaler, steps=10):
-    """Predict future using LSTM"""
+def predict_future(model, last_sequence, scaler, steps=10):
     predictions = []
     current_seq = last_sequence.copy()
     
     for _ in range(steps):
-        # Predict next value
         pred = model.predict(current_seq.reshape(1, -1, 1), verbose=0)
         predictions.append(pred[0, 0])
-        
-        # Update sequence (slide window forward)
         current_seq = np.append(current_seq[1:], pred[0, 0])
     
-    # Inverse transform to get actual prices
     predictions = scaler.inverse_transform(np.array(predictions).reshape(-1, 1))
     return predictions.flatten()
 
-def calculate_metrics(y_true, y_pred):
-    """Calculate prediction metrics"""
-    mae = np.mean(np.abs(y_true - y_pred))
-    mse = np.mean((y_true - y_pred) ** 2)
-    rmse = np.sqrt(mse)
-    mape = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
+# ==========================================
+# EVOLUTIONARY TRAINING
+# ==========================================
+
+class LSTMTrader:
+    def __init__(self, config=None):
+        if config is None:
+            self.config = {
+                'neurons_layer1': random.randint(30, 100),
+                'neurons_layer2': random.randint(30, 100),
+                'dropout': round(random.uniform(0.1, 0.4), 2),
+                'lookback': random.randint(40, 80),
+            }
+        else:
+            self.config = config
+        
+        self.model = None
+        self.scaler = MinMaxScaler()
+        self.fitness = 0
+        
+    def build_and_train(self, data, epochs=8):
+        try:
+            lookback = self.config['lookback']
+            
+            prices = data['Close'].values.reshape(-1, 1)
+            scaled = self.scaler.fit_transform(prices)
+            
+            X, y = [], []
+            for i in range(lookback, len(scaled)):
+                X.append(scaled[i-lookback:i, 0])
+                y.append(scaled[i, 0])
+            
+            X = np.array(X).reshape(-1, lookback, 1)
+            y = np.array(y)
+            
+            split = int(0.8 * len(X))
+            X_train, X_test = X[:split], X[split:]
+            y_train, y_test = y[:split], y[split:]
+            
+            self.model = build_lstm_model(lookback, self.config)
+            self.model.fit(X_train, y_train, batch_size=32, epochs=epochs, verbose=0, validation_split=0.1)
+            
+            test_pred = self.model.predict(X_test, verbose=0)
+            mae = np.mean(np.abs(y_test - test_pred.flatten()))
+            
+            self.fitness = 1 / (mae + 0.0001)
+            return self.fitness
+        except:
+            self.fitness = 0
+            return 0
+
+def crossover(parent1, parent2):
+    child_config = {}
+    for key in parent1.config.keys():
+        child_config[key] = parent1.config[key] if random.random() < 0.5 else parent2.config[key]
+    return LSTMTrader(child_config)
+
+def mutate(trader, rate=0.25):
+    config = trader.config.copy()
+    if random.random() < rate:
+        key = random.choice(list(config.keys()))
+        if key == 'neurons_layer1':
+            config['neurons_layer1'] = random.randint(30, 100)
+        elif key == 'neurons_layer2':
+            config['neurons_layer2'] = random.randint(30, 100)
+        elif key == 'dropout':
+            config['dropout'] = round(random.uniform(0.1, 0.4), 2)
+        elif key == 'lookback':
+            config['lookback'] = random.randint(40, 80)
+    return LSTMTrader(config)
+
+def run_single_generation(population_size=20):
+    """Run one generation of evolution - called automatically"""
     
-    # Direction accuracy
-    if len(y_true) > 1:
-        true_direction = np.diff(y_true.flatten()) > 0
-        pred_direction = np.diff(y_pred.flatten()) > 0
-        direction_accuracy = np.mean(true_direction == pred_direction) * 100
+    # Stock pool
+    STOCK_POOL = ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'TSLA', 'AMD', 'META', 'AMZN', 'JPM', 'V']
+    
+    # Pick 3 random stocks
+    training_stocks = random.sample(STOCK_POOL, 3)
+    
+    # Download data
+    stock_data = []
+    for ticker in training_stocks:
+        data, _, error = download_stock_data(ticker, "6mo", "1d")
+        if not error and len(data) >= 100:
+            stock_data.append(data)
+    
+    if len(stock_data) == 0:
+        return None
+    
+    # Create or evolve population
+    if st.session_state.evolution_stats['current_generation'] == 0:
+        # First generation - random population
+        population = [LSTMTrader() for _ in range(population_size)]
     else:
-        direction_accuracy = 0
+        # Load previous best and evolve
+        best_config = {
+            'neurons_layer1': st.session_state.evolved_config['neurons_layer1'],
+            'neurons_layer2': st.session_state.evolved_config['neurons_layer2'],
+            'dropout': st.session_state.evolved_config['dropout'],
+            'lookback': st.session_state.evolved_config['lookback']
+        }
+        
+        # Create population from best config with mutations
+        population = []
+        population.append(LSTMTrader(best_config))  # Keep best
+        
+        for _ in range(population_size - 1):
+            if random.random() < 0.7:
+                trader = mutate(LSTMTrader(best_config), rate=0.3)
+            else:
+                trader = LSTMTrader()  # Some random
+            population.append(trader)
     
-    return mae, rmse, mape, direction_accuracy
+    # Evaluate on all stocks
+    for trader in population:
+        total_fitness = 0
+        for data in stock_data:
+            fitness = trader.build_and_train(data, epochs=6)
+            total_fitness += fitness
+        trader.fitness = total_fitness / len(stock_data)
+        st.session_state.evolution_stats['total_tested'] += 1
+    
+    # Sort by fitness
+    population.sort(key=lambda x: x.fitness, reverse=True)
+    
+    # Update if better
+    if population[0].fitness > st.session_state.evolved_config['fitness']:
+        st.session_state.evolved_config = {
+            'neurons_layer1': population[0].config['neurons_layer1'],
+            'neurons_layer2': population[0].config['neurons_layer2'],
+            'dropout': population[0].config['dropout'],
+            'lookback': population[0].config['lookback'],
+            'generation': st.session_state.evolution_stats['current_generation'] + 1,
+            'fitness': population[0].fitness,
+            'training_stocks': ', '.join(training_stocks),
+            'last_updated': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        st.session_state.evolution_stats['best_fitness_history'].append(population[0].fitness)
+    
+    st.session_state.evolution_stats['current_generation'] += 1
+    st.session_state.evolution_stats['last_train_time'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # SAVE TO CLOUD after each generation
+    save_evolution_state()
+    
+    return training_stocks
 
 # ==========================================
-# MODE 1: SINGLE STOCK LSTM ANALYSIS
+# AUTO-TRAIN ON LOAD
 # ==========================================
 
-if mode == "🧠 Single Stock (LSTM)":
+if not st.session_state.auto_train_done and NEURAL_NETWORK_AVAILABLE:
+    with st.spinner("🧬 AI Evolution in progress... Training on random stocks..."):
+        training_stocks = run_single_generation(population_size=15)
+        if training_stocks:
+            st.session_state.auto_train_done = True
+            st.success(f"✅ Generation {st.session_state.evolution_stats['current_generation']} complete! Trained on: {', '.join(training_stocks)}")
+            time.sleep(1)
+            st.rerun()
+
+# ==========================================
+# MAIN APP
+# ==========================================
+
+# Header
+st.markdown('<p class="main-header">🧠 AI Stock Predictor Pro</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-header">Continuously Evolving Neural Networks • Multi-Stock Training</p>', unsafe_allow_html=True)
+
+# Sidebar
+with st.sidebar:
+    st.header("⚙️ Mode")
+    
+    mode = st.radio("", 
+        ["📈 Predict Stock", 
+         "🔬 Admin Dashboard"],
+        label_visibility="collapsed")
+    
+    st.markdown("---")
+    
+    # Evolution status (always visible)
+    st.subheader("🧬 AI Status")
+    
+    # Show if loaded from saved state
+    if st.session_state.evolved_config['generation'] > 0:
+        st.success(f"🟢 Active (Loaded Gen {st.session_state.evolved_config['generation']})")
+    else:
+        st.success("🟢 Active & Learning")
+    
+    st.markdown(f"""
+    **Current Best:**
+    - Generation: **{st.session_state.evolved_config['generation']}**
+    - Fitness: **{st.session_state.evolved_config['fitness']:.4f}**
+    - Trained on: {st.session_state.evolved_config.get('training_stocks', 'N/A')}
+    - Models tested: **{st.session_state.evolution_stats['total_tested']}**
+    - Last updated: {st.session_state.evolved_config['last_updated']}
+    """)
+    
+    # Train more button
+    if st.button("🚀 Train Next Generation"):
+        with st.spinner("Training..."):
+            stocks = run_single_generation(population_size=15)
+            if stocks:
+                st.success(f"✅ Gen {st.session_state.evolution_stats['current_generation']} done!")
+                st.rerun()
+
+# ==========================================
+# MODE 1: USER PREDICTION
+# ==========================================
+
+if mode == "📈 Predict Stock":
     
     if not NEURAL_NETWORK_AVAILABLE:
-        st.error("❌ TensorFlow not installed. Cannot use LSTM neural networks.")
+        st.error("❌ AI engine unavailable")
         st.stop()
     
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Stock Settings")
-    ticker = st.sidebar.text_input("Stock Ticker:", value="AAPL").upper()
-    period = st.sidebar.selectbox("Data Period:", ["1mo", "3mo", "6mo", "1y"], index=2)
+    st.markdown("### 🎯 Get AI Price Forecast")
     
-    st.sidebar.subheader("LSTM Neural Network")
-    sequence_length = st.sidebar.slider("Sequence Length (lookback):", 30, 100, 60)
-    neurons = st.sidebar.slider("LSTM Neurons:", 25, 100, 50)
-    epochs = st.sidebar.slider("Training Epochs:", 10, 50, 20)
-    prediction_steps = st.sidebar.slider("Predict Steps:", 5, 30, 10)
+    col1, col2, col3 = st.columns([2, 1, 1])
     
-    # Info about neural network
-    with st.sidebar.expander("ℹ️ What is LSTM?"):
-        st.markdown("""
-        **LSTM = Long Short-Term Memory**
-        
-        - Type of Neural Network
-        - Has "memory" of past patterns
-        - Used in ChatGPT, translation, etc.
-        - Perfect for time series like stocks
-        
-        **Your Network:**
-        - 2 LSTM layers with {0} neurons each
-        - Dropout layers (prevent overfitting)
-        - Dense layers (combine patterns)
-        - Total: ~{1} parameters to learn
-        """.format(neurons, neurons * neurons * 4))
+    with col1:
+        ticker = st.text_input("Stock Symbol", value="AAPL", placeholder="e.g., AAPL, TSLA, NVDA")
     
-    if st.sidebar.button("🧠 Train Neural Network", type="primary"):
+    with col2:
+        period = st.selectbox("Period", ["1mo", "3mo", "6mo", "1y"], index=1)
+    
+    with col3:
+        predict_days = st.slider("Forecast Days", 5, 30, 10)
+    
+    st.markdown("")
+    
+    if st.button("🚀 Generate Forecast", type="primary", use_container_width=True):
         
-        # Download data
-        with st.spinner(f"📥 Downloading {ticker} data..."):
+        # Download
+        with st.spinner(f"📥 Loading {ticker} data..."):
             data, info, error = download_stock_data(ticker, period, "1d")
         
         if error:
             st.error(f"❌ {error}")
-        elif len(data) < sequence_length + 20:
-            st.error(f"❌ Need at least {sequence_length + 20} data points. Got {len(data)}.")
-        else:
-            st.success(f"✅ Downloaded {len(data)} days of data")
-            
-            # Display stock info
-            current_price = data['Close'].iloc[-1]
-            price_change = data['Close'].iloc[-1] - data['Close'].iloc[-2]
-            price_change_pct = (price_change / data['Close'].iloc[-2]) * 100
-            
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Current Price", f"${current_price:.2f}", 
-                         f"{price_change:+.2f} ({price_change_pct:+.2f}%)")
-            with col2:
-                st.metric("Period High", f"${data['High'].max():.2f}")
-            with col3:
-                st.metric("Period Low", f"${data['Low'].min():.2f}")
-            with col4:
-                st.metric("Data Points", len(data))
-            
-            # Prepare sequences
-            with st.spinner("🔧 Creating training sequences for neural network..."):
-                X, y, scaler = create_lstm_sequences(data, sequence_length)
-                
-                # Split
-                split = int(0.8 * len(X))
-                X_train, X_test = X[:split], X[split:]
-                y_train, y_test = y[:split], y[split:]
-            
-            st.info(f"📊 Training: {len(X_train)} sequences | Testing: {len(X_test)} sequences")
-            
-            # Build model
-            st.success("🏗️ Building LSTM neural network architecture...")
-            model = build_lstm_model(sequence_length, neurons)
-            
-            # Show architecture
-            with st.expander("🔍 View Neural Network Architecture"):
-                # Create architecture visualization
-                st.text(f"""
-Neural Network Architecture:
-════════════════════════════════════════════════════
-
-Input Layer: [{sequence_length} time steps]
-    ↓
-LSTM Layer 1: {neurons} neurons (with memory cells)
-    ↓
-Dropout: 20% (prevents overfitting)
-    ↓
-LSTM Layer 2: {neurons} neurons (deeper patterns)
-    ↓
-Dropout: 20%
-    ↓
-Dense Layer: 25 neurons (combination)
-    ↓
-Output: 1 value (predicted price)
-
-════════════════════════════════════════════════════
-Total Parameters: ~{neurons * neurons * 4 + 25 + 1:,}
-Trainable: Yes
-Optimizer: Adam (adaptive learning rate)
-Loss Function: Mean Squared Error
-════════════════════════════════════════════════════
-                """)
-            
-            # Train neural network
-            st.markdown("### 🧠 Training Neural Network...")
-            st.write("This is where the AI learns patterns from historical data!")
-            
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            loss_chart_placeholder = st.empty()
-            
-            # Training history
-            history_loss = []
-            history_mae = []
-            
-            # Train epoch by epoch to show progress
-            for epoch in range(epochs):
-                # Train for 1 epoch
-                h = model.fit(
-                    X_train, y_train,
-                    batch_size=32,
-                    epochs=1,
-                    verbose=0,
-                    validation_split=0.1
-                )
-                
-                # Track metrics
-                history_loss.append(h.history['loss'][0])
-                history_mae.append(h.history['mae'][0])
-                
-                # Update progress
-                progress = (epoch + 1) / epochs
-                progress_bar.progress(progress)
-                status_text.text(
-                    f"Epoch {epoch+1}/{epochs} | "
-                    f"Loss: {h.history['loss'][0]:.6f} | "
-                    f"MAE: {h.history['mae'][0]:.6f}"
-                )
-                
-                # Update loss chart every 5 epochs
-                if (epoch + 1) % 5 == 0 or epoch == epochs - 1:
-                    fig_loss = go.Figure()
-                    fig_loss.add_trace(go.Scatter(
-                        y=history_loss,
-                        name="Training Loss",
-                        line=dict(color='#667eea', width=2)
-                    ))
-                    fig_loss.update_layout(
-                        title="Neural Network Learning Progress",
-                        xaxis_title="Epoch",
-                        yaxis_title="Loss (Lower = Better)",
-                        height=300
-                    )
-                    loss_chart_placeholder.plotly_chart(fig_loss, use_container_width=True)
-            
-            progress_bar.empty()
-            status_text.empty()
-            st.success("✅ Neural network training complete!")
-            
-            # Make predictions on test data
-            st.markdown("### 📊 Testing Neural Network on Unseen Data")
-            
-            with st.spinner("🔮 Making predictions..."):
-                test_predictions_scaled = model.predict(X_test, verbose=0)
-                test_predictions = scaler.inverse_transform(test_predictions_scaled)
-                y_test_actual = scaler.inverse_transform(y_test.reshape(-1, 1))
-            
-            # Calculate metrics
-            mae, rmse, mape, direction_acc = calculate_metrics(y_test_actual, test_predictions)
-            
-            # Display metrics
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Mean Absolute Error", f"${mae:.2f}")
-            with col2:
-                st.metric("RMSE", f"${rmse:.2f}")
-            with col3:
-                accuracy = 100 - mape
-                st.metric("Price Accuracy", f"{accuracy:.1f}%", 
-                         "🔥 Excellent" if accuracy > 90 else "✅ Good" if accuracy > 85 else "⚠️ Okay")
-            with col4:
-                st.metric("Direction Accuracy", f"{direction_acc:.1f}%",
-                         "🔥 Excellent" if direction_acc > 70 else "✅ Good" if direction_acc > 60 else "⚠️ Okay")
-            
-            # Plot predictions vs actual
-            st.markdown("### 📈 Neural Network Predictions vs Reality")
-            fig = go.Figure()
-            
-            fig.add_trace(go.Scatter(
-                y=y_test_actual.flatten(),
-                name="Actual Prices",
-                line=dict(color='#2ecc71', width=3),
-                mode='lines'
-            ))
-            
-            fig.add_trace(go.Scatter(
-                y=test_predictions.flatten(),
-                name="LSTM Predictions",
-                line=dict(color='#e74c3c', width=2, dash='dash'),
-                mode='lines'
-            ))
-            
-            fig.update_layout(
-                height=450,
-                xaxis_title="Time Steps (Test Period)",
-                yaxis_title="Price ($)",
-                hovermode='x unified',
-                legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Future predictions
-            st.markdown("### 🔮 Future Price Predictions (LSTM Neural Network)")
-            
-            with st.spinner("Predicting future prices..."):
-                # Get last sequence
-                last_sequence_scaled = scaler.transform(
-                    data['Close'].values[-sequence_length:].reshape(-1, 1)
-                ).flatten()
-                
-                future_predictions = predict_future_lstm(
-                    model, last_sequence_scaled, scaler, prediction_steps
-                )
-            
-            col1, col2 = st.columns([2, 1])
-            
-            with col1:
-                # Forecast chart
-                fig_future = go.Figure()
-                
-                # Historical
-                fig_future.add_trace(go.Scatter(
-                    x=data.index[-60:],
-                    y=data['Close'].iloc[-60:],
-                    name="Historical Prices",
-                    line=dict(color='#3498db', width=2)
-                ))
-                
-                # Future
-                future_dates = pd.date_range(
-                    start=data.index[-1] + timedelta(days=1),
-                    periods=prediction_steps,
-                    freq='D'
-                )
-                
-                fig_future.add_trace(go.Scatter(
-                    x=future_dates,
-                    y=future_predictions,
-                    name="LSTM Forecast",
-                    line=dict(color='#e74c3c', width=3, dash='dot'),
-                    mode='lines+markers',
-                    marker=dict(size=8)
-                ))
-                
-                fig_future.update_layout(
-                    title="LSTM Neural Network Forecast",
-                    height=400,
-                    xaxis_title="Date",
-                    yaxis_title="Price ($)",
-                    hovermode='x unified'
-                )
-                
-                st.plotly_chart(fig_future, use_container_width=True)
-            
-            with col2:
-                st.markdown("**🔮 Predicted Prices:**")
-                
-                for i, pred in enumerate(future_predictions, 1):
-                    change = ((pred - current_price) / current_price) * 100
-                    color = "🟢" if change > 0 else "🔴"
-                    st.write(f"{color} Day {i}: ${pred:.2f} ({change:+.1f}%)")
-                
-                st.markdown("---")
-                expected_return = ((future_predictions[-1] - current_price) / current_price) * 100
-                
-                if expected_return > 5:
-                    st.success(f"🚀 **Strong Buy Signal**\nExpected Return: +{expected_return:.2f}%")
-                elif expected_return > 0:
-                    st.info(f"📈 **Moderate Buy**\nExpected Return: +{expected_return:.2f}%")
-                elif expected_return > -5:
-                    st.warning(f"📊 **Hold/Neutral**\nExpected Return: {expected_return:.2f}%")
-                else:
-                    st.error(f"📉 **Sell Signal**\nExpected Return: {expected_return:.2f}%")
-            
-            # Neural network insights
-            st.markdown("### 🧠 What the Neural Network Learned")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("""
-                **Pattern Recognition:**
-                - ✅ Analyzed {0} days of price history
-                - ✅ Trained on {1} different sequences
-                - ✅ Learned {2:,} pattern parameters
-                - ✅ Achieved {3:.1f}% accuracy
-                """.format(len(data), len(X_train), neurons * neurons * 4, 100 - mape))
-            
-            with col2:
-                st.markdown("""
-                **This LSTM Network:**
-                - 🧠 Has memory of past {0} days
-                - 🔄 Updates predictions sequentially
-                - 📊 Considers price momentum & trends
-                - 🎯 Optimized for time series data
-                """.format(sequence_length))
-
-# ==========================================
-# MODE 2: COMPARE STOCKS (LSTM)
-# ==========================================
-
-elif mode == "⚔️ Compare Stocks (LSTM)":
-    
-    if not NEURAL_NETWORK_AVAILABLE:
-        st.error("❌ TensorFlow not installed")
-        st.stop()
-    
-    st.sidebar.markdown("---")
-    tickers_input = st.sidebar.text_area(
-        "Enter tickers (comma-separated):",
-        value="AAPL,MSFT,GOOGL,NVDA,TSLA"
-    )
-    tickers = [t.strip().upper() for t in tickers_input.split(',')]
-    
-    period = st.sidebar.selectbox("Period:", ["3mo", "6mo"], index=0)
-    sequence_length = st.sidebar.slider("Sequence Length:", 30, 80, 50)
-    epochs = st.sidebar.slider("Epochs:", 10, 25, 15)
-    
-    if st.sidebar.button("⚔️ Compare with LSTM", type="primary"):
-        results = []
-        progress_bar = st.progress(0)
-        status_text = st.empty()
+            st.stop()
         
-        for idx, ticker in enumerate(tickers):
-            status_text.text(f"🧠 Training LSTM for {ticker}... ({idx+1}/{len(tickers)})")
-            
-            data, info, error = download_stock_data(ticker, period, "1d")
-            
-            if error or len(data) < sequence_length + 30:
-                st.warning(f"⚠️ Skipping {ticker}: Insufficient data")
-                continue
-            
+        if len(data) < 60:
+            st.error("❌ Not enough data")
+            st.stop()
+        
+        # Current price
+        current_price = data['Close'].iloc[-1]
+        prev_price = data['Close'].iloc[-2]
+        price_change = current_price - prev_price
+        price_change_pct = (price_change / prev_price) * 100
+        
+        st.markdown("### 📊 Market Data")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Price", f"${current_price:.2f}", f"{price_change:+.2f} ({price_change_pct:+.2f}%)")
+        col2.metric("High", f"${data['High'].iloc[-1]:.2f}")
+        col3.metric("Low", f"${data['Low'].iloc[-1]:.2f}")
+        col4.metric("Volume", f"{data['Volume'].iloc[-1]:,.0f}")
+        
+        st.markdown("---")
+        
+        # Use evolved config
+        config = st.session_state.evolved_config
+        lookback = config['lookback']
+        
+        # Train
+        with st.spinner("🧠 Analyzing patterns..."):
             try:
-                # Prepare data
-                X, y, scaler = create_lstm_sequences(data, sequence_length)
+                X, y, scaler = create_sequences(data, lookback)
+                
                 split = int(0.8 * len(X))
                 X_train, X_test = X[:split], X[split:]
                 y_train, y_test = y[:split], y[split:]
                 
-                # Build and train
-                model = build_lstm_model(sequence_length, neurons=40)
-                model.fit(X_train, y_train, batch_size=32, epochs=epochs, verbose=0, validation_split=0.1)
+                model = build_lstm_model(lookback, config)
                 
-                # Predict
-                test_pred = model.predict(X_test, verbose=0)
-                test_pred_prices = scaler.inverse_transform(test_pred)
-                y_test_prices = scaler.inverse_transform(y_test.reshape(-1, 1))
+                progress_bar = st.progress(0)
+                epochs = 15
+                for epoch in range(epochs):
+                    model.fit(X_train, y_train, batch_size=32, epochs=1, verbose=0, validation_split=0.1)
+                    progress_bar.progress((epoch + 1) / epochs)
                 
-                mae, rmse, mape, direction_acc = calculate_metrics(y_test_prices, test_pred_prices)
-                
-                # Future prediction
-                last_seq = scaler.transform(data['Close'].values[-sequence_length:].reshape(-1, 1)).flatten()
-                future_preds = predict_future_lstm(model, last_seq, scaler, 10)
-                
-                current_price = data['Close'].iloc[-1]
-                predicted_price = future_preds[-1]
-                expected_return = ((predicted_price - current_price) / current_price) * 100
-                
-                results.append({
-                    'Ticker': ticker,
-                    'Name': info.get('longName', ticker)[:25] if info else ticker,
-                    'Current': current_price,
-                    'Predicted': predicted_price,
-                    'Return (%)': expected_return,
-                    'Accuracy (%)': 100 - mape,
-                    'Direction (%)': direction_acc
-                })
+                progress_bar.empty()
                 
             except Exception as e:
-                st.warning(f"⚠️ Error with {ticker}: {str(e)}")
-            
-            progress_bar.progress((idx + 1) / len(tickers))
+                st.error(f"❌ Error: {e}")
+                st.stop()
         
-        progress_bar.empty()
-        status_text.empty()
+        st.success("✅ Analysis complete!")
         
-        if results:
-            st.success(f"✅ LSTM analysis complete for {len(results)} stocks!")
+        # Predictions
+        y_pred = model.predict(X_test, verbose=0)
+        y_pred_prices = scaler.inverse_transform(y_pred)
+        y_test_prices = scaler.inverse_transform(y_test.reshape(-1, 1))
+        
+        mae = np.mean(np.abs(y_test_prices - y_pred_prices))
+        accuracy = max(0, 100 - (mae / np.mean(y_test_prices) * 100))
+        
+        if len(y_test_prices) > 1:
+            true_dir = np.diff(y_test_prices.flatten()) > 0
+            pred_dir = np.diff(y_pred_prices.flatten()) > 0
+            dir_accuracy = np.mean(true_dir == pred_dir) * 100
+        else:
+            dir_accuracy = 0
+        
+        st.markdown("### 🎯 AI Performance")
+        
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Price Accuracy", f"{accuracy:.1f}%", "Excellent" if accuracy > 90 else "Good")
+        col2.metric("Direction Accuracy", f"{dir_accuracy:.1f}%", "Strong" if dir_accuracy > 65 else "Moderate")
+        col3.metric("Avg Error", f"${mae:.2f}")
+        
+        st.markdown("---")
+        
+        # Future
+        st.markdown("### 🔮 Price Forecast")
+        
+        last_seq = scaler.transform(data['Close'].values[-lookback:].reshape(-1, 1)).flatten()
+        future_preds = predict_future(model, last_seq, scaler, predict_days)
+        
+        future_dates = pd.date_range(start=data.index[-1] + timedelta(days=1), periods=predict_days, freq='D')
+        
+        fig = go.Figure()
+        
+        # Historical
+        fig.add_trace(go.Scatter(
+            x=data.index[-60:], 
+            y=data['Close'].iloc[-60:], 
+            name="Historical", 
+            line=dict(color='#3b82f6', width=3),
+            mode='lines'
+        ))
+        
+        # Connecting line (bridges the gap smoothly)
+        fig.add_trace(go.Scatter(
+            x=[data.index[-1], future_dates[0]], 
+            y=[current_price, future_preds[0]], 
+            line=dict(color='#f59e0b', width=3),
+            mode='lines',
+            showlegend=False,
+            hoverinfo='skip'
+        ))
+        
+        # Forecast
+        fig.add_trace(go.Scatter(
+            x=future_dates, 
+            y=future_preds, 
+            name="Forecast", 
+            line=dict(color='#f59e0b', width=4, dash='dot'), 
+            mode='lines+markers', 
+            marker=dict(size=8, symbol='diamond')
+        ))
+        
+        fig.update_layout(
+            height=500, 
+            template="plotly_white", 
+            xaxis_title="Date", 
+            yaxis_title="Price ($)", 
+            hovermode='x unified'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Table
+        st.markdown("### 📅 Forecast Table")
+        forecast_df = pd.DataFrame({
+            'Date': future_dates.strftime('%Y-%m-%d'),
+            'Price': [f"${p:.2f}" for p in future_preds],
+            'Change': [f"{((p - current_price) / current_price * 100):+.2f}%" for p in future_preds]
+        })
+        st.dataframe(forecast_df, use_container_width=True, hide_index=True)
+        
+        # Trading signals
+        final_price = future_preds[-1]
+        total_return = ((final_price - current_price) / current_price) * 100
+        
+        if total_return > 0:
+            take_profit = final_price * 1.02
+            stop_loss = current_price * 0.98
+        else:
+            take_profit = current_price * 1.02
+            stop_loss = final_price * 0.98
+        
+        st.markdown("### 💡 Trading Signals")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if total_return > 5:
+                st.success(f"""
+                **🚀 Strong Buy**
+                
+                Predicted: **{total_return:+.2f}%** in {predict_days} days
+                
+                Entry: ${current_price:.2f}  
+                Target: ${final_price:.2f}  
+                🎯 Take Profit: ${take_profit:.2f}  
+                🛑 Stop Loss: ${stop_loss:.2f}
+                """)
+            elif total_return > 0:
+                st.info(f"""
+                **📈 Buy Signal**
+                
+                Predicted: **{total_return:+.2f}%**
+                
+                Entry: ${current_price:.2f}  
+                Target: ${final_price:.2f}  
+                🎯 Take Profit: ${take_profit:.2f}  
+                🛑 Stop Loss: ${stop_loss:.2f}
+                """)
+            elif total_return > -5:
+                st.warning(f"""
+                **📊 Hold**
+                
+                Predicted: **{total_return:+.2f}%**
+                
+                Current: ${current_price:.2f}  
+                Target: ${final_price:.2f}
+                """)
+            else:
+                st.error(f"""
+                **📉 Sell Signal**
+                
+                Predicted: **{total_return:+.2f}%**
+                
+                Current: ${current_price:.2f}  
+                Target: ${final_price:.2f}
+                """)
+        
+        with col2:
+            st.markdown("#### Risk/Reward")
+            risk = abs(current_price - stop_loss)
+            reward = abs(take_profit - current_price)
+            rr_ratio = reward / risk if risk > 0 else 0
             
-            df = pd.DataFrame(results).sort_values('Return (%)', ascending=False)
-            
-            # Top 3
-            st.markdown("### 🏆 Top 3 Picks (LSTM Neural Network)")
-            cols = st.columns(3)
-            
-            for idx, (_, row) in enumerate(df.head(3).iterrows()):
-                with cols[idx]:
-                    medal = ["🥇", "🥈", "🥉"][idx]
-                    st.markdown(f"### {medal} {row['Ticker']}")
-                    st.metric("Expected Return", f"{row['Return (%)']:.2f}%")
-                    st.metric("Current", f"${row['Current']:.2f}")
-                    st.metric("LSTM Accuracy", f"{row['Accuracy (%)']:.1f}%")
-            
-            # Table
-            st.markdown("### 📊 Complete LSTM Analysis")
-            st.dataframe(
-                df.style.format({
-                    'Current': '${:.2f}',
-                    'Predicted': '${:.2f}',
-                    'Return (%)': '{:+.2f}%',
-                    'Accuracy (%)': '{:.1f}%',
-                    'Direction (%)': '{:.1f}%'
-                }),
-                use_container_width=True,
-                hide_index=True
-            )
-            
-            # Chart
-            fig = go.Figure()
-            colors = ['#2ecc71' if x > 0 else '#e74c3c' for x in df['Return (%)']]
-            fig.add_trace(go.Bar(
-                x=df['Ticker'],
-                y=df['Return (%)'],
-                marker_color=colors,
-                text=df['Return (%)'].apply(lambda x: f'{x:+.1f}%'),
-                textposition='outside'
-            ))
-            fig.update_layout(
-                title="LSTM Expected Returns Comparison",
-                height=400,
-                yaxis_title="Expected Return (%)",
-                showlegend=False
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            st.metric("Ratio", f"{rr_ratio:.2f}:1", "Good" if rr_ratio > 2 else "Fair")
+            st.metric("Potential Gain", f"${reward:.2f}")
+            st.metric("Potential Loss", f"${risk:.2f}")
+        
+        st.caption("⚠️ Educational purposes only. Not financial advice.")
 
 # ==========================================
-# MODE 3: BACKTEST (LSTM)
+# MODE 2: ADMIN DASHBOARD
 # ==========================================
 
-else:  # Backtest mode
-    st.markdown("### 🔙 LSTM Backtest")
-    st.info("💡 Backtesting with LSTM coming soon! This requires historical prediction simulation.")
+else:
+    st.markdown("### 🔬 Admin Dashboard")
     
-    st.markdown("""
-    **What LSTM Backtesting Would Show:**
-    - Train LSTM on historical data
-    - Make predictions day-by-day
-    - Simulate buy/sell based on LSTM signals
-    - Compare to buy-and-hold strategy
+    col1, col2 = st.columns(2)
     
-    **Why It's Complex:**
-    - Need to retrain network for each time point
-    - Computationally intensive
-    - Takes 10-20 minutes to backtest properly
+    with col1:
+        st.markdown("#### 📊 Evolution Stats")
+        st.write(f"**Generations:** {st.session_state.evolution_stats['current_generation']}")
+        st.write(f"**Models Tested:** {st.session_state.evolution_stats['total_tested']}")
+        st.write(f"**Last Training:** {st.session_state.evolution_stats['last_train_time']}")
+        
+        if st.button("📥 Download Config JSON"):
+            config_json = json.dumps(st.session_state.evolved_config, indent=2)
+            st.download_button(
+                label="💾 Download",
+                data=config_json,
+                file_name=f"evolved_config_gen{st.session_state.evolved_config['generation']}.json",
+                mime="application/json"
+            )
+        
+        st.markdown("---")
+        
+        if st.button("🗑️ Reset All Progress", type="secondary"):
+            if os.path.exists(STATE_FILE):
+                os.remove(STATE_FILE)
+            st.session_state.evolved_config = {
+                'neurons_layer1': 50,
+                'neurons_layer2': 50,
+                'dropout': 0.2,
+                'lookback': 50,
+                'generation': 0,
+                'fitness': 0,
+                'training_stocks': 'Reset',
+                'last_updated': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            st.session_state.evolution_stats = {
+                'total_tested': 0,
+                'best_fitness_history': [],
+                'current_generation': 0,
+                'last_train_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            st.success("✅ Progress reset!")
+            st.rerun()
     
-    **Alternative:** Use the lightweight version for backtesting, or run LSTM locally with more time.
-    """)
+    with col2:
+        st.markdown("#### 🏆 Best Configuration")
+        st.json(st.session_state.evolved_config)
+    
+    st.markdown("---")
+    
+    if len(st.session_state.evolution_stats['best_fitness_history']) > 0:
+        st.markdown("#### 📈 Fitness Progress")
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(y=st.session_state.evolution_stats['best_fitness_history'], mode='lines+markers', name="Fitness", line=dict(color='#10b981', width=3)))
+        fig.update_layout(height=400, xaxis_title="Generation", yaxis_title="Fitness", template="plotly_white")
+        st.plotly_chart(fig, use_container_width=True)
 
-# Footer
-st.sidebar.markdown("---")
-st.sidebar.markdown("""
-### 🧠 About LSTM
-
-**Long Short-Term Memory** is a type of Recurrent Neural Network (RNN) designed for sequence data.
-
-**Used in:**
-- ChatGPT (language prediction)
-- Google Translate
-- Voice recognition
-- Stock prediction
-- Weather forecasting
-
-**Your Network:**
-- 2 LSTM layers
-- Dropout regularization  
-- Dense output layer
-- Adam optimizer
-
-This is **REAL deep learning AI!**
-""")
-
-st.sidebar.warning("⚠️ Educational purposes only. Not financial advice!")
+st.markdown("---")
+st.caption("🧠 Powered by LSTM • Evolving through Multi-Stock Training")
