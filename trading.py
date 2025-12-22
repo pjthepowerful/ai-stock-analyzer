@@ -1,693 +1,547 @@
 import streamlit as st
 import yfinance as yf
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
 from datetime import datetime, timedelta
-import warnings
-import random
-import time
-import json
-import os
-warnings.filterwarnings('ignore')
+from supabase import create_client, Client
+import hashlib
 
-# Import TensorFlow/Keras
-try:
-    import tensorflow as tf
-    from tensorflow import keras
-    from tensorflow.keras import layers
-    from sklearn.preprocessing import MinMaxScaler
-    NEURAL_NETWORK_AVAILABLE = True
-except ImportError:
-    NEURAL_NETWORK_AVAILABLE = False
+# Page configuration
+st.set_page_config(
+    page_title="WealthStockify - Premium Stock Analysis",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-st.set_page_config(page_title="AI Stock Predictor", page_icon="🧠", layout="wide")
+# Initialize Supabase
+@st.cache_resource
+def init_supabase() -> Client:
+    url = st.secrets["supabase"]["url"]
+    key = st.secrets["supabase"]["key"]
+    return create_client(url, key)
+
+supabase = init_supabase()
 
 # Custom CSS
 st.markdown("""
-    <style>
-    .main-header {
-        font-size: 3.5rem;
-        font-weight: bold;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-align: center;
-        margin-bottom: 0.5rem;
+<style>
+    .stApp { background: #0e1117; }
+    h1, h2, h3 { color: #ffffff !important; font-family: 'Inter', sans-serif; }
+    .stButton > button {
+        background: #1f2937;
+        color: white;
+        border: 1px solid #374151;
+        border-radius: 8px;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        transition: all 0.3s;
     }
-    .sub-header {
-        text-align: center;
-        color: #666;
-        font-size: 1.2rem;
-        margin-bottom: 2rem;
+    .stButton > button:hover { background: #374151; }
+    .premium-card {
+        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+        padding: 2rem;
+        border-radius: 12px;
+        color: white;
+        margin: 1rem 0;
     }
-    </style>
+</style>
 """, unsafe_allow_html=True)
 
-# ==========================================
-# GLOBAL STATE - AUTO-TRAINS ON EACH RUN
-# ==========================================
-
-# ==========================================
-# PERSISTENT STORAGE (CLOUD)
-# ==========================================
-
-STATE_FILE = '/tmp/evolution_state.json'
-
-def save_evolution_state():
-    """Save evolution progress to cloud storage"""
-    state = {
-        'evolved_config': st.session_state.evolved_config,
-        'evolution_stats': st.session_state.evolution_stats,
-        'saved_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    }
+# Authentication Functions
+def sign_up(email: str, password: str):
     try:
-        with open(STATE_FILE, 'w') as f:
-            json.dump(state, f, indent=2)
-        return True
+        response = supabase.auth.sign_up({"email": email, "password": password})
+        if response.user:
+            return True, "Account created! You can now log in."
+        return False, "Failed to create account"
     except Exception as e:
-        print(f"Error saving state: {e}")
+        return False, str(e)
+
+def sign_in(email: str, password: str):
+    try:
+        response = supabase.auth.sign_in_with_password({"email": email, "password": password})
+        if response.user:
+            profile = supabase.table('user_profiles').select('*').eq('id', response.user.id).execute()
+            return True, response.user, profile.data[0] if profile.data else None
+        return False, None, None
+    except Exception as e:
+        return False, None, str(e)
+
+def sign_out():
+    supabase.auth.sign_out()
+    st.session_state.clear()
+
+def reset_password(email: str):
+    try:
+        supabase.auth.reset_password_for_email(email)
+        return True, "Password reset email sent! Check your inbox."
+    except Exception as e:
+        return False, str(e)
+
+def upgrade_to_premium(user_id: str):
+    try:
+        end_date = (datetime.now() + timedelta(days=30)).isoformat()
+        supabase.table('user_profiles').update({
+            'is_premium': True,
+            'subscription_end_date': end_date
+        }).eq('id', user_id).execute()
+        return True
+    except:
         return False
 
-def load_evolution_state():
-    """Load evolution progress from cloud storage"""
+def cancel_premium(user_id: str):
     try:
-        if os.path.exists(STATE_FILE):
-            with open(STATE_FILE, 'r') as f:
-                state = json.load(f)
-            return state
-        return None
-    except Exception as e:
-        print(f"Error loading state: {e}")
-        return None
+        supabase.table('user_profiles').update({
+            'is_premium': False,
+            'subscription_end_date': None
+        }).eq('id', user_id).execute()
+        return True
+    except:
+        return False
 
-# ==========================================
-# GLOBAL STATE - AUTO-TRAINS ON EACH RUN
-# ==========================================
+def get_user_watchlist(user_id: str):
+    try:
+        response = supabase.table('watchlists').select('ticker').eq('user_id', user_id).execute()
+        return [item['ticker'] for item in response.data]
+    except:
+        return []
 
-# Try to load saved state first
-if 'state_loaded' not in st.session_state:
-    saved_state = load_evolution_state()
-    if saved_state:
-        st.session_state.evolved_config = saved_state.get('evolved_config', {
-            'neurons_layer1': 50,
-            'neurons_layer2': 50,
-            'dropout': 0.2,
-            'lookback': 50,
-            'generation': 0,
-            'fitness': 0,
-            'training_stocks': 'Initializing...',
-            'last_updated': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        })
-        st.session_state.evolution_stats = saved_state.get('evolution_stats', {
-            'total_tested': 0,
-            'best_fitness_history': [],
-            'current_generation': 0,
-            'last_train_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        })
-        st.session_state.state_loaded = True
-        st.session_state.auto_train_done = True  # Don't auto-train if we loaded state
+def add_to_watchlist(user_id: str, ticker: str):
+    try:
+        supabase.table('watchlists').insert({'user_id': user_id, 'ticker': ticker}).execute()
+        return True
+    except:
+        return False
+
+def remove_from_watchlist(user_id: str, ticker: str):
+    try:
+        supabase.table('watchlists').delete().eq('user_id', user_id).eq('ticker', ticker).execute()
+        return True
+    except:
+        return False
+
+# Initialize session state
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+if 'user' not in st.session_state:
+    st.session_state.user = None
+if 'user_profile' not in st.session_state:
+    st.session_state.user_profile = None
+
+# Helper Functions
+def calculate_technical_indicators(df):
+    delta = df['Close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    exp1 = df['Close'].ewm(span=12, adjust=False).mean()
+    exp2 = df['Close'].ewm(span=26, adjust=False).mean()
+    df['MACD'] = exp1 - exp2
+    df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+    
+    df['BB_Middle'] = df['Close'].rolling(window=20).mean()
+    bb_std = df['Close'].rolling(window=20).std()
+    df['BB_Upper'] = df['BB_Middle'] + (bb_std * 2)
+    df['BB_Lower'] = df['BB_Middle'] - (bb_std * 2)
+    
+    df['SMA_50'] = df['Close'].rolling(window=50).mean()
+    df['SMA_200'] = df['Close'].rolling(window=200).mean()
+    df['EMA_20'] = df['Close'].ewm(span=20, adjust=False).mean()
+    
+    high_low = df['High'] - df['Low']
+    high_close = np.abs(df['High'] - df['Close'].shift())
+    low_close = np.abs(df['Low'] - df['Close'].shift())
+    ranges = pd.concat([high_low, high_close, low_close], axis=1)
+    true_range = np.max(ranges, axis=1)
+    df['ATR'] = true_range.rolling(14).mean()
+    
+    return df
+
+def calculate_ai_score(df, info):
+    score = 50
+    if len(df) > 0:
+        current_price = df['Close'].iloc[-1]
+        if 'RSI' in df.columns and pd.notna(df['RSI'].iloc[-1]):
+            rsi = df['RSI'].iloc[-1]
+            if 40 <= rsi <= 60:
+                score += 10
+            elif 30 <= rsi < 40 or 60 < rsi <= 70:
+                score += 5
+        if 'MACD' in df.columns and 'Signal' in df.columns:
+            if pd.notna(df['MACD'].iloc[-1]) and pd.notna(df['Signal'].iloc[-1]):
+                if df['MACD'].iloc[-1] > df['Signal'].iloc[-1]:
+                    score += 10
+        if 'SMA_50' in df.columns and 'SMA_200' in df.columns:
+            sma50 = df['SMA_50'].iloc[-1]
+            sma200 = df['SMA_200'].iloc[-1]
+            if pd.notna(sma50) and pd.notna(sma200):
+                if current_price > sma50 > sma200:
+                    score += 15
+                elif current_price > sma50:
+                    score += 8
+    try:
+        if 'trailingPE' in info and info['trailingPE']:
+            pe = info['trailingPE']
+            if 10 <= pe <= 25:
+                score += 15
+        if 'profitMargins' in info and info['profitMargins']:
+            if info['profitMargins'] > 0.15:
+                score += 10
+        if 'returnOnEquity' in info and info['returnOnEquity']:
+            if info['returnOnEquity'] > 0.15:
+                score += 10
+    except:
+        pass
+    return min(max(score, 0), 100)
+
+def predict_price(df, days=30):
+    if len(df) < 30:
+        return None
+    recent_df = df.tail(90).copy()
+    recent_df['Days'] = range(len(recent_df))
+    X = recent_df['Days'].values
+    y = recent_df['Close'].values
+    x_mean, y_mean = X.mean(), y.mean()
+    numerator = ((X - x_mean) * (y - y_mean)).sum()
+    denominator = ((X - x_mean) ** 2).sum()
+    if denominator == 0:
+        return None
+    slope = numerator / denominator
+    intercept = y_mean - slope * x_mean
+    momentum = (df['Close'].iloc[-1] - df['Close'].iloc[-30]) / df['Close'].iloc[-30]
+    adjusted_slope = slope * (1 + momentum * 0.5)
+    future_day = len(recent_df) + days
+    return max(adjusted_slope * future_day + intercept, 0)
+
+def calculate_position_size(account_size, stock_price, method='fixed', risk_percent=2, volatility=None, win_rate=0.55, avg_win=1.5, avg_loss=1):
+    if method == 'fixed':
+        shares = int(account_size * (risk_percent / 100) / stock_price)
+    elif method == 'kelly':
+        q = 1 - win_rate
+        b = avg_win / avg_loss
+        kelly_fraction = max(0, min((win_rate * b - q) / b * 0.5, 0.25))
+        shares = int(account_size * kelly_fraction / stock_price)
+    elif method == 'volatility' and volatility:
+        shares = int(account_size * (risk_percent / 100) / volatility / stock_price)
     else:
-        # Initialize fresh
-        st.session_state.evolved_config = {
-            'neurons_layer1': 50,
-            'neurons_layer2': 50,
-            'dropout': 0.2,
-            'lookback': 50,
-            'generation': 0,
-            'fitness': 0,
-            'training_stocks': 'Initializing...',
-            'last_updated': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-        st.session_state.evolution_stats = {
-            'total_tested': 0,
-            'best_fitness_history': [],
-            'current_generation': 0,
-            'last_train_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-        st.session_state.state_loaded = True
-        st.session_state.auto_train_done = False
+        shares = 0
+    return max(shares, 0)
 
-if 'auto_train_done' not in st.session_state:
-    st.session_state.auto_train_done = False
+def run_backtest(ticker, start_date, end_date, initial_capital=10000):
+    stock = yf.Ticker(ticker)
+    df = stock.history(start=start_date, end=end_date)
+    if df.empty:
+        return None
+    df = calculate_technical_indicators(df)
+    df['Signal'] = 0
+    for i in range(1, len(df)):
+        if pd.notna(df['MACD'].iloc[i]) and pd.notna(df['Signal'].iloc[i]) and pd.notna(df['RSI'].iloc[i]):
+            if df['MACD'].iloc[i] > df['Signal'].iloc[i] and df['MACD'].iloc[i-1] <= df['Signal'].iloc[i-1] and df['RSI'].iloc[i] < 70:
+                df.loc[df.index[i], 'Signal'] = 1
+            elif df['MACD'].iloc[i] < df['Signal'].iloc[i] and df['MACD'].iloc[i-1] >= df['Signal'].iloc[i-1]:
+                df.loc[df.index[i], 'Signal'] = -1
+    df['Position'] = df['Signal'].replace(0, np.nan).ffill().fillna(0)
+    df['Returns'] = df['Close'].pct_change()
+    df['Strategy_Returns'] = df['Position'].shift(1) * df['Returns']
+    df['Cumulative_Returns'] = (1 + df['Returns']).cumprod()
+    df['Cumulative_Strategy_Returns'] = (1 + df['Strategy_Returns']).cumprod()
+    total_return = (df['Cumulative_Strategy_Returns'].iloc[-1] - 1) * 100
+    buy_hold_return = (df['Cumulative_Returns'].iloc[-1] - 1) * 100
+    num_trades = len(df[df['Signal'] != 0])
+    sharpe_ratio = np.sqrt(252) * df['Strategy_Returns'].mean() / df['Strategy_Returns'].std() if df['Strategy_Returns'].std() != 0 else 0
+    cumulative = df['Cumulative_Strategy_Returns']
+    running_max = cumulative.expanding().max()
+    drawdown = (cumulative - running_max) / running_max
+    max_drawdown = drawdown.min() * 100
+    return {
+        'df': df,
+        'total_return': total_return,
+        'buy_hold_return': buy_hold_return,
+        'num_trades': num_trades,
+        'sharpe_ratio': sharpe_ratio,
+        'max_drawdown': max_drawdown
+    }
 
-# ==========================================
-# HELPER FUNCTIONS
-# ==========================================
-
-@st.cache_data(ttl=3600)
-def download_stock_data(ticker, period="3mo", interval="1d"):
-    try:
-        stock = yf.Ticker(ticker)
-        data = stock.history(period=period, interval=interval)
-        info = stock.info
-        if len(data) > 0:
-            return data, info, None
-        return None, None, f"No data found for {ticker}"
-    except Exception as e:
-        return None, None, str(e)
-
-def create_sequences(data, lookback=50):
-    prices = data['Close'].values.reshape(-1, 1)
-    scaler = MinMaxScaler(feature_range=(0, 1))
-    scaled_data = scaler.fit_transform(prices)
-    
-    X, y = [], []
-    for i in range(lookback, len(scaled_data)):
-        X.append(scaled_data[i-lookback:i, 0])
-        y.append(scaled_data[i, 0])
-    
-    X = np.array(X)
-    y = np.array(y)
-    X = X.reshape(X.shape[0], X.shape[1], 1)
-    
-    return X, y, scaler
-
-def build_lstm_model(lookback, config):
-    model = keras.Sequential([
-        layers.LSTM(config['neurons_layer1'], return_sequences=True, input_shape=(lookback, 1)),
-        layers.Dropout(config['dropout']),
-        layers.LSTM(config['neurons_layer2'], return_sequences=False),
-        layers.Dropout(config['dropout']),
-        layers.Dense(25, activation='relu'),
-        layers.Dense(1)
-    ])
-    
-    model.compile(optimizer='adam', loss='mse', metrics=['mae'])
-    return model
-
-def predict_future(model, last_sequence, scaler, steps=10):
-    predictions = []
-    current_seq = last_sequence.copy()
-    
-    for _ in range(steps):
-        pred = model.predict(current_seq.reshape(1, -1, 1), verbose=0)
-        predictions.append(pred[0, 0])
-        current_seq = np.append(current_seq[1:], pred[0, 0])
-    
-    predictions = scaler.inverse_transform(np.array(predictions).reshape(-1, 1))
-    return predictions.flatten()
-
-# ==========================================
-# EVOLUTIONARY TRAINING
-# ==========================================
-
-class LSTMTrader:
-    def __init__(self, config=None):
-        if config is None:
-            self.config = {
-                'neurons_layer1': random.randint(30, 100),
-                'neurons_layer2': random.randint(30, 100),
-                'dropout': round(random.uniform(0.1, 0.4), 2),
-                'lookback': random.randint(40, 80),
-            }
-        else:
-            self.config = config
-        
-        self.model = None
-        self.scaler = MinMaxScaler()
-        self.fitness = 0
-        
-    def build_and_train(self, data, epochs=8):
+def screen_stocks():
+    tickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'AMD', 'NFLX', 'DIS',
+               'JPM', 'BAC', 'V', 'MA', 'JNJ', 'PFE', 'XOM', 'CVX', 'WMT', 'HD',
+               'COST', 'NKE', 'PYPL', 'INTC', 'QCOM', 'CSCO', 'ORCL', 'IBM', 'ADBE', 'CRM']
+    results = []
+    progress_bar = st.progress(0)
+    for idx, ticker in enumerate(tickers):
         try:
-            lookback = self.config['lookback']
-            
-            prices = data['Close'].values.reshape(-1, 1)
-            scaled = self.scaler.fit_transform(prices)
-            
-            X, y = [], []
-            for i in range(lookback, len(scaled)):
-                X.append(scaled[i-lookback:i, 0])
-                y.append(scaled[i, 0])
-            
-            X = np.array(X).reshape(-1, lookback, 1)
-            y = np.array(y)
-            
-            split = int(0.8 * len(X))
-            X_train, X_test = X[:split], X[split:]
-            y_train, y_test = y[:split], y[split:]
-            
-            self.model = build_lstm_model(lookback, self.config)
-            self.model.fit(X_train, y_train, batch_size=32, epochs=epochs, verbose=0, validation_split=0.1)
-            
-            test_pred = self.model.predict(X_test, verbose=0)
-            mae = np.mean(np.abs(y_test - test_pred.flatten()))
-            
-            self.fitness = 1 / (mae + 0.0001)
-            return self.fitness
+            stock = yf.Ticker(ticker)
+            info = stock.info
+            hist = stock.history(period='6mo')
+            if not hist.empty:
+                hist = calculate_technical_indicators(hist)
+                score = calculate_ai_score(hist, info)
+                current_price = hist['Close'].iloc[-1]
+                change = ((current_price - hist['Close'].iloc[0]) / hist['Close'].iloc[0]) * 100
+                results.append({
+                    'Ticker': ticker,
+                    'Price': f"${current_price:.2f}",
+                    'Change_6M': f"{change:.2f}%",
+                    'AI_Score': score,
+                    'RSI': f"{hist['RSI'].iloc[-1]:.1f}" if 'RSI' in hist.columns else "N/A"
+                })
+            progress_bar.progress((idx + 1) / len(tickers))
         except:
-            self.fitness = 0
-            return 0
+            continue
+    progress_bar.empty()
+    return pd.DataFrame(results).sort_values('AI_Score', ascending=False)
 
-def crossover(parent1, parent2):
-    child_config = {}
-    for key in parent1.config.keys():
-        child_config[key] = parent1.config[key] if random.random() < 0.5 else parent2.config[key]
-    return LSTMTrader(child_config)
-
-def mutate(trader, rate=0.25):
-    config = trader.config.copy()
-    if random.random() < rate:
-        key = random.choice(list(config.keys()))
-        if key == 'neurons_layer1':
-            config['neurons_layer1'] = random.randint(30, 100)
-        elif key == 'neurons_layer2':
-            config['neurons_layer2'] = random.randint(30, 100)
-        elif key == 'dropout':
-            config['dropout'] = round(random.uniform(0.1, 0.4), 2)
-        elif key == 'lookback':
-            config['lookback'] = random.randint(40, 80)
-    return LSTMTrader(config)
-
-def run_single_generation(population_size=20):
-    """Run one generation of evolution - called automatically"""
+# Authentication UI
+if not st.session_state.authenticated:
+    st.markdown("# WealthStockify")
+    st.markdown("### Professional Stock Analysis Platform")
     
-    # Stock pool
-    STOCK_POOL = ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'TSLA', 'AMD', 'META', 'AMZN', 'JPM', 'V']
+    tab1, tab2, tab3 = st.tabs(["Login", "Sign Up", "Reset Password"])
     
-    # Pick 3 random stocks
-    training_stocks = random.sample(STOCK_POOL, 3)
-    
-    # Download data
-    stock_data = []
-    for ticker in training_stocks:
-        data, _, error = download_stock_data(ticker, "6mo", "1d")
-        if not error and len(data) >= 100:
-            stock_data.append(data)
-    
-    if len(stock_data) == 0:
-        return None
-    
-    # Create or evolve population
-    if st.session_state.evolution_stats['current_generation'] == 0:
-        # First generation - random population
-        population = [LSTMTrader() for _ in range(population_size)]
-    else:
-        # Load previous best and evolve
-        best_config = {
-            'neurons_layer1': st.session_state.evolved_config['neurons_layer1'],
-            'neurons_layer2': st.session_state.evolved_config['neurons_layer2'],
-            'dropout': st.session_state.evolved_config['dropout'],
-            'lookback': st.session_state.evolved_config['lookback']
-        }
+    with tab1:
+        st.subheader("Login to Your Account")
+        email = st.text_input("Email", key="login_email")
+        password = st.text_input("Password", type="password", key="login_password")
         
-        # Create population from best config with mutations
-        population = []
-        population.append(LSTMTrader(best_config))  # Keep best
-        
-        for _ in range(population_size - 1):
-            if random.random() < 0.7:
-                trader = mutate(LSTMTrader(best_config), rate=0.3)
+        if st.button("Login", use_container_width=True, type="primary"):
+            if email and password:
+                success, user, profile = sign_in(email, password)
+                if success:
+                    st.session_state.authenticated = True
+                    st.session_state.user = user
+                    st.session_state.user_profile = profile
+                    st.success("Logged in successfully!")
+                    st.rerun()
+                else:
+                    st.error("Invalid credentials")
             else:
-                trader = LSTMTrader()  # Some random
-            population.append(trader)
+                st.warning("Please enter email and password")
     
-    # Evaluate on all stocks
-    for trader in population:
-        total_fitness = 0
-        for data in stock_data:
-            fitness = trader.build_and_train(data, epochs=6)
-            total_fitness += fitness
-        trader.fitness = total_fitness / len(stock_data)
-        st.session_state.evolution_stats['total_tested'] += 1
+    with tab2:
+        st.subheader("Create New Account")
+        new_email = st.text_input("Email", key="signup_email")
+        new_password = st.text_input("Password (min 6 characters)", type="password", key="signup_password")
+        confirm_password = st.text_input("Confirm Password", type="password", key="confirm_password")
+        
+        if st.button("Sign Up", use_container_width=True, type="primary"):
+            if new_email and new_password and confirm_password:
+                if new_password != confirm_password:
+                    st.error("Passwords do not match")
+                elif len(new_password) < 6:
+                    st.error("Password must be at least 6 characters")
+                else:
+                    success, message = sign_up(new_email, new_password)
+                    if success:
+                        st.success(message)
+                    else:
+                        st.error(f"Error: {message}")
+            else:
+                st.warning("Please fill all fields")
     
-    # Sort by fitness
-    population.sort(key=lambda x: x.fitness, reverse=True)
+    with tab3:
+        st.subheader("Reset Your Password")
+        reset_email = st.text_input("Enter your email address", key="reset_email")
+        
+        if st.button("Send Reset Link", use_container_width=True, type="primary"):
+            if reset_email:
+                success, message = reset_password(reset_email)
+                if success:
+                    st.success(message)
+                else:
+                    st.error(f"Error: {message}")
+            else:
+                st.warning("Please enter your email")
     
-    # Update if better
-    if population[0].fitness > st.session_state.evolved_config['fitness']:
-        st.session_state.evolved_config = {
-            'neurons_layer1': population[0].config['neurons_layer1'],
-            'neurons_layer2': population[0].config['neurons_layer2'],
-            'dropout': population[0].config['dropout'],
-            'lookback': population[0].config['lookback'],
-            'generation': st.session_state.evolution_stats['current_generation'] + 1,
-            'fitness': population[0].fitness,
-            'training_stocks': ', '.join(training_stocks),
-            'last_updated': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-        st.session_state.evolution_stats['best_fitness_history'].append(population[0].fitness)
-    
-    st.session_state.evolution_stats['current_generation'] += 1
-    st.session_state.evolution_stats['last_train_time'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
-    # SAVE TO CLOUD after each generation
-    save_evolution_state()
-    
-    return training_stocks
+    st.stop()
 
-# ==========================================
-# AUTO-TRAIN ON LOAD
-# ==========================================
-
-if not st.session_state.auto_train_done and NEURAL_NETWORK_AVAILABLE:
-    with st.spinner("🧬 AI Evolution in progress... Training on random stocks..."):
-        training_stocks = run_single_generation(population_size=15)
-        if training_stocks:
-            st.session_state.auto_train_done = True
-            st.success(f"✅ Generation {st.session_state.evolution_stats['current_generation']} complete! Trained on: {', '.join(training_stocks)}")
-            time.sleep(1)
-            st.rerun()
-
-# ==========================================
-# MAIN APP
-# ==========================================
-
-# Header
-st.markdown('<p class="main-header">🧠 AI Stock Predictor Pro</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-header">Continuously Evolving Neural Networks • Multi-Stock Training</p>', unsafe_allow_html=True)
-
-# Sidebar
+# Main App
 with st.sidebar:
-    st.header("⚙️ Mode")
+    st.markdown(f"# WealthStockify")
+    st.markdown(f"**{st.session_state.user.email}**")
     
-    mode = st.radio("", 
-        ["📈 Predict Stock", 
-         "🔬 Admin Dashboard"],
-        label_visibility="collapsed")
+    is_premium = st.session_state.user_profile.get('is_premium', False) if st.session_state.user_profile else False
+    
+    if is_premium:
+        st.success("Premium Active")
+        sub_end = st.session_state.user_profile.get('subscription_end_date')
+        if sub_end:
+            st.caption(f"Valid until: {sub_end[:10]}")
+        if st.button("Cancel Subscription", use_container_width=True):
+            if cancel_premium(st.session_state.user.id):
+                profile = supabase.table('user_profiles').select('*').eq('id', st.session_state.user.id).execute()
+                st.session_state.user_profile = profile.data[0]
+                st.rerun()
+    else:
+        st.info("Free Tier")
+        if st.button("Upgrade to Premium - $9.99/mo", use_container_width=True, type="primary"):
+            if upgrade_to_premium(st.session_state.user.id):
+                profile = supabase.table('user_profiles').select('*').eq('id', st.session_state.user.id).execute()
+                st.session_state.user_profile = profile.data[0]
+                st.balloons()
+                st.rerun()
+    
+    if st.button("Logout", use_container_width=True):
+        sign_out()
+        st.rerun()
     
     st.markdown("---")
     
-    # Evolution status (always visible)
-    st.subheader("🧬 AI Status")
-    
-    # Show if loaded from saved state
-    if st.session_state.evolved_config['generation'] > 0:
-        st.success(f"🟢 Active (Loaded Gen {st.session_state.evolved_config['generation']})")
-    else:
-        st.success("🟢 Active & Learning")
-    
-    st.markdown(f"""
-    **Current Best:**
-    - Generation: **{st.session_state.evolved_config['generation']}**
-    - Fitness: **{st.session_state.evolved_config['fitness']:.4f}**
-    - Trained on: {st.session_state.evolved_config.get('training_stocks', 'N/A')}
-    - Models tested: **{st.session_state.evolution_stats['total_tested']}**
-    - Last updated: {st.session_state.evolved_config['last_updated']}
-    """)
-    
-    # Train more button
-    if st.button("🚀 Train Next Generation"):
-        with st.spinner("Training..."):
-            stocks = run_single_generation(population_size=15)
-            if stocks:
-                st.success(f"✅ Gen {st.session_state.evolution_stats['current_generation']} done!")
-                st.rerun()
+    with st.expander("Premium Features"):
+        features = ["Unlimited Stock Analysis", "AI Scoring System", "Advanced Technical Indicators",
+                   "Stock Screener (30+ stocks)", "AI Price Predictions", "Position Size Calculator",
+                   "5-Year Backtesting", "Watchlist with Alerts", "Export to CSV"]
+        for feature in features:
+            icon = "✓" if is_premium else "✗"
+            st.markdown(f"{icon} {feature}")
 
-# ==========================================
-# MODE 1: USER PREDICTION
-# ==========================================
+# Navigation
+st.markdown("### Navigation")
+nav_cols = st.columns(5)
+pages = ["Stock Analysis", "Stock Screener", "Backtesting", "Watchlist", "Position Sizer"]
+for i, (col, page_name) in enumerate(zip(nav_cols, pages)):
+    with col:
+        if st.button(page_name, use_container_width=True):
+            st.session_state.page = page_name
 
-if mode == "📈 Predict Stock":
+if 'page' not in st.session_state:
+    st.session_state.page = "Stock Analysis"
+page = st.session_state.page
+st.markdown("---")
+
+# Stock Analysis Page
+if page == "Stock Analysis":
+    st.title("Stock Analysis Dashboard")
     
-    if not NEURAL_NETWORK_AVAILABLE:
-        st.error("❌ AI engine unavailable")
-        st.stop()
-    
-    st.markdown("### 🎯 Get AI Price Forecast")
-    
-    col1, col2, col3 = st.columns([2, 1, 1])
-    
+    col1, col2, col3 = st.columns([3, 2, 1])
     with col1:
-        ticker = st.text_input("Stock Symbol", value="AAPL", placeholder="e.g., AAPL, TSLA, NVDA")
-    
+        ticker = st.text_input("Enter Stock Ticker", value="AAPL").upper()
     with col2:
-        period = st.selectbox("Period", ["1mo", "3mo", "6mo", "1y"], index=1)
-    
+        period = st.selectbox("Time Period", ["1mo", "3mo", "6mo", "1y", "2y", "5y"], index=2)
     with col3:
-        predict_days = st.slider("Forecast Days", 5, 30, 10)
+        st.write("")
+        st.write("")
+        analyze_btn = st.button("Analyze", type="primary")
     
-    st.markdown("")
-    
-    if st.button("🚀 Generate Forecast", type="primary", use_container_width=True):
-        
-        # Download
-        with st.spinner(f"📥 Loading {ticker} data..."):
-            data, info, error = download_stock_data(ticker, period, "1d")
-        
-        if error:
-            st.error(f"❌ {error}")
-            st.stop()
-        
-        if len(data) < 60:
-            st.error("❌ Not enough data")
-            st.stop()
-        
-        # Current price
-        current_price = data['Close'].iloc[-1]
-        prev_price = data['Close'].iloc[-2]
-        price_change = current_price - prev_price
-        price_change_pct = (price_change / prev_price) * 100
-        
-        st.markdown("### 📊 Market Data")
-        
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Price", f"${current_price:.2f}", f"{price_change:+.2f} ({price_change_pct:+.2f}%)")
-        col2.metric("High", f"${data['High'].iloc[-1]:.2f}")
-        col3.metric("Low", f"${data['Low'].iloc[-1]:.2f}")
-        col4.metric("Volume", f"{data['Volume'].iloc[-1]:,.0f}")
-        
-        st.markdown("---")
-        
-        # Use evolved config
-        config = st.session_state.evolved_config
-        lookback = config['lookback']
-        
-        # Train
-        with st.spinner("🧠 Analyzing patterns..."):
-            try:
-                X, y, scaler = create_sequences(data, lookback)
-                
-                split = int(0.8 * len(X))
-                X_train, X_test = X[:split], X[split:]
-                y_train, y_test = y[:split], y[split:]
-                
-                model = build_lstm_model(lookback, config)
-                
-                progress_bar = st.progress(0)
-                epochs = 15
-                for epoch in range(epochs):
-                    model.fit(X_train, y_train, batch_size=32, epochs=1, verbose=0, validation_split=0.1)
-                    progress_bar.progress((epoch + 1) / epochs)
-                
-                progress_bar.empty()
-                
-            except Exception as e:
-                st.error(f"❌ Error: {e}")
-                st.stop()
-        
-        st.success("✅ Analysis complete!")
-        
-        # Predictions
-        y_pred = model.predict(X_test, verbose=0)
-        y_pred_prices = scaler.inverse_transform(y_pred)
-        y_test_prices = scaler.inverse_transform(y_test.reshape(-1, 1))
-        
-        mae = np.mean(np.abs(y_test_prices - y_pred_prices))
-        accuracy = max(0, 100 - (mae / np.mean(y_test_prices) * 100))
-        
-        if len(y_test_prices) > 1:
-            true_dir = np.diff(y_test_prices.flatten()) > 0
-            pred_dir = np.diff(y_pred_prices.flatten()) > 0
-            dir_accuracy = np.mean(true_dir == pred_dir) * 100
-        else:
-            dir_accuracy = 0
-        
-        st.markdown("### 🎯 AI Performance")
-        
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Price Accuracy", f"{accuracy:.1f}%", "Excellent" if accuracy > 90 else "Good")
-        col2.metric("Direction Accuracy", f"{dir_accuracy:.1f}%", "Strong" if dir_accuracy > 65 else "Moderate")
-        col3.metric("Avg Error", f"${mae:.2f}")
-        
-        st.markdown("---")
-        
-        # Future
-        st.markdown("### 🔮 Price Forecast")
-        
-        last_seq = scaler.transform(data['Close'].values[-lookback:].reshape(-1, 1)).flatten()
-        future_preds = predict_future(model, last_seq, scaler, predict_days)
-        
-        future_dates = pd.date_range(start=data.index[-1] + timedelta(days=1), periods=predict_days, freq='D')
-        
-        fig = go.Figure()
-        
-        # Historical
-        fig.add_trace(go.Scatter(
-            x=data.index[-60:], 
-            y=data['Close'].iloc[-60:], 
-            name="Historical", 
-            line=dict(color='#3b82f6', width=3),
-            mode='lines'
-        ))
-        
-        # Connecting line (bridges the gap smoothly)
-        fig.add_trace(go.Scatter(
-            x=[data.index[-1], future_dates[0]], 
-            y=[current_price, future_preds[0]], 
-            line=dict(color='#f59e0b', width=3),
-            mode='lines',
-            showlegend=False,
-            hoverinfo='skip'
-        ))
-        
-        # Forecast
-        fig.add_trace(go.Scatter(
-            x=future_dates, 
-            y=future_preds, 
-            name="Forecast", 
-            line=dict(color='#f59e0b', width=4, dash='dot'), 
-            mode='lines+markers', 
-            marker=dict(size=8, symbol='diamond')
-        ))
-        
-        fig.update_layout(
-            height=500, 
-            template="plotly_white", 
-            xaxis_title="Date", 
-            yaxis_title="Price ($)", 
-            hovermode='x unified'
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Table
-        st.markdown("### 📅 Forecast Table")
-        forecast_df = pd.DataFrame({
-            'Date': future_dates.strftime('%Y-%m-%d'),
-            'Price': [f"${p:.2f}" for p in future_preds],
-            'Change': [f"{((p - current_price) / current_price * 100):+.2f}%" for p in future_preds]
-        })
-        st.dataframe(forecast_df, use_container_width=True, hide_index=True)
-        
-        # Trading signals
-        final_price = future_preds[-1]
-        total_return = ((final_price - current_price) / current_price) * 100
-        
-        if total_return > 0:
-            take_profit = final_price * 1.02
-            stop_loss = current_price * 0.98
-        else:
-            take_profit = current_price * 1.02
-            stop_loss = final_price * 0.98
-        
-        st.markdown("### 💡 Trading Signals")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if total_return > 5:
-                st.success(f"""
-                **🚀 Strong Buy**
-                
-                Predicted: **{total_return:+.2f}%** in {predict_days} days
-                
-                Entry: ${current_price:.2f}  
-                Target: ${final_price:.2f}  
-                🎯 Take Profit: ${take_profit:.2f}  
-                🛑 Stop Loss: ${stop_loss:.2f}
-                """)
-            elif total_return > 0:
-                st.info(f"""
-                **📈 Buy Signal**
-                
-                Predicted: **{total_return:+.2f}%**
-                
-                Entry: ${current_price:.2f}  
-                Target: ${final_price:.2f}  
-                🎯 Take Profit: ${take_profit:.2f}  
-                🛑 Stop Loss: ${stop_loss:.2f}
-                """)
-            elif total_return > -5:
-                st.warning(f"""
-                **📊 Hold**
-                
-                Predicted: **{total_return:+.2f}%**
-                
-                Current: ${current_price:.2f}  
-                Target: ${final_price:.2f}
-                """)
-            else:
-                st.error(f"""
-                **📉 Sell Signal**
-                
-                Predicted: **{total_return:+.2f}%**
-                
-                Current: ${current_price:.2f}  
-                Target: ${final_price:.2f}
-                """)
-        
-        with col2:
-            st.markdown("#### Risk/Reward")
-            risk = abs(current_price - stop_loss)
-            reward = abs(take_profit - current_price)
-            rr_ratio = reward / risk if risk > 0 else 0
+    if ticker:
+        try:
+            with st.spinner("Fetching data..."):
+                stock = yf.Ticker(ticker)
+                hist = stock.history(period=period)
+                info = stock.info
             
-            st.metric("Ratio", f"{rr_ratio:.2f}:1", "Good" if rr_ratio > 2 else "Fair")
-            st.metric("Potential Gain", f"${reward:.2f}")
-            st.metric("Potential Loss", f"${risk:.2f}")
-        
-        st.caption("⚠️ Educational purposes only. Not financial advice.")
+            if hist.empty:
+                st.error("Invalid ticker")
+            else:
+                hist = calculate_technical_indicators(hist)
+                current_price = hist['Close'].iloc[-1]
+                prev_close = hist['Close'].iloc[-2] if len(hist) > 1 else current_price
+                change_pct = ((current_price - prev_close) / prev_close) * 100
+                
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Current Price", f"${current_price:.2f}", f"{change_pct:+.2f}%")
+                with col2:
+                    if is_premium:
+                        ai_score = calculate_ai_score(hist, info)
+                        st.metric("AI Score", f"{ai_score:.0f}/100")
+                    else:
+                        st.metric("AI Score", "Premium Only")
+                with col3:
+                    st.metric("Volume", f"{info.get('volume', 0)/1e6:.1f}M")
+                with col4:
+                    market_cap = info.get('marketCap', 0)
+                    st.metric("Market Cap", f"${market_cap/1e9:.2f}B" if market_cap > 0 else "N/A")
+                
+                st.markdown("---")
+                st.subheader("Price Chart")
+                
+                fig = make_subplots(rows=3 if is_premium else 1, cols=1, shared_xaxes=True,
+                                   vertical_spacing=0.08, row_heights=[0.6, 0.2, 0.2] if is_premium else [1])
+                
+                fig.add_trace(go.Candlestick(x=hist.index, open=hist['Open'], high=hist['High'],
+                                            low=hist['Low'], close=hist['Close'], name='Price'), row=1, col=1)
+                
+                if is_premium:
+                    fig.add_trace(go.Scatter(x=hist.index, y=hist['SMA_50'], name='SMA 50',
+                                           line=dict(color='orange')), row=1, col=1)
+                    fig.add_trace(go.Scatter(x=hist.index, y=hist['SMA_200'], name='SMA 200',
+                                           line=dict(color='red')), row=1, col=1)
+                    fig.add_trace(go.Scatter(x=hist.index, y=hist['MACD'], name='MACD',
+                                           line=dict(color='blue')), row=2, col=1)
+                    fig.add_trace(go.Scatter(x=hist.index, y=hist['Signal'], name='Signal',
+                                           line=dict(color='red')), row=2, col=1)
+                    fig.add_trace(go.Scatter(x=hist.index, y=hist['RSI'], name='RSI',
+                                           line=dict(color='purple')), row=3, col=1)
+                    fig.add_hline(y=70, line_dash="dash", line_color="red", row=3, col=1)
+                    fig.add_hline(y=30, line_dash="dash", line_color="green", row=3, col=1)
+                
+                fig.update_layout(height=800 if is_premium else 500, template='plotly_dark',
+                                xaxis_rangeslider_visible=False)
+                st.plotly_chart(fig, use_container_width=True)
+                
+                if is_premium:
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.subheader("Fundamentals")
+                        fund_data = {
+                            "Metric": ["P/E Ratio", "Market Cap", "Dividend Yield"],
+                            "Value": [
+                                f"{info.get('trailingPE', 'N/A'):.2f}" if isinstance(info.get('trailingPE'), (int, float)) else "N/A",
+                                f"${info.get('marketCap', 0)/1e9:.2f}B" if info.get('marketCap') else "N/A",
+                                f"{info.get('dividendYield', 0)*100:.2f}%" if info.get('dividendYield') else "N/A"
+                            ]
+                        }
+                        st.dataframe(pd.DataFrame(fund_data), hide_index=True)
+                    with col2:
+                        st.subheader("AI Predictions")
+                        pred_30 = predict_price(hist, 30)
+                        if pred_30:
+                            pred_change = ((pred_30 - current_price) / current_price) * 100
+                            st.metric("30-Day Forecast", f"${pred_30:.2f}", f"{pred_change:+.2f}%")
+                            st.caption("For educational purposes only")
+                
+        except Exception as e:
+            st.error(f"Error: {str(e)}")
 
-# ==========================================
-# MODE 2: ADMIN DASHBOARD
-# ==========================================
+elif page == "Watchlist":
+    st.title("Watchlist")
+    
+    if is_premium:
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            new_ticker = st.text_input("Add Stock", placeholder="e.g., AAPL").upper()
+        with col2:
+            st.write("")
+            st.write("")
+            if st.button("Add", type="primary"):
+                if new_ticker:
+                    if add_to_watchlist(st.session_state.user.id, new_ticker):
+                        st.success(f"Added {new_ticker}")
+                        st.rerun()
+        
+        watchlist = get_user_watchlist(st.session_state.user.id)
+        if watchlist:
+            st.subheader("Your Stocks")
+            for ticker in watchlist:
+                col1, col2 = st.columns([4, 1])
+                with col1:
+                    st.write(f"{ticker}")
+                with col2:
+                    if st.button("Remove", key=f"remove_{ticker}"):
+                        remove_from_watchlist(st.session_state.user.id, ticker)
+                        st.rerun()
+        else:
+            st.info("Your watchlist is empty")
+    else:
+        st.warning("Watchlist is a Premium Feature")
 
 else:
-    st.markdown("### 🔬 Admin Dashboard")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("#### 📊 Evolution Stats")
-        st.write(f"**Generations:** {st.session_state.evolution_stats['current_generation']}")
-        st.write(f"**Models Tested:** {st.session_state.evolution_stats['total_tested']}")
-        st.write(f"**Last Training:** {st.session_state.evolution_stats['last_train_time']}")
-        
-        if st.button("📥 Download Config JSON"):
-            config_json = json.dumps(st.session_state.evolved_config, indent=2)
-            st.download_button(
-                label="💾 Download",
-                data=config_json,
-                file_name=f"evolved_config_gen{st.session_state.evolved_config['generation']}.json",
-                mime="application/json"
-            )
-        
-        st.markdown("---")
-        
-        if st.button("🗑️ Reset All Progress", type="secondary"):
-            if os.path.exists(STATE_FILE):
-                os.remove(STATE_FILE)
-            st.session_state.evolved_config = {
-                'neurons_layer1': 50,
-                'neurons_layer2': 50,
-                'dropout': 0.2,
-                'lookback': 50,
-                'generation': 0,
-                'fitness': 0,
-                'training_stocks': 'Reset',
-                'last_updated': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            }
-            st.session_state.evolution_stats = {
-                'total_tested': 0,
-                'best_fitness_history': [],
-                'current_generation': 0,
-                'last_train_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            }
-            st.success("✅ Progress reset!")
-            st.rerun()
-    
-    with col2:
-        st.markdown("#### 🏆 Best Configuration")
-        st.json(st.session_state.evolved_config)
-    
-    st.markdown("---")
-    
-    if len(st.session_state.evolution_stats['best_fitness_history']) > 0:
-        st.markdown("#### 📈 Fitness Progress")
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(y=st.session_state.evolution_stats['best_fitness_history'], mode='lines+markers', name="Fitness", line=dict(color='#10b981', width=3)))
-        fig.update_layout(height=400, xaxis_title="Generation", yaxis_title="Fitness", template="plotly_white")
-        st.plotly_chart(fig, use_container_width=True)
+    st.info(f"'{page}' page - upgrade to premium for full access!")
 
 st.markdown("---")
-st.caption("🧠 Powered by LSTM • Evolving through Multi-Stock Training")
+st.markdown("WealthStockify © 2025 | For educational purposes only")
