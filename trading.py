@@ -129,7 +129,7 @@ def get_stock_data(ticker, period='6mo'):
                         'volume': int(hist['Volume'].iloc[-1]) if len(hist) > 0 else 0,
                         'marketCap': 0
                     }
-                return hist, info, stock
+                return hist, info
             
         except Exception as e:
             error_msg = str(e).lower()
@@ -140,15 +140,15 @@ def get_stock_data(ticker, period='6mo'):
                     continue
                 else:
                     st.error(f"❌ Rate limit exceeded. Please wait a few minutes and try again.")
-                    return pd.DataFrame(), {}, None
+                    return pd.DataFrame(), {}
             else:
                 if attempt < max_retries - 1:
                     continue
                 else:
                     st.error(f"❌ Error fetching data: {str(e)}")
-                    return pd.DataFrame(), {}, None
+                    return pd.DataFrame(), {}
     
-    return pd.DataFrame(), {}, None
+    return pd.DataFrame(), {}
 
 def calculate_technical_indicators(df):
     """Calculate comprehensive technical indicators"""
@@ -551,7 +551,7 @@ def screen_stocks_advanced():
             if idx > 0:
                 time.sleep(0.5)  # 500ms delay between stocks
             
-            hist, info, _ = get_stock_data(ticker, '6mo')
+            hist, info = get_stock_data(ticker, '6mo')
             
             if not hist.empty and len(hist) > 50:
                 hist = calculate_technical_indicators(hist)
@@ -663,7 +663,7 @@ if page == "Stock Analysis":
     if ticker:
         try:
             with st.spinner(f"Analyzing {ticker}..."):
-                hist, info, stock = get_stock_data(ticker, period)
+                hist, info = get_stock_data(ticker, period)
             
             if hist.empty:
                 st.error("❌ Invalid ticker or no data available")
@@ -1056,7 +1056,7 @@ elif page == "Watchlist":
         watchlist_data = []
         for ticker in st.session_state.watchlist:
             try:
-                hist, info, _ = get_stock_data(ticker, '1mo')
+                hist, info = get_stock_data(ticker, '1mo')
                 if not hist.empty:
                     hist = calculate_technical_indicators(hist)
                     score, _ = calculate_advanced_score(hist, info)
@@ -1131,7 +1131,7 @@ elif page == "Position Sizer":
     if st.button("💡 Calculate Position Size", type="primary", use_container_width=True):
         try:
             # Fetch stock data
-            hist, info, _ = get_stock_data(ps_ticker, '1mo')
+            hist, info = get_stock_data(ps_ticker, '1mo')
             
             if not hist.empty:
                 hist = calculate_technical_indicators(hist)
