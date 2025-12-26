@@ -639,11 +639,16 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # Scanner settings (only show on scanner page)
+    # Scanner settings - initialize with defaults
+    scan_timeframe = '1d'
+    min_quality_score = 70
+    max_results = 20
+    
+    # Show scanner settings only on scanner page
     if st.session_state.page == 'Scanner':
         st.markdown("#### Scanner Settings")
         scan_timeframe = st.selectbox("Timeframe", ["1d", "1h"], index=0)
-        min_quality_score = st.slider("Min Quality Score", 60, 90, 65, 5)
+        min_quality_score = st.slider("Min Quality Score", 60, 90, 70, 5)
         max_results = st.slider("Max Results", 10, 30, 20, 5)
         
         st.markdown("---")
@@ -724,7 +729,7 @@ if page == 'Scanner':
         if st.session_state.last_scan_time:
             st.caption(f"Last scan: {st.session_state.last_scan_time.strftime('%Y-%m-%d %H:%M:%S')}")
         
-        st.markdown("###        st.markdown("### 🎯 Top Trading Setups")
+        st.markdown("### 🎯 Top Trading Setups")
         
         # Display each setup
         for idx, row in df.iterrows():
