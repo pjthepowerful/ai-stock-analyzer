@@ -722,15 +722,11 @@ if page == 'Scanner':
             else:
                 st.info("No setups meeting criteria. Market may be extended or choppy.")
 
-    # Display Results
-    if st.session_state.scan_results is not None and not st.session_state.scan_results.empty:
-        df = st.session_state.scan_results
-        
-        if st.session_state.last_scan_time:
-            st.caption(f"Last scan: {st.session_state.last_scan_time.strftime('%Y-%m-%d %H:%M:%S')}")
-        
-        st.markdown("### 🎯 Top Trading Setups")
-        
+if st.session_state.scan_results is not None and not st.session_state.scan_results.empty:
+    if st.session_state.last_scan_time:
+        st.caption(f"Last scan: {st.session_state.last_scan_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    st.markdown("### 🎯 Top Trading Setups")
         # Display each setup
         for idx, row in df.iterrows():
             # Determine card style
