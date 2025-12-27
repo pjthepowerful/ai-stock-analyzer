@@ -227,7 +227,11 @@ def identify_setup_type(df, info):
         return None, 0, 0, 0, 0, "Not in uptrend structure"
     if pd.notna(ema_20):
         distance_to_ema20 = abs(current_price - ema_20) / ema_20 * 100
-        if (distance_to_ema20 < 2.5 and current_price > ema_20 and rsi > 40 and rsi < 60 and macd_hist > 0):
+        # Check if RSI is rising (green momentum)
+        rsi_prev = df['RSI'].iloc[-2] if len(df) > 1 else rsi
+        rsi_rising = rsi > rsi_prev
+        
+        if (distance_to_ema20 < 2.5 and current_price > ema_20 and rsi > 40 and rsi < 60 and macd_hist > 0 and rsi_rising):
             quality = 85
             if volume_ratio > 1.2:
                 quality += 5
@@ -243,11 +247,15 @@ def identify_setup_type(df, info):
                 'entry': entry,
                 'stop': stop,
                 'target': target,
-                'reason': f'Pullback to 20 EMA in uptrend. RSI: {rsi:.0f}, Vol: {volume_ratio:.1f}x, Stop: 3% risk'
+                'reason': f'Pullback to 20 EMA in uptrend. RSI: {rsi:.0f} ↗️ GREEN, Vol: {volume_ratio:.1f}x, Stop: 3% risk'
             })
     if pd.notna(sma_50):
         distance_to_sma50 = abs(current_price - sma_50) / sma_50 * 100
-        if (distance_to_sma50 < 3.0 and current_price > sma_50 and rsi > 35 and rsi < 55 and sma_50 > sma_200):
+        # Check if RSI is rising (green momentum)
+        rsi_prev = df['RSI'].iloc[-2] if len(df) > 1 else rsi
+        rsi_rising = rsi > rsi_prev
+        
+        if (distance_to_sma50 < 3.0 and current_price > sma_50 and rsi > 35 and rsi < 55 and sma_50 > sma_200 and rsi_rising):
             quality = 75
             if volume_ratio > 1.0:
                 quality += 5
@@ -263,13 +271,17 @@ def identify_setup_type(df, info):
                 'entry': entry,
                 'stop': stop,
                 'target': target,
-                'reason': f'Pullback to 50 SMA support. RSI: {rsi:.0f}, Stop: 3% risk'
+                'reason': f'Pullback to 50 SMA support. RSI: {rsi:.0f} ↗️ GREEN, Stop: 3% risk'
             })
     recent_high = df['High'].iloc[-20:].max()
     distance_from_high = (recent_high - current_price) / current_price * 100
     if distance_from_high < 3:
         last_10_range = (df['High'].iloc[-10:].max() - df['Low'].iloc[-10:].min()) / current_price * 100
-        if (last_10_range < 8 and current_price > ema_20 and volume_ratio > 1.3 and rsi > 50 and rsi < 70):
+        # Check if RSI is rising (green momentum)
+        rsi_prev = df['RSI'].iloc[-2] if len(df) > 1 else rsi
+        rsi_rising = rsi > rsi_prev
+        
+        if (last_10_range < 8 and current_price > ema_20 and volume_ratio > 1.3 and rsi > 50 and rsi < 70 and rsi_rising):
             quality = 80
             if current_price > recent_high:
                 quality += 10
@@ -283,11 +295,15 @@ def identify_setup_type(df, info):
                 'entry': entry,
                 'stop': stop,
                 'target': target,
-                'reason': f'Tight consolidation near highs. Range: {last_10_range:.1f}%, Vol: {volume_ratio:.1f}x, Stop: 3% risk'
+                'reason': f'Tight consolidation near highs. Range: {last_10_range:.1f}%, Vol: {volume_ratio:.1f}x, RSI: {rsi:.0f} ↗️ GREEN, Stop: 3% risk'
             })
     recent_low = df['Low'].iloc[-20:].min()
     distance_from_low = (current_price - recent_low) / recent_low * 100
-    if (distance_from_low < 5 and current_price > ema_9 and rsi > 30 and rsi < 50 and df['Relative_Strength'].iloc[-1] > 0):
+    # Check if RSI is rising (green momentum)
+    rsi_prev = df['RSI'].iloc[-2] if len(df) > 1 else rsi
+    rsi_rising = rsi > rsi_prev
+    
+    if (distance_from_low < 5 and current_price > ema_9 and rsi > 30 and rsi < 50 and df['Relative_Strength'].iloc[-1] > 0 and rsi_rising):
         quality = 70
         if volume_ratio > 1.5:
             quality += 5
@@ -303,9 +319,14 @@ def identify_setup_type(df, info):
             'entry': entry,
             'stop': stop,
             'target': target,
-            'reason': f'Bounce from support. RS > Market, RSI: {rsi:.0f}, Stop: 3% risk'
+            'reason': f'Bounce from support. RS > Market, RSI: {rsi:.0f} ↗️ GREEN, Stop: 3% risk'
         })
-    if (current_price > sma_50 and sma_50 > sma_200 and rsi < 35 and rsi > 25 and macd_hist < 0 and df['MACD_Histogram'].iloc[-2] < df['MACD_Histogram'].iloc[-1]):
+    # Check if RSI is rising (green momentum) - critical for mean reversion
+    rsi_prev = df['RSI'].iloc[-2] if len(df) > 1 else rsi
+    rsi_2bars_ago = df['RSI'].iloc[-3] if len(df) > 2 else rsi_prev
+    rsi_rising = rsi > rsi_prev and rsi_prev > rsi_2bars_ago  # Must be rising for 2 bars
+    
+    if (current_price > sma_50 and sma_50 > sma_200 and rsi < 35 and rsi > 25 and macd_hist < 0 and df['MACD_Histogram'].iloc[-2] < df['MACD_Histogram'].iloc[-1] and rsi_rising):
         quality = 65
         if df['Relative_Strength'].iloc[-1] > 0:
             quality += 5
@@ -319,7 +340,7 @@ def identify_setup_type(df, info):
             'entry': entry,
             'stop': stop,
             'target': target,
-            'reason': f'Oversold bounce in uptrend. RSI: {rsi:.0f}, MACD turning, Stop: 3% risk'
+            'reason': f'Oversold bounce in uptrend. RSI: {rsi:.0f} ↗️ GREEN, MACD turning, Stop: 3% risk'
         })
     if not setups:
         return None, 0, 0, 0, 0, "No valid setup identified"
