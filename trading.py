@@ -234,7 +234,7 @@ def identify_setup_type(df, info):
             if df['Close'].iloc[-3:].min() <= ema_20 <= df['High'].iloc[-3:].max():
                 quality += 5
             entry = current_price
-            stop = ema_20 - (atr * 0.5)
+            stop = entry * 0.97  # 3% below entry
             risk = entry - stop
             target = entry + (risk * 3)
             setups.append({
@@ -243,7 +243,7 @@ def identify_setup_type(df, info):
                 'entry': entry,
                 'stop': stop,
                 'target': target,
-                'reason': f'Pullback to 20 EMA in uptrend. RSI: {rsi:.0f}, Vol: {volume_ratio:.1f}x'
+                'reason': f'Pullback to 20 EMA in uptrend. RSI: {rsi:.0f}, Vol: {volume_ratio:.1f}x, Stop: 3% risk'
             })
     if pd.notna(sma_50):
         distance_to_sma50 = abs(current_price - sma_50) / sma_50 * 100
@@ -254,7 +254,7 @@ def identify_setup_type(df, info):
             if df['Close'].iloc[-5:].min() <= sma_50:
                 quality += 5
             entry = current_price
-            stop = sma_50 - (atr * 0.75)
+            stop = entry * 0.97  # 3% below entry
             risk = entry - stop
             target = entry + (risk * 2.5)
             setups.append({
@@ -263,7 +263,7 @@ def identify_setup_type(df, info):
                 'entry': entry,
                 'stop': stop,
                 'target': target,
-                'reason': f'Pullback to 50 SMA support. RSI: {rsi:.0f}'
+                'reason': f'Pullback to 50 SMA support. RSI: {rsi:.0f}, Stop: 3% risk'
             })
     recent_high = df['High'].iloc[-20:].max()
     distance_from_high = (recent_high - current_price) / current_price * 100
@@ -274,7 +274,7 @@ def identify_setup_type(df, info):
             if current_price > recent_high:
                 quality += 10
             entry = current_price
-            stop = df['Low'].iloc[-10:].min() - (atr * 0.3)
+            stop = entry * 0.97  # 3% below entry
             risk = entry - stop
             target = entry + (risk * 3.5)
             setups.append({
@@ -283,7 +283,7 @@ def identify_setup_type(df, info):
                 'entry': entry,
                 'stop': stop,
                 'target': target,
-                'reason': f'Tight consolidation near highs. Range: {last_10_range:.1f}%, Vol: {volume_ratio:.1f}x'
+                'reason': f'Tight consolidation near highs. Range: {last_10_range:.1f}%, Vol: {volume_ratio:.1f}x, Stop: 3% risk'
             })
     recent_low = df['Low'].iloc[-20:].min()
     distance_from_low = (current_price - recent_low) / recent_low * 100
@@ -294,7 +294,7 @@ def identify_setup_type(df, info):
         if current_price > prev_close:
             quality += 5
         entry = current_price
-        stop = recent_low - (atr * 0.5)
+        stop = entry * 0.97  # 3% below entry
         risk = entry - stop
         target = entry + (risk * 2.5)
         setups.append({
@@ -303,23 +303,23 @@ def identify_setup_type(df, info):
             'entry': entry,
             'stop': stop,
             'target': target,
-            'reason': f'Bounce from support. RS > Market, RSI: {rsi:.0f}'
+            'reason': f'Bounce from support. RS > Market, RSI: {rsi:.0f}, Stop: 3% risk'
         })
     if (current_price > sma_50 and sma_50 > sma_200 and rsi < 35 and rsi > 25 and macd_hist < 0 and df['MACD_Histogram'].iloc[-2] < df['MACD_Histogram'].iloc[-1]):
         quality = 65
         if df['Relative_Strength'].iloc[-1] > 0:
             quality += 5
         entry = current_price
-        stop = current_price - (atr * 1.5)
+        stop = entry * 0.97  # 3% below entry
         risk = entry - stop
-        target = ema_20
+        target = entry + (risk * 2)  # 2R target for mean reversion
         setups.append({
             'type': 'MEAN_REVERSION',
             'quality': quality,
             'entry': entry,
             'stop': stop,
             'target': target,
-            'reason': f'Oversold bounce in uptrend. RSI: {rsi:.0f}, MACD turning'
+            'reason': f'Oversold bounce in uptrend. RSI: {rsi:.0f}, MACD turning, Stop: 3% risk'
         })
     if not setups:
         return None, 0, 0, 0, 0, "No valid setup identified"
