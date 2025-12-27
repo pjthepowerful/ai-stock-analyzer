@@ -419,6 +419,16 @@ def create_setup_chart(ticker, timeframe='1d'):
     return fig
 
 with st.sidebar:
+    st.markdown("""
+    <style>
+        .stButton > button {
+            white-space: nowrap !important;
+            min-width: 80px !important;
+            font-size: 0.85rem !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
     st.markdown("# 📊 Pro Swing Trader")
     st.markdown("### Institutional Grade System")
     st.markdown("---")
@@ -722,107 +732,199 @@ elif page == 'Individual':
 elif page == 'Position Sizer':
     st.title("💰 Professional Position Sizer")
     st.markdown("Calculate optimal position size with institutional risk management")
-    st.markdown("### ⚡ Quick Presets")
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        if st.button("📊 Conservative (0.5%)", use_container_width=True):
-            st.session_state.risk_per_trade = 0.5
-            st.rerun()
-    with col2:
-        if st.button("📈 Standard (1.0%)", use_container_width=True):
-            st.session_state.risk_per_trade = 1.0
-            st.rerun()
-    with col3:
-        if st.button("🚀 Aggressive (1.5%)", use_container_width=True):
-            st.session_state.risk_per_trade = 1.5
-            st.rerun()
-    with col4:
-        st.metric("Current Risk", f"{st.session_state.risk_per_trade}%")
-    st.markdown("---")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("### 📝 Trade Details")
-        ticker_ps = st.text_input("Ticker (Optional)", value="", placeholder="e.g., AAPL").upper()
-        entry_price = st.number_input("Entry Price ($)", min_value=0.01, value=150.00, step=0.01)
-        stop_loss_price = st.number_input("Stop Loss ($)", min_value=0.01, value=145.00, step=0.01)
-        target_price = st.number_input("Target Price ($)", min_value=0.01, value=165.00, step=0.01)
-        if ticker_ps and st.button("Get Current Price"):
-            with st.spinner(f"Fetching {ticker_ps}..."):
-                hist, info = get_stock_data_optimized(ticker_ps, period='5d', interval='1d')
-                if not hist.empty:
-                    live_price = hist['Close'].iloc[-1]
-                    st.info(f"💡 Current {ticker_ps} price: ${live_price:.2f}")
-    with col2:
-        st.markdown("### ⚙️ Advanced Options")
-        custom_account = st.number_input("Account Size (Override)", min_value=1000, value=st.session_state.account_size, step=10000, help="Override sidebar account size")
-        custom_risk = st.number_input("Risk % (Override)", min_value=0.1, max_value=5.0, value=st.session_state.risk_per_trade, step=0.1, help="Override sidebar risk %")
-        max_position_pct = st.slider("Max Position Size (% of Account)", min_value=5, max_value=50, value=25, step=5)
-        commission = st.number_input("Commission Per Trade ($)", min_value=0.0, value=0.0, step=0.1)
-    st.markdown("---")
-    if st.button("🧮 Calculate Position Size", type="primary", use_container_width=True):
-        if entry_price <= 0 or stop_loss_price <= 0 or target_price <= 0:
-            st.error("❌ All prices must be greater than 0")
-        elif stop_loss_price >= entry_price:
-            st.error("❌ Stop loss must be below entry price")
-        elif target_price <= entry_price:
-            st.error("❌ Target must be above entry price")
-        else:
-            risk_per_share = entry_price - stop_loss_price
-            reward_per_share = target_price - entry_price
-            reward_risk_ratio = reward_per_share / risk_per_share
-            risk_amount = custom_account * (custom_risk / 100)
-            shares = int(risk_amount / risk_per_share)
-            position_value = shares * entry_price
-            max_position_value = custom_account * (max_position_pct / 100)
-            if position_value > max_position_value:
-                st.warning(f"⚠️ Position size exceeds max. Adjusting...")
-                shares = int(max_position_value / entry_price)
+    
+    # Tab selection for manual entry vs stock scan
+    tab1, tab2 = st.tabs(["📝 Manual Entry", "🔍 Scan Stock"])
+    
+    with tab1:
+        # Quick preset buttons
+        st.markdown("### ⚡ Quick Presets")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            if st.button("📊 Conservative (0.5%)", use_container_width=True, key="preset_cons"):
+                st.session_state.risk_per_trade = 0.5
+                st.rerun()
+        with col2:
+            if st.button("📈 Standard (1.0%)", use_container_width=True, key="preset_std"):
+                st.session_state.risk_per_trade = 1.0
+                st.rerun()
+        with col3:
+            if st.button("🚀 Aggressive (1.5%)", use_container_width=True, key="preset_agg"):
+                st.session_state.risk_per_trade = 1.5
+                st.rerun()
+        with col4:
+            st.metric("Current Risk", f"{st.session_state.risk_per_trade}%")
+        
+        st.markdown("---")
+        
+        # Input section
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### 📝 Trade Details")
+            
+            ticker_ps = st.text_input("Ticker (Optional)", value="", placeholder="e.g., AAPL", key="manual_ticker").upper()
+            entry_price = st.number_input("Entry Price ($)", min_value=0.01, value=150.00, step=0.01)
+            stop_loss_price = st.number_input("Stop Loss ($)", min_value=0.01, value=145.00, step=0.01)
+            target_price = st.number_input("Target Price ($)", min_value=0.01, value=165.00, step=0.01)
+            
+            # Fetch live price if ticker provided
+            if ticker_ps and st.button("Get Current Price", key="get_price_manual"):
+                with st.spinner(f"Fetching {ticker_ps}..."):
+                    hist, info = get_stock_data_optimized(ticker_ps, period='5d', interval='1d')
+                    if not hist.empty:
+                        live_price = hist['Close'].iloc[-1]
+                        st.info(f"💡 Current {ticker_ps} price: ${live_price:.2f}")
+        
+        with col2:
+            st.markdown("### ⚙️ Advanced Options")
+            
+            custom_account = st.number_input(
+                "Account Size (Override)",
+                min_value=1000,
+                value=st.session_state.account_size,
+                step=10000,
+                help="Override sidebar account size",
+                key="manual_account"
+            )
+            
+            custom_risk = st.number_input(
+                "Risk % (Override)",
+                min_value=0.1,
+                max_value=5.0,
+                value=st.session_state.risk_per_trade,
+                step=0.1,
+                help="Override sidebar risk %",
+                key="manual_risk"
+            )
+            
+            max_position_pct = st.slider(
+                "Max Position Size (% of Account)",
+                min_value=5,
+                max_value=50,
+                value=25,
+                step=5,
+                key="manual_max_pos"
+            )
+            
+            commission = st.number_input(
+                "Commission Per Trade ($)",
+                min_value=0.0,
+                value=0.0,
+                step=0.1,
+                key="manual_commission"
+            )
+        
+        st.markdown("---")
+        
+        # Calculate button
+        if st.button("🧮 Calculate Position Size", type="primary", use_container_width=True, key="calc_manual"):
+            # Validation
+            if entry_price <= 0 or stop_loss_price <= 0 or target_price <= 0:
+                st.error("❌ All prices must be greater than 0")
+            elif stop_loss_price >= entry_price:
+                st.error("❌ Stop loss must be below entry price")
+            elif target_price <= entry_price:
+                st.error("❌ Target must be above entry price")
+            else:
+                # Calculations
+                risk_per_share = entry_price - stop_loss_price
+                reward_per_share = target_price - entry_price
+                reward_risk_ratio = reward_per_share / risk_per_share
+                
+                risk_amount = custom_account * (custom_risk / 100)
+                shares = int(risk_amount / risk_per_share)
                 position_value = shares * entry_price
-            st.success("✅ Position Size Calculated")
-            st.markdown("### 📊 Position Details")
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Shares to Buy", f"{shares:,}")
-            with col2:
-                st.metric("Position Value", f"${position_value:,.0f}")
-            with col3:
-                portfolio_allocation = (position_value / custom_account) * 100
-                st.metric("Portfolio %", f"{portfolio_allocation:.1f}%")
-            with col4:
-                st.metric("R:R Ratio", f"{reward_risk_ratio:.2f}:1")
-            st.markdown("---")
-            st.markdown("### 🎯 Risk & Reward Analysis")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.markdown("**📉 Risk Metrics**")
-                st.metric("Risk Per Share", f"${risk_per_share:.2f}")
-                st.metric("Total Risk", f"${risk_amount:,.0f}")
-                risk_pct_of_account = (risk_amount / custom_account) * 100
-                st.metric("Risk % of Account", f"{risk_pct_of_account:.2f}%")
-            with col2:
-                st.markdown("**📈 Reward Metrics**")
-                st.metric("Reward Per Share", f"${reward_per_share:.2f}")
-                potential_profit = shares * reward_per_share
-                st.metric("Potential Profit", f"${potential_profit:,.0f}")
-                reward_pct_of_account = (potential_profit / custom_account) * 100
-                st.metric("Reward % of Account", f"{reward_pct_of_account:.2f}%")
-            with col3:
-                st.markdown("**💼 Trade Cost**")
-                total_cost = position_value + (commission * 2)
-                st.metric("Entry Cost", f"${position_value:,.0f}")
-                if commission > 0:
-                    st.metric("Total Commission", f"${commission * 2:.2f}")
-                st.metric("Total Capital Needed", f"${total_cost:,.0f}")
-            st.markdown("---")
-            st.markdown("### 📊 Scenario Analysis")
-            scenarios = pd.DataFrame({'Scenario': ['🔴 Stop Loss Hit', '🟡 Breakeven', '🟢 Target Hit (1R)', '🟢 Target Hit (2R)', '🚀 Full Target'], 'Exit Price': [stop_loss_price, entry_price, entry_price + (risk_per_share * 1), entry_price + (risk_per_share * 2), target_price]})
-            scenarios['P&L'] = (scenarios['Exit Price'] - entry_price) * shares
-            scenarios['Account Impact'] = (scenarios['P&L'] / custom_account) * 100
-            scenarios['New Account Value'] = custom_account + scenarios['P&L']
-            st.dataframe(scenarios.style.format({'Exit Price': '${:.2f}', 'P&L': '${:,.2f}', 'Account Impact': '{:+.2f}%', 'New Account Value': '${:,.2f}'}), use_container_width=True, hide_index=True)
-            st.markdown("---")
-            st.markdown("### 📋 Order Summary")
-            order_summary = f"""**Stock:** {ticker_ps if ticker_ps else 'N/A'}
+                
+                # Check position size limits
+                max_position_value = custom_account * (max_position_pct / 100)
+                
+                if position_value > max_position_value:
+                    st.warning(f"⚠️ Position size exceeds max. Adjusting...")
+                    shares = int(max_position_value / entry_price)
+                    position_value = shares * entry_price
+                
+                # Display results
+                st.success("✅ Position Size Calculated")
+                
+                st.markdown("### 📊 Position Details")
+                
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("Shares to Buy", f"{shares:,}")
+                with col2:
+                    st.metric("Position Value", f"${position_value:,.0f}")
+                with col3:
+                    portfolio_allocation = (position_value / custom_account) * 100
+                    st.metric("Portfolio %", f"{portfolio_allocation:.1f}%")
+                with col4:
+                    st.metric("R:R Ratio", f"{reward_risk_ratio:.2f}:1")
+                
+                st.markdown("---")
+                
+                # Risk Analysis
+                st.markdown("### 🎯 Risk & Reward Analysis")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.markdown("**📉 Risk Metrics**")
+                    st.metric("Risk Per Share", f"${risk_per_share:.2f}")
+                    st.metric("Total Risk", f"${risk_amount:,.0f}")
+                    risk_pct_of_account = (risk_amount / custom_account) * 100
+                    st.metric("Risk % of Account", f"{risk_pct_of_account:.2f}%")
+                
+                with col2:
+                    st.markdown("**📈 Reward Metrics**")
+                    st.metric("Reward Per Share", f"${reward_per_share:.2f}")
+                    potential_profit = shares * reward_per_share
+                    st.metric("Potential Profit", f"${potential_profit:,.0f}")
+                    reward_pct_of_account = (potential_profit / custom_account) * 100
+                    st.metric("Reward % of Account", f"{reward_pct_of_account:.2f}%")
+                
+                with col3:
+                    st.markdown("**💼 Trade Cost**")
+                    total_cost = position_value + (commission * 2)
+                    st.metric("Entry Cost", f"${position_value:,.0f}")
+                    if commission > 0:
+                        st.metric("Total Commission", f"${commission * 2:.2f}")
+                    st.metric("Total Capital Needed", f"${total_cost:,.0f}")
+                
+                st.markdown("---")
+                
+                # Scenario Analysis
+                st.markdown("### 📊 Scenario Analysis")
+                
+                scenarios = pd.DataFrame({
+                    'Scenario': [
+                        '🔴 Stop Loss Hit',
+                        '🟡 Breakeven',
+                        '🟢 Target Hit (1R)',
+                        '🟢 Target Hit (2R)',
+                        '🚀 Full Target'
+                    ],
+                    'Exit Price': [
+                        stop_loss_price,
+                        entry_price,
+                        entry_price + (risk_per_share * 1),
+                        entry_price + (risk_per_share * 2),
+                        target_price
+                    ]
+                })
+                
+                scenarios['P&L'] = (scenarios['Exit Price'] - entry_price) * shares
+                scenarios['Account Impact'] = (scenarios['P&L'] / custom_account) * 100
+                scenarios['New Account Value'] = custom_account + scenarios['P&L']
+                
+                st.dataframe(scenarios.style.format({'Exit Price': '${:.2f}', 'P&L': '${:,.2f}', 'Account Impact': '{:+.2f}%', 'New Account Value': '${:,.2f}'}), use_container_width=True, hide_index=True)
+                
+                # Order Summary
+                st.markdown("---")
+                st.markdown("### 📋 Order Summary")
+                
+                order_summary = f"""**Stock:** {ticker_ps if ticker_ps else 'N/A'}
 **Action:** BUY {shares:,} shares
 **Entry Price:** ${entry_price:.2f}
 **Stop Loss:** ${stop_loss_price:.2f}
@@ -831,7 +933,266 @@ elif page == 'Position Sizer':
 **Risk:** ${risk_amount:,.0f} ({risk_pct_of_account:.2f}% of account)
 **Potential Profit:** ${potential_profit:,.0f} ({reward_pct_of_account:.2f}% of account)
 **R:R Ratio:** {reward_risk_ratio:.2f}:1"""
-            st.code(order_summary, language=None)
+                
+                st.code(order_summary, language=None)
+    
+    with tab2:
+        st.markdown("### 🔍 Scan Individual Stock for Setups")
+        st.markdown("Automatically analyze any stock and calculate position sizing based on identified setups")
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            scan_ticker = st.text_input("Enter Stock Ticker", value="", placeholder="e.g., AAPL, TSLA, NVDA", key="scan_ticker").upper()
+        
+        with col2:
+            st.write("")
+            st.write("")
+            scan_timeframe_ps = st.selectbox("Timeframe", ["1d", "1h"], index=0, key="scan_tf_ps")
+        
+        if scan_ticker and st.button("🚀 Scan Stock", type="primary", use_container_width=True, key="scan_stock_btn"):
+            with st.spinner(f"Analyzing {scan_ticker} from Yahoo Finance..."):
+                period = '6mo' if scan_timeframe_ps == '1d' else '2mo'
+                hist, info = get_stock_data_optimized(scan_ticker, period=period, interval=scan_timeframe_ps)
+                
+                if hist.empty or len(hist) < 60:
+                    st.error(f"❌ Unable to fetch sufficient data for {scan_ticker} from Yahoo Finance")
+                else:
+                    # Calculate indicators
+                    hist = calculate_swing_indicators(hist)
+                    
+                    # Get setup analysis
+                    setup_type, quality, entry, stop, target, reason = identify_setup_type(hist, info)
+                    
+                    # Current metrics
+                    current_price = hist['Close'].iloc[-1]
+                    rsi = hist['RSI'].iloc[-1]
+                    volume_ratio = hist['Volume_Ratio'].iloc[-1]
+                    
+                    # Market regime
+                    market_regime, market_strength = get_market_regime()
+                    
+                    # Display current price
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        prev_close = hist['Close'].iloc[-2]
+                        change_pct = ((current_price - prev_close) / prev_close) * 100
+                        st.metric("Current Price", f"${current_price:.2f}", f"{change_pct:+.2f}%")
+                    
+                    with col2:
+                        st.metric("RSI", f"{rsi:.0f}")
+                    
+                    with col3:
+                        st.metric("Volume", f"{volume_ratio:.1f}x avg")
+                    
+                    with col4:
+                        regime_color = {'BULLISH': '🟢', 'NEUTRAL_BULLISH': '🟡', 'BEARISH': '🔴', 'NEUTRAL': '⚪'}
+                        st.metric("Market", f"{regime_color.get(market_regime, '⚪')} {market_regime}")
+                    
+                    st.markdown("---")
+                    
+                    # Setup Analysis
+                    if setup_type and quality >= 60:
+                        # Quality badge
+                        if quality >= 80:
+                            card_class = "strong-buy"
+                            badge = "🔥 STRONG SETUP"
+                        elif quality >= 70:
+                            card_class = "buy"
+                            badge = "✅ GOOD SETUP"
+                        else:
+                            card_class = "caution"
+                            badge = "⚠️ FAIR SETUP"
+                        
+                        st.markdown(f"""<div class="setup-card {card_class}"><h2>{badge}</h2><h3>{setup_type.replace('_', ' ').title()}</h3><p><strong>Quality Score: {quality}/100</strong></p><p>{reason}</p></div>""", unsafe_allow_html=True)
+                        
+                        # Trade Plan
+                        st.markdown("### 📋 Trade Plan")
+                        
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            st.markdown("**🟢 Entry Zone**")
+                            st.metric("Entry Price", f"${entry:.2f}")
+                            st.caption("Execute at or below this price")
+                        
+                        with col2:
+                            st.markdown("**🔴 Stop Loss**")
+                            st.metric("Stop Price", f"${stop:.2f}")
+                            risk_pct = ((entry - stop) / entry) * 100
+                            st.caption(f"Risk: {risk_pct:.1f}% from entry")
+                        
+                        with col3:
+                            st.markdown("**🎯 Target**")
+                            st.metric("Target Price", f"${target:.2f}")
+                            reward_pct = ((target - entry) / entry) * 100
+                            st.caption(f"Reward: {reward_pct:.1f}% from entry")
+                        
+                        # Position Sizing
+                        st.markdown("---")
+                        st.markdown("### 💰 Position Sizing Calculator")
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            scan_account = st.number_input(
+                                "Account Size ($)",
+                                min_value=1000,
+                                value=st.session_state.account_size,
+                                step=10000,
+                                key="scan_account"
+                            )
+                        
+                        with col2:
+                            scan_risk = st.number_input(
+                                "Risk Per Trade (%)",
+                                min_value=0.1,
+                                max_value=5.0,
+                                value=st.session_state.risk_per_trade,
+                                step=0.1,
+                                key="scan_risk"
+                            )
+                        
+                        # Calculate position size
+                        shares, position_value = calculate_position_size(
+                            scan_account,
+                            scan_risk,
+                            entry,
+                            stop
+                        )
+                        
+                        risk_amount = scan_account * (scan_risk / 100)
+                        potential_profit = shares * (target - entry)
+                        reward_risk_ratio = (target - entry) / (entry - stop)
+                        
+                        st.markdown("---")
+                        
+                        col1, col2, col3, col4 = st.columns(4)
+                        
+                        with col1:
+                            st.metric("Shares to Buy", f"{shares:,}")
+                        with col2:
+                            st.metric("Position Value", f"${position_value:,.0f}")
+                        with col3:
+                            st.metric("Risk Amount", f"${risk_amount:,.0f}")
+                        with col4:
+                            st.metric("R:R Ratio", f"{reward_risk_ratio:.1f}:1")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("Potential Profit", f"${potential_profit:,.0f}")
+                        with col2:
+                            portfolio_pct = (position_value / scan_account) * 100
+                            st.metric("Portfolio %", f"{portfolio_pct:.1f}%")
+                        
+                        # Chart
+                        st.markdown("---")
+                        st.markdown("### 📈 Technical Chart")
+                        
+                        chart_fig = create_setup_chart(scan_ticker, scan_timeframe_ps)
+                        if chart_fig:
+                            st.plotly_chart(chart_fig, use_container_width=True)
+                        
+                        # Scenario Analysis
+                        st.markdown("---")
+                        st.markdown("### 📊 Exit Scenarios")
+                        
+                        risk_per_share = entry - stop
+                        
+                        scenarios = pd.DataFrame({
+                            'Scenario': [
+                                '🔴 Stop Loss Hit',
+                                '🟡 Breakeven',
+                                '🟢 Target Hit (1R)',
+                                '🟢 Target Hit (2R)',
+                                '🚀 Full Target'
+                            ],
+                            'Exit Price': [
+                                stop,
+                                entry,
+                                entry + (risk_per_share * 1),
+                                entry + (risk_per_share * 2),
+                                target
+                            ]
+                        })
+                        
+                        scenarios['P&L'] = (scenarios['Exit Price'] - entry) * shares
+                        scenarios['Account Impact'] = (scenarios['P&L'] / scan_account) * 100
+                        scenarios['New Account Value'] = scan_account + scenarios['P&L']
+                        
+                        st.dataframe(
+                            scenarios.style.format({
+                                'Exit Price': '${:.2f}',
+                                'P&L': '${:,.2f}',
+                                'Account Impact': '{:+.2f}%',
+                                'New Account Value': '${:,.2f}'
+                            }),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                        
+                        # Order Summary
+                        st.markdown("---")
+                        st.markdown("### 📋 Trade Summary")
+                        
+                        portfolio_allocation = (position_value / scan_account) * 100
+                        risk_pct_of_account = (risk_amount / scan_account) * 100
+                        reward_pct_of_account = (potential_profit / scan_account) * 100
+                        
+                        order_summary = f"""**Stock:** {scan_ticker}
+**Setup Type:** {setup_type.replace('_', ' ').title()}
+**Quality Score:** {quality}/100
+
+**Action:** BUY {shares:,} shares
+**Entry Price:** ${entry:.2f}
+**Stop Loss:** ${stop:.2f}
+**Target:** ${target:.2f}
+
+**Position Size:** ${position_value:,.0f} ({portfolio_allocation:.1f}% of account)
+**Risk:** ${risk_amount:,.0f} ({risk_pct_of_account:.2f}% of account)
+**Potential Profit:** ${potential_profit:,.0f} ({reward_pct_of_account:.2f}% of account)
+**R:R Ratio:** {reward_risk_ratio:.2f}:1
+
+**Analysis:** {reason}
+"""
+                        
+                        st.code(order_summary, language=None)
+                        
+                        # Technical Details
+                        st.markdown("---")
+                        st.markdown("### 📊 Technical Details")
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.markdown("**Moving Averages**")
+                            ema_20 = hist['EMA_20'].iloc[-1]
+                            sma_50 = hist['SMA_50'].iloc[-1]
+                            sma_200 = hist['SMA_200'].iloc[-1]
+                            
+                            st.text(f"EMA 20: ${ema_20:.2f} ({((current_price/ema_20-1)*100):+.1f}%)")
+                            st.text(f"SMA 50: ${sma_50:.2f} ({((current_price/sma_50-1)*100):+.1f}%)")
+                            if pd.notna(sma_200):
+                                st.text(f"SMA 200: ${sma_200:.2f} ({((current_price/sma_200-1)*100):+.1f}%)")
+                        
+                        with col2:
+                            st.markdown("**Momentum**")
+                            macd = hist['MACD'].iloc[-1]
+                            macd_signal = hist['MACD_Signal'].iloc[-1]
+                            
+                            st.text(f"RSI: {rsi:.1f}")
+                            st.text(f"MACD: {macd:.2f}")
+                            st.text(f"Volume Ratio: {volume_ratio:.1f}x")
+                        
+                    else:
+                        st.warning(f"⚠️ No high-quality setup identified for {scan_ticker}")
+                        st.info(f"**Reason:** {reason}")
+                        st.markdown("**Suggestions:**")
+                        st.markdown("- Wait for a pullback to EMA 20 or SMA 50")
+                        st.markdown("- Look for consolidation near recent highs")
+                        st.markdown("- Check if stock is in a confirmed uptrend")
+                        st.markdown("- Try the manual entry tab to calculate position size anyway")
 
 st.markdown("---")
 st.markdown("""<div style='text-align: center; color: #888; padding: 1rem;'><p><strong>Professional Swing Trading System</strong> | Built for Consistency</p><p style='font-size: 0.85rem;'>⚠️ Trading involves risk. This is for educational purposes. Not financial advice.</p></div>""", unsafe_allow_html=True)
