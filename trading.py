@@ -722,11 +722,15 @@ if page == 'Scanner':
             else:
                 st.info("No setups meeting criteria. Market may be extended or choppy.")
 
-if st.session_state.scan_results is not None and not st.session_state.scan_results.empty:
-    if st.session_state.last_scan_time:
-        st.caption(f"Last scan: {st.session_state.last_scan_time.strftime('%Y-%m-%d %H:%M:%S')}")
-    
-    st.markdown("### 🎯 Top Trading Setups")
+    # Display scan results
+    if st.session_state.scan_results is not None and not st.session_state.scan_results.empty:
+        df = st.session_state.scan_results
+        
+        if st.session_state.last_scan_time:
+            st.caption(f"Last scan: {st.session_state.last_scan_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        st.markdown("### 🎯 Top Trading Setups")
+        
         # Display each setup
         for idx, row in df.iterrows():
             # Determine card style
@@ -1294,155 +1298,7 @@ elif page == 'Position Sizer':
 **R:R Ratio:** {reward_risk_ratio:.2f}:1
             """
             
-            st.code(order_summary, language=None))
-    
-    # Display each setup
-    for idx, row in df.iterrows():
-        # Determine card style
-        if row['Quality'] >= 80:
-            card_class = "strong-buy"
-            badge = "🔥 STRONG"
-        elif row['Quality'] >= 70:
-            card_class = "buy"
-            badge = "✅ GOOD"
-        else:
-            card_class = "caution"
-            badge = "⚠️ MONITOR"
-        
-        # Setup tags
-        setup_tags = {
-            'Ema 20 Pullback': 'tag-pullback',
-            'Sma 50 Pullback': 'tag-pullback',
-            'Consolidation Breakout': 'tag-breakout',
-            'Support Bounce': 'tag-trend',
-            'Mean Reversion': 'tag-reversal'
-        }
-        tag_class = setup_tags.get(row['Setup'], 'tag-trend')
-        
-        st.markdown(f"""
-        <div class="setup-card {card_class}">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <h2 style="margin: 0;">{row['Ticker']} - {badge}</h2>
-                    <span class="strategy-tag {tag_class}">{row['Setup']}</span>
-                </div>
-                <div style="text-align: right;">
-                    <div style="font-size: 2rem; font-weight: bold;">{row['Quality']}/100</div>
-                    <div style="color: #888;">Quality Score</div>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Metrics row
-        col1, col2, col3, col4, col5, col6 = st.columns(6)
-        
-        with col1:
-            st.metric("Entry", f"${row['Entry']:.2f}")
-        with col2:
-            st.metric("Stop Loss", f"${row['Stop']:.2f}")
-        with col3:
-            st.metric("Target", f"${row['Target']:.2f}")
-        with col4:
-            st.metric("R:R Ratio", f"{row['R_R_Ratio']:.1f}R")
-        with col5:
-            st.metric("Position Size", f"{row['Shares']:,} shares")
-        with col6:
-            st.metric("Capital", f"${row['Position_$']:,.0f}")
-        
-        # Additional info
-        col1, col2 = st.columns([2, 1])
-        
-        with col1:
-            st.caption(f"**Analysis:** {row['Reason']}")
-            risk_pct = (row['Risk_$'] / row['Entry']) * 100
-            reward_pct = (row['Reward_$'] / row['Entry']) * 100
-            st.caption(f"Risk: ${row['Risk_$']:.2f} ({risk_pct:.1f}%) | Reward: ${row['Reward_$']:.2f} ({reward_pct:.1f}%)")
-        
-        with col2:
-            if st.button(f"📊 View Chart", key=f"chart_{row['Ticker']}", use_container_width=True):
-                chart_fig = create_setup_chart(row['Ticker'], scan_timeframe)
-                if chart_fig:
-                    st.plotly_chart(chart_fig, use_container_width=True)
-        
-        st.markdown("---")
-    
-    # Summary table
-    with st.expander("📋 Full Results Table", expanded=False):
-        display_df = df[[
-            'Ticker', 'Setup', 'Quality', 'Entry', 'Stop', 'Target', 
-            'R_R_Ratio', 'Shares', 'Position_$', 'RSI', 'Volume_Ratio'
-        ]].copy()
-        
-        st.dataframe(
-            display_df.style.format({
-                'Entry': '${:.2f}',
-                'Stop': '${:.2f}',
-                'Target': '${:.2f}',
-                'R_R_Ratio': '{:.1f}R',
-                'Position_$': '${:,.0f}',
-                'RSI': '{:.0f}',
-                'Volume_Ratio': '{:.1f}x'
-            }),
-            use_container_width=True,
-            height=400
-        )
-    
-    # Download results
-    csv = df.to_csv(index=False)
-    st.download_button(
-        label="📥 Download Results (CSV)",
-        data=csv,
-        file_name=f"swing_setups_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-        mime="text/csv",
-        use_container_width=True
-    )
-
-else:
-    st.info("👆 Click 'SCAN NASDAQ 100' to find high-quality swing trading setups")
-    
-    st.markdown("### 📚 How This System Works")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("""
-        **Strategy Philosophy:**
-        - Only trade in bullish market environments
-        - Focus on institutional-grade setups
-        - Strict risk management: 0.5-1% per trade
-        - Predefined entry, stop, and target for every trade
-        - No subjective decisions
-        
-        **Setup Types (Prioritized):**
-        1. **EMA 20 Pullback** - Highest probability
-        2. **SMA 50 Pullback** - Major support
-        3. **Consolidation Breakout** - Momentum plays
-        4. **Support Bounce** - Strong stocks only
-        5. **Mean Reversion** - Oversold recovery
-        """)
-    
-    with col2:
-        st.markdown("""
-        **Quality Scoring:**
-        - 85-100: Exceptional setups (rare)
-        - 75-84: Strong probability plays
-        - 65-74: Good setups with confirmation
-        - Below 65: Filtered out
-        
-        **Risk Management:**
-        - Fixed % risk per trade
-        - Position size auto-calculated
-        - Stop loss based on structure
-        - Targets based on R:R ratio
-        - Never risk more than defined amount
-        
-        **What Makes This Different:**
-        - No curve-fitting or optimization
-        - Proven institutional patterns
-        - Filters for quality over quantity
-        - Designed for consistency
-        """)
+            st.code(order_summary, language=None)
 
 st.markdown("---")
 st.markdown("""
