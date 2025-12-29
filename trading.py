@@ -9,7 +9,7 @@ import warnings
 import time
 warnings.filterwarnings('ignore')
 
-# Page configuration
+# Page configurationa
 st.set_page_config(
     page_title="Professional Swing Trading System",
     page_icon="📊",
@@ -617,7 +617,9 @@ elif page == 'Individual':
         st.write("")
         st.write("")
         analyze_btn = st.button("🔍 Analyze", type="primary", use_container_width=True)
-    if ticker_input:
+    
+    # KEY FIX: Only run analysis when button is clicked
+    if analyze_btn and ticker_input:
         with st.spinner(f"Analyzing {ticker_input}..."):
             period = '6mo' if analysis_timeframe == '1d' else '2mo'
             hist, info = get_stock_data_optimized(ticker_input, period=period, interval=analysis_timeframe)
@@ -749,6 +751,8 @@ elif page == 'Individual':
                         st.caption("✅ Above average")
                     else:
                         st.caption("⚪ Below average")
+    elif not analyze_btn:
+        st.info("👆 Enter a ticker symbol and click 'Analyze' to scan the stock")
 
 elif page == 'Position Sizer':
     st.title("💰 Professional Position Sizer")
@@ -971,6 +975,7 @@ elif page == 'Position Sizer':
             st.write("")
             scan_timeframe_ps = st.selectbox("Timeframe", ["1d", "1h"], index=0, key="scan_tf_ps")
         
+        # KEY FIX: Only run analysis when button is clicked
         if scan_ticker and st.button("🚀 Scan Stock", type="primary", use_container_width=True, key="scan_stock_btn"):
             with st.spinner(f"Analyzing {scan_ticker} from Yahoo Finance..."):
                 period = '6mo' if scan_timeframe_ps == '1d' else '2mo'
@@ -1214,6 +1219,8 @@ elif page == 'Position Sizer':
                         st.markdown("- Look for consolidation near recent highs")
                         st.markdown("- Check if stock is in a confirmed uptrend")
                         st.markdown("- Try the manual entry tab to calculate position size anyway")
+        elif not scan_ticker:
+            st.info("👆 Enter a ticker symbol and click 'Scan Stock' to analyze")
 
 st.markdown("---")
 st.markdown("""<div style='text-align: center; color: #888; padding: 1rem;'><p><strong>Professional Swing Trading System</strong> | Built for Consistency</p><p style='font-size: 0.85rem;'>⚠️ Trading involves risk. This is for educational purposes. Not financial advice.</p></div>""", unsafe_allow_html=True)
