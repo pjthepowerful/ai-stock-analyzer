@@ -15,7 +15,6 @@ from dotenv import load_dotenv
 warnings.filterwarnings('ignore')
 load_dotenv()
 
-# Page configuration
 st.set_page_config(
     page_title="AI Trading Assistant",
     page_icon="💬",
@@ -23,7 +22,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS
 st.markdown("""
 <style>
     .stApp {
@@ -45,24 +43,9 @@ st.markdown("""
         padding: 1rem;
         margin: 0.5rem 0;
     }
-    .quick-action-btn {
-        background: rgba(59, 130, 246, 0.1);
-        border: 1px solid #3b82f6;
-        border-radius: 8px;
-        padding: 0.5rem 1rem;
-        color: #60a5fa;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s;
-    }
-    .quick-action-btn:hover {
-        background: rgba(59, 130, 246, 0.2);
-        transform: translateY(-2px);
-    }
 </style>
 """, unsafe_allow_html=True)
 
-# Nasdaq 100 Components
 NASDAQ_100 = [
     'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'AVGO', 'COST', 'ASML',
     'NFLX', 'AMD', 'PEP', 'ADBE', 'CSCO', 'TMUS', 'CMCSA', 'INTC', 'TXN', 'QCOM',
@@ -75,7 +58,6 @@ NASDAQ_100 = [
     'CDW', 'BIIB', 'WBD', 'GFS', 'ILMN', 'MDB', 'MRNA', 'DLTR', 'ARM', 'SMCI'
 ]
 
-# Session state initialization
 if 'chat_messages' not in st.session_state:
     st.session_state.chat_messages = []
 if 'anthropic_client' not in st.session_state:
@@ -86,8 +68,6 @@ if 'risk_per_trade' not in st.session_state:
     st.session_state.risk_per_trade = 1.0
 if 'show_settings' not in st.session_state:
     st.session_state.show_settings = False
-
-# ============= TRADING FUNCTIONS =============
 
 @st.cache_data(ttl=300)
 def get_stock_data_optimized(ticker, period='3mo', interval='1d'):
@@ -325,10 +305,7 @@ def scan_nasdaq_for_setups(timeframe='1d', top_n=20, min_quality=65, progress_ca
         return df.head(top_n), market_regime, market_strength
     return pd.DataFrame(), market_regime, market_strength
 
-# ============= CHATBOT TOOL FUNCTIONS =============
-
 def scan_stock_tool(ticker, timeframe='1d'):
-    """Scan individual stock for chatbot"""
     try:
         period = '6mo' if timeframe == '1d' else '2mo'
         hist, info = get_stock_data_optimized(ticker, period=period, interval=timeframe)
@@ -387,9 +364,7 @@ def scan_stock_tool(ticker, timeframe='1d'):
         return {"success": False, "error": f"Error analyzing {ticker}: {str(e)}"}
 
 def scan_nasdaq_tool(timeframe='1d', top_n=20, min_quality=70):
-    """Scan Nasdaq 100 for chatbot"""
     try:
-        # Create a placeholder for progress updates
         progress_placeholder = st.empty()
         
         def progress_callback(idx, total, ticker):
@@ -440,7 +415,6 @@ def scan_nasdaq_tool(timeframe='1d', top_n=20, min_quality=70):
         return {"success": False, "error": f"Error scanning Nasdaq: {str(e)}"}
 
 def calculate_position_tool(entry, stop, target=None, account_size=None, risk_percent=None):
-    """Position sizing for chatbot"""
     try:
         acc_size = account_size if account_size else st.session_state.account_size
         risk_pct = risk_percent if risk_percent else st.session_state.risk_per_trade
@@ -480,7 +454,6 @@ def calculate_position_tool(entry, stop, target=None, account_size=None, risk_pe
         return {"success": False, "error": f"Error calculating position: {str(e)}"}
 
 def get_market_regime_tool():
-    """Market regime check for chatbot"""
     try:
         regime, strength = get_market_regime()
         return {
@@ -498,11 +471,9 @@ def get_market_regime_tool():
         return {"success": False, "error": f"Error checking market regime: {str(e)}"}
 
 def process_chatbot_message(user_message, conversation_history):
-    """Main chatbot processing with Claude API"""
-    
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        return "⚠️ Please set your ANTHROPIC_API_KEY environment variable to use the chatbot."
+        return "⚠️ Please set your ANTHROPIC_API_KEY environment variable."
     
     if not st.session_state.anthropic_client:
         st.session_state.anthropic_client = anthropic.Anthropic(api_key=api_key)
@@ -512,19 +483,19 @@ def process_chatbot_message(user_message, conversation_history):
     tools = [
         {
             "name": "scan_stock",
-            "description": "Scan an individual stock ticker for swing trading setups. Returns setup type, quality score, entry/stop/target prices, position sizing, and technical indicators.",
+            "description": "Scan an individual stock ticker for swing trading setups.",
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "ticker": {"type": "string", "description": "Stock ticker symbol (e.g., AAPL, TSLA, NVDA)"},
-                    "timeframe": {"type": "string", "enum": ["1d", "1h"], "description": "Chart timeframe", "default": "1d"}
+                    "ticker": {"type": "string", "description": "Stock ticker symbol"},
+                    "timeframe": {"type": "string", "enum": ["1d", "1h"], "default": "1d"}
                 },
                 "required": ["ticker"]
             }
         },
         {
             "name": "scan_nasdaq_100",
-            "description": "Scan all Nasdaq 100 stocks for high-quality swing trading setups. Returns top setups ranked by quality score.",
+            "description": "Scan all Nasdaq 100 stocks for setups.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -537,54 +508,33 @@ def process_chatbot_message(user_message, conversation_history):
         },
         {
             "name": "calculate_position_size",
-            "description": "Calculate optimal position size and risk/reward metrics for a trade.",
+            "description": "Calculate position size for a trade.",
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "entry": {"type": "number", "description": "Entry price"},
-                    "stop": {"type": "number", "description": "Stop loss price"},
-                    "target": {"type": "number", "description": "Target price (optional)"},
-                    "account_size": {"type": "number", "description": "Account size (uses default if not provided)"},
-                    "risk_percent": {"type": "number", "description": "Risk % (uses default if not provided)"}
+                    "entry": {"type": "number"},
+                    "stop": {"type": "number"},
+                    "target": {"type": "number"},
+                    "account_size": {"type": "number"},
+                    "risk_percent": {"type": "number"}
                 },
                 "required": ["entry", "stop"]
             }
         },
         {
             "name": "get_market_regime",
-            "description": "Check the current market regime based on QQQ's position relative to moving averages.",
+            "description": "Check current market regime.",
             "input_schema": {"type": "object", "properties": {}, "required": []}
         }
     ]
     
-    system_prompt = f"""You are a professional swing trading assistant with expertise in technical analysis and risk management.
+    system_prompt = f"""You are a professional swing trading assistant.
 
-**User's Current Settings:**
-- Account Size: ${st.session_state.account_size:,}
-- Risk Per Trade: {st.session_state.risk_per_trade}%
-- Risk Amount: ${st.session_state.account_size * (st.session_state.risk_per_trade / 100):,.0f} per trade
+User Settings:
+- Account: ${st.session_state.account_size:,}
+- Risk: {st.session_state.risk_per_trade}%
 
-**Your Trading Strategy:**
-- Only trade stocks in confirmed uptrends
-- Focus on 5 setup types: EMA 20 Pullback, SMA 50 Pullback, Consolidation Breakout, Support Bounce, Mean Reversion
-- Quality scores: 85+ (exceptional), 75-84 (strong), 65-74 (good)
-- Strict risk management with predefined entries, stops, and targets
-
-**Communication Style:**
-- Be professional but conversational
-- Explain setups clearly with technical reasoning
-- Always emphasize risk management
-- Provide actionable trade plans
-- Be honest when no good setups exist
-- Use emojis sparingly (🔥 for strong setups, ✅ for good, ⚠️ for warnings)
-
-**CRITICAL:**
-- This is educational content, NOT financial advice
-- Remind users to verify data before trading
-- Never guarantee profits
-- Encourage proper position sizing
-
-When users ask about stocks or setups, use your tools to get real data and provide clear, actionable responses."""
+Help users analyze stocks and manage risk. Be professional and clear."""
 
     messages = []
     for msg in conversation_history:
@@ -659,13 +609,10 @@ When users ask about stocks or setups, use your tools to get real data and provi
                 return final_text
                 
         except Exception as e:
-            return f"❌ Error communicating with AI: {str(e)}\n\nPlease check your API key and try again."
+            return f"❌ Error: {str(e)}"
     
-    return "⚠️ Response took too long. Please try a simpler question."
+    return "⚠️ Response took too long."
 
-# ============= MAIN UI =============
-
-# Header with settings toggle
 col1, col2 = st.columns([4, 1])
 with col1:
     st.title("💬 AI Trading Assistant")
@@ -674,7 +621,6 @@ with col2:
     if st.button("⚙️ Settings", use_container_width=True):
         st.session_state.show_settings = not st.session_state.show_settings
 
-# Settings panel (collapsible)
 if st.session_state.show_settings:
     with st.expander("⚙️ Account Settings", expanded=True):
         col1, col2 = st.columns(2)
@@ -699,22 +645,20 @@ if st.session_state.show_settings:
 
 st.markdown("---")
 
-# API Key check
 api_key = os.environ.get("ANTHROPIC_API_KEY")
 if not api_key:
     st.error("⚠️ **Anthropic API Key not found!**")
     st.markdown("""
-    **To use the AI assistant, set up your API key:**
+    **To use the AI assistant:**
     
-    1. Create a `.env` file in your project directory
-    2. Add this line: `ANTHROPIC_API_KEY=your-key-here`
+    1. Create a `.env` file
+    2. Add: `ANTHROPIC_API_KEY=your-key-here`
     3. Restart the app
     
-    Get your API key at: **https://console.anthropic.com/**
+    Get key at: **https://console.anthropic.com/**
     """)
     st.stop()
 
-# Quick action buttons
 st.markdown("### ⚡ Quick Actions")
 col1, col2, col3, col4, col5 = st.columns(5)
 
@@ -722,7 +666,7 @@ with col1:
     if st.button("🔍 Scan Nasdaq", use_container_width=True):
         st.session_state.chat_messages.append({
             "role": "user",
-            "content": "Scan the Nasdaq 100 for the best swing trading setups"
+            "content": "Scan the Nasdaq 100"
         })
         st.rerun()
 
@@ -730,61 +674,51 @@ with col2:
     if st.button("📊 Market Check", use_container_width=True):
         st.session_state.chat_messages.append({
             "role": "user",
-            "content": "What's the current market regime?"
+            "content": "What's the market regime?"
         })
         st.rerun()
 
 with col3:
-    if st.button("🎯 Top 5 Setups", use_container_width=True):
+    if st.button("🎯 Top 5", use_container_width=True):
         st.session_state.chat_messages.append({
             "role": "user",
-            "content": "Show me the top 5 highest quality setups"
+            "content": "Show top 5 setups"
         })
         st.rerun()
 
 with col4:
-    if st.button("📈 Analyze Stock", use_container_width=True):
+    if st.button("📈 Analyze", use_container_width=True):
         st.session_state.chat_messages.append({
             "role": "user",
-            "content": "Analyze AAPL for swing trading"
+            "content": "Analyze AAPL"
         })
         st.rerun()
 
 with col5:
-    if st.button("🧹 Clear Chat", use_container_width=True):
+    if st.button("🧹 Clear", use_container_width=True):
         st.session_state.chat_messages = []
         st.rerun()
 
 st.markdown("---")
 
-# Chat container
-chat_container = st.container()
+for message in st.session_state.chat_messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-with chat_container:
-    # Display chat messages
-    for message in st.session_state.chat_messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-# Chat input
-if prompt := st.chat_input("Ask about stocks, setups, position sizing, or market conditions..."):
-    # Add user message
+if prompt := st.chat_input("Ask about stocks, setups, or market conditions..."):
     st.session_state.chat_messages.append({"role": "user", "content": prompt})
     
     with st.chat_message("user"):
         st.markdown(prompt)
     
-    # Get AI response
     with st.chat_message("assistant"):
         with st.spinner("Analyzing..."):
             response = process_chatbot_message(prompt, st.session_state.chat_messages[:-1])
         st.markdown(response)
     
-    # Add assistant response
     st.session_state.chat_messages.append({"role": "assistant", "content": response})
     st.rerun()
 
-# Show examples if chat is empty
 if len(st.session_state.chat_messages) == 0:
     st.markdown("### 💡 Try asking:")
     
@@ -792,43 +726,22 @@ if len(st.session_state.chat_messages) == 0:
     
     with col1:
         st.markdown("""
-        **General Analysis:**
         - "Scan the Nasdaq 100"
         - "What's the market regime?"
-        - "Show me the best setups today"
-        - "Find stocks with quality scores above 85"
+        - "Show me the best setups"
         """)
     
     with col2:
         st.markdown("""
-        **Specific Stocks:**
-        - "Analyze NVDA for swing trading"
-        - "Is TSLA a good buy right now?"
+        - "Analyze NVDA"
+        - "Is TSLA a good buy?"
         - "Calculate position size for AAPL at $185, stop $180"
-        - "Compare MSFT and GOOGL setups"
         """)
 
-# Footer
 st.markdown("---")
 st.markdown("""
-<div style='text-align: center; color: #888; padding: 1rem;'>
-    <p><strong>AI Trading Assistant</strong> | Built for consistent swing trading profits</p>
-    <p style='font-size: 0.85rem;'>⚠️ This is educational content. Not financial advice. Always verify data before trading.</p>
+<div style='text-align: center; color: #888;'>
+    <p><strong>AI Trading Assistant</strong></p>
+    <p style='font-size: 0.85rem;'>⚠️ Educational content. Not financial advice.</p>
 </div>
 """, unsafe_allow_html=True)
-```
-
-## What This Does:
-
-1. **Single Clean Interface** - Just a chat box, no other pages
-2. **Quick Action Buttons** - Fast access to common tasks
-3. **Collapsible Settings** - Account size and risk settings hide when not needed
-4. **Real-time Analysis** - AI scans stocks as you chat
-5. **Clean Design** - Dark theme, modern UI
-
-## To Run It:
-
-1. **Save this as a new file** (e.g., `ai_trader.py`)
-2. **Set up your `.env` file:**
-```
-   ANTHROPIC_API_KEY=sk-ant-your-key-here
