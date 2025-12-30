@@ -7,7 +7,7 @@ import numpy as np
 from datetime import datetime, timedelta
 import warnings
 import time
-import anthropic
+import google.generativeai as genai
 import json
 import os
 from dotenv import load_dotenv
@@ -60,8 +60,6 @@ NASDAQ_100 = [
 
 if 'chat_messages' not in st.session_state:
     st.session_state.chat_messages = []
-if 'anthropic_client' not in st.session_state:
-    st.session_state.anthropic_client = None
 if 'account_size' not in st.session_state:
     st.session_state.account_size = 100000
 if 'risk_per_trade' not in st.session_state:
@@ -471,75 +469,114 @@ def get_market_regime_tool():
         return {"success": False, "error": f"Error checking market regime: {str(e)}"}
 
 def process_chatbot_message(user_message, conversation_history):
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = os.environ.get("GOOGLE_API_KEY")
     if not api_key:
-        return "⚠️ Please set your ANTHROPIC_API_KEY environment variable."
+        return "⚠️ Please set your GOOGLE_API_KEY environment variable."
     
-    if not st.session_state.anthropic_client:
-        st.session_state.anthropic_client = anthropic.Anthropic(api_key=api_key)
+    # Configure Gemini
+    genai.configure(api_key=api_key)
     
-    client = st.session_state.anthropic_client
-    
+    # Define function declarations for Gemini
     tools = [
-        {
-            "name": "scan_stock",
-            "description": "Scan an individual stock ticker for swing trading setups.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "ticker": {"type": "string", "description": "Stock ticker symbol"},
-                    "timeframe": {"type": "string", "enum": ["1d", "1h"], "default": "1d"}
-                },
-                "required": ["ticker"]
-            }
-        },
-        {
-            "name": "scan_nasdaq_100",
-            "description": "Scan all Nasdaq 100 stocks for setups.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "timeframe": {"type": "string", "enum": ["1d", "1h"], "default": "1d"},
-                    "top_n": {"type": "integer", "default": 20, "minimum": 5, "maximum": 30},
-                    "min_quality": {"type": "integer", "default": 70, "minimum": 60, "maximum": 90}
-                },
-                "required": []
-            }
-        },
-        {
-            "name": "calculate_position_size",
-            "description": "Calculate position size for a trade.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "entry": {"type": "number"},
-                    "stop": {"type": "number"},
-                    "target": {"type": "number"},
-                    "account_size": {"type": "number"},
-                    "risk_percent": {"type": "number"}
-                },
-                "required": ["entry", "stop"]
-            }
-        },
-        {
-            "name": "get_market_regime",
-            "description": "Check current market regime.",
-            "input_schema": {"type": "object", "properties": {}, "required": []}
-        }
+        genai.protos.Tool(
+            function_declarations=[
+                genai.protos.FunctionDeclaration(
+                    name="scan_stock",
+                    description="Scan an individual stock ticker for swing trading setups. Returns setup type, quality score, entry/stop/target prices, position sizing, and technical indicators.",
+                    parameters=genai.protos.Schema(
+                        type=genai.protos.Type.OBJECT,
+                        properties={
+                            "ticker": genai.protos.Schema(type=genai.protos.Type.STRING, description="Stock ticker symbol (e.g., AAPL, TSLA, NVDA)"),
+                            "timeframe": genai.protos.Schema(type=genai.protos.Type.STRING, description="Chart timeframe: '1d' for daily or '1h' for hourly")
+                        },
+                        required=["ticker"]
+                    )
+                ),
+                genai.protos.FunctionDeclaration(
+                    name="scan_nasdaq_100",
+                    description="Scan all Nasdaq 100 stocks for high-quality swing trading setups. Returns top setups ranked by quality score.",
+                    parameters=genai.protos.Schema(
+                        type=genai.protos.Type.OBJECT,
+                        properties={
+                            "timeframe": genai.protos.Schema(type=genai.protos.Type.STRING, description="Chart timeframe"),
+                            "top_n": genai.protos.Schema(type=genai.protos.Type.INTEGER, description="Maximum number of setups to return"),
+                            "min_quality": genai.protos.Schema(type=genai.protos.Type.INTEGER, description="Minimum quality score (60-90)")
+                        }
+                    )
+                ),
+                genai.protos.FunctionDeclaration(
+                    name="calculate_position_size",
+                    description="Calculate optimal position size and risk/reward metrics for a trade.",
+                    parameters=genai.protos.Schema(
+                        type=genai.protos.Type.OBJECT,
+                        properties={
+                            "entry": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Entry price"),
+                            "stop": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Stop loss price"),
+                            "target": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Target price (optional)"),
+                            "account_size": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Account size (uses default if not provided)"),
+                            "risk_percent": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Risk percentage (uses default if not provided)")
+                        },
+                        required=["entry", "stop"]
+                    )
+                ),
+                genai.protos.FunctionDeclaration(
+                    name="get_market_regime",
+                    description="Check the current market regime (BULLISH, NEUTRAL_BULLISH, BEARISH, or NEUTRAL) based on QQQ's position relative to moving averages.",
+                    parameters=genai.protos.Schema(
+                        type=genai.protos.Type.OBJECT,
+                        properties={}
+                    )
+                )
+            ]
+        )
     ]
     
-    system_prompt = f"""You are a professional swing trading assistant.
+    system_instruction = f"""You are a professional swing trading assistant with expertise in technical analysis and risk management.
 
-User Settings:
-- Account: ${st.session_state.account_size:,}
-- Risk: {st.session_state.risk_per_trade}%
+**User's Current Settings:**
+- Account Size: ${st.session_state.account_size:,}
+- Risk Per Trade: {st.session_state.risk_per_trade}%
+- Risk Amount: ${st.session_state.account_size * (st.session_state.risk_per_trade / 100):,.0f} per trade
 
-Help users analyze stocks and manage risk. Be professional and clear."""
+**Your Trading Strategy:**
+- Only trade stocks in confirmed uptrends
+- Focus on 5 setup types: EMA 20 Pullback, SMA 50 Pullback, Consolidation Breakout, Support Bounce, Mean Reversion
+- Quality scores: 85+ (exceptional), 75-84 (strong), 65-74 (good)
+- Strict risk management with predefined entries, stops, and targets
 
-    messages = []
+**Communication Style:**
+- Be professional but conversational
+- Explain setups clearly with technical reasoning
+- Always emphasize risk management
+- Provide actionable trade plans
+- Be honest when no good setups exist
+- Use emojis sparingly (🔥 for strong setups, ✅ for good, ⚠️ for warnings)
+
+**CRITICAL:**
+- This is educational content, NOT financial advice
+- Remind users to verify data before trading
+- Never guarantee profits
+- Encourage proper position sizing
+
+When users ask about stocks or setups, use your tools to get real data and provide clear, actionable responses."""
+
+    # Create model with tools
+    model = genai.GenerativeModel(
+        'gemini-1.5-flash',
+        tools=tools,
+        system_instruction=system_instruction
+    )
+    
+    # Build conversation history for Gemini
+    history = []
     for msg in conversation_history:
-        messages.append({"role": msg["role"], "content": msg["content"]})
-    messages.append({"role": "user", "content": user_message})
+        if msg["role"] == "user":
+            history.append({"role": "user", "parts": [msg["content"]]})
+        elif msg["role"] == "assistant":
+            history.append({"role": "model", "parts": [msg["content"]]})
+    
+    # Start chat
+    chat = model.start_chat(history=history)
     
     max_iterations = 5
     iteration = 0
@@ -548,75 +585,74 @@ Help users analyze stocks and manage risk. Be professional and clear."""
         iteration += 1
         
         try:
-            response = client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=4096,
-                system=system_prompt,
-                tools=tools,
-                messages=messages
-            )
+            # Send message
+            response = chat.send_message(user_message)
             
-            if response.stop_reason == "tool_use":
-                assistant_content = []
-                tool_results = []
+            # Check if model wants to call a function
+            if response.candidates[0].content.parts[0].function_call:
+                function_call = response.candidates[0].content.parts[0].function_call
+                function_name = function_call.name
+                function_args = {}
                 
-                for block in response.content:
-                    if block.type == "text":
-                        assistant_content.append(block)
-                    elif block.type == "tool_use":
-                        tool_name = block.name
-                        tool_input = block.input
-                        
-                        if tool_name == "scan_stock":
-                            result = scan_stock_tool(
-                                ticker=tool_input["ticker"],
-                                timeframe=tool_input.get("timeframe", "1d")
-                            )
-                        elif tool_name == "scan_nasdaq_100":
-                            result = scan_nasdaq_tool(
-                                timeframe=tool_input.get("timeframe", "1d"),
-                                top_n=tool_input.get("top_n", 20),
-                                min_quality=tool_input.get("min_quality", 70)
-                            )
-                        elif tool_name == "calculate_position_size":
-                            result = calculate_position_tool(
-                                entry=tool_input["entry"],
-                                stop=tool_input["stop"],
-                                target=tool_input.get("target"),
-                                account_size=tool_input.get("account_size"),
-                                risk_percent=tool_input.get("risk_percent")
-                            )
-                        elif tool_name == "get_market_regime":
-                            result = get_market_regime_tool()
-                        else:
-                            result = {"error": f"Unknown tool: {tool_name}"}
-                        
-                        assistant_content.append(block)
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": json.dumps(result)
-                        })
+                # Extract arguments
+                for key, value in function_call.args.items():
+                    function_args[key] = value
                 
-                messages.append({"role": "assistant", "content": assistant_content})
-                messages.append({"role": "user", "content": tool_results})
+                # Execute the function
+                if function_name == "scan_stock":
+                    result = scan_stock_tool(
+                        ticker=function_args.get("ticker"),
+                        timeframe=function_args.get("timeframe", "1d")
+                    )
+                elif function_name == "scan_nasdaq_100":
+                    result = scan_nasdaq_tool(
+                        timeframe=function_args.get("timeframe", "1d"),
+                        top_n=function_args.get("top_n", 20),
+                        min_quality=function_args.get("min_quality", 70)
+                    )
+                elif function_name == "calculate_position_size":
+                    result = calculate_position_tool(
+                        entry=function_args.get("entry"),
+                        stop=function_args.get("stop"),
+                        target=function_args.get("target"),
+                        account_size=function_args.get("account_size"),
+                        risk_percent=function_args.get("risk_percent")
+                    )
+                elif function_name == "get_market_regime":
+                    result = get_market_regime_tool()
+                else:
+                    result = {"error": f"Unknown function: {function_name}"}
+                
+                # Send function response back to model
+                response = chat.send_message(
+                    genai.protos.Content(
+                        parts=[
+                            genai.protos.Part(
+                                function_response=genai.protos.FunctionResponse(
+                                    name=function_name,
+                                    response={"result": result}
+                                )
+                            )
+                        ]
+                    )
+                )
+                
+                # Update user_message for next iteration
+                user_message = ""
                 continue
-            else:
-                final_text = ""
-                for block in response.content:
-                    if hasattr(block, "text"):
-                        final_text += block.text
-                return final_text
-                
+            
+            # Return final text response
+            return response.text
+            
         except Exception as e:
-            return f"❌ Error: {str(e)}"
+            return f"❌ Error communicating with AI: {str(e)}\n\nPlease check your API key and try again."
     
-    return "⚠️ Response took too long."
+    return "⚠️ Response took too long. Please try a simpler question."
 
 col1, col2 = st.columns([4, 1])
 with col1:
     st.title("💬 AI Trading Assistant")
-    st.markdown("*Professional swing trading analysis powered by AI*")
+    st.markdown("*Professional swing trading analysis powered by Google Gemini*")
 with col2:
     if st.button("⚙️ Settings", use_container_width=True):
         st.session_state.show_settings = not st.session_state.show_settings
@@ -645,17 +681,18 @@ if st.session_state.show_settings:
 
 st.markdown("---")
 
-api_key = os.environ.get("ANTHROPIC_API_KEY")
+api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
-    st.error("⚠️ **Anthropic API Key not found!**")
+    st.error("⚠️ **Google API Key not found!**")
     st.markdown("""
     **To use the AI assistant:**
     
-    1. Create a `.env` file
-    2. Add: `ANTHROPIC_API_KEY=your-key-here`
-    3. Restart the app
+    1. Get your FREE API key at: **https://aistudio.google.com/app/apikey**
+    2. Create a `.env` file in your project directory
+    3. Add this line: `GOOGLE_API_KEY=your-key-here`
+    4. Restart the app
     
-    Get key at: **https://console.anthropic.com/**
+    **Note:** Gemini is completely FREE for up to 1,500 requests per day!
     """)
     st.stop()
 
@@ -666,7 +703,7 @@ with col1:
     if st.button("🔍 Scan Nasdaq", use_container_width=True):
         st.session_state.chat_messages.append({
             "role": "user",
-            "content": "Scan the Nasdaq 100"
+            "content": "Scan the Nasdaq 100 for the best swing trading setups"
         })
         st.rerun()
 
@@ -674,7 +711,7 @@ with col2:
     if st.button("📊 Market Check", use_container_width=True):
         st.session_state.chat_messages.append({
             "role": "user",
-            "content": "What's the market regime?"
+            "content": "What's the current market regime?"
         })
         st.rerun()
 
@@ -682,7 +719,7 @@ with col3:
     if st.button("🎯 Top 5", use_container_width=True):
         st.session_state.chat_messages.append({
             "role": "user",
-            "content": "Show top 5 setups"
+            "content": "Show me the top 5 highest quality setups"
         })
         st.rerun()
 
@@ -690,7 +727,7 @@ with col4:
     if st.button("📈 Analyze", use_container_width=True):
         st.session_state.chat_messages.append({
             "role": "user",
-            "content": "Analyze AAPL"
+            "content": "Analyze AAPL for swing trading"
         })
         st.rerun()
 
@@ -705,7 +742,7 @@ for message in st.session_state.chat_messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt := st.chat_input("Ask about stocks, setups, or market conditions..."):
+if prompt := st.chat_input("Ask about stocks, setups, position sizing, or market conditions..."):
     st.session_state.chat_messages.append({"role": "user", "content": prompt})
     
     with st.chat_message("user"):
@@ -726,22 +763,27 @@ if len(st.session_state.chat_messages) == 0:
     
     with col1:
         st.markdown("""
+        **General Analysis:**
         - "Scan the Nasdaq 100"
         - "What's the market regime?"
-        - "Show me the best setups"
+        - "Show me the best setups today"
+        - "Find stocks with quality scores above 85"
         """)
     
     with col2:
         st.markdown("""
-        - "Analyze NVDA"
-        - "Is TSLA a good buy?"
+        **Specific Stocks:**
+        - "Analyze NVDA for swing trading"
+        - "Is TSLA a good buy right now?"
         - "Calculate position size for AAPL at $185, stop $180"
+        - "Compare MSFT and GOOGL setups"
         """)
 
 st.markdown("---")
 st.markdown("""
-<div style='text-align: center; color: #888;'>
-    <p><strong>AI Trading Assistant</strong></p>
-    <p style='font-size: 0.85rem;'>⚠️ Educational content. Not financial advice.</p>
+<div style='text-align: center; color: #888; padding: 1rem;'>
+    <p><strong>AI Trading Assistant</strong> | Powered by Google Gemini (FREE)</p>
+    <p style='font-size: 0.85rem;'>⚠️ This is educational content. Not financial advice. Always verify data before trading.</p>
 </div>
 """, unsafe_allow_html=True)
+```
