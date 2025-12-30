@@ -1,50 +1,340 @@
-# Add this to your imports section at the top
+import streamlit as st
+import yfinance as yf
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+import warnings
+import time
 import anthropic
 import json
 import os
+from dotenv import load_dotenv
 
-# Add 'Chatbot' to your navigation in the sidebar section
-# Replace the Navigation section with this:
+warnings.filterwarnings('ignore')
+load_dotenv()
 
-st.markdown("#### Navigation")
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    if st.button("🔍 Scanner", use_container_width=True):
-        st.session_state.page = 'Scanner'
-        st.rerun()
-with col2:
-    if st.button("📊 Analyze", use_container_width=True):
-        st.session_state.page = 'Individual'
-        st.rerun()
-with col3:
-    if st.button("💰 Sizer", use_container_width=True):
-        st.session_state.page = 'Position Sizer'
-        st.rerun()
-with col4:
-    if st.button("💬 Chat", use_container_width=True):
-        st.session_state.page = 'Chatbot'
-        st.rerun()
+# Page configuration
+st.set_page_config(
+    page_title="AI Trading Assistant",
+    page_icon="💬",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
-# Add these new session state initializations with your other session state code
+# Custom CSS
+st.markdown("""
+<style>
+    .stApp {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    }
+    h1, h2, h3 {
+        color: #ffffff !important;
+        font-family: 'Inter', 'Segoe UI', sans-serif;
+        font-weight: 600;
+    }
+    .stChatFloatingInputContainer {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+    }
+    .stChatMessage {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        padding: 1rem;
+        margin: 0.5rem 0;
+    }
+    .quick-action-btn {
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid #3b82f6;
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+        color: #60a5fa;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    .quick-action-btn:hover {
+        background: rgba(59, 130, 246, 0.2);
+        transform: translateY(-2px);
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Nasdaq 100 Components
+NASDAQ_100 = [
+    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'AVGO', 'COST', 'ASML',
+    'NFLX', 'AMD', 'PEP', 'ADBE', 'CSCO', 'TMUS', 'CMCSA', 'INTC', 'TXN', 'QCOM',
+    'INTU', 'AMGN', 'AMAT', 'HON', 'SBUX', 'ISRG', 'BKNG', 'VRTX', 'ADI', 'GILD',
+    'PANW', 'ADP', 'LRCX', 'MU', 'REGN', 'MDLZ', 'MELI', 'PYPL', 'SNPS', 'KLAC',
+    'CDNS', 'MAR', 'CSX', 'CRWD', 'MRVL', 'ORLY', 'FTNT', 'ADSK', 'ABNB', 'DASH',
+    'NXPI', 'WDAY', 'MNST', 'CHTR', 'CPRT', 'AEP', 'PAYX', 'ROST', 'ODFL', 'FAST',
+    'PCAR', 'KDP', 'EA', 'KHC', 'VRSK', 'CTSH', 'GEHC', 'DXCM', 'LULU', 'EXC',
+    'CEG', 'IDXX', 'XEL', 'CCEP', 'TTWO', 'ANSS', 'ON', 'ZS', 'FANG', 'CTAS',
+    'CDW', 'BIIB', 'WBD', 'GFS', 'ILMN', 'MDB', 'MRNA', 'DLTR', 'ARM', 'SMCI'
+]
+
+# Session state initialization
 if 'chat_messages' not in st.session_state:
     st.session_state.chat_messages = []
 if 'anthropic_client' not in st.session_state:
     st.session_state.anthropic_client = None
+if 'account_size' not in st.session_state:
+    st.session_state.account_size = 100000
+if 'risk_per_trade' not in st.session_state:
+    st.session_state.risk_per_trade = 1.0
+if 'show_settings' not in st.session_state:
+    st.session_state.show_settings = False
 
-# Add these tool/function wrapper definitions before your page routing
-# (put this after all your existing functions but before the page selection)
+# ============= TRADING FUNCTIONS =============
+
+@st.cache_data(ttl=300)
+def get_stock_data_optimized(ticker, period='3mo', interval='1d'):
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            if attempt > 0:
+                time.sleep(1)
+            stock = yf.Ticker(ticker)
+            hist = stock.history(period=period, interval=interval)
+            if not hist.empty:
+                try:
+                    info = stock.info
+                except:
+                    info = {'symbol': ticker, 'volume': int(hist['Volume'].iloc[-1]) if len(hist) > 0 else 0}
+                return hist, info
+        except Exception as e:
+            if attempt < max_retries - 1:
+                continue
+            return pd.DataFrame(), {}
+    return pd.DataFrame(), {}
+
+@st.cache_data(ttl=300)
+def get_market_regime():
+    try:
+        qqq = yf.Ticker('QQQ')
+        hist = qqq.history(period='1y')
+        if len(hist) < 200:
+            return 'NEUTRAL', 0
+        current_price = hist['Close'].iloc[-1]
+        sma_200 = hist['Close'].rolling(window=200).mean().iloc[-1]
+        sma_50 = hist['Close'].rolling(window=50).mean().iloc[-1]
+        above_200 = (current_price - sma_200) / sma_200 * 100
+        if current_price > sma_50 > sma_200:
+            regime = 'BULLISH'
+        elif current_price > sma_200:
+            regime = 'NEUTRAL_BULLISH'
+        elif current_price < sma_200:
+            regime = 'BEARISH'
+        else:
+            regime = 'NEUTRAL'
+        return regime, above_200
+    except:
+        return 'NEUTRAL', 0
+
+def calculate_swing_indicators(df):
+    if df.empty or len(df) < 2:
+        return df
+    df['EMA_9'] = df['Close'].ewm(span=9, adjust=False).mean()
+    df['EMA_20'] = df['Close'].ewm(span=20, adjust=False).mean()
+    df['SMA_50'] = df['Close'].rolling(window=50).mean()
+    df['SMA_200'] = df['Close'].rolling(window=200).mean()
+    delta = df['Close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    exp1 = df['Close'].ewm(span=12, adjust=False).mean()
+    exp2 = df['Close'].ewm(span=26, adjust=False).mean()
+    df['MACD'] = exp1 - exp2
+    df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+    df['MACD_Histogram'] = df['MACD'] - df['MACD_Signal']
+    high_low = df['High'] - df['Low']
+    high_close = np.abs(df['High'] - df['Close'].shift())
+    low_close = np.abs(df['Low'] - df['Close'].shift())
+    ranges = pd.concat([high_low, high_close, low_close], axis=1)
+    true_range = np.max(ranges, axis=1)
+    df['ATR'] = true_range.rolling(14).mean()
+    df['Volume_SMA_20'] = df['Volume'].rolling(window=20).mean()
+    df['Volume_Ratio'] = df['Volume'] / df['Volume_SMA_20']
+    try:
+        qqq = yf.Ticker('QQQ').history(period='3mo')
+        if len(qqq) >= len(df):
+            qqq_return = (qqq['Close'].iloc[-1] - qqq['Close'].iloc[-20]) / qqq['Close'].iloc[-20]
+            stock_return = (df['Close'].iloc[-1] - df['Close'].iloc[-20]) / df['Close'].iloc[-20]
+            df['Relative_Strength'] = stock_return - qqq_return
+        else:
+            df['Relative_Strength'] = 0
+    except:
+        df['Relative_Strength'] = 0
+    df['Distance_EMA20'] = ((df['Close'] - df['EMA_20']) / df['EMA_20']) * 100
+    df['Distance_SMA50'] = ((df['Close'] - df['SMA_50']) / df['SMA_50']) * 100
+    return df
+
+def identify_setup_type(df, info):
+    if len(df) < 60:
+        return None, 0, 0, 0, 0, "Insufficient data"
+    current_price = df['Close'].iloc[-1]
+    prev_close = df['Close'].iloc[-2]
+    ema_20 = df['EMA_20'].iloc[-1]
+    ema_9 = df['EMA_9'].iloc[-1]
+    sma_50 = df['SMA_50'].iloc[-1]
+    sma_200 = df['SMA_200'].iloc[-1]
+    rsi = df['RSI'].iloc[-1]
+    atr = df['ATR'].iloc[-1]
+    volume_ratio = df['Volume_Ratio'].iloc[-1]
+    macd_hist = df['MACD_Histogram'].iloc[-1]
+    setups = []
+    uptrend = current_price > sma_50 > sma_200 if pd.notna(sma_200) else current_price > sma_50
+    if not uptrend:
+        return None, 0, 0, 0, 0, "Not in uptrend structure"
+    if pd.notna(ema_20):
+        distance_to_ema20 = abs(current_price - ema_20) / ema_20 * 100
+        rsi_prev = df['RSI'].iloc[-2] if len(df) > 1 else rsi
+        rsi_rising = rsi > rsi_prev
+        
+        if (distance_to_ema20 < 2.5 and current_price > ema_20 and rsi > 40 and rsi < 60 and macd_hist > 0 and rsi_rising):
+            quality = 85
+            if volume_ratio > 1.2:
+                quality += 5
+            if df['Close'].iloc[-3:].min() <= ema_20 <= df['High'].iloc[-3:].max():
+                quality += 5
+            entry = current_price
+            stop = entry * 0.97
+            risk = entry - stop
+            target = entry + (risk * 3)
+            setups.append({
+                'type': 'EMA_20_PULLBACK',
+                'quality': quality,
+                'entry': entry,
+                'stop': stop,
+                'target': target,
+                'reason': f'Pullback to 20 EMA in uptrend. RSI: {rsi:.0f} rising, Vol: {volume_ratio:.1f}x'
+            })
+    if pd.notna(sma_50):
+        distance_to_sma50 = abs(current_price - sma_50) / sma_50 * 100
+        rsi_prev = df['RSI'].iloc[-2] if len(df) > 1 else rsi
+        rsi_rising = rsi > rsi_prev
+        
+        if (distance_to_sma50 < 3.0 and current_price > sma_50 and rsi > 35 and rsi < 55 and sma_50 > sma_200 and rsi_rising):
+            quality = 75
+            if volume_ratio > 1.0:
+                quality += 5
+            if df['Close'].iloc[-5:].min() <= sma_50:
+                quality += 5
+            entry = current_price
+            stop = entry * 0.97
+            risk = entry - stop
+            target = entry + (risk * 2.5)
+            setups.append({
+                'type': 'SMA_50_PULLBACK',
+                'quality': quality,
+                'entry': entry,
+                'stop': stop,
+                'target': target,
+                'reason': f'Pullback to 50 SMA support. RSI: {rsi:.0f} rising'
+            })
+    recent_high = df['High'].iloc[-20:].max()
+    distance_from_high = (recent_high - current_price) / current_price * 100
+    if distance_from_high < 3:
+        last_10_range = (df['High'].iloc[-10:].max() - df['Low'].iloc[-10:].min()) / current_price * 100
+        rsi_prev = df['RSI'].iloc[-2] if len(df) > 1 else rsi
+        rsi_rising = rsi > rsi_prev
+        
+        if (last_10_range < 8 and current_price > ema_20 and volume_ratio > 1.3 and rsi > 50 and rsi < 70 and rsi_rising):
+            quality = 80
+            if current_price > recent_high:
+                quality += 10
+            entry = current_price
+            stop = entry * 0.97
+            risk = entry - stop
+            target = entry + (risk * 3.5)
+            setups.append({
+                'type': 'CONSOLIDATION_BREAKOUT',
+                'quality': quality,
+                'entry': entry,
+                'stop': stop,
+                'target': target,
+                'reason': f'Tight consolidation near highs. Range: {last_10_range:.1f}%, Vol: {volume_ratio:.1f}x'
+            })
+    if not setups:
+        return None, 0, 0, 0, 0, "No valid setup identified"
+    best_setup = max(setups, key=lambda x: x['quality'])
+    return (best_setup['type'], best_setup['quality'], best_setup['entry'], best_setup['stop'], best_setup['target'], best_setup['reason'])
+
+def calculate_position_size(account_size, risk_percent, entry, stop):
+    if entry <= stop or stop <= 0:
+        return 0, 0
+    risk_amount = account_size * (risk_percent / 100)
+    risk_per_share = entry - stop
+    shares = int(risk_amount / risk_per_share)
+    position_value = shares * entry
+    return shares, position_value
+
+def scan_nasdaq_for_setups(timeframe='1d', top_n=20, min_quality=65, progress_callback=None):
+    market_regime, market_strength = get_market_regime()
+    if market_regime not in ['BULLISH', 'NEUTRAL_BULLISH']:
+        return pd.DataFrame(), market_regime, market_strength
+    results = []
+    total_stocks = len(NASDAQ_100)
+    
+    for idx, ticker in enumerate(NASDAQ_100):
+        try:
+            if progress_callback:
+                progress_callback(idx, total_stocks, ticker)
+            
+            if idx > 0 and idx % 10 == 0:
+                time.sleep(1)
+            period = '3mo' if timeframe == '1d' else '1mo'
+            hist, info = get_stock_data_optimized(ticker, period=period, interval=timeframe)
+            if hist.empty or len(hist) < 60:
+                continue
+            avg_volume = info.get('averageVolume', 0)
+            if avg_volume < 500000:
+                continue
+            hist = calculate_swing_indicators(hist)
+            setup_type, quality, entry, stop, target, reason = identify_setup_type(hist, info)
+            if setup_type and quality >= min_quality:
+                risk_per_share = entry - stop
+                reward = target - entry
+                reward_risk = reward / risk_per_share if risk_per_share > 0 else 0
+                shares, position_value = calculate_position_size(st.session_state.account_size, st.session_state.risk_per_trade, entry, stop)
+                results.append({
+                    'Ticker': ticker,
+                    'Setup': setup_type.replace('_', ' ').title(),
+                    'Quality': quality,
+                    'Entry': entry,
+                    'Stop': stop,
+                    'Target': target,
+                    'Risk_$': risk_per_share,
+                    'Reward_$': reward,
+                    'R_R_Ratio': reward_risk,
+                    'Shares': shares,
+                    'Position_$': position_value,
+                    'RSI': hist['RSI'].iloc[-1],
+                    'Volume_Ratio': hist['Volume_Ratio'].iloc[-1],
+                    'Reason': reason,
+                })
+        except Exception as e:
+            continue
+    
+    if results:
+        df = pd.DataFrame(results)
+        df = df.sort_values(by=['Quality', 'R_R_Ratio'], ascending=[False, False]).reset_index(drop=True)
+        return df.head(top_n), market_regime, market_strength
+    return pd.DataFrame(), market_regime, market_strength
+
+# ============= CHATBOT TOOL FUNCTIONS =============
 
 def scan_stock_tool(ticker, timeframe='1d'):
-    """Wrapper for chatbot to scan individual stocks"""
+    """Scan individual stock for chatbot"""
     try:
         period = '6mo' if timeframe == '1d' else '2mo'
         hist, info = get_stock_data_optimized(ticker, period=period, interval=timeframe)
         
         if hist.empty or len(hist) < 60:
-            return {
-                "success": False,
-                "error": f"Unable to fetch sufficient data for {ticker}"
-            }
+            return {"success": False, "error": f"Unable to fetch sufficient data for {ticker}"}
         
         hist = calculate_swing_indicators(hist)
         setup_type, quality, entry, stop, target, reason = identify_setup_type(hist, info)
@@ -94,19 +384,25 @@ def scan_stock_tool(ticker, timeframe='1d'):
                 "volume_ratio": round(hist['Volume_Ratio'].iloc[-1], 1)
             }
     except Exception as e:
-        return {
-            "success": False,
-            "error": f"Error analyzing {ticker}: {str(e)}"
-        }
+        return {"success": False, "error": f"Error analyzing {ticker}: {str(e)}"}
 
 def scan_nasdaq_tool(timeframe='1d', top_n=20, min_quality=70):
-    """Wrapper for chatbot to scan Nasdaq 100"""
+    """Scan Nasdaq 100 for chatbot"""
     try:
+        # Create a placeholder for progress updates
+        progress_placeholder = st.empty()
+        
+        def progress_callback(idx, total, ticker):
+            progress_placeholder.text(f"Scanning {ticker}... ({idx + 1}/{total})")
+        
         results_df, regime, strength = scan_nasdaq_for_setups(
             timeframe=timeframe,
             top_n=top_n,
-            min_quality=min_quality
+            min_quality=min_quality,
+            progress_callback=progress_callback
         )
+        
+        progress_placeholder.empty()
         
         if results_df.empty:
             return {
@@ -116,7 +412,6 @@ def scan_nasdaq_tool(timeframe='1d', top_n=20, min_quality=70):
                 "message": "No setups found meeting criteria"
             }
         
-        # Convert dataframe to list of dicts for easier JSON handling
         setups = []
         for _, row in results_df.iterrows():
             setups.append({
@@ -142,22 +437,16 @@ def scan_nasdaq_tool(timeframe='1d', top_n=20, min_quality=70):
             "setups": setups
         }
     except Exception as e:
-        return {
-            "success": False,
-            "error": f"Error scanning Nasdaq: {str(e)}"
-        }
+        return {"success": False, "error": f"Error scanning Nasdaq: {str(e)}"}
 
 def calculate_position_tool(entry, stop, target=None, account_size=None, risk_percent=None):
-    """Wrapper for position sizing calculator"""
+    """Position sizing for chatbot"""
     try:
         acc_size = account_size if account_size else st.session_state.account_size
         risk_pct = risk_percent if risk_percent else st.session_state.risk_per_trade
         
         if entry <= stop:
-            return {
-                "success": False,
-                "error": "Entry price must be greater than stop loss"
-            }
+            return {"success": False, "error": "Entry price must be greater than stop loss"}
         
         shares, position_value = calculate_position_size(acc_size, risk_pct, entry, stop)
         risk_amount = acc_size * (risk_pct / 100)
@@ -188,13 +477,10 @@ def calculate_position_tool(entry, stop, target=None, account_size=None, risk_pe
         
         return result
     except Exception as e:
-        return {
-            "success": False,
-            "error": f"Error calculating position: {str(e)}"
-        }
+        return {"success": False, "error": f"Error calculating position: {str(e)}"}
 
 def get_market_regime_tool():
-    """Wrapper for market regime check"""
+    """Market regime check for chatbot"""
     try:
         regime, strength = get_market_regime()
         return {
@@ -209,15 +495,11 @@ def get_market_regime_tool():
             }.get(regime, "Unknown market condition")
         }
     except Exception as e:
-        return {
-            "success": False,
-            "error": f"Error checking market regime: {str(e)}"
-        }
+        return {"success": False, "error": f"Error checking market regime: {str(e)}"}
 
 def process_chatbot_message(user_message, conversation_history):
-    """Main chatbot processing function using Claude API with tool use"""
+    """Main chatbot processing with Claude API"""
     
-    # Initialize Anthropic client
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         return "⚠️ Please set your ANTHROPIC_API_KEY environment variable to use the chatbot."
@@ -227,7 +509,6 @@ def process_chatbot_message(user_message, conversation_history):
     
     client = st.session_state.anthropic_client
     
-    # Define tools for Claude
     tools = [
         {
             "name": "scan_stock",
@@ -235,149 +516,81 @@ def process_chatbot_message(user_message, conversation_history):
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "ticker": {
-                        "type": "string",
-                        "description": "Stock ticker symbol (e.g., AAPL, TSLA, NVDA)"
-                    },
-                    "timeframe": {
-                        "type": "string",
-                        "enum": ["1d", "1h"],
-                        "description": "Chart timeframe - '1d' for daily or '1h' for hourly",
-                        "default": "1d"
-                    }
+                    "ticker": {"type": "string", "description": "Stock ticker symbol (e.g., AAPL, TSLA, NVDA)"},
+                    "timeframe": {"type": "string", "enum": ["1d", "1h"], "description": "Chart timeframe", "default": "1d"}
                 },
                 "required": ["ticker"]
             }
         },
         {
             "name": "scan_nasdaq_100",
-            "description": "Scan all Nasdaq 100 stocks for high-quality swing trading setups. Returns top setups ranked by quality score with complete trade plans.",
+            "description": "Scan all Nasdaq 100 stocks for high-quality swing trading setups. Returns top setups ranked by quality score.",
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "timeframe": {
-                        "type": "string",
-                        "enum": ["1d", "1h"],
-                        "description": "Chart timeframe",
-                        "default": "1d"
-                    },
-                    "top_n": {
-                        "type": "integer",
-                        "description": "Maximum number of setups to return",
-                        "default": 20,
-                        "minimum": 5,
-                        "maximum": 30
-                    },
-                    "min_quality": {
-                        "type": "integer",
-                        "description": "Minimum quality score (60-90)",
-                        "default": 70,
-                        "minimum": 60,
-                        "maximum": 90
-                    }
+                    "timeframe": {"type": "string", "enum": ["1d", "1h"], "default": "1d"},
+                    "top_n": {"type": "integer", "default": 20, "minimum": 5, "maximum": 30},
+                    "min_quality": {"type": "integer", "default": 70, "minimum": 60, "maximum": 90}
                 },
                 "required": []
             }
         },
         {
             "name": "calculate_position_size",
-            "description": "Calculate optimal position size and risk/reward metrics for a trade based on entry, stop loss, and optional target prices.",
+            "description": "Calculate optimal position size and risk/reward metrics for a trade.",
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "entry": {
-                        "type": "number",
-                        "description": "Entry price"
-                    },
-                    "stop": {
-                        "type": "number",
-                        "description": "Stop loss price"
-                    },
-                    "target": {
-                        "type": "number",
-                        "description": "Target price (optional)"
-                    },
-                    "account_size": {
-                        "type": "number",
-                        "description": "Account size in dollars (uses user's default if not provided)"
-                    },
-                    "risk_percent": {
-                        "type": "number",
-                        "description": "Risk percentage per trade (uses user's default if not provided)"
-                    }
+                    "entry": {"type": "number", "description": "Entry price"},
+                    "stop": {"type": "number", "description": "Stop loss price"},
+                    "target": {"type": "number", "description": "Target price (optional)"},
+                    "account_size": {"type": "number", "description": "Account size (uses default if not provided)"},
+                    "risk_percent": {"type": "number", "description": "Risk % (uses default if not provided)"}
                 },
                 "required": ["entry", "stop"]
             }
         },
         {
             "name": "get_market_regime",
-            "description": "Check the current market regime (BULLISH, NEUTRAL_BULLISH, BEARISH, or NEUTRAL) based on QQQ's position relative to moving averages.",
-            "input_schema": {
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
+            "description": "Check the current market regime based on QQQ's position relative to moving averages.",
+            "input_schema": {"type": "object", "properties": {}, "required": []}
         }
     ]
     
-    system_prompt = f"""You are a professional swing trading assistant with deep expertise in technical analysis and risk management. You help traders analyze stocks, find high-quality setups, and manage positions using a proven institutional strategy.
-
-**Your Trading System:**
-- Only trade stocks in confirmed uptrends (price > 50 SMA > 200 SMA)
-- Focus on 5 high-probability setup types:
-  1. EMA 20 Pullback (highest probability)
-  2. SMA 50 Pullback (major support)
-  3. Consolidation Breakout (momentum plays)
-  4. Support Bounce (strong stocks only)
-  5. Mean Reversion (oversold recovery in uptrends)
-  
-- Quality scoring: 85-100 (exceptional), 75-84 (strong), 65-74 (good), <65 (filtered out)
-- Strict risk management: Fixed percentage risk per trade
-- Only trade in bullish market regimes
+    system_prompt = f"""You are a professional swing trading assistant with expertise in technical analysis and risk management.
 
 **User's Current Settings:**
 - Account Size: ${st.session_state.account_size:,}
 - Risk Per Trade: {st.session_state.risk_per_trade}%
 - Risk Amount: ${st.session_state.account_size * (st.session_state.risk_per_trade / 100):,.0f} per trade
 
-**Your Capabilities:**
-You have access to tools that can:
-- Scan individual stocks for setups
-- Scan entire Nasdaq 100 for opportunities
-- Calculate position sizes with risk/reward metrics
-- Check market regime conditions
+**Your Trading Strategy:**
+- Only trade stocks in confirmed uptrends
+- Focus on 5 setup types: EMA 20 Pullback, SMA 50 Pullback, Consolidation Breakout, Support Bounce, Mean Reversion
+- Quality scores: 85+ (exceptional), 75-84 (strong), 65-74 (good)
+- Strict risk management with predefined entries, stops, and targets
 
 **Communication Style:**
 - Be professional but conversational
-- Explain setups clearly with supporting technical reasons
+- Explain setups clearly with technical reasoning
 - Always emphasize risk management
-- Provide actionable trade plans when setups exist
-- Be honest when no good setups are available
-- Use emojis sparingly for emphasis (🔥 for strong setups, ⚠️ for warnings, ✅ for good setups)
+- Provide actionable trade plans
+- Be honest when no good setups exist
+- Use emojis sparingly (🔥 for strong setups, ✅ for good, ⚠️ for warnings)
 
-**Critical Reminders:**
-- This is educational content, not financial advice
-- Always remind users to verify data before trading
-- Never guarantee profits or downplay risks
-- Encourage proper position sizing and stop losses
+**CRITICAL:**
+- This is educational content, NOT financial advice
+- Remind users to verify data before trading
+- Never guarantee profits
+- Encourage proper position sizing
 
-When a user asks you to scan stocks or analyze anything, use your tools to get real data, then provide a clear, actionable response."""
+When users ask about stocks or setups, use your tools to get real data and provide clear, actionable responses."""
 
-    # Build messages array with conversation history
     messages = []
     for msg in conversation_history:
-        messages.append({
-            "role": msg["role"],
-            "content": msg["content"]
-        })
+        messages.append({"role": msg["role"], "content": msg["content"]})
+    messages.append({"role": "user", "content": user_message})
     
-    # Add current user message
-    messages.append({
-        "role": "user",
-        "content": user_message
-    })
-    
-    # Conversation loop with tool use
     max_iterations = 5
     iteration = 0
     
@@ -393,9 +606,7 @@ When a user asks you to scan stocks or analyze anything, use your tools to get r
                 messages=messages
             )
             
-            # Check if Claude wants to use tools
             if response.stop_reason == "tool_use":
-                # Process all tool uses in the response
                 assistant_content = []
                 tool_results = []
                 
@@ -403,7 +614,6 @@ When a user asks you to scan stocks or analyze anything, use your tools to get r
                     if block.type == "text":
                         assistant_content.append(block)
                     elif block.type == "tool_use":
-                        # Execute the appropriate tool
                         tool_name = block.name
                         tool_input = block.input
                         
@@ -431,7 +641,6 @@ When a user asks you to scan stocks or analyze anything, use your tools to get r
                         else:
                             result = {"error": f"Unknown tool: {tool_name}"}
                         
-                        # Store tool use and result
                         assistant_content.append(block)
                         tool_results.append({
                             "type": "tool_result",
@@ -439,28 +648,14 @@ When a user asks you to scan stocks or analyze anything, use your tools to get r
                             "content": json.dumps(result)
                         })
                 
-                # Add assistant message with tool uses
-                messages.append({
-                    "role": "assistant",
-                    "content": assistant_content
-                })
-                
-                # Add tool results
-                messages.append({
-                    "role": "user",
-                    "content": tool_results
-                })
-                
-                # Continue loop to get final response
+                messages.append({"role": "assistant", "content": assistant_content})
+                messages.append({"role": "user", "content": tool_results})
                 continue
-            
             else:
-                # Final text response
                 final_text = ""
                 for block in response.content:
                     if hasattr(block, "text"):
                         final_text += block.text
-                
                 return final_text
                 
         except Exception as e:
@@ -468,110 +663,172 @@ When a user asks you to scan stocks or analyze anything, use your tools to get r
     
     return "⚠️ Response took too long. Please try a simpler question."
 
-# Now add the Chatbot page section (add this with your other page sections)
+# ============= MAIN UI =============
 
-elif page == 'Chatbot':
+# Header with settings toggle
+col1, col2 = st.columns([4, 1])
+with col1:
     st.title("💬 AI Trading Assistant")
-    st.markdown("Ask me anything about stocks, setups, position sizing, or market conditions!")
-    
-    # API Key check
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        st.error("⚠️ Anthropic API Key not found!")
-        st.markdown("""
-        To use the chatbot, you need to set your Anthropic API key as an environment variable:
+    st.markdown("*Professional swing trading analysis powered by AI*")
+with col2:
+    if st.button("⚙️ Settings", use_container_width=True):
+        st.session_state.show_settings = not st.session_state.show_settings
+
+# Settings panel (collapsible)
+if st.session_state.show_settings:
+    with st.expander("⚙️ Account Settings", expanded=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.session_state.account_size = st.number_input(
+                "Account Size ($)",
+                min_value=10000,
+                value=st.session_state.account_size,
+                step=10000
+            )
+        with col2:
+            st.session_state.risk_per_trade = st.slider(
+                "Risk Per Trade (%)",
+                min_value=0.5,
+                max_value=2.0,
+                value=st.session_state.risk_per_trade,
+                step=0.1
+            )
         
-        **Option 1: Command Line (Temporary)**
-```bash
-        export ANTHROPIC_API_KEY='your-api-key-here'
-        streamlit run your_app.py
-```
-        
-        **Option 2: .env file (Recommended)**
-        1. Create a `.env` file in your project directory
-        2. Add: `ANTHROPIC_API_KEY=your-api-key-here`
-        3. Install python-dotenv: `pip install python-dotenv`
-        4. Add to top of your script:
-```python
-        from dotenv import load_dotenv
-        load_dotenv()
-```
-        
-        Get your API key at: https://console.anthropic.com/
-        """)
-        st.stop()
+        risk_amount = st.session_state.account_size * (st.session_state.risk_per_trade / 100)
+        st.info(f"💰 Risk per trade: **${risk_amount:,.0f}** ({st.session_state.risk_per_trade}% of ${st.session_state.account_size:,})")
+
+st.markdown("---")
+
+# API Key check
+api_key = os.environ.get("ANTHROPIC_API_KEY")
+if not api_key:
+    st.error("⚠️ **Anthropic API Key not found!**")
+    st.markdown("""
+    **To use the AI assistant, set up your API key:**
     
-    # Quick action buttons
-    st.markdown("### ⚡ Quick Actions")
-    col1, col2, col3, col4 = st.columns(4)
+    1. Create a `.env` file in your project directory
+    2. Add this line: `ANTHROPIC_API_KEY=your-key-here`
+    3. Restart the app
     
-    with col1:
-        if st.button("🔍 Scan Nasdaq 100", use_container_width=True):
-            st.session_state.chat_messages.append({
-                "role": "user",
-                "content": "Scan the Nasdaq 100 for the best swing trading setups"
-            })
-            st.rerun()
-    
-    with col2:
-        if st.button("📊 Market Regime", use_container_width=True):
-            st.session_state.chat_messages.append({
-                "role": "user",
-                "content": "What's the current market regime?"
-            })
-            st.rerun()
-    
-    with col3:
-        if st.button("🎯 Best Setups", use_container_width=True):
-            st.session_state.chat_messages.append({
-                "role": "user",
-                "content": "Show me only the highest quality setups (85+ score)"
-            })
-            st.rerun()
-    
-    with col4:
-        if st.button("🧹 Clear Chat", use_container_width=True):
-            st.session_state.chat_messages = []
-            st.rerun()
-    
-    st.markdown("---")
-    
+    Get your API key at: **https://console.anthropic.com/**
+    """)
+    st.stop()
+
+# Quick action buttons
+st.markdown("### ⚡ Quick Actions")
+col1, col2, col3, col4, col5 = st.columns(5)
+
+with col1:
+    if st.button("🔍 Scan Nasdaq", use_container_width=True):
+        st.session_state.chat_messages.append({
+            "role": "user",
+            "content": "Scan the Nasdaq 100 for the best swing trading setups"
+        })
+        st.rerun()
+
+with col2:
+    if st.button("📊 Market Check", use_container_width=True):
+        st.session_state.chat_messages.append({
+            "role": "user",
+            "content": "What's the current market regime?"
+        })
+        st.rerun()
+
+with col3:
+    if st.button("🎯 Top 5 Setups", use_container_width=True):
+        st.session_state.chat_messages.append({
+            "role": "user",
+            "content": "Show me the top 5 highest quality setups"
+        })
+        st.rerun()
+
+with col4:
+    if st.button("📈 Analyze Stock", use_container_width=True):
+        st.session_state.chat_messages.append({
+            "role": "user",
+            "content": "Analyze AAPL for swing trading"
+        })
+        st.rerun()
+
+with col5:
+    if st.button("🧹 Clear Chat", use_container_width=True):
+        st.session_state.chat_messages = []
+        st.rerun()
+
+st.markdown("---")
+
+# Chat container
+chat_container = st.container()
+
+with chat_container:
     # Display chat messages
     for message in st.session_state.chat_messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+
+# Chat input
+if prompt := st.chat_input("Ask about stocks, setups, position sizing, or market conditions..."):
+    # Add user message
+    st.session_state.chat_messages.append({"role": "user", "content": prompt})
     
-    # Chat input
-    if prompt := st.chat_input("Ask about stocks, setups, or trading strategy..."):
-        # Add user message to chat
-        st.session_state.chat_messages.append({"role": "user", "content": prompt})
-        
-        # Display user message
-        with st.chat_message("user"):
-            st.markdown(prompt)
-        
-        # Get AI response
-        with st.chat_message("assistant"):
-            with st.spinner("Analyzing..."):
-                response = process_chatbot_message(prompt, st.session_state.chat_messages[:-1])
-            st.markdown(response)
-        
-        # Add assistant response to chat
-        st.session_state.chat_messages.append({"role": "assistant", "content": response})
-        
-        # Rerun to update chat
-        st.rerun()
+    with st.chat_message("user"):
+        st.markdown(prompt)
     
-    # Example queries
-    if len(st.session_state.chat_messages) == 0:
-        st.markdown("### 💡 Example Questions")
+    # Get AI response
+    with st.chat_message("assistant"):
+        with st.spinner("Analyzing..."):
+            response = process_chatbot_message(prompt, st.session_state.chat_messages[:-1])
+        st.markdown(response)
+    
+    # Add assistant response
+    st.session_state.chat_messages.append({"role": "assistant", "content": response})
+    st.rerun()
+
+# Show examples if chat is empty
+if len(st.session_state.chat_messages) == 0:
+    st.markdown("### 💡 Try asking:")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
         st.markdown("""
+        **General Analysis:**
         - "Scan the Nasdaq 100"
-        - "Analyze AAPL for swing trading setups"
-        - "What's the current market regime?"
-        - "Show me high-quality setups with 80+ score"
-        - "Calculate position size for TSLA entry at $250, stop at $242"
-        - "Scan for EMA 20 pullback setups only"
-        - "What are the best stocks to trade today?"
-        - "Explain the EMA 20 pullback strategy"
+        - "What's the market regime?"
+        - "Show me the best setups today"
+        - "Find stocks with quality scores above 85"
         """)
+    
+    with col2:
+        st.markdown("""
+        **Specific Stocks:**
+        - "Analyze NVDA for swing trading"
+        - "Is TSLA a good buy right now?"
+        - "Calculate position size for AAPL at $185, stop $180"
+        - "Compare MSFT and GOOGL setups"
+        """)
+
+# Footer
+st.markdown("---")
+st.markdown("""
+<div style='text-align: center; color: #888; padding: 1rem;'>
+    <p><strong>AI Trading Assistant</strong> | Built for consistent swing trading profits</p>
+    <p style='font-size: 0.85rem;'>⚠️ This is educational content. Not financial advice. Always verify data before trading.</p>
+</div>
+""", unsafe_allow_html=True)
+```
+
+## What This Does:
+
+1. **Single Clean Interface** - Just a chat box, no other pages
+2. **Quick Action Buttons** - Fast access to common tasks
+3. **Collapsible Settings** - Account size and risk settings hide when not needed
+4. **Real-time Analysis** - AI scans stocks as you chat
+5. **Clean Design** - Dark theme, modern UI
+
+## To Run It:
+
+1. **Save this as a new file** (e.g., `ai_trader.py`)
+2. **Set up your `.env` file:**
+```
+   ANTHROPIC_API_KEY=sk-ant-your-key-here
