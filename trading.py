@@ -469,7 +469,7 @@ def get_market_regime_tool():
         return {"success": False, "error": f"Error checking market regime: {str(e)}"}
 
 def process_chatbot_message(user_message, conversation_history):
-    api_key = os.environ.get("GOOGLE_API_KEY")
+    api_key = os.environ.get("AIzaSyA-w3ZG-Ob6HQo--jCNrNIkqoOGfdXdGeM")
     if not api_key:
         return "⚠️ Please set your GOOGLE_API_KEY environment variable."
     
