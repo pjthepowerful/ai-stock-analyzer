@@ -786,4 +786,3 @@ st.markdown("""
     <p style='font-size: 0.85rem;'>⚠️ This is educational content. Not financial advice. Always verify data before trading.</p>
 </div>
 """, unsafe_allow_html=True)
-```
