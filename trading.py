@@ -680,7 +680,13 @@ if st.session_state.show_settings:
         st.info(f"💰 Risk per trade: **${risk_amount:,.0f}** ({st.session_state.risk_per_trade}% of ${st.session_state.account_size:,})")
 
 st.markdown("---")
-
+# DEBUG: Check if secrets are accessible
+st.write("DEBUG: Checking secrets...")
+try:
+    test_key = st.secrets["GOOGLE_API_KEY"]
+    st.write(f"✅ Secret found! First 10 chars: {test_key[:10]}...")
+except Exception as e:
+    st.write(f"❌ Secret NOT found! Error: {e}")
 # Try to get API key from Streamlit secrets first, then environment variable
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
