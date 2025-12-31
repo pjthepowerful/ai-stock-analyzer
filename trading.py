@@ -919,8 +919,6 @@ if not api_key:
     """)
     st.stop()
 
-# Quick actions
-st.markdown("### ⚡ Quick Actions")
 
 # Quick actions
 st.markdown("### ⚡ Quick Actions")
