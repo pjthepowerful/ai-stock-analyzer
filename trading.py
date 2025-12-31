@@ -681,15 +681,28 @@ if st.session_state.show_settings:
 
 st.markdown("---")
 
-api_key = os.environ.get("GOOGLE_API_KEY")
+# Try to get API key from Streamlit secrets first, then environment variable
+try:
+    api_key = st.secrets["GOOGLE_API_KEY"]
+except:
+    api_key = os.environ.get("GOOGLE_API_KEY")
+
 if not api_key:
     st.error("⚠️ **Google API Key not found!**")
     st.markdown("""
     **To use the AI assistant:**
     
-    1. Get your FREE API key at: **https://aistudio.google.com/app/apikey**
-    2. Create a `.env` file in your project directory
-    3. Add this line: `GOOGLE_API_KEY=your-key-here`
+    **If running on Streamlit Cloud:**
+    1. Get your FREE API key at: https://aistudio.google.com/app/apikey
+    2. Click the ⋮ menu (bottom right)
+    3. Go to Settings → Secrets
+    4. Add: `GOOGLE_API_KEY = "your-key-here"`
+    5. Click Save
+    
+    **If running locally:**
+    1. Get your FREE API key at: https://aistudio.google.com/app/apikey
+    2. Create a `.env` file
+    3. Add: `GOOGLE_API_KEY=your-key-here`
     4. Restart the app
     
     **Note:** Gemini is completely FREE for up to 1,500 requests per day!
