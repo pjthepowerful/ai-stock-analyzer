@@ -882,9 +882,16 @@ with col2:
 st.markdown("---")
 
 # Check API key
+# Check API key
+api_key = None
+
 try:
-    api_key = st.secrets["GOOGLE_API_KEY"]
+    if hasattr(st, 'secrets') and "GOOGLE_API_KEY" in st.secrets:
+        api_key = st.secrets["GOOGLE_API_KEY"]
 except:
+    pass
+
+if not api_key:
     api_key = os.environ.get("GOOGLE_API_KEY")
 
 if not api_key:
