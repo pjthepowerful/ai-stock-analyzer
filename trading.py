@@ -906,7 +906,7 @@ if not api_key:
 ```
     """)
     st.stop()
-    if not api_key:
+if not api_key:
     st.error("⚠️ **Google API Key not found!**")
     st.markdown("""
     **Setup:**
