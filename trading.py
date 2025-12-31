@@ -774,7 +774,7 @@ When analyzing stocks:
 Help users find great investment opportunities using fundamental analysis."""
 
     model = genai.GenerativeModel(
-        'models/gemini-1.5-flash',
+        'models/gemini-2.5-flash',
         tools=tools,
         system_instruction=system_instruction
     )
