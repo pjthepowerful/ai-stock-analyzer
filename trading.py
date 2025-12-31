@@ -631,10 +631,22 @@ def get_sector_stocks_tool(sector):
 def process_chatbot_message(user_message, conversation_history):
     """Process user messages with Gemini AI"""
     
+    # Try multiple ways to get the API key
+    api_key = None
+    
+    # Method 1: Streamlit secrets
     try:
-        api_key = st.secrets["GOOGLE_API_KEY"]
-    except:
+        if hasattr(st, 'secrets') and "GOOGLE_API_KEY" in st.secrets:
+            api_key = st.secrets["GOOGLE_API_KEY"]
+            st.write("DEBUG: Loaded from Streamlit secrets")  # Temporary debug
+    except Exception as e:
+        st.write(f"DEBUG: Secrets error: {e}")  # Temporary debug
+    
+    # Method 2: Environment variable
+    if not api_key:
         api_key = os.environ.get("GOOGLE_API_KEY")
+        if api_key:
+            st.write("DEBUG: Loaded from environment")  # Temporary debug
     
     if not api_key:
         return "⚠️ Please set your GOOGLE_API_KEY in Streamlit Secrets or environment variables."
