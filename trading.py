@@ -919,25 +919,6 @@ if not api_key:
     """)
     st.stop()
 
-# ==================== ADD THIS NEW CODE HERE ====================
-if api_key:
-    st.markdown("### 🔍 Available Models (DEBUG)")
-    try:
-        genai.configure(api_key=api_key)
-        
-        # List all available models
-        available_models = []
-        for model in genai.list_models():
-            if 'generateContent' in model.supported_generation_methods:
-                available_models.append(model.name)
-                st.write(f"✅ {model.name}")
-        
-        st.success(f"Found {len(available_models)} models that support generateContent")
-        
-    except Exception as e:
-        st.error(f"Error listing models: {e}")
-# ==================== END NEW CODE ====================
-
 # Quick actions
 st.markdown("### ⚡ Quick Actions")
 
