@@ -9,12 +9,15 @@ import os
 from dotenv import load_dotenv
 import re
 from groq import Groq
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 warnings.filterwarnings('ignore')
 load_dotenv()
 
 st.set_page_config(
-    page_title="  AI Stock Analyzer",
+    page_title="AI Stock Analyzer",
+    page_icon="📈",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -22,17 +25,14 @@ st.set_page_config(
 # Clean modern CSS
 st.markdown("""
 <style>
-    /* Main background */
     .stApp {
         background: linear-gradient(180deg, #0a0f1a 0%, #111827 100%);
     }
     
-    /* Hide default streamlit elements */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
-    /* Typography */
     h1, h2, h3 {
         color: #ffffff !important;
         font-weight: 700 !important;
@@ -42,7 +42,6 @@ st.markdown("""
         color: #d1d5db !important;
     }
     
-    /* Chat container */
     .stChatMessage {
         background: rgba(255, 255, 255, 0.03) !important;
         border: 1px solid rgba(255, 255, 255, 0.08) !important;
@@ -51,7 +50,6 @@ st.markdown("""
         margin: 0.75rem 0 !important;
     }
     
-    /* Chat input */
     .stChatInput > div {
         background: rgba(255, 255, 255, 0.05) !important;
         border: 1px solid rgba(255, 255, 255, 0.1) !important;
@@ -62,7 +60,6 @@ st.markdown("""
         color: #ffffff !important;
     }
     
-    /* Selectbox */
     .stSelectbox > div > div {
         background: rgba(255, 255, 255, 0.08) !important;
         border: 1px solid rgba(255, 255, 255, 0.15) !important;
@@ -70,7 +67,6 @@ st.markdown("""
         color: #ffffff !important;
     }
     
-    /* Buttons */
     .stButton > button {
         background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
         color: white !important;
@@ -87,48 +83,31 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4) !important;
     }
     
-    /* Info box */
-    .stAlert {
-        background: rgba(37, 99, 235, 0.1) !important;
-        border: 1px solid rgba(37, 99, 235, 0.3) !important;
-        border-radius: 12px !important;
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background: transparent;
     }
     
-    /* Divider */
+    .stTabs [data-baseweb="tab"] {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        color: #9ca3af;
+        padding: 8px 16px;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: rgba(37, 99, 235, 0.3) !important;
+        color: #ffffff !important;
+    }
+    
     hr {
         border-color: rgba(255, 255, 255, 0.1) !important;
         margin: 1.5rem 0 !important;
     }
     
-    /* Code blocks in chat */
-    code {
-        background: rgba(255, 255, 255, 0.1) !important;
-        color: #60a5fa !important;
-        padding: 0.2rem 0.5rem !important;
-        border-radius: 6px !important;
-    }
-    
-    /* Links */
-    a {
-        color: #60a5fa !important;
-    }
-    
-    /* Market badge */
-    .market-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        background: rgba(255, 255, 255, 0.05);
-        padding: 8px 16px;
-        border-radius: 20px;
-        font-size: 14px;
-        color: #9ca3af;
-    }
-    
-    /* Header styling */
     .main-header {
         text-align: center;
-        padding: 2rem 0 1rem 0;
+        padding: 1.5rem 0 1rem 0;
     }
     
     .main-header h1 {
@@ -140,29 +119,39 @@ st.markdown("""
         background-clip: text;
     }
     
-    .main-header p {
-        color: #6b7280 !important;
-        font-size: 1rem;
-    }
-    
-    /* Example chips */
-    .example-chip {
-        display: inline-block;
+    .market-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
         background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
         padding: 8px 16px;
         border-radius: 20px;
-        margin: 4px;
-        font-size: 13px;
+        font-size: 14px;
         color: #9ca3af;
-        cursor: pointer;
-        transition: all 0.2s;
     }
     
-    .example-chip:hover {
-        background: rgba(255, 255, 255, 0.1);
+    .metric-card {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 1rem;
+        text-align: center;
+    }
+    
+    .metric-value {
+        font-size: 1.5rem;
+        font-weight: 700;
         color: #ffffff;
     }
+    
+    .metric-label {
+        font-size: 0.8rem;
+        color: #9ca3af;
+        margin-top: 4px;
+    }
+    
+    .positive { color: #10b981 !important; }
+    .negative { color: #ef4444 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -173,7 +162,7 @@ US_STOCKS = [
     'JNJ', 'WMT', 'JPM', 'MA', 'PG', 'XOM', 'HD', 'CVX', 'MRK', 'ABBV',
     'PEP', 'KO', 'AVGO', 'COST', 'LLY', 'TMO', 'ACN', 'MCD', 'CSCO', 'ABT',
     'DHR', 'CRM', 'VZ', 'ADBE', 'NKE', 'NEE', 'WFC', 'TXN', 'PM', 'UPS',
-    'RTX', 'HON', 'ORCL', 'BMY', 'QCOM', 'UNP', 'INTU', 'LOW', 'AMD', 'COP',
+    'RTX', 'HON', 'ORCL', 'BMY', 'QCOM', 'UNP', 'INTU', 'LOW', 'AMD', 'COP'
 ]
 
 INDIAN_STOCKS = [
@@ -183,7 +172,6 @@ INDIAN_STOCKS = [
     'SUNPHARMA.NS', 'TITAN.NS', 'BAJFINANCE.NS', 'DMART.NS', 'WIPRO.NS',
     'ULTRACEMCO.NS', 'ONGC.NS', 'NTPC.NS', 'POWERGRID.NS', 'M&M.NS',
     'TATAMOTORS.NS', 'TATASTEEL.NS', 'JSWSTEEL.NS', 'ADANIENT.NS', 'ADANIPORTS.NS',
-    'COALINDIA.NS', 'BAJAJFINSV.NS', 'TECHM.NS', 'HDFCLIFE.NS', 'SBILIFE.NS',
     'ZOMATO.NS', 'IRCTC.NS', 'HAL.NS', 'BEL.NS', 'TATAPOWER.NS'
 ]
 
@@ -192,6 +180,8 @@ if 'chat_messages' not in st.session_state:
     st.session_state.chat_messages = []
 if 'market' not in st.session_state:
     st.session_state.market = 'US'
+if 'current_chart_data' not in st.session_state:
+    st.session_state.current_chart_data = None
 
 # ==================== HELPER FUNCTIONS ====================
 
@@ -219,6 +209,269 @@ def format_price(value, market='US'):
     symbol = '₹' if market == 'India' else '$'
     return f"{symbol}{value:,.2f}"
 
+# ==================== CHART FUNCTIONS ====================
+
+def create_price_chart(ticker, period="6mo"):
+    """Create an interactive price chart with volume"""
+    try:
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period=period)
+        
+        if hist.empty:
+            return None
+        
+        # Create figure with secondary y-axis
+        fig = make_subplots(
+            rows=2, cols=1,
+            shared_xaxes=True,
+            vertical_spacing=0.03,
+            row_heights=[0.7, 0.3]
+        )
+        
+        # Candlestick chart
+        fig.add_trace(
+            go.Candlestick(
+                x=hist.index,
+                open=hist['Open'],
+                high=hist['High'],
+                low=hist['Low'],
+                close=hist['Close'],
+                name='Price',
+                increasing_line_color='#10b981',
+                decreasing_line_color='#ef4444'
+            ),
+            row=1, col=1
+        )
+        
+        # Add moving averages
+        if len(hist) >= 20:
+            hist['MA20'] = hist['Close'].rolling(window=20).mean()
+            fig.add_trace(
+                go.Scatter(
+                    x=hist.index,
+                    y=hist['MA20'],
+                    name='20 MA',
+                    line=dict(color='#f59e0b', width=1)
+                ),
+                row=1, col=1
+            )
+        
+        if len(hist) >= 50:
+            hist['MA50'] = hist['Close'].rolling(window=50).mean()
+            fig.add_trace(
+                go.Scatter(
+                    x=hist.index,
+                    y=hist['MA50'],
+                    name='50 MA',
+                    line=dict(color='#8b5cf6', width=1)
+                ),
+                row=1, col=1
+            )
+        
+        # Volume bars
+        colors = ['#10b981' if hist['Close'].iloc[i] >= hist['Open'].iloc[i] 
+                  else '#ef4444' for i in range(len(hist))]
+        
+        fig.add_trace(
+            go.Bar(
+                x=hist.index,
+                y=hist['Volume'],
+                name='Volume',
+                marker_color=colors,
+                opacity=0.7
+            ),
+            row=2, col=1
+        )
+        
+        # Update layout
+        fig.update_layout(
+            title=f"{get_display_ticker(ticker)} - Price Chart",
+            template='plotly_dark',
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            xaxis_rangeslider_visible=False,
+            height=500,
+            margin=dict(l=50, r=50, t=50, b=50),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            font=dict(color='#9ca3af')
+        )
+        
+        fig.update_xaxes(
+            gridcolor='rgba(255,255,255,0.05)',
+            showgrid=True
+        )
+        fig.update_yaxes(
+            gridcolor='rgba(255,255,255,0.05)',
+            showgrid=True
+        )
+        
+        return fig
+    except Exception as e:
+        return None
+
+
+def create_comparison_chart(tickers):
+    """Create a comparison chart for multiple stocks"""
+    try:
+        fig = go.Figure()
+        
+        for ticker in tickers:
+            stock = yf.Ticker(ticker)
+            hist = stock.history(period="6mo")
+            
+            if not hist.empty:
+                # Normalize to percentage change from first day
+                normalized = (hist['Close'] / hist['Close'].iloc[0] - 1) * 100
+                
+                fig.add_trace(
+                    go.Scatter(
+                        x=hist.index,
+                        y=normalized,
+                        name=get_display_ticker(ticker),
+                        mode='lines',
+                        line=dict(width=2)
+                    )
+                )
+        
+        fig.update_layout(
+            title="6-Month Performance Comparison (%)",
+            template='plotly_dark',
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            height=400,
+            margin=dict(l=50, r=50, t=50, b=50),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            font=dict(color='#9ca3af'),
+            yaxis_title="% Change",
+            hovermode='x unified'
+        )
+        
+        fig.update_xaxes(gridcolor='rgba(255,255,255,0.05)')
+        fig.update_yaxes(gridcolor='rgba(255,255,255,0.05)')
+        
+        # Add zero line
+        fig.add_hline(y=0, line_dash="dash", line_color="rgba(255,255,255,0.3)")
+        
+        return fig
+    except Exception as e:
+        return None
+
+
+def create_metrics_chart(data):
+    """Create a radar chart for stock metrics"""
+    try:
+        categories = ['Valuation', 'Profitability', 'Health', 'Growth', 'Dividend']
+        
+        # Calculate scores (0-100 scale)
+        val_score = 50
+        if data.get('pe_ratio') and data['pe_ratio'] > 0:
+            val_score = max(0, min(100, 100 - (data['pe_ratio'] * 2)))
+        
+        prof_score = 50
+        if data.get('roe') and data['roe'] > 0:
+            prof_score = min(100, data['roe'] * 100 * 3)
+        
+        health_score = 50
+        if data.get('current_ratio'):
+            health_score = min(100, data['current_ratio'] * 40)
+        
+        growth_score = 50
+        if data.get('profit_margin') and data['profit_margin'] > 0:
+            growth_score = min(100, data['profit_margin'] * 100 * 3)
+        
+        div_score = 30
+        if data.get('dividend_yield') and data['dividend_yield'] > 0:
+            div_score = min(100, data['dividend_yield'] * 100 * 15)
+        
+        values = [val_score, prof_score, health_score, growth_score, div_score]
+        
+        fig = go.Figure()
+        
+        fig.add_trace(go.Scatterpolar(
+            r=values + [values[0]],  # Close the polygon
+            theta=categories + [categories[0]],
+            fill='toself',
+            fillcolor='rgba(59, 130, 246, 0.3)',
+            line=dict(color='#3b82f6', width=2),
+            name='Score'
+        ))
+        
+        fig.update_layout(
+            polar=dict(
+                radialaxis=dict(
+                    visible=True,
+                    range=[0, 100],
+                    gridcolor='rgba(255,255,255,0.1)',
+                    linecolor='rgba(255,255,255,0.1)'
+                ),
+                angularaxis=dict(
+                    gridcolor='rgba(255,255,255,0.1)',
+                    linecolor='rgba(255,255,255,0.1)'
+                ),
+                bgcolor='rgba(0,0,0,0)'
+            ),
+            template='plotly_dark',
+            paper_bgcolor='rgba(0,0,0,0)',
+            height=350,
+            margin=dict(l=80, r=80, t=30, b=30),
+            font=dict(color='#9ca3af'),
+            showlegend=False
+        )
+        
+        return fig
+    except Exception as e:
+        return None
+
+
+def create_sector_pie_chart(stocks_data):
+    """Create a pie chart showing sector distribution"""
+    try:
+        sectors = {}
+        for stock in stocks_data:
+            sector = stock.get('sector', 'Other')
+            sectors[sector] = sectors.get(sector, 0) + 1
+        
+        fig = go.Figure(data=[go.Pie(
+            labels=list(sectors.keys()),
+            values=list(sectors.values()),
+            hole=.4,
+            marker_colors=['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', 
+                          '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1']
+        )])
+        
+        fig.update_layout(
+            title="Sector Distribution",
+            template='plotly_dark',
+            paper_bgcolor='rgba(0,0,0,0)',
+            height=350,
+            margin=dict(l=30, r=30, t=50, b=30),
+            font=dict(color='#9ca3af'),
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=-0.2,
+                xanchor="center",
+                x=0.5
+            )
+        )
+        
+        return fig
+    except Exception as e:
+        return None
+
 # ==================== LIVE DATA ====================
 
 @st.cache_data(ttl=120)
@@ -231,7 +484,6 @@ def get_live_stock_data(ticker):
         if not info:
             return None
         
-        # Get current price
         current_price = info.get('regularMarketPrice') or info.get('currentPrice') or info.get('previousClose')
         
         if current_price is None:
@@ -280,10 +532,10 @@ def get_live_stock_data(ticker):
     except Exception as e:
         return None
 
-# ==================== ANALYSIS TOOLS ====================
+# ==================== ANALYSIS WITH CHARTS ====================
 
-def analyze_stock(ticker):
-    """Analyze a single stock"""
+def analyze_stock_with_chart(ticker):
+    """Analyze stock and prepare chart data"""
     original = ticker.upper().strip().replace('.NS', '').replace('.BO', '')
     market = st.session_state.market
     
@@ -293,9 +545,17 @@ def analyze_stock(ticker):
     if not data:
         alt_ticker = original if market == 'India' else f"{original}.NS"
         data = get_live_stock_data(alt_ticker)
+        full_ticker = alt_ticker
     
     if not data:
         return {"success": False, "error": f"Could not fetch data for {original}"}
+    
+    # Store chart data in session state
+    st.session_state.current_chart_data = {
+        "type": "single",
+        "ticker": full_ticker,
+        "data": data
+    }
     
     # Calculate scores
     val_score = 0
@@ -329,14 +589,14 @@ def analyze_stock(ticker):
     
     return {
         "success": True,
+        "show_chart": True,
         "source": "Yahoo Finance (Live)",
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "company": {
             "ticker": data['display_ticker'],
             "name": data['name'],
             "sector": data['sector'],
-            "industry": data['industry'],
-            "market": data['market']
+            "industry": data['industry']
         },
         "price": {
             "current": f"{currency}{data['price']:,.2f}",
@@ -346,40 +606,29 @@ def analyze_stock(ticker):
             "52w_high": f"{currency}{data['52_week_high']:,.2f}" if data['52_week_high'] else "N/A",
             "52w_low": f"{currency}{data['52_week_low']:,.2f}" if data['52_week_low'] else "N/A"
         },
-        "valuation": {
+        "metrics": {
             "pe": round(data['pe_ratio'], 2) if data['pe_ratio'] else "N/A",
-            "forward_pe": round(data['forward_pe'], 2) if data['forward_pe'] else "N/A",
             "peg": round(data['peg_ratio'], 2) if data['peg_ratio'] else "N/A",
-            "pb": round(data['price_to_book'], 2) if data['price_to_book'] else "N/A"
-        },
-        "profitability": {
             "roe": f"{data['roe']*100:.1f}%" if data['roe'] else "N/A",
-            "profit_margin": f"{data['profit_margin']*100:.1f}%" if data['profit_margin'] else "N/A",
-            "operating_margin": f"{data['operating_margin']*100:.1f}%" if data['operating_margin'] else "N/A"
-        },
-        "health": {
+            "margin": f"{data['profit_margin']*100:.1f}%" if data['profit_margin'] else "N/A",
             "debt_equity": round(data['debt_to_equity'], 1) if data['debt_to_equity'] else "N/A",
-            "current_ratio": round(data['current_ratio'], 2) if data['current_ratio'] else "N/A"
-        },
-        "dividend": {
-            "yield": f"{data['dividend_yield']*100:.2f}%" if data['dividend_yield'] else "N/A",
-            "payout": f"{data['payout_ratio']*100:.1f}%" if data['payout_ratio'] else "N/A"
+            "div_yield": f"{data['dividend_yield']*100:.2f}%" if data['dividend_yield'] else "N/A"
         },
         "rating": {
             "score": f"{total}/12",
             "pct": round(pct, 1),
             "verdict": rating,
             "emoji": emoji
-        },
-        "about": data['business_summary'][:350] + "..." if len(str(data['business_summary'])) > 350 else data['business_summary']
+        }
     }
 
 
-def compare_stocks(tickers_str):
-    """Compare multiple stocks"""
+def compare_stocks_with_chart(tickers_str):
+    """Compare stocks with chart"""
     tickers = [t.strip().upper().replace('.NS', '').replace('.BO', '') for t in re.split(r'[,\s]+', tickers_str) if t.strip()]
     
     results = []
+    full_tickers = []
     market = st.session_state.market
     
     for ticker in tickers[:5]:
@@ -389,8 +638,10 @@ def compare_stocks(tickers_str):
         if not data:
             alt = ticker if market == 'India' else f"{ticker}.NS"
             data = get_live_stock_data(alt)
+            full_ticker = alt
         
         if data:
+            full_tickers.append(full_ticker)
             currency = '₹' if data['market'] == 'India' else '$'
             results.append({
                 "ticker": data['display_ticker'],
@@ -400,14 +651,18 @@ def compare_stocks(tickers_str):
                 "market_cap": data['market_cap_fmt'],
                 "pe": round(data['pe_ratio'], 1) if data['pe_ratio'] else "N/A",
                 "roe": f"{data['roe']*100:.0f}%" if data['roe'] else "N/A",
-                "div_yield": f"{data['dividend_yield']*100:.1f}%" if data['dividend_yield'] else "-",
                 "sector": data['sector']
             })
-        else:
-            results.append({"ticker": ticker, "error": "No data"})
+    
+    # Store chart data
+    st.session_state.current_chart_data = {
+        "type": "comparison",
+        "tickers": full_tickers
+    }
     
     return {
         "success": True,
+        "show_chart": True,
         "source": "Yahoo Finance (Live)",
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "count": len(results),
@@ -415,14 +670,16 @@ def compare_stocks(tickers_str):
     }
 
 
-def screen_stocks(screen_type):
-    """Screen stocks by criteria"""
+def screen_stocks_with_chart(screen_type):
+    """Screen stocks with chart"""
     results = []
     stocks = get_stock_list()
     market = st.session_state.market
     
     progress = st.progress(0)
     status = st.empty()
+    
+    stocks_data = []
     
     for i, ticker in enumerate(stocks):
         progress.progress((i + 1) / len(stocks))
@@ -434,7 +691,6 @@ def screen_stocks(screen_type):
         
         currency = '₹' if data['market'] == 'India' else '$'
         
-        # Apply filter based on screen type
         if screen_type == "undervalued":
             if data['pe_ratio'] and 0 < data['pe_ratio'] < 20:
                 if data['roe'] and data['roe'] > 0.12:
@@ -446,6 +702,7 @@ def screen_stocks(screen_type):
                         "roe": f"{data['roe']*100:.0f}%",
                         "sector": data['sector']
                     })
+                    stocks_data.append(data)
         
         elif screen_type == "growth":
             if data['roe'] and data['roe'] > 0.15:
@@ -458,6 +715,7 @@ def screen_stocks(screen_type):
                         "margin": f"{data['profit_margin']*100:.0f}%",
                         "sector": data['sector']
                     })
+                    stocks_data.append(data)
         
         elif screen_type == "dividend":
             if data['dividend_yield'] and data['dividend_yield'] > 0.02:
@@ -469,9 +727,17 @@ def screen_stocks(screen_type):
                     "pe": round(data['pe_ratio'], 1) if data['pe_ratio'] else "N/A",
                     "sector": data['sector']
                 })
+                stocks_data.append(data)
     
     progress.empty()
     status.empty()
+    
+    # Store chart data for sector pie
+    if stocks_data:
+        st.session_state.current_chart_data = {
+            "type": "screener",
+            "stocks": stocks_data
+        }
     
     criteria_map = {
         "undervalued": "PE < 20, ROE > 12%",
@@ -482,8 +748,8 @@ def screen_stocks(screen_type):
     if results:
         return {
             "success": True,
+            "show_chart": True,
             "source": "Yahoo Finance (Live)",
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
             "market": market,
             "screen": screen_type,
             "criteria": criteria_map.get(screen_type, ""),
@@ -493,6 +759,59 @@ def screen_stocks(screen_type):
     return {"success": False, "message": f"No {screen_type} stocks found"}
 
 
+# ==================== DISPLAY CHARTS ====================
+
+def display_charts():
+    """Display charts based on current data"""
+    chart_data = st.session_state.current_chart_data
+    
+    if not chart_data:
+        return
+    
+    st.markdown("---")
+    
+    if chart_data["type"] == "single":
+        ticker = chart_data["ticker"]
+        data = chart_data["data"]
+        
+        # Create tabs for different charts
+        tab1, tab2 = st.tabs(["📈 Price Chart", "📊 Metrics"])
+        
+        with tab1:
+            # Time period selector
+            col1, col2 = st.columns([3, 1])
+            with col2:
+                period = st.selectbox(
+                    "Period",
+                    ["1mo", "3mo", "6mo", "1y", "2y"],
+                    index=2,
+                    key="period_select"
+                )
+            
+            price_chart = create_price_chart(ticker, period)
+            if price_chart:
+                st.plotly_chart(price_chart, use_container_width=True)
+        
+        with tab2:
+            metrics_chart = create_metrics_chart(data)
+            if metrics_chart:
+                st.plotly_chart(metrics_chart, use_container_width=True)
+    
+    elif chart_data["type"] == "comparison":
+        tickers = chart_data["tickers"]
+        
+        comparison_chart = create_comparison_chart(tickers)
+        if comparison_chart:
+            st.plotly_chart(comparison_chart, use_container_width=True)
+    
+    elif chart_data["type"] == "screener":
+        stocks = chart_data["stocks"]
+        
+        sector_chart = create_sector_pie_chart(stocks)
+        if sector_chart:
+            st.plotly_chart(sector_chart, use_container_width=True)
+
+
 # ==================== AI CHAT ====================
 
 def detect_and_execute(message):
@@ -500,20 +819,20 @@ def detect_and_execute(message):
     msg = message.lower()
     
     if any(w in msg for w in ['undervalued', 'value', 'cheap', 'low pe', 'bargain']):
-        return screen_stocks("undervalued")
+        return screen_stocks_with_chart("undervalued")
     
     if any(w in msg for w in ['growth', 'growing', 'high growth', 'fast growing']):
-        return screen_stocks("growth")
+        return screen_stocks_with_chart("growth")
     
     if any(w in msg for w in ['dividend', 'yield', 'income', 'passive']):
-        return screen_stocks("dividend")
+        return screen_stocks_with_chart("dividend")
     
     if any(w in msg for w in ['compare', 'vs', 'versus', 'comparison']):
         tickers = re.findall(r'\b([A-Z]{2,6})\b', message.upper())
         exclude = ['PE', 'ROE', 'VS', 'AND', 'THE', 'FOR', 'ROA', 'EPS']
         tickers = [t for t in tickers if t not in exclude]
         if len(tickers) >= 2:
-            return compare_stocks(','.join(tickers))
+            return compare_stocks_with_chart(','.join(tickers))
     
     # Single stock
     tickers = re.findall(r'\b([A-Z]{2,6})\b', message.upper())
@@ -521,17 +840,17 @@ def detect_and_execute(message):
     
     for t in tickers:
         if t in US_STOCKS and t not in exclude:
-            return analyze_stock(t)
+            return analyze_stock_with_chart(t)
     
     indian_names = [s.replace('.NS', '') for s in INDIAN_STOCKS]
     for t in tickers:
         if t in indian_names and t not in exclude:
-            return analyze_stock(t)
+            return analyze_stock_with_chart(t)
     
-    if any(w in msg for w in ['analyze', 'analysis', 'check', 'tell me', 'how is', 'price', 'stock']):
+    if any(w in msg for w in ['analyze', 'analysis', 'check', 'tell me', 'how is', 'price', 'stock', 'chart', 'show']):
         for t in tickers:
             if t not in exclude and len(t) >= 2:
-                return analyze_stock(t)
+                return analyze_stock_with_chart(t)
     
     return None
 
@@ -555,19 +874,18 @@ def process_message(user_message, history):
     market = st.session_state.market
     currency = '₹' if market == 'India' else '$'
     
-    system = f"""You are a professional stock analyst with LIVE market data access.
+    system = f"""You are a professional stock analyst with LIVE market data.
 
-CRITICAL RULES:
-1. ONLY use data provided in this prompt - it's LIVE from Yahoo Finance
-2. NEVER use training data for prices - it's outdated
-3. Always note data is from Yahoo Finance
-4. Format responses cleanly with markdown
+RULES:
+1. ONLY use data provided - it's LIVE from Yahoo Finance
+2. NEVER use training data for prices
+3. Note that charts are displayed separately below your response
+4. Be concise and data-focused
 
 Market: {market} | Currency: {currency}
 Time: {datetime.now().strftime("%Y-%m-%d %H:%M")}
 
-Style: Professional, concise, data-driven
-Always add: "⚠️ Educational only, not financial advice" at the end"""
+End with: "⚠️ Educational only, not financial advice" """
 
     messages = [{"role": "system", "content": system}]
     
@@ -577,17 +895,15 @@ Always add: "⚠️ Educational only, not financial advice" at the end"""
     if data:
         prompt = f"""Question: {user_message}
 
-LIVE DATA (use ONLY this):
+LIVE DATA:
 {json.dumps(data, indent=2, default=str)}
 
-Provide analysis based on this live data."""
+Note: Interactive charts are displayed below. Analyze the data concisely."""
     else:
         prompt = f"""Question: {user_message}
 
-No live data was fetched. Either:
-1. Help with general stock questions
-2. Ask user to specify a ticker (like AAPL, NVDA, TCS, RELIANCE)
-3. DO NOT provide any stock prices - they would be outdated"""
+No live data fetched. Ask user to specify a ticker (AAPL, NVDA, TCS, RELIANCE, etc.)
+DO NOT provide stock prices from training data."""
     
     messages.append({"role": "user", "content": prompt})
     
@@ -595,13 +911,13 @@ No live data was fetched. Either:
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=messages,
-            max_tokens=2048,
+            max_tokens=1500,
             temperature=0.5
         )
         return response.choices[0].message.content
     except Exception as e:
         if "rate_limit" in str(e).lower():
-            return "⚠️ Rate limit reached. Please wait a moment."
+            return "⚠️ Rate limit reached. Please wait."
         return f"Error: {e}"
 
 
@@ -610,19 +926,19 @@ No live data was fetched. Either:
 # Header
 st.markdown("""
 <div class="main-header">
-    <h1> AI Stock Analyzer</h1>
-    <p>Real-time analysis for US & Indian markets</p>
+    <h1>📈 AI Stock Analyzer</h1>
+    <p>Real-time analysis with interactive charts</p>
 </div>
 """, unsafe_allow_html=True)
 
-# Controls row
+# Controls
 col1, col2, col3 = st.columns([2, 1, 1])
 
 with col1:
     market_emoji = "🇺🇸" if st.session_state.market == 'US' else "🇮🇳"
     st.markdown(f"""
     <div class="market-badge">
-        {market_emoji} <strong>{st.session_state.market} Market</strong> • Live data from Yahoo Finance
+        {market_emoji} <strong>{st.session_state.market} Market</strong> • Live data
     </div>
     """, unsafe_allow_html=True)
 
@@ -636,18 +952,20 @@ with col2:
     if market != st.session_state.market:
         st.session_state.market = market
         st.session_state.chat_messages = []
+        st.session_state.current_chart_data = None
         st.cache_data.clear()
         st.rerun()
 
 with col3:
-    col3a, col3b = st.columns(2)
-    with col3a:
-        if st.button("🔄 Refresh", use_container_width=True):
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("🔄", use_container_width=True, help="Refresh data"):
             st.cache_data.clear()
             st.rerun()
-    with col3b:
-        if st.button("🗑️ Clear", use_container_width=True):
+    with c2:
+        if st.button("🗑️", use_container_width=True, help="Clear chat"):
             st.session_state.chat_messages = []
+            st.session_state.current_chart_data = None
             st.rerun()
 
 st.markdown("---")
@@ -663,14 +981,8 @@ if not api_key:
     api_key = os.environ.get("GROQ_API_KEY")
 
 if not api_key:
-    st.error("⚠️ **Setup Required**")
-    st.markdown("""
-    1. Get free API key: [console.groq.com/keys](https://console.groq.com/keys)
-    2. Add to Streamlit Secrets:
-    ```
-    GROQ_API_KEY = "gsk_your_key_here"
-    ```
-    """)
+    st.error("⚠️ Add GROQ_API_KEY to Streamlit Secrets")
+    st.code('GROQ_API_KEY = "gsk_your_key_here"')
     st.stop()
 
 # Chat messages
@@ -678,28 +990,19 @@ for m in st.session_state.chat_messages:
     with st.chat_message(m["role"]):
         st.markdown(m["content"])
 
-# Welcome message when empty
+# Display charts if available
+if st.session_state.current_chart_data:
+    display_charts()
+
+# Welcome
 if not st.session_state.chat_messages:
-    st.markdown("### 👋 Welcome! What would you like to know?")
-    
-    st.markdown("**Try asking:**")
+    st.markdown("### 👋 Welcome! Ask me about any stock.")
+    st.markdown("**Examples:**")
     
     if st.session_state.market == 'India':
-        examples = [
-            "Analyze TCS",
-            "Compare RELIANCE, INFY, TCS", 
-            "Find undervalued stocks",
-            "Show dividend stocks",
-            "How is HDFC Bank doing?"
-        ]
+        examples = ["Analyze TCS", "Compare RELIANCE INFY TCS", "Find undervalued stocks", "Show dividend stocks"]
     else:
-        examples = [
-            "Analyze AAPL",
-            "Compare AAPL, MSFT, GOOGL",
-            "Find undervalued stocks", 
-            "Show growth stocks",
-            "Tell me about NVDA"
-        ]
+        examples = ["Analyze AAPL", "Compare AAPL MSFT GOOGL", "Find growth stocks", "Show dividend stocks"]
     
     cols = st.columns(len(examples))
     for i, ex in enumerate(examples):
@@ -709,7 +1012,7 @@ if not st.session_state.chat_messages:
                 st.rerun()
 
 # Chat input
-if prompt := st.chat_input("Ask about any stock... (e.g., 'Analyze AAPL' or 'Compare TCS, INFY')"):
+if prompt := st.chat_input("Ask about stocks... (e.g., 'Analyze NVDA' or 'Compare TCS INFY')"):
     st.session_state.chat_messages.append({"role": "user", "content": prompt})
     
     with st.chat_message("user"):
@@ -727,7 +1030,7 @@ if prompt := st.chat_input("Ask about any stock... (e.g., 'Analyze AAPL' or 'Com
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #6b7280; font-size: 12px;">
-    <p>📈 AI Stock Analyzer • Live data from Yahoo Finance • Powered by Groq AI</p>
-    <p>⚠️ For educational purposes only. Not financial advice.</p>
+    📈 AI Stock Analyzer • Live data from Yahoo Finance • Powered by Groq AI<br>
+    ⚠️ For educational purposes only. Not financial advice.
 </div>
 """, unsafe_allow_html=True)
