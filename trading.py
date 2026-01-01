@@ -13,6 +13,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from supabase import create_client, Client
 import extra_streamlit_components as stx
+from streamlit_mic_recorder import speech_to_text
 
 warnings.filterwarnings('ignore')
 load_dotenv()
@@ -500,6 +501,38 @@ MAIN_APP_CSS = """
         font-size: 13px;
         color: #10b981;
     }
+    
+    /* Voice button styling */
+    .stAudioInput > div, [data-testid="stAudioInput"] {
+        background: transparent !important;
+    }
+    
+    .voice-container button {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+        border-radius: 50% !important;
+        width: 45px !important;
+        height: 45px !important;
+        padding: 0 !important;
+        border: none !important;
+        color: white !important;
+        font-size: 1.2rem !important;
+    }
+    
+    .voice-container button:hover {
+        background: linear-gradient(135deg, #34d399 0%, #10b981 100%) !important;
+        transform: scale(1.05) !important;
+    }
+    
+    /* Recording state */
+    .voice-container button[kind="secondary"] {
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+        animation: pulse 1s infinite !important;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+        50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+    }
 </style>
 """
 
@@ -960,6 +993,8 @@ def show_main_app():
         st.session_state.market = 'US'
     if 'charts_to_display' not in st.session_state:
         st.session_state.charts_to_display = []
+    if 'voice_prompt' not in st.session_state:
+        st.session_state.voice_prompt = None
     
     # Header
     st.markdown("""
@@ -1039,8 +1074,38 @@ def show_main_app():
                     st.session_state.chat_messages.append({"role": "user", "content": ex})
                     st.rerun()
     
-    # Chat input
-    if prompt := st.chat_input("Ask Paula about stocks..."):
+    # Voice and Chat input
+    col_voice, col_chat = st.columns([1, 11])
+    
+    with col_voice:
+        voice_text = speech_to_text(
+            language='en',
+            start_prompt="🎤",
+            stop_prompt="⏹️",
+            just_once=True,
+            key='voice_input',
+            use_container_width=True
+        )
+    
+    # Handle voice input
+    if voice_text:
+        st.session_state.voice_prompt = voice_text
+        st.rerun()
+    
+    # Check for voice prompt from previous run
+    prompt = None
+    if st.session_state.get('voice_prompt'):
+        prompt = st.session_state.voice_prompt
+        st.session_state.voice_prompt = None  # Clear it
+    
+    # Regular chat input
+    with col_chat:
+        typed_prompt = st.chat_input("Ask Paula about stocks... or click 🎤 to speak")
+    
+    if typed_prompt:
+        prompt = typed_prompt
+    
+    if prompt:
         st.session_state.chat_messages.append({"role": "user", "content": prompt})
         
         with st.chat_message("user"):
