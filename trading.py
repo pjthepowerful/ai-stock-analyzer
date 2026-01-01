@@ -34,26 +34,22 @@ st.markdown("""
         color: #ffffff !important;
     }
     
-    /* Headers - always white */
     h1, h2, h3, h4, h5, h6 {
         color: #ffffff !important;
         font-family: 'Inter', 'Segoe UI', sans-serif !important;
         font-weight: 600 !important;
     }
     
-    /* All text - light gray */
     p, span, div, label, .stMarkdown {
         color: #e5e7eb !important;
     }
     
-    /* Chat input */
     .stChatFloatingInputContainer {
         background: rgba(255, 255, 255, 0.05) !important;
         border: 1px solid rgba(255, 255, 255, 0.1) !important;
         border-radius: 12px !important;
     }
     
-    /* Chat messages */
     .stChatMessage {
         background: rgba(255, 255, 255, 0.05) !important;
         border-radius: 12px !important;
@@ -62,14 +58,12 @@ st.markdown("""
         color: #ffffff !important;
     }
     
-    /* Input fields */
     input, textarea, .stTextInput input, .stTextArea textarea {
         background: rgba(255, 255, 255, 0.1) !important;
         color: #ffffff !important;
         border: 1px solid rgba(255, 255, 255, 0.2) !important;
     }
     
-    /* Buttons */
     .stButton > button {
         background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
         color: white !important;
@@ -83,22 +77,15 @@ st.markdown("""
         transform: translateY(-2px);
     }
     
-    /* Metrics */
     .stMetric {
         background: rgba(255, 255, 255, 0.05) !important;
         padding: 1rem !important;
         border-radius: 8px !important;
     }
     
-    .stMetric label {
-        color: #9ca3af !important;
-    }
+    .stMetric label { color: #9ca3af !important; }
+    .stMetric [data-testid="stMetricValue"] { color: #ffffff !important; }
     
-    .stMetric [data-testid="stMetricValue"] {
-        color: #ffffff !important;
-    }
-    
-    /* Dataframes/Tables */
     .stDataFrame, table {
         background: rgba(255, 255, 255, 0.05) !important;
         color: #ffffff !important;
@@ -109,37 +96,16 @@ st.markdown("""
         color: #ffffff !important;
     }
     
-    .stDataFrame td {
-        color: #e5e7eb !important;
-    }
+    .stDataFrame td { color: #e5e7eb !important; }
     
-    /* Expanders */
     .streamlit-expanderHeader {
         background: rgba(255, 255, 255, 0.05) !important;
         color: #ffffff !important;
     }
     
-    /* Success/Info/Warning/Error boxes */
-    .stSuccess, .stInfo, .stWarning, .stError {
-        background: rgba(255, 255, 255, 0.1) !important;
-        color: #ffffff !important;
-    }
+    a { color: #60a5fa !important; }
+    a:hover { color: #93c5fd !important; }
     
-    /* Sidebar (if you add one later) */
-    .css-1d391kg, .st-emotion-cache-1cypcdb {
-        background: #1e293b !important;
-    }
-    
-    /* Links */
-    a {
-        color: #60a5fa !important;
-    }
-    
-    a:hover {
-        color: #93c5fd !important;
-    }
-    
-    /* Code blocks */
     code {
         background: rgba(255, 255, 255, 0.1) !important;
         color: #fbbf24 !important;
@@ -147,16 +113,28 @@ st.markdown("""
         border-radius: 4px !important;
     }
     
-    pre {
-        background: rgba(255, 255, 255, 0.05) !important;
-        color: #e5e7eb !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    /* Tab styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        color: #ffffff;
+        padding: 8px 16px;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background-color: #3b82f6 !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Stock Universe
-SP500_MAJOR = [
+# ==================== STOCK UNIVERSES ====================
+
+# US Stocks - S&P 500 Top 100
+US_STOCKS = [
     'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B', 'V', 'UNH',
     'JNJ', 'WMT', 'JPM', 'MA', 'PG', 'XOM', 'HD', 'CVX', 'MRK', 'ABBV',
     'PEP', 'KO', 'AVGO', 'COST', 'LLY', 'TMO', 'ACN', 'MCD', 'CSCO', 'ABT',
@@ -169,26 +147,153 @@ SP500_MAJOR = [
     'GD', 'ISRG', 'MU', 'FIS', 'NSC', 'EL', 'SHW', 'CL', 'KLAC', 'APD'
 ]
 
+# Indian Stocks - NIFTY 50 + Popular Stocks (NSE)
+INDIAN_STOCKS = [
+    # NIFTY 50
+    'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
+    'HINDUNILVR.NS', 'ITC.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'KOTAKBANK.NS',
+    'LT.NS', 'HCLTECH.NS', 'AXISBANK.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
+    'SUNPHARMA.NS', 'TITAN.NS', 'BAJFINANCE.NS', 'DMART.NS', 'WIPRO.NS',
+    'ULTRACEMCO.NS', 'ONGC.NS', 'NTPC.NS', 'POWERGRID.NS', 'M&M.NS',
+    'TATAMOTORS.NS', 'TATASTEEL.NS', 'JSWSTEEL.NS', 'ADANIENT.NS', 'ADANIPORTS.NS',
+    'COALINDIA.NS', 'BAJAJFINSV.NS', 'TECHM.NS', 'HDFCLIFE.NS', 'SBILIFE.NS',
+    'GRASIM.NS', 'DIVISLAB.NS', 'DRREDDY.NS', 'CIPLA.NS', 'APOLLOHOSP.NS',
+    'EICHERMOT.NS', 'BRITANNIA.NS', 'NESTLEIND.NS', 'INDUSINDBK.NS', 'HEROMOTOCO.NS',
+    'BAJAJ-AUTO.NS', 'TATACONSUM.NS', 'HINDALCO.NS', 'BPCL.NS', 'UPL.NS',
+    # Additional Popular Indian Stocks
+    'ZOMATO.NS', 'PAYTM.NS', 'NYKAA.NS', 'POLICYBZR.NS', 'IRCTC.NS',
+    'HAL.NS', 'BEL.NS', 'IRFC.NS', 'INDIANB.NS', 'PNB.NS',
+    'BANKBARODA.NS', 'CANBK.NS', 'VEDL.NS', 'TATAPOWER.NS', 'ADANIGREEN.NS',
+    'ADANIPOWER.NS', 'AMBUJACEM.NS', 'ACC.NS', 'SHREECEM.NS', 'PIDILITIND.NS',
+    'HAVELLS.NS', 'VOLTAS.NS', 'GODREJCP.NS', 'MARICO.NS', 'COLPAL.NS',
+    'DABUR.NS', 'BERGEPAINT.NS', 'PAGEIND.NS', 'MUTHOOTFIN.NS', 'CHOLAFIN.NS',
+    'BAJAJHLDNG.NS', 'SIEMENS.NS', 'ABB.NS', 'CGPOWER.NS', 'BHEL.NS'
+]
+
+# Display names for Indian stocks (without .NS suffix)
+INDIAN_STOCK_NAMES = {ticker: ticker.replace('.NS', '') for ticker in INDIAN_STOCKS}
+
 # Session state
 if 'chat_messages' not in st.session_state:
     st.session_state.chat_messages = []
-if 'show_settings' not in st.session_state:
-    st.session_state.show_settings = False
+if 'market' not in st.session_state:
+    st.session_state.market = 'US'  # Default to US market
 
-# ==================== FUNDAMENTAL ANALYSIS FUNCTIONS ====================
+# ==================== HELPER FUNCTIONS ====================
 
-@st.cache_data(ttl=3600)
-def get_stock_fundamentals(ticker):
-    """Get comprehensive fundamental data"""
+def get_stock_list():
+    """Get current stock list based on selected market"""
+    if st.session_state.market == 'India':
+        return INDIAN_STOCKS
+    return US_STOCKS
+
+
+def get_currency_symbol():
+    """Get currency symbol based on market"""
+    if st.session_state.market == 'India':
+        return '₹'
+    return '$'
+
+
+def format_market_cap(value, market='US'):
+    """Format market cap to readable string"""
+    if value is None:
+        return "N/A"
+    
+    symbol = '₹' if market == 'India' else '$'
+    
+    if value >= 1e12:
+        return f"{symbol}{value/1e12:.2f}T"
+    elif value >= 1e9:
+        return f"{symbol}{value/1e9:.2f}B"
+    elif value >= 1e7:
+        return f"{symbol}{value/1e7:.2f}Cr"  # Crores for Indian market
+    elif value >= 1e6:
+        return f"{symbol}{value/1e6:.2f}M"
+    else:
+        return f"{symbol}{value:,.0f}"
+
+
+def format_price(value, market='US'):
+    """Format price with currency symbol"""
+    if value is None:
+        return "N/A"
+    symbol = '₹' if market == 'India' else '$'
+    return f"{symbol}{value:,.2f}"
+
+
+def get_display_ticker(ticker):
+    """Get display name for ticker (removes .NS suffix for Indian stocks)"""
+    return ticker.replace('.NS', '').replace('.BO', '')
+
+
+def normalize_ticker(ticker, market='US'):
+    """Add appropriate suffix for market"""
+    ticker = ticker.upper().strip()
+    
+    # Remove any existing suffix
+    ticker = ticker.replace('.NS', '').replace('.BO', '')
+    
+    if market == 'India':
+        # Check if it's a known Indian stock
+        if f"{ticker}.NS" in INDIAN_STOCKS:
+            return f"{ticker}.NS"
+        return f"{ticker}.NS"  # Default to NSE
+    
+    return ticker
+
+
+# ==================== LIVE DATA FUNCTIONS ====================
+
+@st.cache_data(ttl=300)
+def get_live_price(ticker):
+    """Get live/recent price data"""
     try:
         stock = yf.Ticker(ticker)
-        info = stock.info
-        hist = stock.history(period='2y')
-        
+        hist = stock.history(period='5d')
         if hist.empty:
             return None
         
         current_price = hist['Close'].iloc[-1]
+        prev_close = hist['Close'].iloc[-2] if len(hist) > 1 else current_price
+        change = current_price - prev_close
+        change_pct = (change / prev_close) * 100
+        
+        return {
+            "price": round(current_price, 2),
+            "change": round(change, 2),
+            "change_pct": round(change_pct, 2),
+            "high": round(hist['High'].iloc[-1], 2),
+            "low": round(hist['Low'].iloc[-1], 2),
+            "volume": int(hist['Volume'].iloc[-1])
+        }
+    except:
+        return None
+
+
+@st.cache_data(ttl=900)
+def get_stock_fundamentals(ticker):
+    """Get comprehensive fundamental data from Yahoo Finance"""
+    try:
+        stock = yf.Ticker(ticker)
+        info = stock.info
+        
+        if not info or 'symbol' not in info:
+            return None
+        
+        # Determine market
+        market = 'India' if '.NS' in ticker or '.BO' in ticker else 'US'
+        
+        # Get price data
+        hist = stock.history(period='1y')
+        if hist.empty:
+            return None
+        
+        current_price = hist['Close'].iloc[-1]
+        
+        # Calculate YTD performance
+        year_ago_price = hist['Close'].iloc[0] if len(hist) > 200 else current_price
+        ytd_change = ((current_price - year_ago_price) / year_ago_price) * 100
         
         # Calculate growth metrics
         revenue_growth = None
@@ -200,23 +305,30 @@ def get_stock_fundamentals(ticker):
                 if 'Total Revenue' in financials.index:
                     recent_rev = financials.loc['Total Revenue'].iloc[0]
                     old_rev = financials.loc['Total Revenue'].iloc[-1]
-                    revenue_growth = ((recent_rev - old_rev) / abs(old_rev)) * 100
+                    if old_rev and old_rev != 0:
+                        revenue_growth = ((recent_rev - old_rev) / abs(old_rev)) * 100
                 
                 if 'Net Income' in financials.index:
                     recent_earn = financials.loc['Net Income'].iloc[0]
                     old_earn = financials.loc['Net Income'].iloc[-1]
-                    if old_earn != 0:
+                    if old_earn and old_earn != 0:
                         earnings_growth = ((recent_earn - old_earn) / abs(old_earn)) * 100
         except:
             pass
         
         fundamentals = {
             "ticker": ticker,
-            "name": info.get('longName', ticker),
+            "display_ticker": get_display_ticker(ticker),
+            "name": info.get('longName', info.get('shortName', get_display_ticker(ticker))),
             "sector": info.get('sector', 'N/A'),
             "industry": info.get('industry', 'N/A'),
-            "market_cap": info.get('marketCap', 0),
+            "market": market,
+            "market_cap": info.get('marketCap'),
+            "market_cap_fmt": format_market_cap(info.get('marketCap'), market),
             "price": round(current_price, 2),
+            "price_fmt": format_price(current_price, market),
+            "ytd_change": round(ytd_change, 2) if ytd_change else None,
+            "currency": info.get('currency', 'INR' if market == 'India' else 'USD'),
             
             # Valuation
             "pe_ratio": info.get('trailingPE'),
@@ -224,7 +336,6 @@ def get_stock_fundamentals(ticker):
             "peg_ratio": info.get('pegRatio'),
             "price_to_book": info.get('priceToBook'),
             "price_to_sales": info.get('priceToSalesTrailing12Months'),
-            "ev_to_revenue": info.get('enterpriseToRevenue'),
             "ev_to_ebitda": info.get('enterpriseToEbitda'),
             
             # Profitability
@@ -232,7 +343,6 @@ def get_stock_fundamentals(ticker):
             "operating_margin": info.get('operatingMargins'),
             "roe": info.get('returnOnEquity'),
             "roa": info.get('returnOnAssets'),
-            "roic": info.get('returnOnCapital'),
             
             # Financial Health
             "debt_to_equity": info.get('debtToEquity'),
@@ -244,7 +354,6 @@ def get_stock_fundamentals(ticker):
             # Growth
             "revenue_growth": revenue_growth,
             "earnings_growth": earnings_growth,
-            "revenue_per_share": info.get('revenuePerShare'),
             "earnings_per_share": info.get('trailingEps'),
             
             # Dividends
@@ -252,16 +361,14 @@ def get_stock_fundamentals(ticker):
             "payout_ratio": info.get('payoutRatio'),
             "dividend_rate": info.get('dividendRate'),
             
-            # Other
+            # Trading Info
             "beta": info.get('beta'),
             "52_week_high": info.get('fiftyTwoWeekHigh'),
             "52_week_low": info.get('fiftyTwoWeekLow'),
             "avg_volume": info.get('averageVolume'),
-            "float_shares": info.get('floatShares'),
-            "shares_outstanding": info.get('sharesOutstanding'),
             
             # Description
-            "business_summary": info.get('longBusinessSummary', 'N/A')
+            "business_summary": info.get('longBusinessSummary', 'No description available.')
         }
         
         return fundamentals
@@ -270,294 +377,21 @@ def get_stock_fundamentals(ticker):
         return None
 
 
-def fundamental_screener_tool(
-    min_market_cap=None, max_market_cap=None,
-    min_pe=None, max_pe=None,
-    min_roe=None, max_roe=None,
-    min_profit_margin=None,
-    max_debt_equity=None,
-    min_dividend_yield=None,
-    sector=None,
-    min_revenue_growth=None,
-    max_peg=None
-):
-    """Screen stocks by fundamental criteria"""
+# ==================== STOCK SCREENING TOOLS ====================
+
+def find_undervalued_stocks_tool(max_pe=20, min_roe=12):
+    """Find undervalued stocks"""
     try:
         results = []
-        progress = st.empty()
+        stock_list = get_stock_list()
+        market = st.session_state.market
         
-        stocks_to_scan = SP500_MAJOR
+        progress_bar = st.progress(0)
+        status_text = st.empty()
         
-        for idx, ticker in enumerate(stocks_to_scan):
-            progress.text(f"Screening {ticker}... ({idx+1}/{len(stocks_to_scan)})")
-            
-            fundamentals = get_stock_fundamentals(ticker)
-            if not fundamentals:
-                continue
-            
-            # Apply filters
-            passes = True
-            
-            # Market Cap
-            if min_market_cap and (not fundamentals['market_cap'] or fundamentals['market_cap'] < min_market_cap):
-                passes = False
-            if max_market_cap and (not fundamentals['market_cap'] or fundamentals['market_cap'] > max_market_cap):
-                passes = False
-            
-            # PE Ratio
-            if min_pe and (not fundamentals['pe_ratio'] or fundamentals['pe_ratio'] < min_pe):
-                passes = False
-            if max_pe and (not fundamentals['pe_ratio'] or fundamentals['pe_ratio'] > max_pe):
-                passes = False
-            
-            # ROE
-            if min_roe and (not fundamentals['roe'] or fundamentals['roe'] * 100 < min_roe):
-                passes = False
-            if max_roe and (not fundamentals['roe'] or fundamentals['roe'] * 100 > max_roe):
-                passes = False
-            
-            # Profit Margin
-            if min_profit_margin and (not fundamentals['profit_margin'] or fundamentals['profit_margin'] * 100 < min_profit_margin):
-                passes = False
-            
-            # Debt to Equity
-            if max_debt_equity and (fundamentals['debt_to_equity'] and fundamentals['debt_to_equity'] > max_debt_equity):
-                passes = False
-            
-            # Dividend Yield
-            if min_dividend_yield and (not fundamentals['dividend_yield'] or fundamentals['dividend_yield'] * 100 < min_dividend_yield):
-                passes = False
-            
-            # Sector
-            if sector and fundamentals['sector'].lower() != sector.lower():
-                passes = False
-            
-            # Revenue Growth
-            if min_revenue_growth and (not fundamentals['revenue_growth'] or fundamentals['revenue_growth'] < min_revenue_growth):
-                passes = False
-            
-            # PEG Ratio
-            if max_peg and (not fundamentals['peg_ratio'] or fundamentals['peg_ratio'] > max_peg):
-                passes = False
-            
-            if passes:
-                results.append({
-                    "ticker": fundamentals['ticker'],
-                    "name": fundamentals['name'],
-                    "price": fundamentals['price'],
-                    "market_cap": fundamentals['market_cap'],
-                    "pe_ratio": round(fundamentals['pe_ratio'], 2) if fundamentals['pe_ratio'] else None,
-                    "roe": round(fundamentals['roe'] * 100, 2) if fundamentals['roe'] else None,
-                    "profit_margin": round(fundamentals['profit_margin'] * 100, 2) if fundamentals['profit_margin'] else None,
-                    "debt_to_equity": round(fundamentals['debt_to_equity'], 2) if fundamentals['debt_to_equity'] else None,
-                    "dividend_yield": round(fundamentals['dividend_yield'] * 100, 2) if fundamentals['dividend_yield'] else None,
-                    "sector": fundamentals['sector'],
-                    "peg_ratio": round(fundamentals['peg_ratio'], 2) if fundamentals['peg_ratio'] else None
-                })
-        
-        progress.empty()
-        
-        if results:
-            return {
-                "success": True,
-                "total_found": len(results),
-                "stocks": results[:30]
-            }
-        else:
-            return {
-                "success": False,
-                "message": "No stocks found matching criteria"
-            }
-            
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-def analyze_company_tool(ticker):
-    """Deep dive analysis of a company"""
-    try:
-        fundamentals = get_stock_fundamentals(ticker)
-        
-        if not fundamentals:
-            return {"success": False, "error": f"Could not fetch data for {ticker}"}
-        
-        # Calculate valuation score
-        valuation_score = 0
-        
-        if fundamentals['pe_ratio']:
-            if fundamentals['pe_ratio'] < 15:
-                valuation_score += 2
-            elif fundamentals['pe_ratio'] < 25:
-                valuation_score += 1
-        
-        if fundamentals['peg_ratio']:
-            if fundamentals['peg_ratio'] < 1:
-                valuation_score += 2
-            elif fundamentals['peg_ratio'] < 2:
-                valuation_score += 1
-        
-        if fundamentals['price_to_book']:
-            if fundamentals['price_to_book'] < 3:
-                valuation_score += 1
-        
-        # Calculate profitability score
-        profitability_score = 0
-        
-        if fundamentals['roe']:
-            if fundamentals['roe'] > 0.20:
-                profitability_score += 2
-            elif fundamentals['roe'] > 0.15:
-                profitability_score += 1
-        
-        if fundamentals['profit_margin']:
-            if fundamentals['profit_margin'] > 0.20:
-                profitability_score += 2
-            elif fundamentals['profit_margin'] > 0.10:
-                profitability_score += 1
-        
-        if fundamentals['operating_margin']:
-            if fundamentals['operating_margin'] > 0.20:
-                profitability_score += 1
-        
-        # Calculate financial health score
-        health_score = 0
-        
-        if fundamentals['current_ratio']:
-            if fundamentals['current_ratio'] > 2:
-                health_score += 2
-            elif fundamentals['current_ratio'] > 1.5:
-                health_score += 1
-        
-        if fundamentals['debt_to_equity']:
-            if fundamentals['debt_to_equity'] < 0.5:
-                health_score += 2
-            elif fundamentals['debt_to_equity'] < 1.0:
-                health_score += 1
-        
-        # Calculate growth score
-        growth_score = 0
-        
-        if fundamentals['revenue_growth']:
-            if fundamentals['revenue_growth'] > 20:
-                growth_score += 2
-            elif fundamentals['revenue_growth'] > 10:
-                growth_score += 1
-        
-        if fundamentals['earnings_growth']:
-            if fundamentals['earnings_growth'] > 20:
-                growth_score += 2
-            elif fundamentals['earnings_growth'] > 10:
-                growth_score += 1
-        
-        # Overall score
-        overall_score = valuation_score + profitability_score + health_score + growth_score
-        max_score = 18
-        overall_rating = (overall_score / max_score) * 100
-        
-        return {
-            "success": True,
-            "company": {
-                "ticker": fundamentals['ticker'],
-                "name": fundamentals['name'],
-                "sector": fundamentals['sector'],
-                "industry": fundamentals['industry'],
-                "price": fundamentals['price'],
-                "market_cap": fundamentals['market_cap']
-            },
-            "valuation": {
-                "pe_ratio": fundamentals['pe_ratio'],
-                "forward_pe": fundamentals['forward_pe'],
-                "peg_ratio": fundamentals['peg_ratio'],
-                "price_to_book": fundamentals['price_to_book'],
-                "price_to_sales": fundamentals['price_to_sales'],
-                "score": valuation_score
-            },
-            "profitability": {
-                "roe": round(fundamentals['roe'] * 100, 2) if fundamentals['roe'] else None,
-                "roa": round(fundamentals['roa'] * 100, 2) if fundamentals['roa'] else None,
-                "profit_margin": round(fundamentals['profit_margin'] * 100, 2) if fundamentals['profit_margin'] else None,
-                "operating_margin": round(fundamentals['operating_margin'] * 100, 2) if fundamentals['operating_margin'] else None,
-                "score": profitability_score
-            },
-            "financial_health": {
-                "debt_to_equity": fundamentals['debt_to_equity'],
-                "current_ratio": fundamentals['current_ratio'],
-                "quick_ratio": fundamentals['quick_ratio'],
-                "total_debt": fundamentals['total_debt'],
-                "total_cash": fundamentals['total_cash'],
-                "score": health_score
-            },
-            "growth": {
-                "revenue_growth": fundamentals['revenue_growth'],
-                "earnings_growth": fundamentals['earnings_growth'],
-                "score": growth_score
-            },
-            "dividends": {
-                "dividend_yield": round(fundamentals['dividend_yield'] * 100, 2) if fundamentals['dividend_yield'] else None,
-                "payout_ratio": round(fundamentals['payout_ratio'] * 100, 2) if fundamentals['payout_ratio'] else None,
-                "dividend_rate": fundamentals['dividend_rate']
-            },
-            "rating": {
-                "overall_score": overall_score,
-                "max_score": max_score,
-                "percentage": round(overall_rating, 1)
-            },
-            "business_summary": fundamentals['business_summary']
-        }
-        
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-def compare_companies_tool(tickers):
-    """Compare multiple companies side-by-side"""
-    try:
-        if isinstance(tickers, str):
-            tickers = [t.strip().upper() for t in tickers.split(',')]
-        
-        comparisons = []
-        
-        for ticker in tickers[:5]:  # Limit to 5 companies
-            fundamentals = get_stock_fundamentals(ticker)
-            if not fundamentals:
-                comparisons.append({
-                    "ticker": ticker,
-                    "error": "Could not fetch data"
-                })
-                continue
-            
-            comparisons.append({
-                "ticker": ticker,
-                "name": fundamentals['name'],
-                "price": fundamentals['price'],
-                "market_cap": fundamentals['market_cap'],
-                "pe_ratio": round(fundamentals['pe_ratio'], 2) if fundamentals['pe_ratio'] else None,
-                "peg_ratio": round(fundamentals['peg_ratio'], 2) if fundamentals['peg_ratio'] else None,
-                "roe": round(fundamentals['roe'] * 100, 2) if fundamentals['roe'] else None,
-                "profit_margin": round(fundamentals['profit_margin'] * 100, 2) if fundamentals['profit_margin'] else None,
-                "debt_to_equity": round(fundamentals['debt_to_equity'], 2) if fundamentals['debt_to_equity'] else None,
-                "dividend_yield": round(fundamentals['dividend_yield'] * 100, 2) if fundamentals['dividend_yield'] else None,
-                "revenue_growth": round(fundamentals['revenue_growth'], 2) if fundamentals['revenue_growth'] else None,
-                "sector": fundamentals['sector']
-            })
-        
-        return {
-            "success": True,
-            "comparisons": comparisons
-        }
-        
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-def find_undervalued_stocks_tool(max_pe=15, min_roe=15, max_peg=1.5):
-    """Find undervalued stocks with good fundamentals"""
-    try:
-        results = []
-        progress = st.empty()
-        
-        for idx, ticker in enumerate(SP500_MAJOR):
-            progress.text(f"Scanning {ticker}... ({idx+1}/{len(SP500_MAJOR)})")
+        for idx, ticker in enumerate(stock_list):
+            progress_bar.progress((idx + 1) / len(stock_list))
+            status_text.text(f"Scanning {get_display_ticker(ticker)}... ({idx+1}/{len(stock_list)})")
             
             fundamentals = get_stock_fundamentals(ticker)
             if not fundamentals:
@@ -565,50 +399,52 @@ def find_undervalued_stocks_tool(max_pe=15, min_roe=15, max_peg=1.5):
             
             pe = fundamentals['pe_ratio']
             roe = fundamentals['roe']
-            peg = fundamentals['peg_ratio']
             
-            # Undervalued criteria
-            if pe and roe and peg:
-                if pe < max_pe and roe * 100 > min_roe and peg < max_peg:
+            if pe and pe > 0 and pe < max_pe:
+                if roe and roe * 100 > min_roe:
                     results.append({
-                        "ticker": ticker,
+                        "ticker": fundamentals['display_ticker'],
                         "name": fundamentals['name'],
-                        "price": fundamentals['price'],
+                        "price": fundamentals['price_fmt'],
+                        "market_cap": fundamentals['market_cap_fmt'],
                         "pe_ratio": round(pe, 2),
-                        "peg_ratio": round(peg, 2),
-                        "roe": round(roe * 100, 2),
-                        "sector": fundamentals['sector'],
-                        "profit_margin": round(fundamentals['profit_margin'] * 100, 2) if fundamentals['profit_margin'] else None
+                        "roe": f"{roe * 100:.1f}%",
+                        "profit_margin": f"{fundamentals['profit_margin'] * 100:.1f}%" if fundamentals['profit_margin'] else "N/A",
+                        "sector": fundamentals['sector']
                     })
         
-        progress.empty()
+        progress_bar.empty()
+        status_text.empty()
         
         if results:
-            # Sort by PEG ratio (lower is better)
-            results = sorted(results, key=lambda x: x['peg_ratio'])
+            results = sorted(results, key=lambda x: x['pe_ratio'])
             return {
                 "success": True,
+                "market": market,
+                "criteria": f"PE < {max_pe}, ROE > {min_roe}%",
                 "total_found": len(results),
-                "stocks": results[:20]
+                "stocks": results[:15]
             }
         else:
-            return {
-                "success": False,
-                "message": "No undervalued stocks found"
-            }
+            return {"success": False, "message": "No undervalued stocks found matching criteria."}
             
     except Exception as e:
         return {"success": False, "error": str(e)}
 
 
-def find_high_growth_stocks_tool(min_revenue_growth=20, min_roe=15):
+def find_high_growth_stocks_tool(min_revenue_growth=15, min_roe=10):
     """Find high growth stocks"""
     try:
         results = []
-        progress = st.empty()
+        stock_list = get_stock_list()
+        market = st.session_state.market
         
-        for idx, ticker in enumerate(SP500_MAJOR):
-            progress.text(f"Scanning {ticker}... ({idx+1}/{len(SP500_MAJOR)})")
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        for idx, ticker in enumerate(stock_list):
+            progress_bar.progress((idx + 1) / len(stock_list))
+            status_text.text(f"Scanning {get_display_ticker(ticker)}... ({idx+1}/{len(stock_list)})")
             
             fundamentals = get_stock_fundamentals(ticker)
             if not fundamentals:
@@ -617,84 +453,279 @@ def find_high_growth_stocks_tool(min_revenue_growth=20, min_roe=15):
             rev_growth = fundamentals['revenue_growth']
             roe = fundamentals['roe']
             
-            if rev_growth and roe:
-                if rev_growth > min_revenue_growth and roe * 100 > min_roe:
+            if rev_growth and rev_growth > min_revenue_growth:
+                if roe and roe * 100 > min_roe:
                     results.append({
-                        "ticker": ticker,
+                        "ticker": fundamentals['display_ticker'],
                         "name": fundamentals['name'],
-                        "price": fundamentals['price'],
-                        "revenue_growth": round(rev_growth, 2),
-                        "roe": round(roe * 100, 2),
-                        "pe_ratio": round(fundamentals['pe_ratio'], 2) if fundamentals['pe_ratio'] else None,
+                        "price": fundamentals['price_fmt'],
+                        "market_cap": fundamentals['market_cap_fmt'],
+                        "revenue_growth": f"{rev_growth:.1f}%",
+                        "roe": f"{roe * 100:.1f}%",
+                        "pe_ratio": round(fundamentals['pe_ratio'], 2) if fundamentals['pe_ratio'] else "N/A",
                         "sector": fundamentals['sector']
                     })
         
-        progress.empty()
+        progress_bar.empty()
+        status_text.empty()
         
         if results:
-            # Sort by revenue growth
-            results = sorted(results, key=lambda x: x['revenue_growth'], reverse=True)
+            results = sorted(results, key=lambda x: float(x['revenue_growth'].replace('%', '')), reverse=True)
             return {
                 "success": True,
+                "market": market,
+                "criteria": f"Revenue Growth > {min_revenue_growth}%, ROE > {min_roe}%",
                 "total_found": len(results),
-                "stocks": results[:20]
+                "stocks": results[:15]
             }
         else:
-            return {
-                "success": False,
-                "message": "No high growth stocks found"
-            }
+            return {"success": False, "message": "No high growth stocks found."}
             
     except Exception as e:
         return {"success": False, "error": str(e)}
 
 
-def find_dividend_stocks_tool(min_yield=3, max_payout_ratio=60):
+def find_dividend_stocks_tool(min_yield=2.0):
     """Find high dividend yield stocks"""
     try:
         results = []
-        progress = st.empty()
+        stock_list = get_stock_list()
+        market = st.session_state.market
         
-        for idx, ticker in enumerate(SP500_MAJOR):
-            progress.text(f"Scanning {ticker}... ({idx+1}/{len(SP500_MAJOR)})")
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        for idx, ticker in enumerate(stock_list):
+            progress_bar.progress((idx + 1) / len(stock_list))
+            status_text.text(f"Scanning {get_display_ticker(ticker)}... ({idx+1}/{len(stock_list)})")
             
             fundamentals = get_stock_fundamentals(ticker)
             if not fundamentals:
                 continue
             
             div_yield = fundamentals['dividend_yield']
-            payout = fundamentals['payout_ratio']
             
             if div_yield:
                 yield_pct = div_yield * 100
-                if yield_pct > min_yield:
-                    if not max_payout_ratio or not payout or payout * 100 < max_payout_ratio:
-                        results.append({
-                            "ticker": ticker,
-                            "name": fundamentals['name'],
-                            "price": fundamentals['price'],
-                            "dividend_yield": round(yield_pct, 2),
-                            "payout_ratio": round(payout * 100, 2) if payout else None,
-                            "pe_ratio": round(fundamentals['pe_ratio'], 2) if fundamentals['pe_ratio'] else None,
-                            "sector": fundamentals['sector']
-                        })
+                if yield_pct >= min_yield:
+                    results.append({
+                        "ticker": fundamentals['display_ticker'],
+                        "name": fundamentals['name'],
+                        "price": fundamentals['price_fmt'],
+                        "market_cap": fundamentals['market_cap_fmt'],
+                        "dividend_yield": f"{yield_pct:.2f}%",
+                        "payout_ratio": f"{fundamentals['payout_ratio'] * 100:.1f}%" if fundamentals['payout_ratio'] else "N/A",
+                        "pe_ratio": round(fundamentals['pe_ratio'], 2) if fundamentals['pe_ratio'] else "N/A",
+                        "sector": fundamentals['sector']
+                    })
         
-        progress.empty()
+        progress_bar.empty()
+        status_text.empty()
         
         if results:
-            # Sort by dividend yield
-            results = sorted(results, key=lambda x: x['dividend_yield'], reverse=True)
+            results = sorted(results, key=lambda x: float(x['dividend_yield'].replace('%', '')), reverse=True)
             return {
                 "success": True,
+                "market": market,
+                "criteria": f"Dividend Yield >= {min_yield}%",
                 "total_found": len(results),
-                "stocks": results[:20]
+                "stocks": results[:15]
             }
         else:
-            return {
-                "success": False,
-                "message": "No dividend stocks found"
-            }
+            return {"success": False, "message": "No dividend stocks found."}
             
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def analyze_company_tool(ticker):
+    """Deep dive analysis of a company"""
+    try:
+        # Normalize ticker based on current market
+        original_ticker = ticker.upper().strip()
+        market = st.session_state.market
+        
+        # Try to find the stock
+        if market == 'India':
+            if not original_ticker.endswith('.NS') and not original_ticker.endswith('.BO'):
+                ticker = f"{original_ticker}.NS"
+            else:
+                ticker = original_ticker
+        else:
+            ticker = original_ticker.replace('.NS', '').replace('.BO', '')
+        
+        fundamentals = get_stock_fundamentals(ticker)
+        
+        # If not found in current market, try the other market
+        if not fundamentals:
+            if market == 'India':
+                fundamentals = get_stock_fundamentals(original_ticker)  # Try US
+            else:
+                fundamentals = get_stock_fundamentals(f"{original_ticker}.NS")  # Try India
+        
+        if not fundamentals:
+            return {"success": False, "error": f"Could not fetch data for {original_ticker}. Please check the ticker symbol."}
+        
+        # Get live price
+        live_data = get_live_price(fundamentals['ticker'])
+        stock_market = fundamentals['market']
+        
+        # Calculate scores
+        valuation_score = 0
+        if fundamentals['pe_ratio'] and fundamentals['pe_ratio'] < 25:
+            valuation_score += 2 if fundamentals['pe_ratio'] < 15 else 1
+        if fundamentals['peg_ratio'] and fundamentals['peg_ratio'] < 2:
+            valuation_score += 2 if fundamentals['peg_ratio'] < 1 else 1
+        if fundamentals['price_to_book'] and fundamentals['price_to_book'] < 3:
+            valuation_score += 1
+        
+        profitability_score = 0
+        if fundamentals['roe'] and fundamentals['roe'] > 0.12:
+            profitability_score += 2 if fundamentals['roe'] > 0.20 else 1
+        if fundamentals['profit_margin'] and fundamentals['profit_margin'] > 0.10:
+            profitability_score += 2 if fundamentals['profit_margin'] > 0.20 else 1
+        if fundamentals['operating_margin'] and fundamentals['operating_margin'] > 0.15:
+            profitability_score += 1
+        
+        health_score = 0
+        if fundamentals['current_ratio'] and fundamentals['current_ratio'] > 1.2:
+            health_score += 2 if fundamentals['current_ratio'] > 2 else 1
+        if fundamentals['debt_to_equity'] and fundamentals['debt_to_equity'] < 100:
+            health_score += 2 if fundamentals['debt_to_equity'] < 50 else 1
+        
+        total_score = valuation_score + profitability_score + health_score
+        max_total = 14
+        overall_pct = (total_score / max_total) * 100
+        
+        if overall_pct >= 70:
+            rating, rating_emoji = "Strong Buy", "🟢"
+        elif overall_pct >= 55:
+            rating, rating_emoji = "Buy", "🟡"
+        elif overall_pct >= 40:
+            rating, rating_emoji = "Hold", "🟠"
+        else:
+            rating, rating_emoji = "Caution", "🔴"
+        
+        currency = '₹' if stock_market == 'India' else '$'
+        
+        return {
+            "success": True,
+            "company": {
+                "ticker": fundamentals['display_ticker'],
+                "name": fundamentals['name'],
+                "sector": fundamentals['sector'],
+                "industry": fundamentals['industry'],
+                "market": stock_market,
+                "price": f"{currency}{live_data['price']:,.2f}" if live_data else fundamentals['price_fmt'],
+                "change": f"{live_data['change']:+.2f}" if live_data else "0.00",
+                "change_pct": f"{live_data['change_pct']:+.2f}%" if live_data else "0.00%",
+                "market_cap": fundamentals['market_cap_fmt']
+            },
+            "valuation": {
+                "pe_ratio": round(fundamentals['pe_ratio'], 2) if fundamentals['pe_ratio'] else "N/A",
+                "forward_pe": round(fundamentals['forward_pe'], 2) if fundamentals['forward_pe'] else "N/A",
+                "peg_ratio": round(fundamentals['peg_ratio'], 2) if fundamentals['peg_ratio'] else "N/A",
+                "price_to_book": round(fundamentals['price_to_book'], 2) if fundamentals['price_to_book'] else "N/A",
+                "score": f"{valuation_score}/5"
+            },
+            "profitability": {
+                "roe": f"{fundamentals['roe']*100:.2f}%" if fundamentals['roe'] else "N/A",
+                "roa": f"{fundamentals['roa']*100:.2f}%" if fundamentals['roa'] else "N/A",
+                "profit_margin": f"{fundamentals['profit_margin']*100:.2f}%" if fundamentals['profit_margin'] else "N/A",
+                "operating_margin": f"{fundamentals['operating_margin']*100:.2f}%" if fundamentals['operating_margin'] else "N/A",
+                "score": f"{profitability_score}/5"
+            },
+            "financial_health": {
+                "debt_to_equity": round(fundamentals['debt_to_equity'], 2) if fundamentals['debt_to_equity'] else "N/A",
+                "current_ratio": round(fundamentals['current_ratio'], 2) if fundamentals['current_ratio'] else "N/A",
+                "total_cash": format_market_cap(fundamentals['total_cash'], stock_market),
+                "total_debt": format_market_cap(fundamentals['total_debt'], stock_market),
+                "score": f"{health_score}/4"
+            },
+            "growth": {
+                "revenue_growth": f"{fundamentals['revenue_growth']:.2f}%" if fundamentals['revenue_growth'] else "N/A",
+                "earnings_growth": f"{fundamentals['earnings_growth']:.2f}%" if fundamentals['earnings_growth'] else "N/A",
+                "ytd_performance": f"{fundamentals['ytd_change']:.2f}%" if fundamentals['ytd_change'] else "N/A"
+            },
+            "dividends": {
+                "dividend_yield": f"{fundamentals['dividend_yield']*100:.2f}%" if fundamentals['dividend_yield'] else "N/A",
+                "payout_ratio": f"{fundamentals['payout_ratio']*100:.2f}%" if fundamentals['payout_ratio'] else "N/A"
+            },
+            "trading_info": {
+                "52_week_high": f"{currency}{fundamentals['52_week_high']:.2f}" if fundamentals['52_week_high'] else "N/A",
+                "52_week_low": f"{currency}{fundamentals['52_week_low']:.2f}" if fundamentals['52_week_low'] else "N/A",
+                "beta": round(fundamentals['beta'], 2) if fundamentals['beta'] else "N/A",
+                "avg_volume": f"{fundamentals['avg_volume']:,}" if fundamentals['avg_volume'] else "N/A"
+            },
+            "rating": {
+                "overall_score": f"{total_score}/{max_total}",
+                "percentage": round(overall_pct, 1),
+                "recommendation": rating,
+                "emoji": rating_emoji
+            },
+            "business_summary": fundamentals['business_summary'][:500] + "..." if len(str(fundamentals['business_summary'])) > 500 else fundamentals['business_summary']
+        }
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def compare_companies_tool(tickers):
+    """Compare multiple companies"""
+    try:
+        if isinstance(tickers, str):
+            tickers = [t.strip().upper() for t in re.split(r'[,\s]+', tickers) if t.strip()]
+        
+        comparisons = []
+        progress_bar = st.progress(0)
+        market = st.session_state.market
+        
+        for idx, ticker in enumerate(tickers[:5]):
+            progress_bar.progress((idx + 1) / min(len(tickers), 5))
+            
+            # Normalize ticker
+            if market == 'India' and not ticker.endswith('.NS'):
+                full_ticker = f"{ticker}.NS"
+            else:
+                full_ticker = ticker
+            
+            fundamentals = get_stock_fundamentals(full_ticker)
+            
+            # Try other market if not found
+            if not fundamentals:
+                alt_ticker = ticker if market == 'India' else f"{ticker}.NS"
+                fundamentals = get_stock_fundamentals(alt_ticker)
+            
+            if not fundamentals:
+                comparisons.append({"ticker": ticker, "error": "Could not fetch data"})
+                continue
+            
+            live_data = get_live_price(fundamentals['ticker'])
+            stock_market = fundamentals['market']
+            currency = '₹' if stock_market == 'India' else '$'
+            
+            comparisons.append({
+                "ticker": fundamentals['display_ticker'],
+                "name": fundamentals['name'],
+                "market": stock_market,
+                "price": f"{currency}{live_data['price']:,.2f}" if live_data else fundamentals['price_fmt'],
+                "change_pct": f"{live_data['change_pct']:+.2f}%" if live_data else "N/A",
+                "market_cap": fundamentals['market_cap_fmt'],
+                "pe_ratio": round(fundamentals['pe_ratio'], 2) if fundamentals['pe_ratio'] else "N/A",
+                "roe": f"{fundamentals['roe']*100:.1f}%" if fundamentals['roe'] else "N/A",
+                "profit_margin": f"{fundamentals['profit_margin']*100:.1f}%" if fundamentals['profit_margin'] else "N/A",
+                "dividend_yield": f"{fundamentals['dividend_yield']*100:.2f}%" if fundamentals['dividend_yield'] else "N/A",
+                "sector": fundamentals['sector']
+            })
+        
+        progress_bar.empty()
+        
+        return {
+            "success": True,
+            "count": len(comparisons),
+            "comparisons": comparisons
+        }
+        
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -703,131 +734,114 @@ def get_sector_stocks_tool(sector):
     """Get all stocks in a specific sector"""
     try:
         results = []
-        progress = st.empty()
+        stock_list = get_stock_list()
+        market = st.session_state.market
         
-        for idx, ticker in enumerate(SP500_MAJOR):
-            progress.text(f"Scanning {ticker}... ({idx+1}/{len(SP500_MAJOR)})")
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        for idx, ticker in enumerate(stock_list):
+            progress_bar.progress((idx + 1) / len(stock_list))
+            status_text.text(f"Scanning {get_display_ticker(ticker)}... ({idx+1}/{len(stock_list)})")
             
             fundamentals = get_stock_fundamentals(ticker)
             if not fundamentals:
                 continue
             
-            if fundamentals['sector'].lower() == sector.lower():
+            if sector.lower() in fundamentals['sector'].lower():
                 results.append({
-                    "ticker": ticker,
+                    "ticker": fundamentals['display_ticker'],
                     "name": fundamentals['name'],
-                    "price": fundamentals['price'],
-                    "market_cap": fundamentals['market_cap'],
-                    "pe_ratio": round(fundamentals['pe_ratio'], 2) if fundamentals['pe_ratio'] else None,
-                    "roe": round(fundamentals['roe'] * 100, 2) if fundamentals['roe'] else None,
+                    "price": fundamentals['price_fmt'],
+                    "market_cap": fundamentals['market_cap_fmt'],
+                    "pe_ratio": round(fundamentals['pe_ratio'], 2) if fundamentals['pe_ratio'] else "N/A",
+                    "roe": f"{fundamentals['roe']*100:.1f}%" if fundamentals['roe'] else "N/A",
                     "industry": fundamentals['industry']
                 })
         
-        progress.empty()
+        progress_bar.empty()
+        status_text.empty()
         
         if results:
-            # Sort by market cap
-            results = sorted(results, key=lambda x: x['market_cap'] or 0, reverse=True)
             return {
                 "success": True,
+                "market": market,
                 "sector": sector,
                 "total_found": len(results),
                 "stocks": results
             }
         else:
-            return {
-                "success": False,
-                "message": f"No stocks found in {sector} sector"
-            }
+            return {"success": False, "message": f"No stocks found in '{sector}' sector."}
             
     except Exception as e:
         return {"success": False, "error": str(e)}
 
 
-# ==================== AI CHATBOT FUNCTION (GROQ - INTENT DETECTION) ====================
+# ==================== AI CHATBOT (GROQ) ====================
 
 def detect_intent_and_execute(user_message):
     """Detect user intent and execute appropriate function"""
     message_lower = user_message.lower()
     
-    # Check for specific intents
-    if any(word in message_lower for word in ['undervalued', 'undervalue', 'cheap', 'value stock', 'bargain']):
+    # Check for undervalued stocks
+    if any(word in message_lower for word in ['undervalued', 'undervalue', 'cheap stock', 'value stock', 'bargain', 'low pe']):
         return "find_undervalued", find_undervalued_stocks_tool()
     
+    # Check for growth stocks
     elif any(word in message_lower for word in ['high growth', 'growth stock', 'fast growing', 'growing fast']):
         return "find_growth", find_high_growth_stocks_tool()
     
-    elif any(word in message_lower for word in ['dividend', 'dividends', 'income', 'yield']):
+    # Check for dividend stocks
+    elif any(word in message_lower for word in ['dividend', 'dividends', 'income stock', 'yield']):
         return "find_dividend", find_dividend_stocks_tool()
     
-    elif any(word in message_lower for word in ['compare', 'comparison', 'versus', 'vs', 'vs.']):
-        # Extract tickers for comparison
+    # Check for comparison
+    elif any(word in message_lower for word in ['compare', 'comparison', 'versus', ' vs ', ' vs.']):
         tickers = re.findall(r'\b([A-Z]{2,5})\b', user_message)
-        common_words = ['PE', 'ROE', 'ROA', 'EPS', 'CEO', 'CFO', 'IPO', 'ETF', 'NYSE', 'USD', 'THE', 'AND', 'FOR', 'VS']
+        common_words = ['PE', 'ROE', 'ROA', 'EPS', 'CEO', 'CFO', 'IPO', 'ETF', 'NSE', 'BSE', 'NYSE', 'USD', 'INR', 'THE', 'AND', 'FOR', 'VS']
         tickers = [t for t in tickers if t not in common_words]
         if len(tickers) >= 2:
             return "compare", compare_companies_tool(','.join(tickers[:5]))
     
-    # Detect sector queries
+    # Check for sector queries
     sectors = {
-        'technology': 'Technology',
-        'tech': 'Technology',
-        'healthcare': 'Healthcare',
-        'health': 'Healthcare',
-        'financial': 'Financial Services',
-        'finance': 'Financial Services',
-        'bank': 'Financial Services',
-        'energy': 'Energy',
-        'oil': 'Energy',
-        'consumer': 'Consumer Cyclical',
-        'retail': 'Consumer Cyclical',
-        'industrial': 'Industrials',
-        'utility': 'Utilities',
-        'utilities': 'Utilities',
-        'real estate': 'Real Estate',
-        'communication': 'Communication Services'
+        'technology': 'Technology', 'tech': 'Technology', 'it': 'Technology', 'software': 'Technology',
+        'healthcare': 'Healthcare', 'health': 'Healthcare', 'pharma': 'Healthcare',
+        'financial': 'Financial', 'finance': 'Financial', 'bank': 'Financial', 'banking': 'Financial',
+        'energy': 'Energy', 'oil': 'Energy', 'gas': 'Energy', 'power': 'Energy',
+        'consumer': 'Consumer', 'retail': 'Consumer', 'fmcg': 'Consumer',
+        'industrial': 'Industrial', 'auto': 'Automobile', 'automobile': 'Automobile',
+        'metal': 'Metal', 'steel': 'Metal', 'cement': 'Cement', 'construction': 'Construction',
+        'telecom': 'Communication', 'communication': 'Communication',
+        'real estate': 'Real Estate', 'realty': 'Real Estate'
     }
     
     for key, sector in sectors.items():
-        if key in message_lower and any(word in message_lower for word in ['sector', 'stocks in', 'companies in', 'show me']):
+        if key in message_lower and any(word in message_lower for word in ['sector', 'stocks', 'companies', 'show', 'list', 'find']):
             return "sector", get_sector_stocks_tool(sector)
     
     # Check for company analysis
-    if any(word in message_lower for word in ['analyze', 'analysis', 'tell me about', 'look at', 'check', 'how is', 'what about']):
+    if any(word in message_lower for word in ['analyze', 'analysis', 'tell me about', 'look at', 'check', 'how is', 'what about', 'details', 'info']):
         tickers = re.findall(r'\b([A-Z]{2,5})\b', user_message)
-        common_words = ['PE', 'ROE', 'ROA', 'EPS', 'CEO', 'CFO', 'IPO', 'ETF', 'NYSE', 'USD', 'THE', 'AND', 'FOR']
-        tickers = [t for t in tickers if t not in common_words and t in SP500_MAJOR]
+        common_words = ['PE', 'ROE', 'ROA', 'EPS', 'CEO', 'CFO', 'IPO', 'ETF', 'NSE', 'BSE', 'NYSE', 'USD', 'INR', 'THE', 'AND', 'FOR', 'OK', 'AI']
+        tickers = [t for t in tickers if t not in common_words]
         if tickers:
             return "analyze", analyze_company_tool(tickers[0])
     
-    # Check for screening criteria
-    if any(word in message_lower for word in ['screen', 'filter', 'find stocks', 'search for', 'stocks with']):
-        params = {}
-        
-        # PE ratio
-        pe_match = re.search(r'pe\s*(?:ratio)?\s*(?:<|less than|under|below)\s*(\d+)', message_lower)
-        if pe_match:
-            params['max_pe'] = float(pe_match.group(1))
-        
-        # ROE
-        roe_match = re.search(r'roe\s*(?:>|greater than|over|above)\s*(\d+)', message_lower)
-        if roe_match:
-            params['min_roe'] = float(roe_match.group(1))
-        
-        # Debt
-        debt_match = re.search(r'debt.*?(?:<|less than|under|below)\s*(\d+\.?\d*)', message_lower)
-        if debt_match:
-            params['max_debt_equity'] = float(debt_match.group(1))
-        
-        if params:
-            return "screen", fundamental_screener_tool(**params)
+    # Check for standalone ticker
+    tickers = re.findall(r'\b([A-Z]{2,5})\b', user_message)
+    common_words = ['PE', 'ROE', 'ROA', 'EPS', 'CEO', 'CFO', 'IPO', 'ETF', 'NSE', 'BSE', 'NYSE', 'USD', 'INR', 'THE', 'AND', 'FOR', 'CAN', 'YOU', 'HI', 'HELLO', 'OK', 'AI', 'IS', 'IT', 'BE', 'TO', 'IN']
     
-    # Check for standalone ticker (like "AAPL" or "MSFT")
-    standalone_ticker = re.findall(r'\b([A-Z]{2,5})\b', user_message)
-    common_words = ['PE', 'ROE', 'ROA', 'EPS', 'CEO', 'CFO', 'IPO', 'ETF', 'NYSE', 'USD', 'THE', 'AND', 'FOR', 'CAN', 'YOU', 'HI', 'HELLO']
-    standalone_ticker = [t for t in standalone_ticker if t not in common_words and t in SP500_MAJOR]
-    if standalone_ticker:
-        return "analyze", analyze_company_tool(standalone_ticker[0])
+    # Check US stocks
+    us_tickers = [t for t in tickers if t not in common_words and t in US_STOCKS]
+    if us_tickers:
+        return "analyze", analyze_company_tool(us_tickers[0])
+    
+    # Check Indian stocks (without .NS)
+    indian_names = [t.replace('.NS', '') for t in INDIAN_STOCKS]
+    indian_tickers = [t for t in tickers if t not in common_words and t in indian_names]
+    if indian_tickers:
+        return "analyze", analyze_company_tool(indian_tickers[0])
     
     return None, None
 
@@ -835,9 +849,7 @@ def detect_intent_and_execute(user_message):
 def process_chatbot_message(user_message, conversation_history):
     """Process user messages with Groq AI"""
     
-    # Get API key
     api_key = None
-    
     try:
         if hasattr(st, 'secrets') and "GROQ_API_KEY" in st.secrets:
             api_key = st.secrets["GROQ_API_KEY"]
@@ -848,58 +860,53 @@ def process_chatbot_message(user_message, conversation_history):
         api_key = os.environ.get("GROQ_API_KEY")
     
     if not api_key:
-        return "⚠️ Please set your GROQ_API_KEY in Streamlit Secrets or environment variables."
+        return "⚠️ Please set your GROQ_API_KEY in Streamlit Secrets."
     
     client = Groq(api_key=api_key)
     
-    # First, try to detect intent and execute function
+    # Detect intent and execute
     intent, data = detect_intent_and_execute(user_message)
     
-    # Build system prompt
-    system_prompt = """You are a professional stock market analyst specializing in fundamental analysis.
+    market = st.session_state.market
+    currency = '₹ (INR)' if market == 'India' else '$ (USD)'
+    
+    system_prompt = f"""You are a professional stock market analyst covering both US and Indian markets.
 
-Your expertise includes:
-- Fundamental Analysis: Valuation (PE, PEG), profitability (ROE, margins), financial health (debt, cash)
-- Company comparisons and sector analysis
-- Finding undervalued and high-quality investment opportunities
+Current market focus: {market}
+Currency: {currency}
 
-Communication style:
-- Be professional but conversational
-- Provide actionable insights with data
-- Always emphasize: this is educational content, not financial advice
-- Format data nicely using markdown tables and bullet points when appropriate
-- Keep responses concise but informative
+Your expertise:
+- Fundamental analysis (PE, ROE, margins, debt ratios)
+- Company analysis and comparisons
+- Finding undervalued and growth stocks
 
-If you receive stock data in the prompt, analyze it and provide clear insights. Format numbers nicely (e.g., market cap in billions).
+Guidelines:
+- Use markdown tables for comparisons
+- Highlight key metrics
+- Note both strengths and risks
+- Always mention this is educational, not financial advice
+- Format Indian numbers appropriately (Lakhs, Crores)
+- Format US numbers (Millions, Billions, Trillions)"""
 
-Available sectors: Technology, Healthcare, Financial Services, Consumer Cyclical, Communication Services, Industrials, Consumer Defensive, Energy, Utilities, Real Estate, Basic Materials"""
-
-    # Build messages
     messages = [{"role": "system", "content": system_prompt}]
     
-    # Add conversation history (limit to last 6 messages)
-    for msg in conversation_history[-6:]:
-        if msg["role"] == "user":
-            messages.append({"role": "user", "content": msg["content"]})
-        elif msg["role"] == "assistant":
-            messages.append({"role": "assistant", "content": msg["content"]})
+    for msg in conversation_history[-4:]:
+        if msg["role"] in ["user", "assistant"]:
+            messages.append({"role": msg["role"], "content": msg["content"]})
     
-    # If we have data from function execution, include it
     if data:
         data_str = json.dumps(data, indent=2, default=str)
-        # Truncate if too long
-        if len(data_str) > 10000:
-            data_str = data_str[:10000] + "... (truncated)"
+        if len(data_str) > 8000:
+            data_str = data_str[:8000] + "\n... (truncated)"
         
-        user_content = f"""User asked: {user_message}
+        user_content = f"""User asked: "{user_message}"
 
-Here is the data I retrieved:
+Market: {market}
+Live stock data:
 
-```json
 {data_str}
-```
 
-Please analyze this data and provide a helpful response. Format it nicely with key insights."""
+Analyze and provide clear insights."""
         messages.append({"role": "user", "content": user_content})
     else:
         messages.append({"role": "user", "content": user_message})
@@ -912,10 +919,7 @@ Please analyze this data and provide a helpful response. Format it nicely with k
             temperature=0.7
         )
         
-        if response.choices[0].message.content:
-            return response.choices[0].message.content
-        else:
-            return "I apologize, but I couldn't generate a response. Please try rephrasing your question."
+        return response.choices[0].message.content if response.choices[0].message.content else "I couldn't generate a response."
         
     except Exception as e:
         error_msg = str(e)
@@ -924,21 +928,40 @@ Please analyze this data and provide a helpful response. Format it nicely with k
         return f"❌ Error: {error_msg}"
 
 
-# ==================== UI ====================
+# ==================== STREAMLIT UI ====================
 
-col1, col2 = st.columns([4, 1])
+# Header
+col1, col2, col3 = st.columns([3, 1, 1])
 with col1:
     st.title("📊 AI Stock Analyzer")
-    st.markdown("*Fundamental analysis powered by Groq AI*")
+    st.markdown("*US & Indian Markets | Live Data from Yahoo Finance*")
 with col2:
-    if st.button("⚙️ Settings", use_container_width=True):
-        st.session_state.show_settings = not st.session_state.show_settings
+    # Market selector
+    market_options = ['US', 'India']
+    selected_market = st.selectbox(
+        "🌍 Market",
+        market_options,
+        index=market_options.index(st.session_state.market),
+        key="market_selector"
+    )
+    if selected_market != st.session_state.market:
+        st.session_state.market = selected_market
+        st.session_state.chat_messages = []
+        st.cache_data.clear()
+        st.rerun()
+with col3:
+    if st.button("🔄 Refresh", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+
+# Market indicator
+market_emoji = "🇺🇸" if st.session_state.market == 'US' else "🇮🇳"
+st.info(f"{market_emoji} Currently viewing **{st.session_state.market}** market stocks")
 
 st.markdown("---")
 
 # Check API key
 api_key = None
-
 try:
     if hasattr(st, 'secrets') and "GROQ_API_KEY" in st.secrets:
         api_key = st.secrets["GROQ_API_KEY"]
@@ -952,106 +975,136 @@ if not api_key:
     st.error("⚠️ **Groq API Key not found!**")
     st.markdown("""
     **Setup:**
-    
     1. Get FREE API key: https://console.groq.com/keys
-    2. Add to Streamlit Secrets (Settings → Secrets):
+    2. Add to Streamlit Secrets:
     ```
-    GROQ_API_KEY = "your-key-here"
+    GROQ_API_KEY = "gsk_your_key_here"
     ```
     """)
     st.stop()
 
-# Quick actions
+# Quick Actions
 st.markdown("### ⚡ Quick Actions")
-col1, col2, col3, col4, col5 = st.columns(5)
 
-with col1:
-    if st.button("🔍 Find Undervalued", use_container_width=True):
-        st.session_state.chat_messages.append({
-            "role": "user",
-            "content": "Find undervalued stocks"
-        })
-        st.rerun()
-
-with col2:
-    if st.button("📈 High Growth", use_container_width=True):
-        st.session_state.chat_messages.append({
-            "role": "user",
-            "content": "Find high growth stocks"
-        })
-        st.rerun()
-
-with col3:
-    if st.button("💰 Dividend Stocks", use_container_width=True):
-        st.session_state.chat_messages.append({
-            "role": "user",
-            "content": "Find dividend stocks"
-        })
-        st.rerun()
-
-with col4:
-    if st.button("🏢 Analyze AAPL", use_container_width=True):
-        st.session_state.chat_messages.append({
-            "role": "user",
-            "content": "Analyze AAPL"
-        })
-        st.rerun()
-
-with col5:
-    if st.button("🧹 Clear", use_container_width=True):
-        st.session_state.chat_messages = []
-        st.rerun()
+if st.session_state.market == 'India':
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1:
+        if st.button("🔍 Undervalued", use_container_width=True, key="btn_undervalued"):
+            st.session_state.chat_messages.append({"role": "user", "content": "Find undervalued Indian stocks with low PE"})
+            st.rerun()
+    with col2:
+        if st.button("📈 Growth", use_container_width=True, key="btn_growth"):
+            st.session_state.chat_messages.append({"role": "user", "content": "Find high growth Indian stocks"})
+            st.rerun()
+    with col3:
+        if st.button("💰 Dividends", use_container_width=True, key="btn_dividend"):
+            st.session_state.chat_messages.append({"role": "user", "content": "Find Indian dividend stocks"})
+            st.rerun()
+    with col4:
+        if st.button("🏢 Analyze TCS", use_container_width=True, key="btn_tcs"):
+            st.session_state.chat_messages.append({"role": "user", "content": "Analyze TCS stock"})
+            st.rerun()
+    with col5:
+        if st.button("🧹 Clear", use_container_width=True, key="btn_clear"):
+            st.session_state.chat_messages = []
+            st.rerun()
+else:
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1:
+        if st.button("🔍 Undervalued", use_container_width=True, key="btn_undervalued"):
+            st.session_state.chat_messages.append({"role": "user", "content": "Find undervalued stocks with low PE"})
+            st.rerun()
+    with col2:
+        if st.button("📈 Growth", use_container_width=True, key="btn_growth"):
+            st.session_state.chat_messages.append({"role": "user", "content": "Find high growth stocks"})
+            st.rerun()
+    with col3:
+        if st.button("💰 Dividends", use_container_width=True, key="btn_dividend"):
+            st.session_state.chat_messages.append({"role": "user", "content": "Find dividend stocks"})
+            st.rerun()
+    with col4:
+        if st.button("🏢 Analyze AAPL", use_container_width=True, key="btn_aapl"):
+            st.session_state.chat_messages.append({"role": "user", "content": "Analyze AAPL stock"})
+            st.rerun()
+    with col5:
+        if st.button("🧹 Clear", use_container_width=True, key="btn_clear"):
+            st.session_state.chat_messages = []
+            st.rerun()
 
 st.markdown("---")
 
-# Chat display
+# Chat Display
 for message in st.session_state.chat_messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Chat input
-if prompt := st.chat_input("Ask about stocks, companies, sectors..."):
+# Chat Input
+if prompt := st.chat_input(f"Ask about {'Indian' if st.session_state.market == 'India' else 'US'} stocks..."):
     st.session_state.chat_messages.append({"role": "user", "content": prompt})
     
     with st.chat_message("user"):
         st.markdown(prompt)
     
     with st.chat_message("assistant"):
-        with st.spinner("Analyzing..."):
+        with st.spinner("🔍 Fetching live data..."):
             response = process_chatbot_message(prompt, st.session_state.chat_messages[:-1])
         st.markdown(response)
     
     st.session_state.chat_messages.append({"role": "assistant", "content": response})
     st.rerun()
 
-# Examples
+# Help section
 if len(st.session_state.chat_messages) == 0:
-    st.markdown("### 💡 Try asking:")
+    st.markdown("### 💡 What can I help you with?")
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("""
-        **Screening:**
-        - "Find undervalued stocks"
-        - "Show me technology sector stocks"
-        - "Find dividend stocks"
-        - "Find high growth stocks"
-        """)
-    
-    with col2:
-        st.markdown("""
-        **Analysis:**
-        - "Analyze AAPL"
-        - "Compare MSFT, GOOGL, AAPL"
-        - "Tell me about NVDA"
-        - "How is Tesla doing?"
-        """)
+    if st.session_state.market == 'India':
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("""
+            **📊 Stock Screening (India)**
+            - "Find undervalued stocks"
+            - "Show high growth stocks"
+            - "Find dividend stocks"
+            - "List IT sector stocks"
+            - "Show banking stocks"
+            """)
+        with col2:
+            st.markdown("""
+            **🔍 Stock Analysis (India)**
+            - "Analyze TCS"
+            - "Tell me about RELIANCE"
+            - "Compare INFY, TCS, WIPRO"
+            - "How is HDFC Bank doing?"
+            - "Check TATAMOTORS"
+            """)
+        
+        st.info("💡 **Popular Indian Stocks:** RELIANCE, TCS, INFY, HDFCBANK, ICICIBANK, SBIN, BHARTIARTL, ITC, HINDUNILVR, MARUTI")
+    else:
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("""
+            **📊 Stock Screening (US)**
+            - "Find undervalued stocks"
+            - "Show high growth stocks"
+            - "Find dividend stocks"
+            - "List technology stocks"
+            """)
+        with col2:
+            st.markdown("""
+            **🔍 Stock Analysis (US)**
+            - "Analyze AAPL"
+            - "Tell me about NVDA"
+            - "Compare MSFT, GOOGL, AMZN"
+            - "How is Tesla doing?"
+            """)
+        
+        st.info("💡 **Popular US Stocks:** AAPL, MSFT, GOOGL, AMZN, NVDA, META, TSLA, JPM, V, JNJ")
 
+# Footer
 st.markdown("---")
-st.markdown("""
+st.markdown(f"""
 <div style='text-align: center; color: #888;'>
-    <p><strong>AI Stock Analyzer</strong> | Powered by Groq AI (Llama 3.3)</p>
-    <p style='font-size: 0.85rem;'>⚠️ Educational content. Not financial advice.</p>
+    <p><strong>AI Stock Analyzer</strong> | {market_emoji} {st.session_state.market} Market | Powered by Yahoo Finance + Groq AI</p>
+    <p style='font-size: 0.8rem;'>⚠️ For educational purposes only. Not financial advice. Always do your own research.</p>
 </div>
 """, unsafe_allow_html=True)
