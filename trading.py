@@ -610,7 +610,7 @@ No live data was fetched. Either:
 # Header
 st.markdown("""
 <div class="main-header">
-    <h1>📈 AI Stock Analyzer</h1>
+    <h1> AI Stock Analyzer</h1>
     <p>Real-time analysis for US & Indian markets</p>
 </div>
 """, unsafe_allow_html=True)
