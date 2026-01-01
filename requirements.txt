@@ -1,9 +1,9 @@
 streamlit
 yfinance
-plotly
 pandas
 numpy
-google-generativeai
 python-dotenv
 groq
 plotly
+supabase
+extra-streamlit-components
