@@ -1004,7 +1004,7 @@ while iteration < max_iterations:
         return "⚠️ Response took too long. Please try a simpler question."
             
  # Get response text
-            response_text = response.text if response.text else "I apologize, but I couldn't generate a response. Please try rephrasing your question."
+        response_text = response.text if response.text else "I apologize, but I couldn't generate a response. Please try rephrasing your question."
             return response_text
             
         except Exception as e:
