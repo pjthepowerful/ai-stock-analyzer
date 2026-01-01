@@ -904,12 +904,18 @@ Communication style:
     max_iterations = 5
     iteration = 0
     
-    while iteration < max_iterations:
+while iteration < max_iterations:
         iteration += 1
         
         try:
-            response = chat.send_message(user_message)
+            # Only send user_message on first iteration
+            if user_message and user_message.strip():
+                response = chat.send_message(user_message)
+            else:
+                # Empty message, break loop
+                break
             
+            # Check if AI wants to use a function
             if response.candidates[0].content.parts[0].function_call:
                 function_call = response.candidates[0].content.parts[0].function_call
                 function_name = function_call.name
@@ -959,6 +965,7 @@ Communication style:
                 else:
                     result = {"error": f"Unknown function: {function_name}"}
                 
+                # Send function response back to AI
                 response = chat.send_message(
                     genai.protos.Content(
                         parts=[
@@ -972,8 +979,29 @@ Communication style:
                     )
                 )
                 
-                user_message = ""
+                # Clear user_message so we don't resend it
+                user_message = None
+                
+                # Check if we got a text response now
+                if response.text and response.text.strip():
+                    return response.text
+                
+                # Otherwise continue loop (might call another function)
                 continue
+            
+            # No function call - return the text response
+            if response.text and response.text.strip():
+                return response.text
+            else:
+                return "I apologize, but I couldn't generate a response. Please try rephrasing your question."
+            
+        except Exception as e:
+            error_msg = str(e)
+            if "empty" in error_msg.lower():
+                return "I encountered an issue processing your request. Please try asking in a different way."
+            return f"❌ Error: {error_msg}"
+    
+    return "⚠️ Response took too long. Please try a simpler question."
             
  # Get response text
             response_text = response.text if response.text else "I apologize, but I couldn't generate a response. Please try rephrasing your question."
