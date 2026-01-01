@@ -18,29 +18,139 @@ st.set_page_config(
     page_title="AI Stock Analyzer",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="collapsed",
+    menu_items={
+        'Get Help': None,
+        'Report a bug': None,
+        'About': None
+    }
 )
 
 st.markdown("""
 <style>
+    /* Force dark mode on all devices */
     .stApp {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-    }
-    h1, h2, h3 {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
         color: #ffffff !important;
-        font-family: 'Inter', 'Segoe UI', sans-serif;
-        font-weight: 600;
     }
+    
+    /* Headers - always white */
+    h1, h2, h3, h4, h5, h6 {
+        color: #ffffff !important;
+        font-family: 'Inter', 'Segoe UI', sans-serif !important;
+        font-weight: 600 !important;
+    }
+    
+    /* All text - light gray */
+    p, span, div, label, .stMarkdown {
+        color: #e5e7eb !important;
+    }
+    
+    /* Chat input */
     .stChatFloatingInputContainer {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.05) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 12px !important;
     }
+    
+    /* Chat messages */
     .stChatMessage {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 12px;
-        padding: 1rem;
-        margin: 0.5rem 0;
+        background: rgba(255, 255, 255, 0.05) !important;
+        border-radius: 12px !important;
+        padding: 1rem !important;
+        margin: 0.5rem 0 !important;
+        color: #ffffff !important;
+    }
+    
+    /* Input fields */
+    input, textarea, .stTextInput input, .stTextArea textarea {
+        background: rgba(255, 255, 255, 0.1) !important;
+        color: #ffffff !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    }
+    
+    /* Buttons */
+    .stButton > button {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+    }
+    
+    .stButton > button:hover {
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+        transform: translateY(-2px);
+    }
+    
+    /* Metrics */
+    .stMetric {
+        background: rgba(255, 255, 255, 0.05) !important;
+        padding: 1rem !important;
+        border-radius: 8px !important;
+    }
+    
+    .stMetric label {
+        color: #9ca3af !important;
+    }
+    
+    .stMetric [data-testid="stMetricValue"] {
+        color: #ffffff !important;
+    }
+    
+    /* Dataframes/Tables */
+    .stDataFrame, table {
+        background: rgba(255, 255, 255, 0.05) !important;
+        color: #ffffff !important;
+    }
+    
+    .stDataFrame th {
+        background: rgba(255, 255, 255, 0.1) !important;
+        color: #ffffff !important;
+    }
+    
+    .stDataFrame td {
+        color: #e5e7eb !important;
+    }
+    
+    /* Expanders */
+    .streamlit-expanderHeader {
+        background: rgba(255, 255, 255, 0.05) !important;
+        color: #ffffff !important;
+    }
+    
+    /* Success/Info/Warning/Error boxes */
+    .stSuccess, .stInfo, .stWarning, .stError {
+        background: rgba(255, 255, 255, 0.1) !important;
+        color: #ffffff !important;
+    }
+    
+    /* Sidebar (if you add one later) */
+    .css-1d391kg, .st-emotion-cache-1cypcdb {
+        background: #1e293b !important;
+    }
+    
+    /* Links */
+    a {
+        color: #60a5fa !important;
+    }
+    
+    a:hover {
+        color: #93c5fd !important;
+    }
+    
+    /* Code blocks */
+    code {
+        background: rgba(255, 255, 255, 0.1) !important;
+        color: #fbbf24 !important;
+        padding: 0.2rem 0.4rem !important;
+        border-radius: 4px !important;
+    }
+    
+    pre {
+        background: rgba(255, 255, 255, 0.05) !important;
+        color: #e5e7eb !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
     }
 </style>
 """, unsafe_allow_html=True)
