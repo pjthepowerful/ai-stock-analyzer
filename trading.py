@@ -1005,7 +1005,7 @@ while iteration < max_iterations:
             
  # Get response text
         response_text = response.text if response.text else "I apologize, but I couldn't generate a response. Please try rephrasing your question."
-            return response_text
+        return response_text
             
         except Exception as e:
             return f"❌ Error: {str(e)}\n\nPlease try asking in a different way."
