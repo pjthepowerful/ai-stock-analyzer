@@ -50,6 +50,7 @@ def check_auth_state():
     cookie_manager = get_cookie_manager()
     stored_token = cookie_manager.get("paula_auth_token")
     stored_email = cookie_manager.get("paula_user_email")
+    stored_name = cookie_manager.get("paula_user_name")
     
     if stored_token and stored_email:
         # Verify token with Supabase
@@ -63,6 +64,7 @@ def check_auth_state():
                     st.session_state['authenticated'] = True
                     st.session_state['user'] = {
                         'email': stored_email,
+                        'name': stored_name or '',
                         'access_token': stored_token
                     }
                     return True
@@ -70,6 +72,7 @@ def check_auth_state():
                 # Token expired or invalid, clear cookies
                 cookie_manager.delete("paula_auth_token")
                 cookie_manager.delete("paula_user_email")
+                cookie_manager.delete("paula_user_name")
     
     return False
 
@@ -86,10 +89,16 @@ def login_user(email, password):
         })
         
         if response.user:
+            # Get name from user metadata
+            user_name = ""
+            if response.user.user_metadata:
+                user_name = response.user.user_metadata.get('name', '')
+            
             st.session_state['authenticated'] = True
             st.session_state['user'] = {
                 'email': response.user.email,
                 'id': response.user.id,
+                'name': user_name,
                 'access_token': response.session.access_token
             }
             
@@ -98,6 +107,8 @@ def login_user(email, password):
             cookie_manager.set("paula_auth_token", response.session.access_token, 
                              expires_at=datetime.now() + timedelta(days=30))
             cookie_manager.set("paula_user_email", response.user.email,
+                             expires_at=datetime.now() + timedelta(days=30))
+            cookie_manager.set("paula_user_name", user_name,
                              expires_at=datetime.now() + timedelta(days=30))
             
             return True, "Login successful!"
@@ -155,6 +166,7 @@ def logout_user():
     cookie_manager = get_cookie_manager()
     cookie_manager.delete("paula_auth_token")
     cookie_manager.delete("paula_user_email")
+    cookie_manager.delete("paula_user_name")
 
 def reset_password(email):
     """Send password reset email"""
@@ -962,10 +974,12 @@ def show_main_app():
     
     with col1:
         market_emoji = "🇺🇸" if st.session_state.market == 'US' else "🇮🇳"
-        user_email = st.session_state.get('user', {}).get('email', 'User')
+        user_display = st.session_state.get('user', {}).get('name', '')
+        if not user_display:
+            user_display = st.session_state.get('user', {}).get('email', 'User')
         st.markdown(f"""
         <div class="market-badge">{market_emoji} <strong>{st.session_state.market} Market</strong></div>
-        <div class="user-badge">👤 {user_email}</div>
+        <div class="user-badge">👤 {user_display}</div>
         """, unsafe_allow_html=True)
     
     with col2:
@@ -1010,7 +1024,9 @@ def show_main_app():
     
     # Welcome
     if not st.session_state.chat_messages:
-        user_name = st.session_state.get('user', {}).get('email', 'there').split('@')[0]
+        user_name = st.session_state.get('user', {}).get('name', '')
+        if not user_name:
+            user_name = st.session_state.get('user', {}).get('email', 'there').split('@')[0]
         st.markdown(f"### 👋 Hi {user_name}! I'm Paula. Ask me about any stock.")
         st.markdown("**Examples:**")
         
