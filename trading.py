@@ -748,15 +748,12 @@ def process_chatbot_message(user_message, conversation_history):
     try:
         if hasattr(st, 'secrets') and "GOOGLE_API_KEY" in st.secrets:
             api_key = st.secrets["GOOGLE_API_KEY"]
-            st.write("DEBUG: Loaded from Streamlit secrets")  # Temporary debug
     except Exception as e:
-        st.write(f"DEBUG: Secrets error: {e}")  # Temporary debug
+        pass
     
     # Method 2: Environment variable
     if not api_key:
         api_key = os.environ.get("GOOGLE_API_KEY")
-        if api_key:
-            st.write("DEBUG: Loaded from environment")  # Temporary debug
     
     if not api_key:
         return "⚠️ Please set your GOOGLE_API_KEY in Streamlit Secrets or environment variables."
@@ -866,20 +863,6 @@ Your expertise includes:
 - Company comparisons and sector analysis
 - Finding undervalued and high-quality investment opportunities
 
-**Swing Trading Strategy:**
-When user asks to "scan the Nasdaq" or find "trading setups," use swing trading analysis:
-- EMA 20 Pullback: Stock pulls back to 20 EMA in uptrend (best setup)
-- SMA 50 Pullback: Stock bounces off 50 SMA support
-- Consolidation Breakout: Stock breaking out of tight range near highs
-- Quality scores: 85+ (exceptional), 75-84 (strong), 65-74 (good)
-- All setups include entry, stop loss (3% risk), and target prices
-
-**Investment Analysis:**
-When user asks about "fundamentals" or "value," use fundamental analysis:
-- Screen by PE, ROE, profit margins, debt levels
-- Find undervalued, high-growth, or dividend stocks
-- Provide detailed company analysis with ratings
-
 Communication style:
 - Be professional but conversational
 - Provide actionable insights
@@ -887,7 +870,7 @@ Communication style:
 - Use data to support recommendations"""
 
     model = genai.GenerativeModel(
-        'models/gemini-2.5-flash',
+        'models/gemini-2.0-flash',
         tools=tools,
         system_instruction=system_instruction
     )
@@ -904,24 +887,15 @@ Communication style:
     max_iterations = 5
     iteration = 0
     
-def process_chat_response(chat, user_message, max_iterations=10):
-    iteration = 0
-    
-    # Debug: Check input
-    print(f"DEBUG: user_message = '{user_message}'")
-    
-    if not user_message or not user_message.strip():
-        return "Please enter a message."
-    
     while iteration < max_iterations:
         iteration += 1
         
         try:
-            response = chat.send_message(user_message)
-            
-            # Debug: Check response
-            print(f"DEBUG: response = {response}")
-            print(f"DEBUG: response.text = {response.text if hasattr(response, 'text') else 'No text attribute'}")
+            # Only send user_message on first iteration
+            if user_message and user_message.strip():
+                response = chat.send_message(user_message)
+            else:
+                return "Please enter a message."
             
             # Check if AI wants to use a function
             if (response.candidates and 
@@ -929,8 +903,77 @@ def process_chat_response(chat, user_message, max_iterations=10):
                 hasattr(response.candidates[0].content.parts[0], 'function_call') and
                 response.candidates[0].content.parts[0].function_call):
                 
-                # ... rest of your function call handling code ...
-                pass
+                function_call = response.candidates[0].content.parts[0].function_call
+                function_name = function_call.name
+                function_args = {}
+                
+                for key, value in function_call.args.items():
+                    function_args[key] = value
+                
+                # Execute functions
+                if function_name == "fundamental_screener":
+                    result = fundamental_screener_tool(
+                        min_market_cap=function_args.get("min_market_cap"),
+                        max_market_cap=function_args.get("max_market_cap"),
+                        min_pe=function_args.get("min_pe"),
+                        max_pe=function_args.get("max_pe"),
+                        min_roe=function_args.get("min_roe"),
+                        max_roe=function_args.get("max_roe"),
+                        min_profit_margin=function_args.get("min_profit_margin"),
+                        max_debt_equity=function_args.get("max_debt_equity"),
+                        min_dividend_yield=function_args.get("min_dividend_yield"),
+                        sector=function_args.get("sector"),
+                        min_revenue_growth=function_args.get("min_revenue_growth"),
+                        max_peg=function_args.get("max_peg")
+                    )
+                elif function_name == "analyze_company":
+                    result = analyze_company_tool(function_args.get("ticker"))
+                elif function_name == "compare_companies":
+                    result = compare_companies_tool(function_args.get("tickers"))
+                elif function_name == "find_undervalued_stocks":
+                    result = find_undervalued_stocks_tool(
+                        max_pe=function_args.get("max_pe", 15),
+                        min_roe=function_args.get("min_roe", 15),
+                        max_peg=function_args.get("max_peg", 1.5)
+                    )
+                elif function_name == "find_high_growth_stocks":
+                    result = find_high_growth_stocks_tool(
+                        min_revenue_growth=function_args.get("min_revenue_growth", 20),
+                        min_roe=function_args.get("min_roe", 15)
+                    )
+                elif function_name == "find_dividend_stocks":
+                    result = find_dividend_stocks_tool(
+                        min_yield=function_args.get("min_yield", 3),
+                        max_payout_ratio=function_args.get("max_payout_ratio", 60)
+                    )
+                elif function_name == "get_sector_stocks":
+                    result = get_sector_stocks_tool(function_args.get("sector"))
+                else:
+                    result = {"error": f"Unknown function: {function_name}"}
+                
+                # Send function response back to AI
+                response = chat.send_message(
+                    genai.protos.Content(
+                        parts=[
+                            genai.protos.Part(
+                                function_response=genai.protos.FunctionResponse(
+                                    name=function_name,
+                                    response={"result": result}
+                                )
+                            )
+                        ]
+                    )
+                )
+                
+                # Clear user_message so we don't resend it
+                user_message = None
+                
+                # Check if we got a text response now
+                if response.text and response.text.strip():
+                    return response.text
+                
+                # Otherwise continue loop (might call another function)
+                continue
             
             # No function call - return the text response
             if response.text and response.text.strip():
@@ -939,9 +982,12 @@ def process_chat_response(chat, user_message, max_iterations=10):
                 return "I apologize, but I couldn't generate a response. Please try rephrasing your question."
             
         except Exception as e:
-            print(f"DEBUG: Exception = {e}")
-            return f"❌ Error: {str(e)}"
+            error_msg = str(e)
+            if "empty" in error_msg.lower():
+                return "I encountered an issue processing your request. Please try asking in a different way."
+            return f"❌ Error: {error_msg}"
 
+    # Loop finished without returning (max iterations reached)
     return "⚠️ Response took too long. Please try a simpler question."
 # ==================== UI ====================
 
