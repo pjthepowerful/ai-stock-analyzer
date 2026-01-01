@@ -987,7 +987,7 @@ Communication style:
 col1, col2 = st.columns([4, 1])
 with col1:
     st.title("📊 AI Stock Analyzer")
-    st.markdown("*Fundamental analysis powered by Google Gemini - Like Screener.in*")
+    st.markdown("*Fundamental analysis powered by Google Gemini")
 with col2:
     if st.button("⚙️ Settings", use_container_width=True):
         st.session_state.show_settings = not st.session_state.show_settings
