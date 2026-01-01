@@ -744,7 +744,93 @@ def get_sector_stocks_tool(sector):
         return {"success": False, "error": str(e)}
 
 
-# ==================== AI CHATBOT FUNCTION (GROQ) ====================
+# ==================== AI CHATBOT FUNCTION (GROQ - INTENT DETECTION) ====================
+
+def detect_intent_and_execute(user_message):
+    """Detect user intent and execute appropriate function"""
+    message_lower = user_message.lower()
+    
+    # Check for specific intents
+    if any(word in message_lower for word in ['undervalued', 'undervalue', 'cheap', 'value stock', 'bargain']):
+        return "find_undervalued", find_undervalued_stocks_tool()
+    
+    elif any(word in message_lower for word in ['high growth', 'growth stock', 'fast growing', 'growing fast']):
+        return "find_growth", find_high_growth_stocks_tool()
+    
+    elif any(word in message_lower for word in ['dividend', 'dividends', 'income', 'yield']):
+        return "find_dividend", find_dividend_stocks_tool()
+    
+    elif any(word in message_lower for word in ['compare', 'comparison', 'versus', 'vs', 'vs.']):
+        # Extract tickers for comparison
+        tickers = re.findall(r'\b([A-Z]{2,5})\b', user_message)
+        common_words = ['PE', 'ROE', 'ROA', 'EPS', 'CEO', 'CFO', 'IPO', 'ETF', 'NYSE', 'USD', 'THE', 'AND', 'FOR', 'VS']
+        tickers = [t for t in tickers if t not in common_words]
+        if len(tickers) >= 2:
+            return "compare", compare_companies_tool(','.join(tickers[:5]))
+    
+    # Detect sector queries
+    sectors = {
+        'technology': 'Technology',
+        'tech': 'Technology',
+        'healthcare': 'Healthcare',
+        'health': 'Healthcare',
+        'financial': 'Financial Services',
+        'finance': 'Financial Services',
+        'bank': 'Financial Services',
+        'energy': 'Energy',
+        'oil': 'Energy',
+        'consumer': 'Consumer Cyclical',
+        'retail': 'Consumer Cyclical',
+        'industrial': 'Industrials',
+        'utility': 'Utilities',
+        'utilities': 'Utilities',
+        'real estate': 'Real Estate',
+        'communication': 'Communication Services'
+    }
+    
+    for key, sector in sectors.items():
+        if key in message_lower and any(word in message_lower for word in ['sector', 'stocks in', 'companies in', 'show me']):
+            return "sector", get_sector_stocks_tool(sector)
+    
+    # Check for company analysis
+    if any(word in message_lower for word in ['analyze', 'analysis', 'tell me about', 'look at', 'check', 'how is', 'what about']):
+        tickers = re.findall(r'\b([A-Z]{2,5})\b', user_message)
+        common_words = ['PE', 'ROE', 'ROA', 'EPS', 'CEO', 'CFO', 'IPO', 'ETF', 'NYSE', 'USD', 'THE', 'AND', 'FOR']
+        tickers = [t for t in tickers if t not in common_words and t in SP500_MAJOR]
+        if tickers:
+            return "analyze", analyze_company_tool(tickers[0])
+    
+    # Check for screening criteria
+    if any(word in message_lower for word in ['screen', 'filter', 'find stocks', 'search for', 'stocks with']):
+        params = {}
+        
+        # PE ratio
+        pe_match = re.search(r'pe\s*(?:ratio)?\s*(?:<|less than|under|below)\s*(\d+)', message_lower)
+        if pe_match:
+            params['max_pe'] = float(pe_match.group(1))
+        
+        # ROE
+        roe_match = re.search(r'roe\s*(?:>|greater than|over|above)\s*(\d+)', message_lower)
+        if roe_match:
+            params['min_roe'] = float(roe_match.group(1))
+        
+        # Debt
+        debt_match = re.search(r'debt.*?(?:<|less than|under|below)\s*(\d+\.?\d*)', message_lower)
+        if debt_match:
+            params['max_debt_equity'] = float(debt_match.group(1))
+        
+        if params:
+            return "screen", fundamental_screener_tool(**params)
+    
+    # Check for standalone ticker (like "AAPL" or "MSFT")
+    standalone_ticker = re.findall(r'\b([A-Z]{2,5})\b', user_message)
+    common_words = ['PE', 'ROE', 'ROA', 'EPS', 'CEO', 'CFO', 'IPO', 'ETF', 'NYSE', 'USD', 'THE', 'AND', 'FOR', 'CAN', 'YOU', 'HI', 'HELLO']
+    standalone_ticker = [t for t in standalone_ticker if t not in common_words and t in SP500_MAJOR]
+    if standalone_ticker:
+        return "analyze", analyze_company_tool(standalone_ticker[0])
+    
+    return None, None
+
 
 def process_chatbot_message(user_message, conversation_history):
     """Process user messages with Groq AI"""
@@ -766,256 +852,76 @@ def process_chatbot_message(user_message, conversation_history):
     
     client = Groq(api_key=api_key)
     
-    # Define tools for function calling
-    tools = [
-        {
-            "type": "function",
-            "function": {
-                "name": "fundamental_screener",
-                "description": "Screen stocks by fundamental criteria like PE ratio, ROE, profit margin, debt levels, dividend yield, sector, market cap, and growth rates.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "min_market_cap": {"type": "number", "description": "Minimum market cap"},
-                        "max_market_cap": {"type": "number", "description": "Maximum market cap"},
-                        "min_pe": {"type": "number", "description": "Minimum PE ratio"},
-                        "max_pe": {"type": "number", "description": "Maximum PE ratio"},
-                        "min_roe": {"type": "number", "description": "Minimum ROE percentage"},
-                        "max_roe": {"type": "number", "description": "Maximum ROE percentage"},
-                        "min_profit_margin": {"type": "number", "description": "Minimum profit margin percentage"},
-                        "max_debt_equity": {"type": "number", "description": "Maximum debt to equity ratio"},
-                        "min_dividend_yield": {"type": "number", "description": "Minimum dividend yield percentage"},
-                        "sector": {"type": "string", "description": "Sector to filter (e.g., Technology, Healthcare, Financial Services)"},
-                        "min_revenue_growth": {"type": "number", "description": "Minimum revenue growth percentage"},
-                        "max_peg": {"type": "number", "description": "Maximum PEG ratio"}
-                    }
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "analyze_company",
-                "description": "Get detailed fundamental analysis of a specific company including valuation metrics, profitability scores, financial health, growth metrics, and overall rating.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "ticker": {"type": "string", "description": "Stock ticker symbol (e.g., AAPL, MSFT)"}
-                    },
-                    "required": ["ticker"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "compare_companies",
-                "description": "Compare multiple companies side-by-side with key financial metrics",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "tickers": {"type": "string", "description": "Comma-separated ticker symbols (e.g., AAPL,MSFT,GOOGL)"}
-                    },
-                    "required": ["tickers"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "find_undervalued_stocks",
-                "description": "Find undervalued stocks with low PE, high ROE, and low PEG ratio",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "max_pe": {"type": "number", "description": "Maximum PE ratio (default 15)"},
-                        "min_roe": {"type": "number", "description": "Minimum ROE percentage (default 15)"},
-                        "max_peg": {"type": "number", "description": "Maximum PEG ratio (default 1.5)"}
-                    }
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "find_high_growth_stocks",
-                "description": "Find high revenue growth stocks with strong profitability",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "min_revenue_growth": {"type": "number", "description": "Minimum revenue growth percentage (default 20)"},
-                        "min_roe": {"type": "number", "description": "Minimum ROE percentage (default 15)"}
-                    }
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "find_dividend_stocks",
-                "description": "Find high dividend yield stocks with sustainable payouts",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "min_yield": {"type": "number", "description": "Minimum dividend yield percentage (default 3)"},
-                        "max_payout_ratio": {"type": "number", "description": "Maximum payout ratio percentage (default 60)"}
-                    }
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "get_sector_stocks",
-                "description": "Get all stocks in a specific sector",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "sector": {"type": "string", "description": "Sector name (Technology, Healthcare, Financial Services, Consumer Cyclical, etc.)"}
-                    },
-                    "required": ["sector"]
-                }
-            }
-        }
-    ]
+    # First, try to detect intent and execute function
+    intent, data = detect_intent_and_execute(user_message)
     
+    # Build system prompt
     system_prompt = """You are a professional stock market analyst specializing in fundamental analysis.
 
 Your expertise includes:
-- **Fundamental Analysis**: Valuation (PE, PEG), profitability (ROE, margins), financial health (debt, cash)
+- Fundamental Analysis: Valuation (PE, PEG), profitability (ROE, margins), financial health (debt, cash)
 - Company comparisons and sector analysis
 - Finding undervalued and high-quality investment opportunities
-
-You have access to tools to:
-1. Screen stocks by various criteria (PE, ROE, margins, etc.)
-2. Analyze individual companies in detail
-3. Compare multiple companies
-4. Find undervalued, high-growth, or dividend stocks
-5. Get stocks by sector
 
 Communication style:
 - Be professional but conversational
 - Provide actionable insights with data
 - Always emphasize: this is educational content, not financial advice
-- Use the tools to get real data before answering
+- Format data nicely using markdown tables and bullet points when appropriate
+- Keep responses concise but informative
+
+If you receive stock data in the prompt, analyze it and provide clear insights. Format numbers nicely (e.g., market cap in billions).
 
 Available sectors: Technology, Healthcare, Financial Services, Consumer Cyclical, Communication Services, Industrials, Consumer Defensive, Energy, Utilities, Real Estate, Basic Materials"""
 
     # Build messages
     messages = [{"role": "system", "content": system_prompt}]
     
-    for msg in conversation_history:
+    # Add conversation history (limit to last 6 messages)
+    for msg in conversation_history[-6:]:
         if msg["role"] == "user":
             messages.append({"role": "user", "content": msg["content"]})
         elif msg["role"] == "assistant":
             messages.append({"role": "assistant", "content": msg["content"]})
     
-    messages.append({"role": "user", "content": user_message})
-    
-    max_iterations = 5
-    iteration = 0
-    
-    while iteration < max_iterations:
-        iteration += 1
+    # If we have data from function execution, include it
+    if data:
+        data_str = json.dumps(data, indent=2, default=str)
+        # Truncate if too long
+        if len(data_str) > 10000:
+            data_str = data_str[:10000] + "... (truncated)"
         
-        try:
-            response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=messages,
-                tools=tools,
-                tool_choice="auto",
-                max_tokens=4096
-            )
-            
-            response_message = response.choices[0].message
-            
-            # Check if AI wants to use a tool
-            if response_message.tool_calls:
-                # Add assistant message with tool calls to history
-                messages.append({
-                    "role": "assistant",
-                    "content": response_message.content or "",
-                    "tool_calls": [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.function.name,
-                                "arguments": tc.function.arguments
-                            }
-                        } for tc in response_message.tool_calls
-                    ]
-                })
-                
-                # Process each tool call
-                for tool_call in response_message.tool_calls:
-                    function_name = tool_call.function.name
-                    function_args = json.loads(tool_call.function.arguments)
-                    
-                    # Execute the function
-                    if function_name == "fundamental_screener":
-                        result = fundamental_screener_tool(
-                            min_market_cap=function_args.get("min_market_cap"),
-                            max_market_cap=function_args.get("max_market_cap"),
-                            min_pe=function_args.get("min_pe"),
-                            max_pe=function_args.get("max_pe"),
-                            min_roe=function_args.get("min_roe"),
-                            max_roe=function_args.get("max_roe"),
-                            min_profit_margin=function_args.get("min_profit_margin"),
-                            max_debt_equity=function_args.get("max_debt_equity"),
-                            min_dividend_yield=function_args.get("min_dividend_yield"),
-                            sector=function_args.get("sector"),
-                            min_revenue_growth=function_args.get("min_revenue_growth"),
-                            max_peg=function_args.get("max_peg")
-                        )
-                    elif function_name == "analyze_company":
-                        result = analyze_company_tool(function_args.get("ticker"))
-                    elif function_name == "compare_companies":
-                        result = compare_companies_tool(function_args.get("tickers"))
-                    elif function_name == "find_undervalued_stocks":
-                        result = find_undervalued_stocks_tool(
-                            max_pe=function_args.get("max_pe", 15),
-                            min_roe=function_args.get("min_roe", 15),
-                            max_peg=function_args.get("max_peg", 1.5)
-                        )
-                    elif function_name == "find_high_growth_stocks":
-                        result = find_high_growth_stocks_tool(
-                            min_revenue_growth=function_args.get("min_revenue_growth", 20),
-                            min_roe=function_args.get("min_roe", 15)
-                        )
-                    elif function_name == "find_dividend_stocks":
-                        result = find_dividend_stocks_tool(
-                            min_yield=function_args.get("min_yield", 3),
-                            max_payout_ratio=function_args.get("max_payout_ratio", 60)
-                        )
-                    elif function_name == "get_sector_stocks":
-                        result = get_sector_stocks_tool(function_args.get("sector"))
-                    else:
-                        result = {"error": f"Unknown function: {function_name}"}
-                    
-                    # Add tool result to messages
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": json.dumps(result)
-                    })
-                
-                # Continue loop to get AI's response after tool use
-                continue
-            
-            # No tool call - return the text response
-            if response_message.content and response_message.content.strip():
-                return response_message.content
-            else:
-                return "I apologize, but I couldn't generate a response. Please try rephrasing your question."
-            
-        except Exception as e:
-            error_msg = str(e)
-            if "rate_limit" in error_msg.lower():
-                return "⚠️ Rate limit reached. Please wait a moment and try again."
-            return f"❌ Error: {error_msg}"
+        user_content = f"""User asked: {user_message}
 
-    return "⚠️ Response took too long. Please try a simpler question."
+Here is the data I retrieved:
+
+```json
+{data_str}
+```
+
+Please analyze this data and provide a helpful response. Format it nicely with key insights."""
+        messages.append({"role": "user", "content": user_content})
+    else:
+        messages.append({"role": "user", "content": user_message})
+    
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=messages,
+            max_tokens=2048,
+            temperature=0.7
+        )
+        
+        if response.choices[0].message.content:
+            return response.choices[0].message.content
+        else:
+            return "I apologize, but I couldn't generate a response. Please try rephrasing your question."
+        
+    except Exception as e:
+        error_msg = str(e)
+        if "rate_limit" in error_msg.lower():
+            return "⚠️ Rate limit reached. Please wait a moment and try again."
+        return f"❌ Error: {error_msg}"
 
 
 # ==================== UI ====================
@@ -1063,7 +969,7 @@ with col1:
     if st.button("🔍 Find Undervalued", use_container_width=True):
         st.session_state.chat_messages.append({
             "role": "user",
-            "content": "Find undervalued stocks with good fundamentals"
+            "content": "Find undervalued stocks"
         })
         st.rerun()
 
@@ -1079,15 +985,15 @@ with col3:
     if st.button("💰 Dividend Stocks", use_container_width=True):
         st.session_state.chat_messages.append({
             "role": "user",
-            "content": "Find high dividend yield stocks"
+            "content": "Find dividend stocks"
         })
         st.rerun()
 
 with col4:
-    if st.button("🏢 Analyze Company", use_container_width=True):
+    if st.button("🏢 Analyze AAPL", use_container_width=True):
         st.session_state.chat_messages.append({
             "role": "user",
-            "content": "Analyze AAPL in detail"
+            "content": "Analyze AAPL"
         })
         st.rerun()
 
@@ -1104,7 +1010,7 @@ for message in st.session_state.chat_messages:
         st.markdown(message["content"])
 
 # Chat input
-if prompt := st.chat_input("Ask about stocks, companies, sectors, or request stock screens..."):
+if prompt := st.chat_input("Ask about stocks, companies, sectors..."):
     st.session_state.chat_messages.append({"role": "user", "content": prompt})
     
     with st.chat_message("user"):
@@ -1127,19 +1033,19 @@ if len(st.session_state.chat_messages) == 0:
     with col1:
         st.markdown("""
         **Screening:**
-        - "Find stocks with PE < 15 and ROE > 20%"
-        - "Show me technology stocks with low debt"
-        - "Find undervalued stocks in healthcare sector"
-        - "Which stocks have dividend yield above 4%?"
+        - "Find undervalued stocks"
+        - "Show me technology sector stocks"
+        - "Find dividend stocks"
+        - "Find high growth stocks"
         """)
     
     with col2:
         st.markdown("""
         **Analysis:**
-        - "Analyze Apple in detail"
-        - "Compare MSFT, GOOGL, and AAPL"
-        - "What are the best tech stocks to buy?"
-        - "Find profitable companies with high growth"
+        - "Analyze AAPL"
+        - "Compare MSFT, GOOGL, AAPL"
+        - "Tell me about NVDA"
+        - "How is Tesla doing?"
         """)
 
 st.markdown("---")
