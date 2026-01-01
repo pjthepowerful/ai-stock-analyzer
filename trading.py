@@ -15,7 +15,6 @@ load_dotenv()
 
 st.set_page_config(
     page_title="AI Stock Analyzer",
-    page_icon="💰",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
