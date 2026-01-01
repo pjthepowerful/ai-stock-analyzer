@@ -904,105 +904,108 @@ Communication style:
     max_iterations = 5
     iteration = 0
     
-while iteration < max_iterations:
-    iteration += 1
+def process_chat_response(chat, user_message, max_iterations=10):
+    iteration = 0
     
-    try:
-        # Only send user_message on first iteration
-        if user_message and user_message.strip():
-            response = chat.send_message(user_message)
-        else:
-            # Empty message, break loop
-            break
+    while iteration < max_iterations:
+        iteration += 1
         
-        # Check if AI wants to use a function
-        if response.candidates[0].content.parts[0].function_call:
-            function_call = response.candidates[0].content.parts[0].function_call
-            function_name = function_call.name
-            function_args = {}
-            
-            for key, value in function_call.args.items():
-                function_args[key] = value
-            
-            # Execute functions
-            if function_name == "fundamental_screener":
-                result = fundamental_screener_tool(
-                    min_market_cap=function_args.get("min_market_cap"),
-                    max_market_cap=function_args.get("max_market_cap"),
-                    min_pe=function_args.get("min_pe"),
-                    max_pe=function_args.get("max_pe"),
-                    min_roe=function_args.get("min_roe"),
-                    max_roe=function_args.get("max_roe"),
-                    min_profit_margin=function_args.get("min_profit_margin"),
-                    max_debt_equity=function_args.get("max_debt_equity"),
-                    min_dividend_yield=function_args.get("min_dividend_yield"),
-                    sector=function_args.get("sector"),
-                    min_revenue_growth=function_args.get("min_revenue_growth"),
-                    max_peg=function_args.get("max_peg")
-                )
-            elif function_name == "analyze_company":
-                result = analyze_company_tool(function_args.get("ticker"))
-            elif function_name == "compare_companies":
-                result = compare_companies_tool(function_args.get("tickers"))
-            elif function_name == "find_undervalued_stocks":
-                result = find_undervalued_stocks_tool(
-                    max_pe=function_args.get("max_pe", 15),
-                    min_roe=function_args.get("min_roe", 15),
-                    max_peg=function_args.get("max_peg", 1.5)
-                )
-            elif function_name == "find_high_growth_stocks":
-                result = find_high_growth_stocks_tool(
-                    min_revenue_growth=function_args.get("min_revenue_growth", 20),
-                    min_roe=function_args.get("min_roe", 15)
-                )
-            elif function_name == "find_dividend_stocks":
-                result = find_dividend_stocks_tool(
-                    min_yield=function_args.get("min_yield", 3),
-                    max_payout_ratio=function_args.get("max_payout_ratio", 60)
-                )
-            elif function_name == "get_sector_stocks":
-                result = get_sector_stocks_tool(function_args.get("sector"))
+        try:
+            # Only send user_message on first iteration
+            if user_message and user_message.strip():
+                response = chat.send_message(user_message)
             else:
-                result = {"error": f"Unknown function: {function_name}"}
+                # Empty message, break loop
+                break
             
-            # Send function response back to AI
-            response = chat.send_message(
-                genai.protos.Content(
-                    parts=[
-                        genai.protos.Part(
-                            function_response=genai.protos.FunctionResponse(
-                                name=function_name,
-                                response={"result": result}
+            # Check if AI wants to use a function
+            if response.candidates[0].content.parts[0].function_call:
+                function_call = response.candidates[0].content.parts[0].function_call
+                function_name = function_call.name
+                function_args = {}
+                
+                for key, value in function_call.args.items():
+                    function_args[key] = value
+                
+                # Execute functions
+                if function_name == "fundamental_screener":
+                    result = fundamental_screener_tool(
+                        min_market_cap=function_args.get("min_market_cap"),
+                        max_market_cap=function_args.get("max_market_cap"),
+                        min_pe=function_args.get("min_pe"),
+                        max_pe=function_args.get("max_pe"),
+                        min_roe=function_args.get("min_roe"),
+                        max_roe=function_args.get("max_roe"),
+                        min_profit_margin=function_args.get("min_profit_margin"),
+                        max_debt_equity=function_args.get("max_debt_equity"),
+                        min_dividend_yield=function_args.get("min_dividend_yield"),
+                        sector=function_args.get("sector"),
+                        min_revenue_growth=function_args.get("min_revenue_growth"),
+                        max_peg=function_args.get("max_peg")
+                    )
+                elif function_name == "analyze_company":
+                    result = analyze_company_tool(function_args.get("ticker"))
+                elif function_name == "compare_companies":
+                    result = compare_companies_tool(function_args.get("tickers"))
+                elif function_name == "find_undervalued_stocks":
+                    result = find_undervalued_stocks_tool(
+                        max_pe=function_args.get("max_pe", 15),
+                        min_roe=function_args.get("min_roe", 15),
+                        max_peg=function_args.get("max_peg", 1.5)
+                    )
+                elif function_name == "find_high_growth_stocks":
+                    result = find_high_growth_stocks_tool(
+                        min_revenue_growth=function_args.get("min_revenue_growth", 20),
+                        min_roe=function_args.get("min_roe", 15)
+                    )
+                elif function_name == "find_dividend_stocks":
+                    result = find_dividend_stocks_tool(
+                        min_yield=function_args.get("min_yield", 3),
+                        max_payout_ratio=function_args.get("max_payout_ratio", 60)
+                    )
+                elif function_name == "get_sector_stocks":
+                    result = get_sector_stocks_tool(function_args.get("sector"))
+                else:
+                    result = {"error": f"Unknown function: {function_name}"}
+                
+                # Send function response back to AI
+                response = chat.send_message(
+                    genai.protos.Content(
+                        parts=[
+                            genai.protos.Part(
+                                function_response=genai.protos.FunctionResponse(
+                                    name=function_name,
+                                    response={"result": result}
+                                )
                             )
-                        )
-                    ]
+                        ]
+                    )
                 )
-            )
+                
+                # Clear user_message so we don't resend it
+                user_message = None
+                
+                # Check if we got a text response now
+                if response.text and response.text.strip():
+                    return response.text
+                
+                # Otherwise continue loop (might call another function)
+                continue
             
-            # Clear user_message so we don't resend it
-            user_message = None
-            
-            # Check if we got a text response now
+            # No function call - return the text response
             if response.text and response.text.strip():
                 return response.text
+            else:
+                return "I apologize, but I couldn't generate a response. Please try rephrasing your question."
             
-            # Otherwise continue loop (might call another function)
-            continue
-        
-        # No function call - return the text response
-        if response.text and response.text.strip():
-            return response.text
-        else:
-            return "I apologize, but I couldn't generate a response. Please try rephrasing your question."
-        
-    except Exception as e:
-        error_msg = str(e)
-        if "empty" in error_msg.lower():
-            return "I encountered an issue processing your request. Please try asking in a different way."
-        return f"❌ Error: {error_msg}"
+        except Exception as e:
+            error_msg = str(e)
+            if "empty" in error_msg.lower():
+                return "I encountered an issue processing your request. Please try asking in a different way."
+            return f"❌ Error: {error_msg}"
 
-# This runs if the while loop completes without returning
-return "⚠️ Response took too long. Please try a simpler question."
+    # Loop finished without returning (max iterations reached or empty message)
+    return "⚠️ Response took too long. Please try a simpler question."
 # ==================== UI ====================
 
 col1, col2 = st.columns([4, 1])
