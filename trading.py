@@ -5,11 +5,11 @@ import numpy as np
 from datetime import datetime, timedelta
 import warnings
 import time
-import google.generativeai as genai
 import json
 import os
 from dotenv import load_dotenv
 import re
+from groq import Groq
 
 warnings.filterwarnings('ignore')
 load_dotenv()
@@ -269,6 +269,7 @@ def get_stock_fundamentals(ticker):
     except Exception as e:
         return None
 
+
 def fundamental_screener_tool(
     min_market_cap=None, max_market_cap=None,
     min_pe=None, max_pe=None,
@@ -328,7 +329,7 @@ def fundamental_screener_tool(
                 passes = False
             
             # Sector
-            if sector and fundamentals['sector'] != sector:
+            if sector and fundamentals['sector'].lower() != sector.lower():
                 passes = False
             
             # Revenue Growth
@@ -370,6 +371,7 @@ def fundamental_screener_tool(
             
     except Exception as e:
         return {"success": False, "error": str(e)}
+
 
 def analyze_company_tool(ticker):
     """Deep dive analysis of a company"""
@@ -506,6 +508,7 @@ def analyze_company_tool(ticker):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+
 def compare_companies_tool(tickers):
     """Compare multiple companies side-by-side"""
     try:
@@ -545,6 +548,7 @@ def compare_companies_tool(tickers):
         
     except Exception as e:
         return {"success": False, "error": str(e)}
+
 
 def find_undervalued_stocks_tool(max_pe=15, min_roe=15, max_peg=1.5):
     """Find undervalued stocks with good fundamentals"""
@@ -596,6 +600,7 @@ def find_undervalued_stocks_tool(max_pe=15, min_roe=15, max_peg=1.5):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+
 def find_high_growth_stocks_tool(min_revenue_growth=20, min_roe=15):
     """Find high growth stocks"""
     try:
@@ -642,6 +647,7 @@ def find_high_growth_stocks_tool(min_revenue_growth=20, min_roe=15):
             
     except Exception as e:
         return {"success": False, "error": str(e)}
+
 
 def find_dividend_stocks_tool(min_yield=3, max_payout_ratio=60):
     """Find high dividend yield stocks"""
@@ -692,6 +698,7 @@ def find_dividend_stocks_tool(min_yield=3, max_payout_ratio=60):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+
 def get_sector_stocks_tool(sector):
     """Get all stocks in a specific sector"""
     try:
@@ -736,153 +743,174 @@ def get_sector_stocks_tool(sector):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-# ==================== AI CHATBOT FUNCTION ====================
+
+# ==================== AI CHATBOT FUNCTION (GROQ) ====================
 
 def process_chatbot_message(user_message, conversation_history):
-    """Process user messages with Gemini AI"""
+    """Process user messages with Groq AI"""
     
-    # Try multiple ways to get the API key
+    # Get API key
     api_key = None
     
-    # Method 1: Streamlit secrets
     try:
-        if hasattr(st, 'secrets') and "GOOGLE_API_KEY" in st.secrets:
-            api_key = st.secrets["GOOGLE_API_KEY"]
-    except Exception as e:
+        if hasattr(st, 'secrets') and "GROQ_API_KEY" in st.secrets:
+            api_key = st.secrets["GROQ_API_KEY"]
+    except:
         pass
     
-    # Method 2: Environment variable
     if not api_key:
-        api_key = os.environ.get("GOOGLE_API_KEY")
+        api_key = os.environ.get("GROQ_API_KEY")
     
     if not api_key:
-        return "⚠️ Please set your GOOGLE_API_KEY in Streamlit Secrets or environment variables."
+        return "⚠️ Please set your GROQ_API_KEY in Streamlit Secrets or environment variables."
     
-    genai.configure(api_key=api_key)
+    client = Groq(api_key=api_key)
     
+    # Define tools for function calling
     tools = [
-        genai.protos.Tool(
-            function_declarations=[
-                genai.protos.FunctionDeclaration(
-                    name="fundamental_screener",
-                    description="Screen stocks by fundamental criteria like PE ratio, ROE, profit margin, debt levels, dividend yield, sector, market cap, and growth rates. Returns matching stocks.",
-                    parameters=genai.protos.Schema(
-                        type=genai.protos.Type.OBJECT,
-                        properties={
-                            "min_market_cap": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Minimum market cap"),
-                            "max_market_cap": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Maximum market cap"),
-                            "min_pe": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Minimum PE ratio"),
-                            "max_pe": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Maximum PE ratio"),
-                            "min_roe": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Minimum ROE percentage"),
-                            "max_roe": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Maximum ROE percentage"),
-                            "min_profit_margin": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Minimum profit margin percentage"),
-                            "max_debt_equity": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Maximum debt to equity ratio"),
-                            "min_dividend_yield": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Minimum dividend yield percentage"),
-                            "sector": genai.protos.Schema(type=genai.protos.Type.STRING, description="Sector to filter (e.g., Technology, Healthcare, Finance)"),
-                            "min_revenue_growth": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Minimum revenue growth percentage"),
-                            "max_peg": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Maximum PEG ratio")
-                        }
-                    )
-                ),
-                genai.protos.FunctionDeclaration(
-                    name="analyze_company",
-                    description="Get detailed fundamental analysis of a specific company including valuation metrics, profitability scores, financial health, growth metrics, and overall rating.",
-                    parameters=genai.protos.Schema(
-                        type=genai.protos.Type.OBJECT,
-                        properties={
-                            "ticker": genai.protos.Schema(type=genai.protos.Type.STRING, description="Stock ticker symbol")
-                        },
-                        required=["ticker"]
-                    )
-                ),
-                genai.protos.FunctionDeclaration(
-                    name="compare_companies",
-                    description="Compare multiple companies side-by-side with key financial metrics",
-                    parameters=genai.protos.Schema(
-                        type=genai.protos.Type.OBJECT,
-                        properties={
-                            "tickers": genai.protos.Schema(type=genai.protos.Type.STRING, description="Comma-separated ticker symbols")
-                        },
-                        required=["tickers"]
-                    )
-                ),
-                genai.protos.FunctionDeclaration(
-                    name="find_undervalued_stocks",
-                    description="Find undervalued stocks with low PE, high ROE, and low PEG ratio",
-                    parameters=genai.protos.Schema(
-                        type=genai.protos.Type.OBJECT,
-                        properties={
-                            "max_pe": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Maximum PE ratio"),
-                            "min_roe": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Minimum ROE percentage"),
-                            "max_peg": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Maximum PEG ratio")
-                        }
-                    )
-                ),
-                genai.protos.FunctionDeclaration(
-                    name="find_high_growth_stocks",
-                    description="Find high revenue growth stocks with strong profitability",
-                    parameters=genai.protos.Schema(
-                        type=genai.protos.Type.OBJECT,
-                        properties={
-                            "min_revenue_growth": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Minimum revenue growth percentage"),
-                            "min_roe": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Minimum ROE percentage")
-                        }
-                    )
-                ),
-                genai.protos.FunctionDeclaration(
-                    name="find_dividend_stocks",
-                    description="Find high dividend yield stocks with sustainable payouts",
-                    parameters=genai.protos.Schema(
-                        type=genai.protos.Type.OBJECT,
-                        properties={
-                            "min_yield": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Minimum dividend yield percentage"),
-                            "max_payout_ratio": genai.protos.Schema(type=genai.protos.Type.NUMBER, description="Maximum payout ratio percentage")
-                        }
-                    )
-                ),
-                genai.protos.FunctionDeclaration(
-                    name="get_sector_stocks",
-                    description="Get all stocks in a specific sector",
-                    parameters=genai.protos.Schema(
-                        type=genai.protos.Type.OBJECT,
-                        properties={
-                            "sector": genai.protos.Schema(type=genai.protos.Type.STRING, description="Sector name (Technology, Healthcare, Finance, etc.)")
-                        },
-                        required=["sector"]
-                    )
-                )
-            ]
-        )
+        {
+            "type": "function",
+            "function": {
+                "name": "fundamental_screener",
+                "description": "Screen stocks by fundamental criteria like PE ratio, ROE, profit margin, debt levels, dividend yield, sector, market cap, and growth rates.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "min_market_cap": {"type": "number", "description": "Minimum market cap"},
+                        "max_market_cap": {"type": "number", "description": "Maximum market cap"},
+                        "min_pe": {"type": "number", "description": "Minimum PE ratio"},
+                        "max_pe": {"type": "number", "description": "Maximum PE ratio"},
+                        "min_roe": {"type": "number", "description": "Minimum ROE percentage"},
+                        "max_roe": {"type": "number", "description": "Maximum ROE percentage"},
+                        "min_profit_margin": {"type": "number", "description": "Minimum profit margin percentage"},
+                        "max_debt_equity": {"type": "number", "description": "Maximum debt to equity ratio"},
+                        "min_dividend_yield": {"type": "number", "description": "Minimum dividend yield percentage"},
+                        "sector": {"type": "string", "description": "Sector to filter (e.g., Technology, Healthcare, Financial Services)"},
+                        "min_revenue_growth": {"type": "number", "description": "Minimum revenue growth percentage"},
+                        "max_peg": {"type": "number", "description": "Maximum PEG ratio"}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "analyze_company",
+                "description": "Get detailed fundamental analysis of a specific company including valuation metrics, profitability scores, financial health, growth metrics, and overall rating.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "ticker": {"type": "string", "description": "Stock ticker symbol (e.g., AAPL, MSFT)"}
+                    },
+                    "required": ["ticker"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "compare_companies",
+                "description": "Compare multiple companies side-by-side with key financial metrics",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "tickers": {"type": "string", "description": "Comma-separated ticker symbols (e.g., AAPL,MSFT,GOOGL)"}
+                    },
+                    "required": ["tickers"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "find_undervalued_stocks",
+                "description": "Find undervalued stocks with low PE, high ROE, and low PEG ratio",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "max_pe": {"type": "number", "description": "Maximum PE ratio (default 15)"},
+                        "min_roe": {"type": "number", "description": "Minimum ROE percentage (default 15)"},
+                        "max_peg": {"type": "number", "description": "Maximum PEG ratio (default 1.5)"}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "find_high_growth_stocks",
+                "description": "Find high revenue growth stocks with strong profitability",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "min_revenue_growth": {"type": "number", "description": "Minimum revenue growth percentage (default 20)"},
+                        "min_roe": {"type": "number", "description": "Minimum ROE percentage (default 15)"}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "find_dividend_stocks",
+                "description": "Find high dividend yield stocks with sustainable payouts",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "min_yield": {"type": "number", "description": "Minimum dividend yield percentage (default 3)"},
+                        "max_payout_ratio": {"type": "number", "description": "Maximum payout ratio percentage (default 60)"}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_sector_stocks",
+                "description": "Get all stocks in a specific sector",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "sector": {"type": "string", "description": "Sector name (Technology, Healthcare, Financial Services, Consumer Cyclical, etc.)"}
+                    },
+                    "required": ["sector"]
+                }
+            }
+        }
     ]
     
-    system_instruction = """You are a professional stock market analyst combining both fundamental and technical analysis.
+    system_prompt = """You are a professional stock market analyst specializing in fundamental analysis.
 
 Your expertise includes:
 - **Fundamental Analysis**: Valuation (PE, PEG), profitability (ROE, margins), financial health (debt, cash)
-- **Technical Analysis**: Swing trading setups (EMA 20 pullbacks, SMA 50 pullbacks, consolidation breakouts)
 - Company comparisons and sector analysis
 - Finding undervalued and high-quality investment opportunities
 
+You have access to tools to:
+1. Screen stocks by various criteria (PE, ROE, margins, etc.)
+2. Analyze individual companies in detail
+3. Compare multiple companies
+4. Find undervalued, high-growth, or dividend stocks
+5. Get stocks by sector
+
 Communication style:
 - Be professional but conversational
-- Provide actionable insights
-- Always emphasize: educational content, not financial advice
-- Use data to support recommendations"""
+- Provide actionable insights with data
+- Always emphasize: this is educational content, not financial advice
+- Use the tools to get real data before answering
 
-    model = genai.GenerativeModel(
-        'models/gemini-2.0-flash',
-        tools=tools,
-        system_instruction=system_instruction
-    )
+Available sectors: Technology, Healthcare, Financial Services, Consumer Cyclical, Communication Services, Industrials, Consumer Defensive, Energy, Utilities, Real Estate, Basic Materials"""
+
+    # Build messages
+    messages = [{"role": "system", "content": system_prompt}]
     
-    history = []
     for msg in conversation_history:
         if msg["role"] == "user":
-            history.append({"role": "user", "parts": [msg["content"]]})
+            messages.append({"role": "user", "content": msg["content"]})
         elif msg["role"] == "assistant":
-            history.append({"role": "model", "parts": [msg["content"]]})
+            messages.append({"role": "assistant", "content": msg["content"]})
     
-    chat = model.start_chat(history=history)
+    messages.append({"role": "user", "content": user_message})
     
     max_iterations = 5
     iteration = 0
@@ -891,110 +919,111 @@ Communication style:
         iteration += 1
         
         try:
-            # Only send user_message on first iteration
-            if user_message and user_message.strip():
-                response = chat.send_message(user_message)
-            else:
-                return "Please enter a message."
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+                max_tokens=4096
+            )
             
-            # Check if AI wants to use a function
-            if (response.candidates and 
-                response.candidates[0].content.parts and 
-                hasattr(response.candidates[0].content.parts[0], 'function_call') and
-                response.candidates[0].content.parts[0].function_call):
+            response_message = response.choices[0].message
+            
+            # Check if AI wants to use a tool
+            if response_message.tool_calls:
+                # Add assistant message with tool calls to history
+                messages.append({
+                    "role": "assistant",
+                    "content": response_message.content or "",
+                    "tool_calls": [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments
+                            }
+                        } for tc in response_message.tool_calls
+                    ]
+                })
                 
-                function_call = response.candidates[0].content.parts[0].function_call
-                function_name = function_call.name
-                function_args = {}
+                # Process each tool call
+                for tool_call in response_message.tool_calls:
+                    function_name = tool_call.function.name
+                    function_args = json.loads(tool_call.function.arguments)
+                    
+                    # Execute the function
+                    if function_name == "fundamental_screener":
+                        result = fundamental_screener_tool(
+                            min_market_cap=function_args.get("min_market_cap"),
+                            max_market_cap=function_args.get("max_market_cap"),
+                            min_pe=function_args.get("min_pe"),
+                            max_pe=function_args.get("max_pe"),
+                            min_roe=function_args.get("min_roe"),
+                            max_roe=function_args.get("max_roe"),
+                            min_profit_margin=function_args.get("min_profit_margin"),
+                            max_debt_equity=function_args.get("max_debt_equity"),
+                            min_dividend_yield=function_args.get("min_dividend_yield"),
+                            sector=function_args.get("sector"),
+                            min_revenue_growth=function_args.get("min_revenue_growth"),
+                            max_peg=function_args.get("max_peg")
+                        )
+                    elif function_name == "analyze_company":
+                        result = analyze_company_tool(function_args.get("ticker"))
+                    elif function_name == "compare_companies":
+                        result = compare_companies_tool(function_args.get("tickers"))
+                    elif function_name == "find_undervalued_stocks":
+                        result = find_undervalued_stocks_tool(
+                            max_pe=function_args.get("max_pe", 15),
+                            min_roe=function_args.get("min_roe", 15),
+                            max_peg=function_args.get("max_peg", 1.5)
+                        )
+                    elif function_name == "find_high_growth_stocks":
+                        result = find_high_growth_stocks_tool(
+                            min_revenue_growth=function_args.get("min_revenue_growth", 20),
+                            min_roe=function_args.get("min_roe", 15)
+                        )
+                    elif function_name == "find_dividend_stocks":
+                        result = find_dividend_stocks_tool(
+                            min_yield=function_args.get("min_yield", 3),
+                            max_payout_ratio=function_args.get("max_payout_ratio", 60)
+                        )
+                    elif function_name == "get_sector_stocks":
+                        result = get_sector_stocks_tool(function_args.get("sector"))
+                    else:
+                        result = {"error": f"Unknown function: {function_name}"}
+                    
+                    # Add tool result to messages
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": json.dumps(result)
+                    })
                 
-                for key, value in function_call.args.items():
-                    function_args[key] = value
-                
-                # Execute functions
-                if function_name == "fundamental_screener":
-                    result = fundamental_screener_tool(
-                        min_market_cap=function_args.get("min_market_cap"),
-                        max_market_cap=function_args.get("max_market_cap"),
-                        min_pe=function_args.get("min_pe"),
-                        max_pe=function_args.get("max_pe"),
-                        min_roe=function_args.get("min_roe"),
-                        max_roe=function_args.get("max_roe"),
-                        min_profit_margin=function_args.get("min_profit_margin"),
-                        max_debt_equity=function_args.get("max_debt_equity"),
-                        min_dividend_yield=function_args.get("min_dividend_yield"),
-                        sector=function_args.get("sector"),
-                        min_revenue_growth=function_args.get("min_revenue_growth"),
-                        max_peg=function_args.get("max_peg")
-                    )
-                elif function_name == "analyze_company":
-                    result = analyze_company_tool(function_args.get("ticker"))
-                elif function_name == "compare_companies":
-                    result = compare_companies_tool(function_args.get("tickers"))
-                elif function_name == "find_undervalued_stocks":
-                    result = find_undervalued_stocks_tool(
-                        max_pe=function_args.get("max_pe", 15),
-                        min_roe=function_args.get("min_roe", 15),
-                        max_peg=function_args.get("max_peg", 1.5)
-                    )
-                elif function_name == "find_high_growth_stocks":
-                    result = find_high_growth_stocks_tool(
-                        min_revenue_growth=function_args.get("min_revenue_growth", 20),
-                        min_roe=function_args.get("min_roe", 15)
-                    )
-                elif function_name == "find_dividend_stocks":
-                    result = find_dividend_stocks_tool(
-                        min_yield=function_args.get("min_yield", 3),
-                        max_payout_ratio=function_args.get("max_payout_ratio", 60)
-                    )
-                elif function_name == "get_sector_stocks":
-                    result = get_sector_stocks_tool(function_args.get("sector"))
-                else:
-                    result = {"error": f"Unknown function: {function_name}"}
-                
-                # Send function response back to AI
-                response = chat.send_message(
-                    genai.protos.Content(
-                        parts=[
-                            genai.protos.Part(
-                                function_response=genai.protos.FunctionResponse(
-                                    name=function_name,
-                                    response={"result": result}
-                                )
-                            )
-                        ]
-                    )
-                )
-                
-                # Clear user_message so we don't resend it
-                user_message = None
-                
-                # Check if we got a text response now
-                if response.text and response.text.strip():
-                    return response.text
-                
-                # Otherwise continue loop (might call another function)
+                # Continue loop to get AI's response after tool use
                 continue
             
-            # No function call - return the text response
-            if response.text and response.text.strip():
-                return response.text
+            # No tool call - return the text response
+            if response_message.content and response_message.content.strip():
+                return response_message.content
             else:
                 return "I apologize, but I couldn't generate a response. Please try rephrasing your question."
             
         except Exception as e:
             error_msg = str(e)
-            if "empty" in error_msg.lower():
-                return "I encountered an issue processing your request. Please try asking in a different way."
+            if "rate_limit" in error_msg.lower():
+                return "⚠️ Rate limit reached. Please wait a moment and try again."
             return f"❌ Error: {error_msg}"
 
-    # Loop finished without returning (max iterations reached)
     return "⚠️ Response took too long. Please try a simpler question."
+
+
 # ==================== UI ====================
 
 col1, col2 = st.columns([4, 1])
 with col1:
     st.title("📊 AI Stock Analyzer")
-    st.markdown("*Fundamental analysis powered by Google Gemini")
+    st.markdown("*Fundamental analysis powered by Groq AI*")
 with col2:
     if st.button("⚙️ Settings", use_container_width=True):
         st.session_state.show_settings = not st.session_state.show_settings
@@ -1002,43 +1031,29 @@ with col2:
 st.markdown("---")
 
 # Check API key
-# Check API key
 api_key = None
 
 try:
-    if hasattr(st, 'secrets') and "GOOGLE_API_KEY" in st.secrets:
-        api_key = st.secrets["GOOGLE_API_KEY"]
+    if hasattr(st, 'secrets') and "GROQ_API_KEY" in st.secrets:
+        api_key = st.secrets["GROQ_API_KEY"]
 except:
     pass
 
 if not api_key:
-    api_key = os.environ.get("GOOGLE_API_KEY")
+    api_key = os.environ.get("GROQ_API_KEY")
 
 if not api_key:
-    st.error("⚠️ **Google API Key not found!**")
+    st.error("⚠️ **Groq API Key not found!**")
     st.markdown("""
     **Setup:**
     
-    1. Get FREE API key: https://aistudio.google.com/app/apikey
+    1. Get FREE API key: https://console.groq.com/keys
     2. Add to Streamlit Secrets (Settings → Secrets):
-```
-    GOOGLE_API_KEY = "your-key-here"
-```
+    ```
+    GROQ_API_KEY = "your-key-here"
+    ```
     """)
     st.stop()
-if not api_key:
-    st.error("⚠️ **Google API Key not found!**")
-    st.markdown("""
-    **Setup:**
-    
-    1. Get FREE API key: https://aistudio.google.com/app/apikey
-    2. Add to Streamlit Secrets (Settings → Secrets):
-```
-    GOOGLE_API_KEY = "your-key-here"
-```
-    """)
-    st.stop()
-
 
 # Quick actions
 st.markdown("### ⚡ Quick Actions")
@@ -1130,7 +1145,7 @@ if len(st.session_state.chat_messages) == 0:
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #888;'>
-    <p><strong>AI Stock Analyzer</strong> | Powered by Google Gemini</p>
+    <p><strong>AI Stock Analyzer</strong> | Powered by Groq AI (Llama 3.3)</p>
     <p style='font-size: 0.85rem;'>⚠️ Educational content. Not financial advice.</p>
 </div>
 """, unsafe_allow_html=True)
