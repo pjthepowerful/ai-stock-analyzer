@@ -995,14 +995,13 @@ while iteration < max_iterations:
             else:
                 return "I apologize, but I couldn't generate a response. Please try rephrasing your question."
             
-            except Exception as e:
-                error_msg = str(e)
+        except Exception as e:
+            error_msg = str(e)
             if "empty" in error_msg.lower():
                 return "I encountered an issue processing your request. Please try asking in a different way."
             return f"❌ Error: {error_msg}"
     
-        return "⚠️ Response took too long. Please try a simpler question."
-            
+    return "⚠️ Response took too long. Please try a simpler question."
  # Get response text
         response_text = response.text if response.text else "I apologize, but I couldn't generate a response. Please try rephrasing your question."
         return response_text
