@@ -77,6 +77,57 @@ INDIAN_STOCKS = ['RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.N
     'LT.NS', 'HCLTECH.NS', 'AXISBANK.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
     'SUNPHARMA.NS', 'TITAN.NS', 'BAJFINANCE.NS', 'DMART.NS', 'WIPRO.NS']
 
+# Company name to ticker mapping (case-insensitive)
+COMPANY_TO_TICKER = {
+    # US Companies
+    'apple': 'AAPL', 'microsoft': 'MSFT', 'google': 'GOOGL', 'alphabet': 'GOOGL',
+    'amazon': 'AMZN', 'nvidia': 'NVDA', 'meta': 'META', 'facebook': 'META',
+    'tesla': 'TSLA', 'berkshire': 'BRK-B', 'visa': 'V', 'unitedhealth': 'UNH',
+    'johnson': 'JNJ', 'walmart': 'WMT', 'jpmorgan': 'JPM', 'chase': 'JPM',
+    'mastercard': 'MA', 'procter': 'PG', 'exxon': 'XOM', 'home depot': 'HD',
+    'chevron': 'CVX', 'merck': 'MRK', 'abbvie': 'ABBV', 'pepsi': 'PEP',
+    'pepsico': 'PEP', 'coca cola': 'KO', 'coke': 'KO', 'broadcom': 'AVGO',
+    'costco': 'COST', 'eli lilly': 'LLY', 'lilly': 'LLY', 'thermo fisher': 'TMO',
+    'accenture': 'ACN', 'mcdonalds': 'MCD', "mcdonald's": 'MCD', 'cisco': 'CSCO',
+    'abbott': 'ABT', 'danaher': 'DHR', 'salesforce': 'CRM', 'verizon': 'VZ',
+    'adobe': 'ADBE', 'nike': 'NKE', 'nextera': 'NEE', 'wells fargo': 'WFC',
+    'texas instruments': 'TXN', 'philip morris': 'PM', 'ups': 'UPS',
+    'raytheon': 'RTX', 'honeywell': 'HON', 'oracle': 'ORCL', 'bristol': 'BMY',
+    'qualcomm': 'QCOM', 'union pacific': 'UNP', 'intuit': 'INTU', 'lowes': 'LOW',
+    "lowe's": 'LOW', 'amd': 'AMD', 'conocophillips': 'COP', 'netflix': 'NFLX',
+    'disney': 'DIS', 'paypal': 'PYPL', 'intel': 'INTC', 'ibm': 'IBM',
+    'boeing': 'BA', 'caterpillar': 'CAT', 'goldman': 'GS', 'morgan stanley': 'MS',
+    'spotify': 'SPOT', 'uber': 'UBER', 'airbnb': 'ABNB', 'zoom': 'ZM',
+    'snowflake': 'SNOW', 'palantir': 'PLTR', 'coinbase': 'COIN', 'robinhood': 'HOOD',
+    
+    # Indian Companies
+    'reliance': 'RELIANCE', 'tcs': 'TCS', 'tata consultancy': 'TCS',
+    'hdfc': 'HDFCBANK', 'hdfc bank': 'HDFCBANK', 'infosys': 'INFY',
+    'icici': 'ICICIBANK', 'icici bank': 'ICICIBANK', 'hindustan unilever': 'HINDUNILVR',
+    'hul': 'HINDUNILVR', 'itc': 'ITC', 'sbi': 'SBIN', 'state bank': 'SBIN',
+    'bharti airtel': 'BHARTIARTL', 'airtel': 'BHARTIARTL', 'kotak': 'KOTAKBANK',
+    'larsen': 'LT', 'l&t': 'LT', 'hcl': 'HCLTECH', 'axis': 'AXISBANK',
+    'axis bank': 'AXISBANK', 'asian paints': 'ASIANPAINT', 'maruti': 'MARUTI',
+    'maruti suzuki': 'MARUTI', 'sun pharma': 'SUNPHARMA', 'titan': 'TITAN',
+    'bajaj finance': 'BAJFINANCE', 'bajaj': 'BAJFINANCE', 'dmart': 'DMART',
+    'avenue supermarts': 'DMART', 'wipro': 'WIPRO'
+}
+
+def get_ticker_from_name(query):
+    """Convert company name to ticker symbol"""
+    query_lower = query.lower().strip()
+    
+    # Direct match
+    if query_lower in COMPANY_TO_TICKER:
+        return COMPANY_TO_TICKER[query_lower]
+    
+    # Partial match (e.g., "apple inc" should match "apple")
+    for name, ticker in COMPANY_TO_TICKER.items():
+        if name in query_lower or query_lower in name:
+            return ticker
+    
+    return None
+
 def get_stock_list():
     return INDIAN_STOCKS if st.session_state.get('market') == 'India' else US_STOCKS
 
@@ -276,8 +327,20 @@ def detect_and_execute(message):
         tickers = [t for t in tickers if t not in ['PE', 'ROE', 'VS', 'AND', 'THE', 'FOR']]
         if len(tickers) >= 2: return compare_stocks(','.join(tickers))
     
+    # First, try to find company name in message
+    ticker_from_name = get_ticker_from_name(msg)
+    if ticker_from_name:
+        return analyze_stock(ticker_from_name)
+    
+    # Also check for multi-word company names
+    for company_name in COMPANY_TO_TICKER.keys():
+        if company_name in msg:
+            return analyze_stock(COMPANY_TO_TICKER[company_name])
+    
+    # Fall back to ticker symbol detection
     tickers = re.findall(r'\b([A-Z]{2,6})\b', message.upper())
-    exclude = ['PE', 'ROE', 'VS', 'AND', 'THE', 'FOR', 'AI', 'OK', 'HI', 'RSI', 'MACD']
+    exclude = ['PE', 'ROE', 'VS', 'AND', 'THE', 'FOR', 'AI', 'OK', 'HI', 'RSI', 'MACD', 
+               'ANALYZE', 'ANALYSIS', 'TELL', 'ME', 'ABOUT', 'SHOW', 'GET', 'FIND']
     
     for t in tickers:
         if t in US_STOCKS and t not in exclude: return analyze_stock(t)
