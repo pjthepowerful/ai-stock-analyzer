@@ -12,7 +12,6 @@ from groq import Groq
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit.components.v1 as components
-from streamlit_extras.stylable_container import stylable_container
 
 warnings.filterwarnings('ignore')
 load_dotenv()
