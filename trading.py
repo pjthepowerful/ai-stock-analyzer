@@ -11,8 +11,7 @@ import re
 from groq import Groq
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from supabase import create_client, Client
-import extra_streamlit_components as stx
+import streamlit.components.v1 as components
 
 warnings.filterwarnings('ignore')
 load_dotenv()
@@ -23,385 +22,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
-
-# ==================== SUPABASE AUTH ====================
-
-def init_supabase():
-    """Initialize Supabase client"""
-    url = st.secrets.get("SUPABASE_URL") or os.environ.get("SUPABASE_URL")
-    key = st.secrets.get("SUPABASE_KEY") or os.environ.get("SUPABASE_KEY")
-    
-    if not url or not key:
-        return None
-    
-    return create_client(url, key)
-
-def get_cookie_manager():
-    """Get cookie manager for persistent login"""
-    return stx.CookieManager()
-
-def check_auth_state():
-    """Check if user is authenticated via session or cookie"""
-    # Check session state first
-    if st.session_state.get('authenticated') and st.session_state.get('user'):
-        return True
-    
-    # Check for stored session in cookies
-    cookie_manager = get_cookie_manager()
-    stored_token = cookie_manager.get("paula_auth_token")
-    stored_email = cookie_manager.get("paula_user_email")
-    stored_name = cookie_manager.get("paula_user_name")
-    
-    if stored_token and stored_email:
-        # Verify token with Supabase
-        supabase = init_supabase()
-        if supabase:
-            try:
-                # Try to get user with stored token
-                supabase.auth.set_session(stored_token, stored_token)
-                user = supabase.auth.get_user(stored_token)
-                if user:
-                    st.session_state['authenticated'] = True
-                    st.session_state['user'] = {
-                        'email': stored_email,
-                        'name': stored_name or '',
-                        'access_token': stored_token
-                    }
-                    return True
-            except Exception as e:
-                # Token expired or invalid, clear cookies
-                cookie_manager.delete("paula_auth_token")
-                cookie_manager.delete("paula_user_email")
-                cookie_manager.delete("paula_user_name")
-    
-    return False
-
-def login_user(email, password):
-    """Login user with Supabase"""
-    supabase = init_supabase()
-    if not supabase:
-        return False, "Supabase not configured"
-    
-    try:
-        response = supabase.auth.sign_in_with_password({
-            "email": email,
-            "password": password
-        })
-        
-        if response.user:
-            # Get name from user metadata
-            user_name = ""
-            if response.user.user_metadata:
-                user_name = response.user.user_metadata.get('name', '')
-            
-            st.session_state['authenticated'] = True
-            st.session_state['user'] = {
-                'email': response.user.email,
-                'id': response.user.id,
-                'name': user_name,
-                'access_token': response.session.access_token
-            }
-            
-            # Store in cookies for persistent login
-            cookie_manager = get_cookie_manager()
-            cookie_manager.set("paula_auth_token", response.session.access_token, 
-                             expires_at=datetime.now() + timedelta(days=30))
-            cookie_manager.set("paula_user_email", response.user.email,
-                             expires_at=datetime.now() + timedelta(days=30))
-            cookie_manager.set("paula_user_name", user_name,
-                             expires_at=datetime.now() + timedelta(days=30))
-            
-            return True, "Login successful!"
-        else:
-            return False, "Invalid credentials"
-            
-    except Exception as e:
-        error_msg = str(e)
-        if "Invalid login credentials" in error_msg:
-            return False, "Invalid email or password"
-        return False, f"Login failed: {error_msg}"
-
-def signup_user(email, password, name=""):
-    """Sign up new user with Supabase"""
-    supabase = init_supabase()
-    if not supabase:
-        return False, "Supabase not configured"
-    
-    try:
-        response = supabase.auth.sign_up({
-            "email": email,
-            "password": password,
-            "options": {
-                "data": {
-                    "name": name
-                }
-            }
-        })
-        
-        if response.user:
-            return True, "Account created! Please check your email to verify your account."
-        else:
-            return False, "Sign up failed"
-            
-    except Exception as e:
-        error_msg = str(e)
-        if "already registered" in error_msg.lower():
-            return False, "This email is already registered"
-        return False, f"Sign up failed: {error_msg}"
-
-def logout_user():
-    """Logout user"""
-    supabase = init_supabase()
-    if supabase:
-        try:
-            supabase.auth.sign_out()
-        except:
-            pass
-    
-    # Clear session state
-    st.session_state['authenticated'] = False
-    st.session_state['user'] = None
-    
-    # Clear cookies
-    cookie_manager = get_cookie_manager()
-    cookie_manager.delete("paula_auth_token")
-    cookie_manager.delete("paula_user_email")
-    cookie_manager.delete("paula_user_name")
-
-def reset_password(email):
-    """Send password reset email"""
-    supabase = init_supabase()
-    if not supabase:
-        return False, "Supabase not configured"
-    
-    try:
-        supabase.auth.reset_password_email(email)
-        return True, "Password reset email sent! Check your inbox."
-    except Exception as e:
-        return False, f"Failed to send reset email: {str(e)}"
-
-# ==================== LOGIN PAGE ====================
-
-def show_login_page():
-    """Display the login/signup page"""
-    
-    # CSS for login page
-    st.markdown("""
-    <style>
-        .stApp {
-            background: linear-gradient(180deg, #0a0f1a 0%, #111827 100%);
-        }
-        
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        header {visibility: hidden;}
-        
-        .login-container {
-            max-width: 400px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-        
-        .login-header {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-        
-        .login-header h1 {
-            font-size: 3rem;
-            margin-bottom: 0.5rem;
-            background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        
-        .login-header p {
-            color: #9ca3af;
-            font-size: 1.1rem;
-        }
-        
-        h1, h2, h3 {
-            color: #ffffff !important;
-        }
-        
-        p, span, div, label {
-            color: #d1d5db !important;
-        }
-        
-        .stTextInput > div > div {
-            background: rgba(255, 255, 255, 0.05) !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
-            border-radius: 10px !important;
-        }
-        
-        .stTextInput input {
-            color: #ffffff !important;
-        }
-        
-        .stButton > button {
-            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-            color: white !important;
-            border: none !important;
-            border-radius: 10px !important;
-            font-weight: 600 !important;
-            padding: 0.75rem 1.5rem !important;
-            width: 100%;
-        }
-        
-        .stButton > button:hover {
-            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-        }
-        
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 0;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
-            padding: 4px;
-        }
-        
-        .stTabs [data-baseweb="tab"] {
-            background: transparent;
-            border-radius: 8px;
-            color: #9ca3af;
-            padding: 10px 20px;
-        }
-        
-        .stTabs [aria-selected="true"] {
-            background: rgba(37, 99, 235, 0.5) !important;
-            color: #ffffff !important;
-        }
-        
-        .success-msg {
-            background: rgba(16, 185, 129, 0.1);
-            border: 1px solid rgba(16, 185, 129, 0.3);
-            border-radius: 8px;
-            padding: 12px;
-            color: #10b981;
-            text-align: center;
-        }
-        
-        .error-msg {
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            border-radius: 8px;
-            padding: 12px;
-            color: #ef4444;
-            text-align: center;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # Center the login form
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
-    with col2:
-        # Header
-        st.markdown("""
-        <div class="login-header">
-            <h1>👩‍💼 Paula</h1>
-            <p>Your AI Stock Analyst</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Check if Supabase is configured
-        supabase = init_supabase()
-        if not supabase:
-            st.error("⚠️ Supabase not configured!")
-            st.markdown("""
-            **Add these to your Streamlit Secrets:**
-            ```
-            SUPABASE_URL = "https://your-project.supabase.co"
-            SUPABASE_KEY = "your-anon-key"
-            ```
-            
-            **Get these from:** [Supabase Dashboard](https://supabase.com) → Your Project → Settings → API
-            """)
-            return
-        
-        # Tabs for Login / Sign Up
-        tab1, tab2, tab3 = st.tabs(["🔐 Login", "✨ Sign Up", "🔑 Reset Password"])
-        
-        with tab1:
-            st.markdown("#### Welcome back!")
-            
-            with st.form("login_form"):
-                email = st.text_input("Email", placeholder="your@email.com")
-                password = st.text_input("Password", type="password", placeholder="••••••••")
-                
-                submit = st.form_submit_button("Login", use_container_width=True)
-                
-                if submit:
-                    if not email or not password:
-                        st.error("Please fill in all fields")
-                    else:
-                        with st.spinner("Logging in..."):
-                            success, message = login_user(email, password)
-                        
-                        if success:
-                            st.success(message)
-                            st.rerun()
-                        else:
-                            st.error(message)
-        
-        with tab2:
-            st.markdown("#### Create your account")
-            
-            with st.form("signup_form"):
-                name = st.text_input("Name", placeholder="Your name")
-                email = st.text_input("Email", placeholder="your@email.com", key="signup_email")
-                password = st.text_input("Password", type="password", placeholder="Min 6 characters", key="signup_password")
-                confirm = st.text_input("Confirm Password", type="password", placeholder="••••••••")
-                
-                submit = st.form_submit_button("Create Account", use_container_width=True)
-                
-                if submit:
-                    if not email or not password:
-                        st.error("Please fill in all required fields")
-                    elif password != confirm:
-                        st.error("Passwords don't match")
-                    elif len(password) < 6:
-                        st.error("Password must be at least 6 characters")
-                    else:
-                        with st.spinner("Creating account..."):
-                            success, message = signup_user(email, password, name)
-                        
-                        if success:
-                            st.success(message)
-                        else:
-                            st.error(message)
-        
-        with tab3:
-            st.markdown("#### Forgot your password?")
-            st.markdown("Enter your email and we'll send you a reset link.")
-            
-            with st.form("reset_form"):
-                email = st.text_input("Email", placeholder="your@email.com", key="reset_email")
-                
-                submit = st.form_submit_button("Send Reset Link", use_container_width=True)
-                
-                if submit:
-                    if not email:
-                        st.error("Please enter your email")
-                    else:
-                        with st.spinner("Sending..."):
-                            success, message = reset_password(email)
-                        
-                        if success:
-                            st.success(message)
-                        else:
-                            st.error(message)
-        
-        # Footer
-        st.markdown("---")
-        st.markdown("""
-        <div style="text-align: center; color: #6b7280; font-size: 12px;">
-            <p>By signing up, you agree to our Terms of Service</p>
-            <p>📈 Paula - AI Stock Analyst</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-
-# ==================== MAIN APP (After Login) ====================
 
 # Clean modern CSS for main app
 MAIN_APP_CSS = """
@@ -488,20 +108,178 @@ MAIN_APP_CSS = """
         font-size: 14px;
         color: #9ca3af;
     }
-    
-    .user-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        background: rgba(16, 185, 129, 0.1);
-        border: 1px solid rgba(16, 185, 129, 0.3);
-        padding: 6px 12px;
-        border-radius: 20px;
-        font-size: 13px;
-        color: #10b981;
-    }
 </style>
 """
+
+# ==================== VOICE INPUT COMPONENT ====================
+
+def create_voice_input_component():
+    """Create the voice input HTML/JS component"""
+    voice_html = """
+    <div id="voice-container" style="display: flex; align-items: center; gap: 15px; padding: 10px 0;">
+        <button id="voice-btn" onclick="toggleVoice()" style="
+            background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+            border: none;
+            border-radius: 50%;
+            width: 56px;
+            height: 56px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+        ">
+            <svg id="mic-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                <line x1="12" y1="19" x2="12" y2="23"></line>
+                <line x1="8" y1="23" x2="16" y2="23"></line>
+            </svg>
+        </button>
+        
+        <div id="voice-status" style="
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        ">
+            <span id="status-text" style="color: #9ca3af; font-size: 14px;">🎤 Click to speak</span>
+            <span id="status-hint" style="color: #6b7280; font-size: 12px;">Voice input ready</span>
+        </div>
+    </div>
+    
+    <div id="transcript-box" style="
+        display: none;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(139, 92, 246, 0.3);
+        border-radius: 12px;
+        padding: 12px 16px;
+        margin: 10px 0;
+        color: #d1d5db;
+    ">
+        <span style="color: #8b5cf6; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Transcript:</span>
+        <p id="transcript-text" style="margin: 8px 0 0 0; font-size: 15px;"></p>
+    </div>
+
+    <script>
+    let recognition = null;
+    let isListening = false;
+    let finalTranscript = '';
+    
+    // Check browser support
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+        document.getElementById('status-text').innerText = '❌ Voice not supported';
+        document.getElementById('status-hint').innerText = 'Try Chrome or Edge browser';
+        document.getElementById('voice-btn').style.opacity = '0.5';
+        document.getElementById('voice-btn').style.cursor = 'not-allowed';
+    } else {
+        recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+        
+        recognition.onstart = function() {
+            isListening = true;
+            updateUI(true);
+        };
+        
+        recognition.onend = function() {
+            isListening = false;
+            updateUI(false);
+            
+            if (finalTranscript.trim()) {
+                // Send to Streamlit
+                window.parent.postMessage({
+                    type: 'streamlit:setComponentValue',
+                    value: finalTranscript.trim()
+                }, '*');
+            }
+        };
+        
+        recognition.onresult = function(event) {
+            let interimTranscript = '';
+            
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const transcript = event.results[i][0].transcript;
+                if (event.results[i].isFinal) {
+                    finalTranscript += transcript + ' ';
+                } else {
+                    interimTranscript += transcript;
+                }
+            }
+            
+            const display = finalTranscript + interimTranscript;
+            if (display.trim()) {
+                document.getElementById('transcript-box').style.display = 'block';
+                document.getElementById('transcript-text').innerText = display;
+            }
+        };
+        
+        recognition.onerror = function(event) {
+            console.error('Speech recognition error:', event.error);
+            isListening = false;
+            updateUI(false);
+            
+            if (event.error === 'not-allowed') {
+                document.getElementById('status-text').innerText = '🚫 Microphone blocked';
+                document.getElementById('status-hint').innerText = 'Allow microphone access';
+            }
+        };
+    }
+    
+    function toggleVoice() {
+        if (!recognition) return;
+        
+        if (isListening) {
+            recognition.stop();
+        } else {
+            finalTranscript = '';
+            document.getElementById('transcript-box').style.display = 'none';
+            document.getElementById('transcript-text').innerText = '';
+            
+            try {
+                recognition.start();
+            } catch (e) {
+                console.error('Start error:', e);
+            }
+        }
+    }
+    
+    function updateUI(listening) {
+        const btn = document.getElementById('voice-btn');
+        const statusText = document.getElementById('status-text');
+        const statusHint = document.getElementById('status-hint');
+        
+        if (listening) {
+            btn.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
+            btn.style.boxShadow = '0 4px 20px rgba(239, 68, 68, 0.4)';
+            btn.style.animation = 'pulse 1.5s infinite';
+            statusText.innerText = '🔴 Listening...';
+            statusHint.innerText = 'Click again to stop';
+        } else {
+            btn.style.background = 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)';
+            btn.style.boxShadow = '0 4px 15px rgba(139, 92, 246, 0.3)';
+            btn.style.animation = 'none';
+            statusText.innerText = '🎤 Click to speak';
+            statusHint.innerText = 'Voice input ready';
+        }
+    }
+    
+    // Add pulse animation
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+    `;
+    document.head.appendChild(style);
+    </script>
+    """
+    return voice_html
+
 
 # ==================== STOCK DATA ====================
 
@@ -910,10 +688,7 @@ def process_message(user_message, history):
     market = st.session_state.get('market', 'US')
     currency = '₹' if market == 'India' else '$'
     
-    user_email = st.session_state.get('user', {}).get('email', 'User')
-    
     system = f"""You are Paula, a friendly and professional stock analyst.
-User: {user_email}
 
 RULES:
 1. ONLY use data provided - it's LIVE from Yahoo Finance
@@ -949,8 +724,8 @@ End with: "⚠️ Educational only, not financial advice" """
 
 # ==================== MAIN APP ====================
 
-def show_main_app():
-    """Display the main Paula app (after login)"""
+def main():
+    """Display the main Paula app"""
     st.markdown(MAIN_APP_CSS, unsafe_allow_html=True)
     
     # Initialize session state
@@ -960,6 +735,8 @@ def show_main_app():
         st.session_state.market = 'US'
     if 'charts_to_display' not in st.session_state:
         st.session_state.charts_to_display = []
+    if 'voice_input' not in st.session_state:
+        st.session_state.voice_input = ""
     
     # Header
     st.markdown("""
@@ -969,17 +746,13 @@ def show_main_app():
     </div>
     """, unsafe_allow_html=True)
     
-    # User info and controls
-    col1, col2, col3, col4 = st.columns([2, 1, 0.5, 0.5])
+    # Controls
+    col1, col2, col3 = st.columns([2, 1, 0.5])
     
     with col1:
         market_emoji = "🇺🇸" if st.session_state.market == 'US' else "🇮🇳"
-        user_display = st.session_state.get('user', {}).get('name', '')
-        if not user_display:
-            user_display = st.session_state.get('user', {}).get('email', 'User')
         st.markdown(f"""
         <div class="market-badge">{market_emoji} <strong>{st.session_state.market} Market</strong></div>
-        <div class="user-badge">👤 {user_display}</div>
         """, unsafe_allow_html=True)
     
     with col2:
@@ -996,11 +769,6 @@ def show_main_app():
     with col3:
         if st.button("🔄", use_container_width=True, help="Refresh"):
             st.cache_data.clear()
-            st.rerun()
-    
-    with col4:
-        if st.button("🚪", use_container_width=True, help="Logout"):
-            logout_user()
             st.rerun()
     
     st.markdown("---")
@@ -1024,10 +792,7 @@ def show_main_app():
     
     # Welcome
     if not st.session_state.chat_messages:
-        user_name = st.session_state.get('user', {}).get('name', '')
-        if not user_name:
-            user_name = st.session_state.get('user', {}).get('email', 'there').split('@')[0]
-        st.markdown(f"### 👋 Hi {user_name}! I'm Paula. Ask me about any stock.")
+        st.markdown("### 👋 Hi! I'm Paula. Ask me about any stock.")
         st.markdown("**Examples:**")
         
         examples = ["Analyze TCS", "Compare RELIANCE INFY", "Find undervalued", "Show dividends"] if st.session_state.market == 'India' else ["Analyze AAPL", "Compare AAPL MSFT", "Find growth stocks", "Show dividends"]
@@ -1039,7 +804,56 @@ def show_main_app():
                     st.session_state.chat_messages.append({"role": "user", "content": ex})
                     st.rerun()
     
-    # Chat input
+    # Voice Input Section
+    st.markdown("### 🎤 Voice Input")
+    st.markdown("*Click the microphone to speak your query*")
+    
+    # Voice input component
+    components.html(
+        create_voice_input_component(),
+        height=150,
+    )
+    
+    # Text area for voice transcript with send button
+    col_voice1, col_voice2 = st.columns([4, 1])
+    
+    with col_voice1:
+        voice_text = st.text_input(
+            "Voice transcript (edit if needed):",
+            value=st.session_state.get('voice_input', ''),
+            key="voice_text_input",
+            placeholder="Your speech will appear here... (copy from above)",
+            label_visibility="collapsed"
+        )
+    
+    with col_voice2:
+        send_voice = st.button("📤 Send", key="send_voice_btn", use_container_width=True)
+    
+    # Process voice input when send button is clicked
+    if send_voice and voice_text.strip():
+        st.session_state.chat_messages.append({"role": "user", "content": voice_text.strip()})
+        
+        with st.chat_message("user"):
+            st.markdown(voice_text.strip())
+        
+        with st.chat_message("assistant"):
+            with st.spinner("📡 Fetching live data..."):
+                response, data = process_message(voice_text.strip(), st.session_state.chat_messages[:-1])
+            st.markdown(response)
+            if data and "table" in data:
+                display_table(data)
+        
+        msg_data = {"role": "assistant", "content": response}
+        if data and "table" in data:
+            msg_data["table_data"] = data
+        st.session_state.chat_messages.append(msg_data)
+        st.session_state.voice_input = ""
+        st.rerun()
+    
+    st.markdown("---")
+    
+    # Regular Chat input
+    st.markdown("### ⌨️ Text Input")
     if prompt := st.chat_input("Ask Paula about stocks..."):
         st.session_state.chat_messages.append({"role": "user", "content": prompt})
         
@@ -1063,29 +877,10 @@ def show_main_app():
     st.markdown("---")
     st.markdown("""
     <div style="text-align: center; color: #6b7280; font-size: 12px;">
-        👩‍💼 Paula • Live data from Yahoo Finance • ⚠️ Educational only
+        👩‍💼 Paula • Live data from Yahoo Finance • 🎤 Voice powered by Web Speech API • ⚠️ Educational only
     </div>
     """, unsafe_allow_html=True)
 
-
-# ==================== MAIN ====================
-
-def main():
-    # Initialize session state
-    if 'authenticated' not in st.session_state:
-        st.session_state.authenticated = False
-    if 'user' not in st.session_state:
-        st.session_state.user = None
-    
-    # Check if already authenticated
-    if not st.session_state.authenticated:
-        check_auth_state()
-    
-    # Show login or main app
-    if st.session_state.authenticated and st.session_state.user:
-        show_main_app()
-    else:
-        show_login_page()
 
 if __name__ == "__main__":
     main()
