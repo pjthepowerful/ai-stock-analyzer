@@ -11,7 +11,6 @@ import re
 from groq import Groq
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import streamlit.components.v1 as components
 
 warnings.filterwarnings('ignore')
 load_dotenv()
@@ -55,15 +54,6 @@ st.markdown("""
         display: inline-flex; align-items: center; gap: 8px;
         background: rgba(255, 255, 255, 0.05);
         padding: 8px 16px; border-radius: 20px; font-size: 14px; color: #9ca3af;
-    }
-    /* Hide form submit button label */
-    .stForm [data-testid="stFormSubmitButton"] > button {
-        background: #ffffff !important;
-        color: #1f2937 !important;
-        border-radius: 50% !important;
-        width: 45px !important;
-        height: 45px !important;
-        padding: 0 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -353,7 +343,6 @@ def main():
     if 'chat_messages' not in st.session_state: st.session_state.chat_messages = []
     if 'market' not in st.session_state: st.session_state.market = 'US'
     if 'charts_to_display' not in st.session_state: st.session_state.charts_to_display = []
-    if 'voice_text' not in st.session_state: st.session_state.voice_text = ""
     
     # Header
     st.markdown('<div class="main-header"><h1>👩‍💼 Paula</h1><p style="color: #9ca3af;">Your AI Stock Analyst</p></div>', unsafe_allow_html=True)
@@ -402,81 +391,10 @@ def main():
     
     st.markdown("---")
     
-    # Voice recorder - stores text in session state
-    st.markdown("##### 🎤 Voice Input *(speak, then click Send)*")
-    
-    # Create a callback to update session state from JS
-    voice_component = components.html("""
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
-            <button id="mic" onclick="toggle()" style="
-                background: linear-gradient(135deg, #8b5cf6, #6366f1);
-                color: white; border: none; padding: 8px 16px;
-                border-radius: 15px; cursor: pointer; font-size: 14px;
-            ">🎤 Record</button>
-            <span id="status" style="color: #9ca3af; font-size: 13px;"></span>
-        </div>
-        <input type="text" id="out" readonly style="
-            width: 100%; padding: 10px; margin-top: 5px;
-            background: rgba(55,65,81,0.8); border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 8px; color: white; font-size: 14px;
-        " placeholder="Your speech will appear here..." />
-        <script>
-            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-            let r, on=false;
-            if(SR){
-                r = new SR();
-                r.continuous = true;
-                r.interimResults = true;
-                r.lang = 'en-US';
-                r.onstart = () => {
-                    on = true;
-                    document.getElementById('mic').innerText = '🔴 Stop';
-                    document.getElementById('mic').style.background = '#ef4444';
-                    document.getElementById('status').innerText = 'Listening...';
-                };
-                r.onend = () => {
-                    on = false;
-                    document.getElementById('mic').innerText = '🎤 Record';
-                    document.getElementById('mic').style.background = 'linear-gradient(135deg, #8b5cf6, #6366f1)';
-                    document.getElementById('status').innerText = document.getElementById('out').value ? '✓ Ready to send' : '';
-                };
-                r.onresult = (e) => {
-                    let t = '';
-                    for(let i=0; i<e.results.length; i++) t += e.results[i][0].transcript;
-                    document.getElementById('out').value = t;
-                    // Store in window for parent to access
-                    window.voiceResult = t;
-                };
-                r.onerror = () => {
-                    on = false;
-                    document.getElementById('mic').innerText = '🎤 Record';
-                    document.getElementById('mic').style.background = 'linear-gradient(135deg, #8b5cf6, #6366f1)';
-                };
-            }
-            function toggle() {
-                if(!r){ alert('Use Chrome/Edge'); return; }
-                if(on) r.stop(); else { document.getElementById('out').value=''; r.start(); }
-            }
-        </script>
-    """, height=100)
-    
-    # Form for text input + send button
-    with st.form(key="chat_form", clear_on_submit=True):
-        col_input, col_send = st.columns([6, 1])
-        
-        with col_input:
-            user_input = st.text_input(
-                "Message",
-                placeholder="Type here or use voice above, then click Send →",
-                label_visibility="collapsed"
-            )
-        
-        with col_send:
-            submitted = st.form_submit_button("➤", use_container_width=True)
-        
-        if submitted and user_input.strip():
-            process_and_display(user_input.strip())
-            st.rerun()
+    # Chat input
+    if prompt := st.chat_input("Ask Paula anything..."):
+        process_and_display(prompt)
+        st.rerun()
     
     st.markdown('<div style="text-align:center;color:#6b7280;font-size:12px;margin-top:20px;">👩‍💼 Paula • Yahoo Finance • ⚠️ Educational only</div>', unsafe_allow_html=True)
 
