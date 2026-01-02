@@ -344,19 +344,6 @@ def main():
     if 'chat_messages' not in st.session_state: st.session_state.chat_messages = []
     if 'market' not in st.session_state: st.session_state.market = 'US'
     if 'charts_to_display' not in st.session_state: st.session_state.charts_to_display = []
-    if 'voice_text' not in st.session_state: st.session_state.voice_text = ""
-    
-    # Check URL params for voice message
-    params = st.query_params
-    voice_msg = params.get('v', '')
-    if voice_msg:
-        # Clear the param first
-        st.query_params.clear()
-        # Decode and process
-        import urllib.parse
-        decoded_msg = urllib.parse.unquote(voice_msg)
-        process_and_display(decoded_msg)
-        st.rerun()
     
     # Header
     st.markdown('<div class="main-header"><h1>👩‍💼 Paula</h1><p style="color: #9ca3af;">Your AI Stock Analyst</p></div>', unsafe_allow_html=True)
@@ -405,131 +392,68 @@ def main():
     
     st.markdown("---")
     
-    # Combined input with voice - all in one HTML component
-    components.html("""
-        <style>
-            * { box-sizing: border-box; margin: 0; padding: 0; }
-            .container {
-                display: flex;
-                align-items: center;
-                background: rgba(55, 65, 81, 0.95);
-                border: 1px solid rgba(255, 255, 255, 0.15);
-                border-radius: 26px;
-                padding: 6px 8px 6px 16px;
-                gap: 8px;
-            }
-            #input {
-                flex: 1;
-                background: transparent;
-                border: none;
-                outline: none;
-                color: #fff;
-                font-size: 15px;
-                padding: 10px 0;
-            }
-            #input::placeholder { color: #9ca3af; }
-            .btn {
-                background: transparent;
-                border: none;
-                cursor: pointer;
-                font-size: 20px;
-                padding: 8px;
-                border-radius: 50%;
-                transition: background 0.2s;
-            }
-            .btn:hover { background: rgba(255,255,255,0.1); }
-            .send-btn {
-                background: #fff;
-                border: none;
-                border-radius: 50%;
-                width: 38px;
-                height: 38px;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            .send-btn:hover { background: #e5e7eb; }
-            #status {
-                text-align: center;
-                color: #ef4444;
-                font-size: 12px;
-                margin-top: 6px;
-                height: 16px;
-            }
-        </style>
-        
-        <div class="container">
-            <input type="text" id="input" placeholder="Ask Paula... (type or click 🎤)" />
-            <button class="btn" id="mic" onclick="toggleMic()">🎤</button>
-            <button class="send-btn" onclick="send()">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.5">
-                    <line x1="12" y1="19" x2="12" y2="5"></line>
-                    <polyline points="5 12 12 5 19 12"></polyline>
-                </svg>
-            </button>
-        </div>
-        <div id="status"></div>
-        
-        <script>
-            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-            let rec = null, on = false;
-            
-            if (SR) {
-                rec = new SR();
-                rec.continuous = true;
-                rec.interimResults = true;
-                rec.lang = 'en-US';
-                
-                rec.onstart = () => {
-                    on = true;
-                    document.getElementById('mic').innerText = '🔴';
-                    document.getElementById('status').innerText = 'Listening... click 🔴 to stop';
-                };
-                
-                rec.onresult = (e) => {
-                    let t = '';
-                    for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
-                    document.getElementById('input').value = t;
-                };
-                
-                rec.onend = () => {
-                    on = false;
-                    document.getElementById('mic').innerText = '🎤';
-                    document.getElementById('status').innerText = '';
-                };
-                
-                rec.onerror = (e) => {
-                    on = false;
-                    document.getElementById('mic').innerText = '🎤';
-                    document.getElementById('status').innerText = e.error === 'not-allowed' ? '⚠️ Allow microphone access' : '';
-                };
-            }
-            
-            function toggleMic() {
-                if (!rec) { alert('Use Chrome or Edge for voice'); return; }
-                if (on) rec.stop();
-                else { document.getElementById('input').value = ''; rec.start(); }
-            }
-            
-            function send() {
-                const text = document.getElementById('input').value.trim();
-                if (!text) return;
-                if (on && rec) rec.stop();
-                
-                // Build new URL with voice message
-                const currentUrl = window.parent.location.href.split('?')[0];
-                const newUrl = currentUrl + '?v=' + encodeURIComponent(text);
-                window.parent.location.replace(newUrl);
-            }
-            
-            document.getElementById('input').addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') send();
-            });
-        </script>
-    """, height=80)
+    # Voice input section (optional - for voice users)
+    with st.expander("🎤 Voice Input (Chrome/Edge)", expanded=False):
+        st.markdown("Click the button, speak, then copy the text to the chat input below.")
+        components.html("""
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <button id="mic" onclick="toggleMic()" style="
+                    background: linear-gradient(135deg, #8b5cf6, #6366f1);
+                    color: white; border: none; padding: 10px 20px;
+                    border-radius: 20px; cursor: pointer; font-size: 14px;
+                ">🎤 Click to Speak</button>
+                <span id="status" style="color: #9ca3af;"></span>
+            </div>
+            <div id="result" style="margin-top: 10px; padding: 10px; background: rgba(139,92,246,0.1);
+                border-radius: 8px; display: none;">
+                <div style="color: #a78bfa; font-size: 11px;">HEARD (copy this):</div>
+                <div id="text" style="color: white; font-size: 14px; user-select: all;"></div>
+            </div>
+            <script>
+                const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+                let rec, on = false;
+                if (SR) {
+                    rec = new SR();
+                    rec.continuous = true;
+                    rec.interimResults = true;
+                    rec.lang = 'en-US';
+                    rec.onstart = () => {
+                        on = true;
+                        document.getElementById('mic').innerText = '🔴 Stop';
+                        document.getElementById('mic').style.background = '#ef4444';
+                        document.getElementById('status').innerText = 'Listening...';
+                    };
+                    rec.onend = () => {
+                        on = false;
+                        document.getElementById('mic').innerText = '🎤 Click to Speak';
+                        document.getElementById('mic').style.background = 'linear-gradient(135deg, #8b5cf6, #6366f1)';
+                        document.getElementById('status').innerText = '';
+                    };
+                    rec.onresult = (e) => {
+                        let t = '';
+                        for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
+                        document.getElementById('result').style.display = 'block';
+                        document.getElementById('text').innerText = t;
+                    };
+                    rec.onerror = () => {
+                        on = false;
+                        document.getElementById('mic').innerText = '🎤 Click to Speak';
+                        document.getElementById('mic').style.background = 'linear-gradient(135deg, #8b5cf6, #6366f1)';
+                    };
+                }
+                function toggleMic() {
+                    if (!rec) { alert('Use Chrome or Edge'); return; }
+                    if (on) rec.stop(); else rec.start();
+                }
+            </script>
+        """, height=120)
     
-    st.markdown('<div style="text-align:center;color:#6b7280;font-size:12px;margin-top:30px;">👩‍💼 Paula • Yahoo Finance • 🎤 Voice: Chrome/Edge • ⚠️ Educational only</div>', unsafe_allow_html=True)
+    # Main chat input - THIS WORKS RELIABLY
+    if prompt := st.chat_input("Ask Paula anything..."):
+        process_and_display(prompt)
+        st.rerun()
+    
+    st.markdown('<div style="text-align:center;color:#6b7280;font-size:12px;margin-top:20px;">👩‍💼 Paula • Yahoo Finance • ⚠️ Educational only</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
