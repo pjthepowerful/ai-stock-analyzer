@@ -348,10 +348,14 @@ def main():
     
     # Check URL params for voice message
     params = st.query_params
-    voice_msg = params.get('v')
+    voice_msg = params.get('v', '')
     if voice_msg:
+        # Clear the param first
         st.query_params.clear()
-        process_and_display(voice_msg)
+        # Decode and process
+        import urllib.parse
+        decoded_msg = urllib.parse.unquote(voice_msg)
+        process_and_display(decoded_msg)
         st.rerun()
     
     # Header
@@ -513,9 +517,10 @@ def main():
                 if (!text) return;
                 if (on && rec) rec.stop();
                 
-                // Get base URL without query params
-                const base = window.parent.location.origin + window.parent.location.pathname;
-                window.parent.location.href = base + '?v=' + encodeURIComponent(text);
+                // Build new URL with voice message
+                const currentUrl = window.parent.location.href.split('?')[0];
+                const newUrl = currentUrl + '?v=' + encodeURIComponent(text);
+                window.parent.location.replace(newUrl);
             }
             
             document.getElementById('input').addEventListener('keydown', (e) => {
