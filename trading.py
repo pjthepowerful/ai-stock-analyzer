@@ -55,6 +55,13 @@ st.markdown("""
         background: rgba(255, 255, 255, 0.05);
         padding: 8px 16px; border-radius: 20px; font-size: 14px; color: #9ca3af;
     }
+    /* Voice button styling */
+    .voice-container {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -391,8 +398,161 @@ def main():
     
     st.markdown("---")
     
+    # ==================== VOICE INPUT ====================
+    st.markdown("### 🎤 Voice Input")
+    
+    # Try to use streamlit-mic-recorder (best option)
+    try:
+        from streamlit_mic_recorder import speech_to_text
+        
+        text = speech_to_text(
+            language='en',
+            start_prompt="🎤 Click to Speak",
+            stop_prompt="⏹️ Stop Recording",
+            just_once=True,
+            use_container_width=True,
+            key='voice_input'
+        )
+        
+        if text:
+            st.success(f"🗣️ You said: **{text}**")
+            process_and_display(text)
+            st.rerun()
+            
+    except ImportError:
+        # Fallback: Custom HTML/JS component using Web Speech API
+        st.info("💡 For best voice experience, install: `pip install streamlit-mic-recorder`")
+        
+        voice_html = """
+        <div id="voice-container" style="
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin: 10px 0;
+        ">
+            <button id="voiceBtn" onclick="toggleVoice()" style="
+                background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+                border: none;
+                border-radius: 50%;
+                width: 60px;
+                height: 60px;
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+                transition: all 0.3s ease;
+                margin-bottom: 10px;
+            ">
+                <svg id="micIcon" width="28" height="28" viewBox="0 0 24 24" fill="white">
+                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                </svg>
+            </button>
+            <div id="voiceStatus" style="color: #a78bfa; font-size: 14px; font-weight: 500;">
+                Click the microphone to speak
+            </div>
+            <div id="transcript" style="
+                color: #e0e7ff;
+                font-size: 16px;
+                margin-top: 10px;
+                min-height: 24px;
+                font-weight: 600;
+            "></div>
+        </div>
+        
+        <script>
+        let recognition = null;
+        let isListening = false;
+        
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+            
+            recognition.onstart = function() {
+                isListening = true;
+                document.getElementById('voiceBtn').style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
+                document.getElementById('voiceBtn').style.boxShadow = '0 4px 15px rgba(239, 68, 68, 0.5)';
+                document.getElementById('voiceStatus').textContent = '🔴 Listening... Speak now!';
+                document.getElementById('voiceStatus').style.color = '#f87171';
+            };
+            
+            recognition.onresult = function(event) {
+                let finalTranscript = '';
+                let interimTranscript = '';
+                
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript;
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+                
+                document.getElementById('transcript').textContent = interimTranscript || finalTranscript;
+                
+                if (finalTranscript) {
+                    document.getElementById('voiceStatus').textContent = '✅ Got it! Processing...';
+                    document.getElementById('voiceStatus').style.color = '#4ade80';
+                    
+                    // Copy to clipboard so user can paste
+                    navigator.clipboard.writeText(finalTranscript).then(() => {
+                        document.getElementById('transcript').innerHTML = 
+                            '"' + finalTranscript + '"<br><small style="color:#9ca3af;">Copied! Paste in chat below ↓</small>';
+                    });
+                }
+            };
+            
+            recognition.onerror = function(event) {
+                document.getElementById('voiceStatus').textContent = '❌ Error: ' + event.error;
+                document.getElementById('voiceStatus').style.color = '#f87171';
+                resetButton();
+            };
+            
+            recognition.onend = function() {
+                resetButton();
+            };
+        } else {
+            document.getElementById('voiceStatus').textContent = '❌ Voice not supported. Use Chrome or Edge.';
+            document.getElementById('voiceBtn').style.opacity = '0.5';
+            document.getElementById('voiceBtn').style.cursor = 'not-allowed';
+        }
+        
+        function toggleVoice() {
+            if (!recognition) return;
+            
+            if (isListening) {
+                recognition.stop();
+            } else {
+                document.getElementById('transcript').textContent = '';
+                recognition.start();
+            }
+        }
+        
+        function resetButton() {
+            isListening = false;
+            document.getElementById('voiceBtn').style.background = 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)';
+            document.getElementById('voiceBtn').style.boxShadow = '0 4px 15px rgba(139, 92, 246, 0.4)';
+            if (!document.getElementById('transcript').textContent) {
+                document.getElementById('voiceStatus').textContent = 'Click the microphone to speak';
+                document.getElementById('voiceStatus').style.color = '#a78bfa';
+            }
+        }
+        </script>
+        """
+        
+        st.components.v1.html(voice_html, height=180)
+        st.caption("After speaking, paste your text in the chat input below")
+    
+    st.markdown("---")
+    
     # Chat input
-    if prompt := st.chat_input("Ask Paula anything..."):
+    if prompt := st.chat_input("Ask Paula anything... (or paste voice input)"):
         process_and_display(prompt)
         st.rerun()
     
