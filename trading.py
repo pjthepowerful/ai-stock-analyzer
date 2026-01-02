@@ -98,33 +98,6 @@ MAIN_APP_CSS = """
         font-size: 14px;
         color: #9ca3af;
     }
-    
-    /* Custom input styling */
-    .stTextInput > div > div {
-        background: rgba(55, 65, 81, 0.9) !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
-        border-radius: 24px !important;
-    }
-    
-    .stTextInput input {
-        color: #ffffff !important;
-        padding: 12px 16px !important;
-    }
-    
-    .stTextInput input::placeholder {
-        color: #6b7280 !important;
-    }
-    
-    /* Input row styling */
-    .input-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        background: rgba(55, 65, 81, 0.9);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 28px;
-        padding: 6px 12px;
-    }
 </style>
 """
 
@@ -223,38 +196,30 @@ def create_technical_chart(ticker, period="6mo"):
             subplot_titles=(f'{display_name} Price', 'Volume', 'RSI (14)', 'MACD')
         )
         
-        # Bollinger Bands
         fig.add_trace(go.Scatter(x=hist.index, y=hist['BB_Upper'], name='BB Upper',
                                 line=dict(color='rgba(128,128,128,0.3)', width=1), showlegend=False), row=1, col=1)
         fig.add_trace(go.Scatter(x=hist.index, y=hist['BB_Lower'], name='BB Lower',
                                 line=dict(color='rgba(128,128,128,0.3)', width=1),
                                 fill='tonexty', fillcolor='rgba(128,128,128,0.1)', showlegend=False), row=1, col=1)
         
-        # Candlestick
         fig.add_trace(go.Candlestick(x=hist.index, open=hist['Open'], high=hist['High'],
                                      low=hist['Low'], close=hist['Close'], name='Price',
                                      increasing_line_color='#10b981', decreasing_line_color='#ef4444'), row=1, col=1)
         
-        # MAs
         fig.add_trace(go.Scatter(x=hist.index, y=hist['MA20'], name='MA 20',
                                 line=dict(color='#f59e0b', width=1.5)), row=1, col=1)
         fig.add_trace(go.Scatter(x=hist.index, y=hist['MA50'], name='MA 50',
                                 line=dict(color='#8b5cf6', width=1.5)), row=1, col=1)
         
-        # Volume
         colors = ['#10b981' if hist['Close'].iloc[i] >= hist['Open'].iloc[i] else '#ef4444' for i in range(len(hist))]
         fig.add_trace(go.Bar(x=hist.index, y=hist['Volume'], name='Volume',
                             marker_color=colors, opacity=0.7, showlegend=False), row=2, col=1)
         
-        # RSI
         fig.add_trace(go.Scatter(x=hist.index, y=hist['RSI'], name='RSI',
                                 line=dict(color='#06b6d4', width=1.5)), row=3, col=1)
         fig.add_hline(y=70, line_dash="dash", line_color="rgba(239,68,68,0.5)", row=3, col=1)
         fig.add_hline(y=30, line_dash="dash", line_color="rgba(16,185,129,0.5)", row=3, col=1)
-        fig.add_hrect(y0=70, y1=100, fillcolor="rgba(239,68,68,0.1)", line_width=0, row=3, col=1)
-        fig.add_hrect(y0=0, y1=30, fillcolor="rgba(16,185,129,0.1)", line_width=0, row=3, col=1)
         
-        # MACD
         fig.add_trace(go.Scatter(x=hist.index, y=hist['MACD'], name='MACD',
                                 line=dict(color='#3b82f6', width=1.5)), row=4, col=1)
         fig.add_trace(go.Scatter(x=hist.index, y=hist['Signal'], name='Signal',
@@ -262,7 +227,6 @@ def create_technical_chart(ticker, period="6mo"):
         macd_colors = ['#10b981' if val >= 0 else '#ef4444' for val in hist['MACD_Hist']]
         fig.add_trace(go.Bar(x=hist.index, y=hist['MACD_Hist'], name='MACD Hist',
                             marker_color=macd_colors, opacity=0.6, showlegend=False), row=4, col=1)
-        fig.add_hline(y=0, line_dash="solid", line_color="rgba(255,255,255,0.2)", row=4, col=1)
         
         fig.update_layout(
             template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
@@ -481,7 +445,6 @@ def display_charts():
     
     st.markdown("### 📈 Technical Analysis Charts")
     period = st.selectbox("Time Period", ["1mo", "3mo", "6mo", "1y", "2y"], index=2, key="chart_period")
-    st.caption("📊 Showing: Price + Bollinger Bands, Volume, RSI, MACD")
     
     for ticker in charts[:3]:
         fig = create_technical_chart(ticker, period)
@@ -508,7 +471,7 @@ def detect_and_execute(message):
             return compare_stocks(','.join(tickers))
     
     tickers = re.findall(r'\b([A-Z]{2,6})\b', message.upper())
-    exclude = ['PE', 'ROE', 'VS', 'AND', 'THE', 'FOR', 'AI', 'OK', 'HI', 'RSI', 'MACD']
+    exclude = ['PE', 'ROE', 'VS', 'AND', 'THE', 'FOR', 'AI', 'OK', 'HI', 'RSI', 'MACD', 'APPLE']
     
     for t in tickers:
         if t in US_STOCKS and t not in exclude:
@@ -572,91 +535,113 @@ End with: "⚠️ Educational only, not financial advice" """
 
 # ==================== VOICE INPUT COMPONENT ====================
 
-def voice_input_component():
-    """Streamlit audio recorder alternative - using a simpler approach"""
-    # This component handles voice input via browser
-    component_html = """
-    <div id="voice-widget" style="display: inline-block;">
-        <button id="voice-btn" onclick="toggleRecording()" style="
-            background: transparent;
-            border: none;
-            cursor: pointer;
-            font-size: 20px;
-            padding: 8px 12px;
-            border-radius: 8px;
-            transition: all 0.2s;
-        " title="Click to speak">🎤</button>
-        <span id="status" style="color: #9ca3af; font-size: 12px; margin-left: 8px;"></span>
-    </div>
-    
-    <script>
-    let recognition = null;
-    let isRecording = false;
-    let transcript = '';
-    
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    
-    if (SpeechRecognition) {
-        recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = 'en-US';
+def voice_input_html():
+    """Create voice input that returns transcript via component value"""
+    return components.html("""
+        <div style="display: flex; align-items: center; gap: 10px; padding: 10px; 
+                    background: rgba(55, 65, 81, 0.9); border-radius: 24px; 
+                    border: 1px solid rgba(255,255,255,0.1);">
+            
+            <input type="text" id="voice-input" placeholder="Click 🎤 to speak or type here..." 
+                   style="flex: 1; background: transparent; border: none; outline: none; 
+                          color: white; font-size: 16px; padding: 10px;"
+                   onkeypress="if(event.key==='Enter'){sendText()}">
+            
+            <button id="mic-btn" onclick="toggleMic()" 
+                    style="background: transparent; border: none; font-size: 24px; 
+                           cursor: pointer; padding: 5px 10px;">🎤</button>
+            
+            <button onclick="sendText()" 
+                    style="background: white; border: none; border-radius: 50%; 
+                           width: 40px; height: 40px; cursor: pointer; font-size: 18px;">➤</button>
+        </div>
         
-        recognition.onresult = (event) => {
-            transcript = '';
-            for (let i = 0; i < event.results.length; i++) {
-                transcript += event.results[i][0].transcript;
+        <div id="status" style="text-align: center; color: #9ca3af; font-size: 12px; 
+                                margin-top: 5px; height: 20px;"></div>
+        
+        <script>
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            let recognition = null;
+            let isListening = false;
+            
+            if (SpeechRecognition) {
+                recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.lang = 'en-US';
+                
+                recognition.onstart = () => {
+                    isListening = true;
+                    document.getElementById('mic-btn').innerText = '🔴';
+                    document.getElementById('status').innerText = 'Listening... (click 🔴 to stop)';
+                };
+                
+                recognition.onend = () => {
+                    isListening = false;
+                    document.getElementById('mic-btn').innerText = '🎤';
+                    document.getElementById('status').innerText = '';
+                };
+                
+                recognition.onresult = (event) => {
+                    let transcript = '';
+                    for (let i = 0; i < event.results.length; i++) {
+                        transcript += event.results[i][0].transcript;
+                    }
+                    document.getElementById('voice-input').value = transcript;
+                };
+                
+                recognition.onerror = (e) => {
+                    document.getElementById('mic-btn').innerText = '🎤';
+                    document.getElementById('status').innerText = e.error === 'not-allowed' ? 
+                        '⚠️ Microphone access denied' : '';
+                    isListening = false;
+                };
             }
-            // Send transcript to Streamlit
-            window.parent.postMessage({type: 'voice_transcript', text: transcript}, '*');
-        };
-        
-        recognition.onstart = () => {
-            isRecording = true;
-            document.getElementById('voice-btn').innerText = '🔴';
-            document.getElementById('status').innerText = 'Listening...';
-        };
-        
-        recognition.onend = () => {
-            isRecording = false;
-            document.getElementById('voice-btn').innerText = '🎤';
-            document.getElementById('status').innerText = '';
-            if (transcript) {
-                window.parent.postMessage({type: 'voice_done', text: transcript}, '*');
+            
+            function toggleMic() {
+                if (!recognition) {
+                    alert('Speech recognition not supported. Use Chrome or Edge.');
+                    return;
+                }
+                if (isListening) {
+                    recognition.stop();
+                } else {
+                    document.getElementById('voice-input').value = '';
+                    recognition.start();
+                }
             }
-        };
-        
-        recognition.onerror = (event) => {
-            console.error('Speech error:', event.error);
-            document.getElementById('voice-btn').innerText = '🎤';
-            document.getElementById('status').innerText = event.error === 'not-allowed' ? 'Mic blocked' : '';
-        };
-    } else {
-        document.getElementById('voice-btn').style.opacity = '0.5';
-        document.getElementById('status').innerText = 'Not supported';
-    }
-    
-    function toggleRecording() {
-        if (!recognition) {
-            alert('Voice not supported. Use Chrome or Edge.');
-            return;
-        }
-        
-        if (isRecording) {
-            recognition.stop();
-        } else {
-            transcript = '';
-            recognition.start();
-        }
-    }
-    </script>
-    """
-    return components.html(component_html, height=50)
+            
+            function sendText() {
+                const text = document.getElementById('voice-input').value.trim();
+                if (text) {
+                    if (isListening) recognition.stop();
+                    
+                    // Send to Streamlit using Streamlit's component communication
+                    const data = {isStreamlitMessage: true, type: "streamlit:componentValue", value: text};
+                    window.parent.postMessage(data, "*");
+                    
+                    // Also set it in a way Streamlit can read
+                    const frame = window.frameElement;
+                    if (frame) {
+                        frame.setAttribute('data-value', text);
+                    }
+                    
+                    document.getElementById('voice-input').value = '';
+                    document.getElementById('status').innerText = 'Sent! Refresh if not processed.';
+                    
+                    // Force reload with query param
+                    const url = new URL(window.parent.location.href);
+                    url.searchParams.set('voice_msg', encodeURIComponent(text));
+                    url.searchParams.set('t', Date.now());
+                    window.parent.location.href = url.toString();
+                }
+            }
+        </script>
+    """, height=100)
 
 # ==================== MAIN APP ====================
 
 def main():
-    """Display the main Paula app"""
     st.markdown(MAIN_APP_CSS, unsafe_allow_html=True)
     
     # Initialize session state
@@ -666,8 +651,15 @@ def main():
         st.session_state.market = 'US'
     if 'charts_to_display' not in st.session_state:
         st.session_state.charts_to_display = []
-    if 'voice_text' not in st.session_state:
-        st.session_state.voice_text = ""
+    
+    # Check for voice message in URL params
+    params = st.query_params
+    voice_msg = params.get('voice_msg', '')
+    if voice_msg:
+        # Clear the param to prevent re-processing
+        st.query_params.clear()
+        # Process the voice message
+        st.session_state.pending_voice_msg = voice_msg
     
     # Header
     st.markdown("""
@@ -682,9 +674,8 @@ def main():
     
     with col1:
         market_emoji = "🇺🇸" if st.session_state.market == 'US' else "🇮🇳"
-        st.markdown(f"""
-        <div class="market-badge">{market_emoji} <strong>{st.session_state.market} Market</strong></div>
-        """, unsafe_allow_html=True)
+        st.markdown(f'<div class="market-badge">{market_emoji} <strong>{st.session_state.market} Market</strong></div>', 
+                    unsafe_allow_html=True)
     
     with col2:
         market = st.selectbox("Market", ['US', 'India'],
@@ -704,27 +695,40 @@ def main():
     
     st.markdown("---")
     
-    # Check GROQ API key
+    # Check API key
     api_key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
     if not api_key:
         st.error("⚠️ Add GROQ_API_KEY to Streamlit Secrets")
         return
     
-    # Chat messages
+    # Process pending voice message
+    if st.session_state.get('pending_voice_msg'):
+        msg = st.session_state.pending_voice_msg
+        st.session_state.pending_voice_msg = None
+        
+        st.session_state.chat_messages.append({"role": "user", "content": msg})
+        with st.spinner("📡 Processing..."):
+            response, data = process_message(msg, st.session_state.chat_messages[:-1])
+        msg_data = {"role": "assistant", "content": response}
+        if data and "table" in data:
+            msg_data["table_data"] = data
+        st.session_state.chat_messages.append(msg_data)
+    
+    # Display chat messages
     for m in st.session_state.chat_messages:
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
             if m.get("table_data"):
                 display_table(m["table_data"])
     
-    # Charts
+    # Display charts
     if st.session_state.charts_to_display:
         display_charts()
     
-    # Welcome
+    # Welcome message
     if not st.session_state.chat_messages:
         st.markdown("### 👋 Hi! I'm Paula. Ask me about any stock.")
-        st.markdown("**Try these examples:**")
+        st.markdown("**Try these:**")
         
         examples = ["Analyze TCS", "Compare RELIANCE INFY", "Find undervalued", "Show dividends"] if st.session_state.market == 'India' else ["Analyze AAPL", "Compare AAPL MSFT", "Find growth stocks", "Show dividends"]
         
@@ -733,52 +737,32 @@ def main():
             with cols[i]:
                 if st.button(ex, key=f"ex_{i}", use_container_width=True):
                     st.session_state.chat_messages.append({"role": "user", "content": ex})
-                    with st.chat_message("user"):
-                        st.markdown(ex)
-                    with st.chat_message("assistant"):
-                        with st.spinner("📡 Fetching live data..."):
-                            response, data = process_message(ex, [])
-                        st.markdown(response)
-                        if data and "table" in data:
-                            display_table(data)
+                    with st.spinner("📡 Fetching..."):
+                        response, data = process_message(ex, [])
                     msg_data = {"role": "assistant", "content": response}
                     if data and "table" in data:
                         msg_data["table_data"] = data
                     st.session_state.chat_messages.append(msg_data)
                     st.rerun()
     
-    # Input area with voice button
     st.markdown("---")
     
-    # Create input row with text input, mic button, and send button
-    input_col, mic_col, send_col = st.columns([8, 1, 1])
+    # Voice input component
+    st.markdown("**🎤 Voice or type your question:**")
+    voice_input_html()
     
-    with input_col:
-        user_input = st.text_input(
-            "Message",
-            key="user_input",
-            placeholder="Ask Paula about stocks... (or click 🎤)",
-            label_visibility="collapsed"
-        )
+    # Also provide standard text input as backup
+    user_input = st.chat_input("Or type here and press Enter...")
     
-    with mic_col:
-        # Voice input button and component
-        voice_input_component()
-    
-    with send_col:
-        send = st.button("➤", use_container_width=True, help="Send")
-    
-    # Process input
-    if (send or user_input) and user_input.strip():
-        prompt = user_input.strip()
-        st.session_state.chat_messages.append({"role": "user", "content": prompt})
+    if user_input:
+        st.session_state.chat_messages.append({"role": "user", "content": user_input})
         
         with st.chat_message("user"):
-            st.markdown(prompt)
+            st.markdown(user_input)
         
         with st.chat_message("assistant"):
             with st.spinner("📡 Fetching live data..."):
-                response, data = process_message(prompt, st.session_state.chat_messages[:-1])
+                response, data = process_message(user_input, st.session_state.chat_messages[:-1])
             st.markdown(response)
             if data and "table" in data:
                 display_table(data)
@@ -793,7 +777,7 @@ def main():
     st.markdown("---")
     st.markdown("""
     <div style="text-align: center; color: #6b7280; font-size: 12px;">
-        👩‍💼 Paula • Live data from Yahoo Finance • 🎤 Voice: Chrome/Edge • ⚠️ Educational only
+        👩‍💼 Paula • Live data via Yahoo Finance • 🎤 Voice: Chrome/Edge • ⚠️ Educational only
     </div>
     """, unsafe_allow_html=True)
 
