@@ -51,16 +51,6 @@ MAIN_APP_CSS = """
         margin: 0.75rem 0 !important;
     }
     
-    .stChatInput > div {
-        background: rgba(255, 255, 255, 0.05) !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
-        border-radius: 12px !important;
-    }
-    
-    .stChatInput input {
-        color: #ffffff !important;
-    }
-    
     .stSelectbox > div > div {
         background: rgba(255, 255, 255, 0.08) !important;
         border: 1px solid rgba(255, 255, 255, 0.15) !important;
@@ -108,113 +98,35 @@ MAIN_APP_CSS = """
         font-size: 14px;
         color: #9ca3af;
     }
+    
+    /* Custom input styling */
+    .stTextInput > div > div {
+        background: rgba(55, 65, 81, 0.9) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 24px !important;
+    }
+    
+    .stTextInput input {
+        color: #ffffff !important;
+        padding: 12px 16px !important;
+    }
+    
+    .stTextInput input::placeholder {
+        color: #6b7280 !important;
+    }
+    
+    /* Input row styling */
+    .input-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(55, 65, 81, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 28px;
+        padding: 6px 12px;
+    }
 </style>
 """
-
-# ==================== VOICE INPUT COMPONENT ====================
-
-def create_voice_input_component():
-    """Create the voice input HTML/JS component that types into Streamlit input"""
-    voice_html = """
-    <script>
-    let recognition = null;
-    let isListening = false;
-    let finalTranscript = '';
-    
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    
-    if (SpeechRecognition) {
-        recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = 'en-US';
-        
-        recognition.onstart = function() {
-            isListening = true;
-            updateMicButton(true);
-        };
-        
-        recognition.onend = function() {
-            isListening = false;
-            updateMicButton(false);
-            
-            if (finalTranscript.trim()) {
-                fillChatInput(finalTranscript.trim());
-            }
-        };
-        
-        recognition.onresult = function(event) {
-            let interimTranscript = '';
-            
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                const transcript = event.results[i][0].transcript;
-                if (event.results[i].isFinal) {
-                    finalTranscript += transcript + ' ';
-                } else {
-                    interimTranscript += transcript;
-                }
-            }
-            
-            // Update input in real-time
-            const display = finalTranscript + interimTranscript;
-            if (display.trim()) {
-                fillChatInput(display.trim());
-            }
-        };
-        
-        recognition.onerror = function(event) {
-            console.error('Speech recognition error:', event.error);
-            isListening = false;
-            updateMicButton(false);
-        };
-    }
-    
-    function fillChatInput(text) {
-        // Find the Streamlit chat input textarea
-        const inputs = window.parent.document.querySelectorAll('textarea[data-testid="stChatInputTextArea"]');
-        if (inputs.length > 0) {
-            const input = inputs[0];
-            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.parent.HTMLTextAreaElement.prototype, 'value').set;
-            nativeInputValueSetter.call(input, text);
-            const event = new Event('input', { bubbles: true });
-            input.dispatchEvent(event);
-            input.focus();
-        }
-    }
-    
-    function updateMicButton(listening) {
-        const btn = window.parent.document.getElementById('voice-mic-btn');
-        if (btn) {
-            if (listening) {
-                btn.style.background = '#ef4444';
-                btn.innerHTML = '🔴';
-            } else {
-                btn.style.background = 'transparent';
-                btn.innerHTML = '🎤';
-            }
-        }
-    }
-    
-    window.toggleVoiceRecognition = function() {
-        if (!recognition) {
-            alert('Voice recognition not supported. Try Chrome or Edge.');
-            return;
-        }
-        
-        if (isListening) {
-            recognition.stop();
-        } else {
-            finalTranscript = '';
-            try {
-                recognition.start();
-            } catch (e) {
-                console.error('Start error:', e);
-            }
-        }
-    };
-    </script>
-    """
-    return voice_html
 
 
 # ==================== STOCK DATA ====================
@@ -658,48 +570,94 @@ End with: "⚠️ Educational only, not financial advice" """
     except Exception as e:
         return f"Error: {e}", None
 
+# ==================== VOICE INPUT COMPONENT ====================
+
+def voice_input_component():
+    """Streamlit audio recorder alternative - using a simpler approach"""
+    # This component handles voice input via browser
+    component_html = """
+    <div id="voice-widget" style="display: inline-block;">
+        <button id="voice-btn" onclick="toggleRecording()" style="
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 20px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            transition: all 0.2s;
+        " title="Click to speak">🎤</button>
+        <span id="status" style="color: #9ca3af; font-size: 12px; margin-left: 8px;"></span>
+    </div>
+    
+    <script>
+    let recognition = null;
+    let isRecording = false;
+    let transcript = '';
+    
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+        
+        recognition.onresult = (event) => {
+            transcript = '';
+            for (let i = 0; i < event.results.length; i++) {
+                transcript += event.results[i][0].transcript;
+            }
+            // Send transcript to Streamlit
+            window.parent.postMessage({type: 'voice_transcript', text: transcript}, '*');
+        };
+        
+        recognition.onstart = () => {
+            isRecording = true;
+            document.getElementById('voice-btn').innerText = '🔴';
+            document.getElementById('status').innerText = 'Listening...';
+        };
+        
+        recognition.onend = () => {
+            isRecording = false;
+            document.getElementById('voice-btn').innerText = '🎤';
+            document.getElementById('status').innerText = '';
+            if (transcript) {
+                window.parent.postMessage({type: 'voice_done', text: transcript}, '*');
+            }
+        };
+        
+        recognition.onerror = (event) => {
+            console.error('Speech error:', event.error);
+            document.getElementById('voice-btn').innerText = '🎤';
+            document.getElementById('status').innerText = event.error === 'not-allowed' ? 'Mic blocked' : '';
+        };
+    } else {
+        document.getElementById('voice-btn').style.opacity = '0.5';
+        document.getElementById('status').innerText = 'Not supported';
+    }
+    
+    function toggleRecording() {
+        if (!recognition) {
+            alert('Voice not supported. Use Chrome or Edge.');
+            return;
+        }
+        
+        if (isRecording) {
+            recognition.stop();
+        } else {
+            transcript = '';
+            recognition.start();
+        }
+    }
+    </script>
+    """
+    return components.html(component_html, height=50)
+
 # ==================== MAIN APP ====================
 
 def main():
     """Display the main Paula app"""
     st.markdown(MAIN_APP_CSS, unsafe_allow_html=True)
-    
-    # Add custom CSS for mic button styling
-    st.markdown("""
-    <style>
-        /* Style the mic button container */
-        .mic-button-container {
-            position: fixed;
-            bottom: 24px;
-            right: 100px;
-            z-index: 1000;
-        }
-        
-        .mic-btn {
-            background: transparent;
-            border: none;
-            font-size: 20px;
-            cursor: pointer;
-            padding: 8px;
-            border-radius: 50%;
-            transition: all 0.2s ease;
-        }
-        
-        .mic-btn:hover {
-            background: rgba(255, 255, 255, 0.1);
-        }
-        
-        .mic-btn.listening {
-            background: rgba(239, 68, 68, 0.2);
-            animation: pulse 1s infinite;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.7; transform: scale(1.1); }
-        }
-    </style>
-    """, unsafe_allow_html=True)
     
     # Initialize session state
     if 'chat_messages' not in st.session_state:
@@ -708,6 +666,8 @@ def main():
         st.session_state.market = 'US'
     if 'charts_to_display' not in st.session_state:
         st.session_state.charts_to_display = []
+    if 'voice_text' not in st.session_state:
+        st.session_state.voice_text = ""
     
     # Header
     st.markdown("""
@@ -764,7 +724,7 @@ def main():
     # Welcome
     if not st.session_state.chat_messages:
         st.markdown("### 👋 Hi! I'm Paula. Ask me about any stock.")
-        st.markdown("**Try these examples:** *(or click 🎤 to speak)*")
+        st.markdown("**Try these examples:**")
         
         examples = ["Analyze TCS", "Compare RELIANCE INFY", "Find undervalued", "Show dividends"] if st.session_state.market == 'India' else ["Analyze AAPL", "Compare AAPL MSFT", "Find growth stocks", "Show dividends"]
         
@@ -773,37 +733,44 @@ def main():
             with cols[i]:
                 if st.button(ex, key=f"ex_{i}", use_container_width=True):
                     st.session_state.chat_messages.append({"role": "user", "content": ex})
+                    with st.chat_message("user"):
+                        st.markdown(ex)
+                    with st.chat_message("assistant"):
+                        with st.spinner("📡 Fetching live data..."):
+                            response, data = process_message(ex, [])
+                        st.markdown(response)
+                        if data and "table" in data:
+                            display_table(data)
+                    msg_data = {"role": "assistant", "content": response}
+                    if data and "table" in data:
+                        msg_data["table_data"] = data
+                    st.session_state.chat_messages.append(msg_data)
                     st.rerun()
     
-    # Inject voice recognition script (hidden)
-    components.html(create_voice_input_component(), height=0)
+    # Input area with voice button
+    st.markdown("---")
     
-    # Add mic button that floats near the chat input
-    st.markdown("""
-    <div class="mic-button-container">
-        <button id="voice-mic-btn" class="mic-btn" onclick="window.parent.toggleVoiceRecognition ? window.parent.toggleVoiceRecognition() : (window.frames[0] && window.frames[0].toggleVoiceRecognition ? window.frames[0].toggleVoiceRecognition() : alert('Voice not ready'))" title="Click to speak">
-            🎤
-        </button>
-    </div>
+    # Create input row with text input, mic button, and send button
+    input_col, mic_col, send_col = st.columns([8, 1, 1])
     
-    <script>
-    // Make toggleVoiceRecognition available globally
-    document.addEventListener('DOMContentLoaded', function() {
-        // Find the iframe with our voice script and expose the function
-        const iframes = document.querySelectorAll('iframe');
-        iframes.forEach(iframe => {
-            try {
-                if (iframe.contentWindow && iframe.contentWindow.toggleVoiceRecognition) {
-                    window.toggleVoiceRecognition = iframe.contentWindow.toggleVoiceRecognition;
-                }
-            } catch(e) {}
-        });
-    });
-    </script>
-    """, unsafe_allow_html=True)
+    with input_col:
+        user_input = st.text_input(
+            "Message",
+            key="user_input",
+            placeholder="Ask Paula about stocks... (or click 🎤)",
+            label_visibility="collapsed"
+        )
     
-    # Chat input
-    if prompt := st.chat_input("Ask Paula about stocks... (or click 🎤 to speak)"):
+    with mic_col:
+        # Voice input button and component
+        voice_input_component()
+    
+    with send_col:
+        send = st.button("➤", use_container_width=True, help="Send")
+    
+    # Process input
+    if (send or user_input) and user_input.strip():
+        prompt = user_input.strip()
         st.session_state.chat_messages.append({"role": "user", "content": prompt})
         
         with st.chat_message("user"):
@@ -826,7 +793,7 @@ def main():
     st.markdown("---")
     st.markdown("""
     <div style="text-align: center; color: #6b7280; font-size: 12px;">
-        👩‍💼 Paula • Live data from Yahoo Finance • 🎤 Voice input supported • ⚠️ Educational only
+        👩‍💼 Paula • Live data from Yahoo Finance • 🎤 Voice: Chrome/Edge • ⚠️ Educational only
     </div>
     """, unsafe_allow_html=True)
 
