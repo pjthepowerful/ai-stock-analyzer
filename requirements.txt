@@ -2,9 +2,7 @@ streamlit
 yfinance
 pandas
 numpy
-python-dotenv
-groq
 plotly
-supabase
-extra-streamlit-components
-streamlit-js-eval
+groq
+python-dotenv
+streamlit-mic-recorder
