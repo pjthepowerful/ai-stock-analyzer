@@ -26,9 +26,7 @@ st.set_page_config(
 # CSS
 st.markdown("""
 <style>
-    .stApp {
-        background: linear-gradient(180deg, #0a0f1a 0%, #111827 100%);
-    }
+    .stApp { background: linear-gradient(180deg, #0a0f1a 0%, #111827 100%); }
     #MainMenu, footer, header {visibility: hidden;}
     h1, h2, h3 {color: #ffffff !important; font-weight: 700 !important;}
     p, span, div, label {color: #d1d5db !important;}
@@ -44,17 +42,14 @@ st.markdown("""
     }
     .stButton > button {
         background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 10px !important;
+        color: white !important; border: none !important; border-radius: 10px !important;
     }
     hr {border-color: rgba(255, 255, 255, 0.1) !important;}
     .main-header {text-align: center; padding: 1rem 0;}
     .main-header h1 {
         font-size: 2.5rem !important;
         background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     }
     .market-badge {
         display: inline-flex; align-items: center; gap: 8px;
@@ -125,11 +120,9 @@ def create_technical_chart(ticker, period="6mo"):
             increasing_line_color='#10b981', decreasing_line_color='#ef4444'), row=1, col=1)
         fig.add_trace(go.Scatter(x=hist.index, y=hist['MA20'], name='MA20', line=dict(color='#f59e0b', width=1)), row=1, col=1)
         fig.add_trace(go.Scatter(x=hist.index, y=hist['MA50'], name='MA50', line=dict(color='#8b5cf6', width=1)), row=1, col=1)
-        
         fig.add_trace(go.Scatter(x=hist.index, y=hist['RSI'], name='RSI', line=dict(color='#06b6d4')), row=2, col=1)
         fig.add_hline(y=70, line_dash="dash", line_color="red", row=2, col=1)
         fig.add_hline(y=30, line_dash="dash", line_color="green", row=2, col=1)
-        
         fig.add_trace(go.Scatter(x=hist.index, y=hist['MACD'], name='MACD', line=dict(color='#3b82f6')), row=3, col=1)
         fig.add_trace(go.Scatter(x=hist.index, y=hist['Signal'], name='Signal', line=dict(color='#f59e0b')), row=3, col=1)
         
@@ -338,15 +331,11 @@ def display_charts():
         if fig: st.plotly_chart(fig, use_container_width=True)
 
 def process_and_display(prompt):
-    """Process a message and display results"""
     st.session_state.chat_messages.append({"role": "user", "content": prompt})
-    
     with st.spinner("📡 Fetching data..."):
         response, data = process_message(prompt, st.session_state.chat_messages[:-1])
-    
     msg_data = {"role": "assistant", "content": response}
-    if data and "table" in data: 
-        msg_data["table_data"] = data
+    if data and "table" in data: msg_data["table_data"] = data
     st.session_state.chat_messages.append(msg_data)
 
 # ==================== MAIN ====================
@@ -355,8 +344,15 @@ def main():
     if 'chat_messages' not in st.session_state: st.session_state.chat_messages = []
     if 'market' not in st.session_state: st.session_state.market = 'US'
     if 'charts_to_display' not in st.session_state: st.session_state.charts_to_display = []
-    if 'pending_voice' not in st.session_state: st.session_state.pending_voice = ""
-    if 'input_key' not in st.session_state: st.session_state.input_key = 0
+    if 'voice_text' not in st.session_state: st.session_state.voice_text = ""
+    
+    # Check URL params for voice message
+    params = st.query_params
+    voice_msg = params.get('v')
+    if voice_msg:
+        st.query_params.clear()
+        process_and_display(voice_msg)
+        st.rerun()
     
     # Header
     st.markdown('<div class="main-header"><h1>👩‍💼 Paula</h1><p style="color: #9ca3af;">Your AI Stock Analyst</p></div>', unsafe_allow_html=True)
@@ -405,89 +401,130 @@ def main():
     
     st.markdown("---")
     
-    # Voice input section
-    st.markdown("**🎤 Voice Input** *(Chrome/Edge only)*")
-    
-    # This component captures voice and stores in session via query params
-    voice_result = components.html("""
-        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
-            <button id="micBtn" onclick="toggleMic()" style="
-                background: linear-gradient(135deg, #8b5cf6, #6366f1);
-                color: white; border: none; padding: 12px 24px;
-                border-radius: 25px; cursor: pointer; font-size: 15px; font-weight: 600;
-            ">🎤 Click to Speak</button>
-            <span id="status" style="color: #9ca3af; font-size: 14px;"></span>
+    # Combined input with voice - all in one HTML component
+    components.html("""
+        <style>
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            .container {
+                display: flex;
+                align-items: center;
+                background: rgba(55, 65, 81, 0.95);
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                border-radius: 26px;
+                padding: 6px 8px 6px 16px;
+                gap: 8px;
+            }
+            #input {
+                flex: 1;
+                background: transparent;
+                border: none;
+                outline: none;
+                color: #fff;
+                font-size: 15px;
+                padding: 10px 0;
+            }
+            #input::placeholder { color: #9ca3af; }
+            .btn {
+                background: transparent;
+                border: none;
+                cursor: pointer;
+                font-size: 20px;
+                padding: 8px;
+                border-radius: 50%;
+                transition: background 0.2s;
+            }
+            .btn:hover { background: rgba(255,255,255,0.1); }
+            .send-btn {
+                background: #fff;
+                border: none;
+                border-radius: 50%;
+                width: 38px;
+                height: 38px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .send-btn:hover { background: #e5e7eb; }
+            #status {
+                text-align: center;
+                color: #ef4444;
+                font-size: 12px;
+                margin-top: 6px;
+                height: 16px;
+            }
+        </style>
+        
+        <div class="container">
+            <input type="text" id="input" placeholder="Ask Paula... (type or click 🎤)" />
+            <button class="btn" id="mic" onclick="toggleMic()">🎤</button>
+            <button class="send-btn" onclick="send()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2.5">
+                    <line x1="12" y1="19" x2="12" y2="5"></line>
+                    <polyline points="5 12 12 5 19 12"></polyline>
+                </svg>
+            </button>
         </div>
-        <div id="result" style="display: none; margin-top: 10px; padding: 12px 16px;
-            background: rgba(139, 92, 246, 0.15); border-radius: 12px; border: 1px solid rgba(139, 92, 246, 0.3);">
-            <span style="color: #a78bfa; font-size: 11px;">HEARD:</span>
-            <span id="heard" style="color: white; margin-left: 8px;"></span>
-        </div>
+        <div id="status"></div>
         
         <script>
             const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-            let recog = null, listening = false;
+            let rec = null, on = false;
             
             if (SR) {
-                recog = new SR();
-                recog.continuous = false;
-                recog.interimResults = true;
-                recog.lang = 'en-US';
+                rec = new SR();
+                rec.continuous = true;
+                rec.interimResults = true;
+                rec.lang = 'en-US';
                 
-                recog.onstart = () => {
-                    listening = true;
-                    document.getElementById('micBtn').innerHTML = '🔴 Listening...';
-                    document.getElementById('micBtn').style.background = '#ef4444';
-                    document.getElementById('status').innerText = 'Speak now';
-                    document.getElementById('result').style.display = 'none';
+                rec.onstart = () => {
+                    on = true;
+                    document.getElementById('mic').innerText = '🔴';
+                    document.getElementById('status').innerText = 'Listening... click 🔴 to stop';
                 };
                 
-                recog.onresult = (e) => {
-                    let text = '';
-                    for (let i = 0; i < e.results.length; i++) {
-                        text += e.results[i][0].transcript;
-                    }
-                    document.getElementById('result').style.display = 'block';
-                    document.getElementById('heard').innerText = text;
-                    
-                    // Store for retrieval
-                    window.voiceText = text;
+                rec.onresult = (e) => {
+                    let t = '';
+                    for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
+                    document.getElementById('input').value = t;
                 };
                 
-                recog.onend = () => {
-                    listening = false;
-                    document.getElementById('micBtn').innerHTML = '🎤 Click to Speak';
-                    document.getElementById('micBtn').style.background = 'linear-gradient(135deg, #8b5cf6, #6366f1)';
-                    document.getElementById('status').innerText = window.voiceText ? '✓ Copy text above to input below' : '';
+                rec.onend = () => {
+                    on = false;
+                    document.getElementById('mic').innerText = '🎤';
+                    document.getElementById('status').innerText = '';
                 };
                 
-                recog.onerror = (e) => {
-                    listening = false;
-                    document.getElementById('micBtn').innerHTML = '🎤 Click to Speak';
-                    document.getElementById('micBtn').style.background = 'linear-gradient(135deg, #8b5cf6, #6366f1)';
-                    document.getElementById('status').innerText = e.error === 'not-allowed' ? '⚠️ Allow microphone' : '';
+                rec.onerror = (e) => {
+                    on = false;
+                    document.getElementById('mic').innerText = '🎤';
+                    document.getElementById('status').innerText = e.error === 'not-allowed' ? '⚠️ Allow microphone access' : '';
                 };
-            } else {
-                document.getElementById('micBtn').innerHTML = '❌ Not Supported';
-                document.getElementById('micBtn').disabled = true;
-                document.getElementById('status').innerText = 'Use Chrome or Edge';
             }
             
             function toggleMic() {
-                if (!recog) return;
-                if (listening) recog.stop();
-                else { window.voiceText = ''; recog.start(); }
+                if (!rec) { alert('Use Chrome or Edge for voice'); return; }
+                if (on) rec.stop();
+                else { document.getElementById('input').value = ''; rec.start(); }
             }
+            
+            function send() {
+                const text = document.getElementById('input').value.trim();
+                if (!text) return;
+                if (on && rec) rec.stop();
+                
+                // Get base URL without query params
+                const base = window.parent.location.origin + window.parent.location.pathname;
+                window.parent.location.href = base + '?v=' + encodeURIComponent(text);
+            }
+            
+            document.getElementById('input').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') send();
+            });
         </script>
-    """, height=100)
+    """, height=80)
     
-    # Standard Streamlit chat input - this is the main input
-    if prompt := st.chat_input("Type your message here (or copy from voice above)...", key=f"chat_{st.session_state.input_key}"):
-        process_and_display(prompt)
-        st.session_state.input_key += 1  # Change key to clear input
-        st.rerun()
-    
-    st.markdown('<div style="text-align:center;color:#6b7280;font-size:12px;margin-top:20px;">👩‍💼 Paula • Yahoo Finance • ⚠️ Educational only</div>', unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center;color:#6b7280;font-size:12px;margin-top:30px;">👩‍💼 Paula • Yahoo Finance • 🎤 Voice: Chrome/Edge • ⚠️ Educational only</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
