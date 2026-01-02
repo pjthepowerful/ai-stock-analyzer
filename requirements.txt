@@ -7,3 +7,4 @@ groq
 plotly
 supabase
 extra-streamlit-components
+streamlit-js-eval
