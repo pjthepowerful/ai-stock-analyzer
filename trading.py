@@ -12,6 +12,7 @@ from groq import Groq
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit.components.v1 as components
+from streamlit_js_eval import streamlit_js_eval
 
 warnings.filterwarnings('ignore')
 load_dotenv()
@@ -61,6 +62,16 @@ st.markdown("""
         background: rgba(255, 255, 255, 0.05);
         padding: 8px 16px; border-radius: 20px; font-size: 14px; color: #9ca3af;
     }
+    /* Style the text input to look like a chat input */
+    div[data-testid="stTextInput"] > div > div {
+        background: rgba(55, 65, 81, 0.95) !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        border-radius: 24px !important;
+    }
+    div[data-testid="stTextInput"] input {
+        color: #ffffff !important;
+        padding: 12px 16px !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -89,10 +100,6 @@ def format_market_cap(value, market='US'):
     elif value >= 1e9: return f"{symbol}{value/1e9:.2f}B"
     elif value >= 1e6: return f"{symbol}{value/1e6:.2f}M"
     return f"{symbol}{value:,.0f}"
-
-def format_price(value, market='US'):
-    if value is None: return "N/A"
-    return f"{'₹' if market == 'India' else '$'}{value:,.2f}"
 
 # ==================== TECHNICAL ====================
 def calculate_rsi(data, period=14):
@@ -359,7 +366,7 @@ def main():
     if 'chat_messages' not in st.session_state: st.session_state.chat_messages = []
     if 'market' not in st.session_state: st.session_state.market = 'US'
     if 'charts_to_display' not in st.session_state: st.session_state.charts_to_display = []
-    if 'input_text' not in st.session_state: st.session_state.input_text = ""
+    if 'voice_text' not in st.session_state: st.session_state.voice_text = ""
     
     # Header
     st.markdown('<div class="main-header"><h1>👩‍💼 Paula</h1><p style="color: #9ca3af;">Your AI Stock Analyst</p></div>', unsafe_allow_html=True)
@@ -408,180 +415,101 @@ def main():
     
     st.markdown("---")
     
-    # Single unified input box with voice
-    components.html("""
-        <style>
-            * { box-sizing: border-box; }
-            .input-container {
-                display: flex;
-                align-items: center;
-                background: rgba(55, 65, 81, 0.95);
-                border: 1px solid rgba(255, 255, 255, 0.15);
-                border-radius: 28px;
-                padding: 8px 16px;
-                gap: 12px;
-                width: 100%;
-            }
-            .input-container input {
-                flex: 1;
-                background: transparent;
-                border: none;
-                outline: none;
-                color: #ffffff;
-                font-size: 16px;
-                padding: 10px 0;
-                min-width: 0;
-            }
-            .input-container input::placeholder {
-                color: #9ca3af;
-            }
-            .mic-btn {
-                background: transparent;
-                border: none;
-                cursor: pointer;
-                font-size: 22px;
-                padding: 8px;
-                border-radius: 50%;
-                transition: all 0.2s;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            .mic-btn:hover {
-                background: rgba(255,255,255,0.1);
-            }
-            .send-btn {
-                background: #ffffff;
-                border: none;
-                border-radius: 50%;
-                width: 40px;
-                height: 40px;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                transition: all 0.2s;
-                flex-shrink: 0;
-            }
-            .send-btn:hover {
-                background: #e5e7eb;
-            }
-            .status-text {
-                color: #ef4444;
-                font-size: 12px;
-                text-align: center;
-                margin-top: 8px;
-                height: 18px;
-            }
-        </style>
-        
-        <div class="input-container">
-            <input type="text" id="mainInput" placeholder="Ask Paula anything... (type or click 🎤)" />
-            <button class="mic-btn" id="micBtn" onclick="toggleMic()" title="Voice input">🎤</button>
-            <button class="send-btn" onclick="sendMessage()" title="Send">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1f2937" stroke-width="2.5">
-                    <line x1="12" y1="19" x2="12" y2="5"></line>
-                    <polyline points="5 12 12 5 19 12"></polyline>
-                </svg>
-            </button>
-        </div>
-        <div class="status-text" id="statusText"></div>
-        
-        <script>
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            let recognition = null;
-            let isListening = false;
-            
-            if (SpeechRecognition) {
-                recognition = new SpeechRecognition();
-                recognition.continuous = true;
-                recognition.interimResults = true;
-                recognition.lang = 'en-US';
-                
-                recognition.onresult = (event) => {
-                    let finalTranscript = '';
-                    let interimTranscript = '';
-                    
-                    for (let i = 0; i < event.results.length; i++) {
-                        if (event.results[i].isFinal) {
-                            finalTranscript += event.results[i][0].transcript;
-                        } else {
-                            interimTranscript += event.results[i][0].transcript;
-                        }
-                    }
-                    
-                    // Put the text directly in the input field
-                    document.getElementById('mainInput').value = finalTranscript + interimTranscript;
-                };
-                
-                recognition.onstart = () => {
-                    isListening = true;
-                    document.getElementById('micBtn').innerText = '🔴';
-                    document.getElementById('statusText').innerText = 'Listening... (click 🔴 to stop)';
-                };
-                
-                recognition.onend = () => {
-                    isListening = false;
-                    document.getElementById('micBtn').innerText = '🎤';
-                    document.getElementById('statusText').innerText = '';
-                };
-                
-                recognition.onerror = (e) => {
-                    isListening = false;
-                    document.getElementById('micBtn').innerText = '🎤';
-                    if (e.error === 'not-allowed') {
-                        document.getElementById('statusText').innerText = '⚠️ Microphone blocked - allow access';
-                    } else {
-                        document.getElementById('statusText').innerText = '';
-                    }
-                };
-            }
-            
-            function toggleMic() {
-                if (!recognition) {
-                    alert('Voice not supported. Use Chrome or Edge.');
-                    return;
-                }
-                
-                if (isListening) {
-                    recognition.stop();
-                } else {
-                    document.getElementById('mainInput').value = '';
-                    recognition.start();
-                }
-            }
-            
-            function sendMessage() {
-                const text = document.getElementById('mainInput').value.trim();
-                if (!text) return;
-                
-                if (isListening && recognition) {
-                    recognition.stop();
-                }
-                
-                // Navigate with the message as URL parameter
-                const url = new URL(window.parent.location.href);
-                url.searchParams.set('msg', encodeURIComponent(text));
-                window.parent.location.href = url.toString();
-            }
-            
-            // Allow Enter key to send
-            document.getElementById('mainInput').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    sendMessage();
-                }
-            });
-        </script>
-    """, height=90)
+    # Voice recording component - stores result in localStorage
+    voice_js = """
+    <div style="margin-bottom: 10px;">
+        <button id="micBtn" onclick="toggleMic()" style="
+            background: linear-gradient(135deg, #8b5cf6, #6366f1);
+            color: white; border: none; padding: 10px 20px;
+            border-radius: 20px; cursor: pointer; font-size: 14px;
+            font-weight: 600;
+        ">🎤 Voice Input</button>
+        <span id="status" style="margin-left: 10px; color: #9ca3af; font-size: 14px;"></span>
+    </div>
     
-    # Check for message from URL params
-    params = st.query_params
-    if 'msg' in params:
-        msg = params.get('msg')
-        st.query_params.clear()
-        if msg:
-            process_and_display(msg)
-            st.rerun()
+    <script>
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = null;
+        let isListening = false;
+        
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+            
+            recognition.onresult = (event) => {
+                const text = event.results[0][0].transcript;
+                // Store in localStorage for Streamlit to read
+                localStorage.setItem('voice_input', text);
+                document.getElementById('status').innerText = '✓ Got: "' + text + '" - Click Send below';
+                document.getElementById('micBtn').innerText = '🎤 Voice Input';
+                document.getElementById('micBtn').style.background = 'linear-gradient(135deg, #8b5cf6, #6366f1)';
+            };
+            
+            recognition.onstart = () => {
+                isListening = true;
+                document.getElementById('micBtn').innerText = '🔴 Listening...';
+                document.getElementById('micBtn').style.background = '#ef4444';
+                document.getElementById('status').innerText = 'Speak now...';
+            };
+            
+            recognition.onend = () => {
+                isListening = false;
+                document.getElementById('micBtn').innerText = '🎤 Voice Input';
+                document.getElementById('micBtn').style.background = 'linear-gradient(135deg, #8b5cf6, #6366f1)';
+            };
+            
+            recognition.onerror = (e) => {
+                document.getElementById('status').innerText = e.error === 'not-allowed' ? '⚠️ Mic blocked' : '';
+                document.getElementById('micBtn').innerText = '🎤 Voice Input';
+                document.getElementById('micBtn').style.background = 'linear-gradient(135deg, #8b5cf6, #6366f1)';
+            };
+        } else {
+            document.getElementById('micBtn').disabled = true;
+            document.getElementById('status').innerText = 'Voice not supported - use Chrome/Edge';
+        }
+        
+        function toggleMic() {
+            if (!recognition) return;
+            if (isListening) {
+                recognition.stop();
+            } else {
+                localStorage.removeItem('voice_input');
+                recognition.start();
+            }
+        }
+    </script>
+    """
+    components.html(voice_js, height=50)
+    
+    # Read voice input from localStorage using streamlit_js_eval
+    voice_from_storage = streamlit_js_eval(js_expressions="localStorage.getItem('voice_input')", key="get_voice")
+    
+    # Show input with voice text pre-filled if available
+    default_value = voice_from_storage if voice_from_storage else ""
+    
+    # Input row
+    col_input, col_send = st.columns([6, 1])
+    
+    with col_input:
+        user_input = st.text_input(
+            "Message",
+            value=default_value,
+            placeholder="Type here or use 🎤 voice above...",
+            label_visibility="collapsed",
+            key="main_input"
+        )
+    
+    with col_send:
+        send_clicked = st.button("➤ Send", type="primary", use_container_width=True)
+    
+    # Process message
+    if send_clicked and user_input.strip():
+        # Clear localStorage
+        streamlit_js_eval(js_expressions="localStorage.removeItem('voice_input')", key="clear_voice")
+        process_and_display(user_input.strip())
+        st.rerun()
     
     st.markdown('<div style="text-align:center;color:#6b7280;font-size:12px;margin-top:20px;">👩‍💼 Paula • Yahoo Finance • 🎤 Voice: Chrome/Edge • ⚠️ Educational only</div>', unsafe_allow_html=True)
 
