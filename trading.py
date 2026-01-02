@@ -11,6 +11,7 @@ import re
 from groq import Groq
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import streamlit.components.v1 as components
 
 warnings.filterwarnings('ignore')
 load_dotenv()
@@ -60,6 +61,13 @@ st.markdown("""
         background: rgba(255, 255, 255, 0.05);
         padding: 8px 16px; border-radius: 20px; font-size: 14px; color: #9ca3af;
     }
+    .voice-result {
+        background: rgba(139, 92, 246, 0.1);
+        border: 1px solid rgba(139, 92, 246, 0.3);
+        border-radius: 10px;
+        padding: 10px 15px;
+        margin: 10px 0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -93,7 +101,7 @@ def format_price(value, market='US'):
     if value is None: return "N/A"
     return f"{'₹' if market == 'India' else '$'}{value:,.2f}"
 
-# ==================== TECHNICAL INDICATORS ====================
+# ==================== TECHNICAL ====================
 def calculate_rsi(data, period=14):
     delta = data['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
@@ -120,7 +128,6 @@ def create_technical_chart(ticker, period="6mo"):
         hist['MA20'] = hist['Close'].rolling(window=20).mean()
         hist['MA50'] = hist['Close'].rolling(window=50).mean()
         
-        from plotly.subplots import make_subplots
         fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.05,
             row_heights=[0.5, 0.25, 0.25], subplot_titles=(f'{display_name} Price', 'RSI', 'MACD'))
         
@@ -142,7 +149,7 @@ def create_technical_chart(ticker, period="6mo"):
         return fig
     except: return None
 
-# ==================== DATA FETCHING ====================
+# ==================== DATA ====================
 @st.cache_data(ttl=120)
 def get_live_stock_data(ticker):
     try:
@@ -269,7 +276,7 @@ def screen_stocks(screen_type):
     if results: return {"success": True, "screen_type": screen_type.title(), "found": len(results), "table": results[:15]}
     return {"success": False, "message": f"No {screen_type} stocks found"}
 
-# ==================== AI PROCESSING ====================
+# ==================== AI ====================
 def detect_and_execute(message):
     msg = message.lower()
     
@@ -341,26 +348,25 @@ def display_charts():
         fig = create_technical_chart(ticker, period)
         if fig: st.plotly_chart(fig, use_container_width=True)
 
+def process_and_display(prompt):
+    """Process a message and display results"""
+    st.session_state.chat_messages.append({"role": "user", "content": prompt})
+    
+    with st.spinner("📡 Fetching data..."):
+        response, data = process_message(prompt, st.session_state.chat_messages[:-1])
+    
+    msg_data = {"role": "assistant", "content": response}
+    if data and "table" in data: 
+        msg_data["table_data"] = data
+    st.session_state.chat_messages.append(msg_data)
+
 # ==================== MAIN ====================
 def main():
     # Init state
     if 'chat_messages' not in st.session_state: st.session_state.chat_messages = []
     if 'market' not in st.session_state: st.session_state.market = 'US'
     if 'charts_to_display' not in st.session_state: st.session_state.charts_to_display = []
-    if 'voice_text' not in st.session_state: st.session_state.voice_text = ""
-    
-    # Check URL params for voice input
-    params = st.query_params
-    if 'q' in params:
-        voice_msg = params.get('q')
-        st.query_params.clear()
-        if voice_msg:
-            st.session_state.chat_messages.append({"role": "user", "content": voice_msg})
-            with st.spinner("Processing..."):
-                response, data = process_message(voice_msg, st.session_state.chat_messages[:-1])
-            msg_data = {"role": "assistant", "content": response}
-            if data and "table" in data: msg_data["table_data"] = data
-            st.session_state.chat_messages.append(msg_data)
+    if 'voice_transcript' not in st.session_state: st.session_state.voice_transcript = ""
     
     # Header
     st.markdown('<div class="main-header"><h1>👩‍💼 Paula</h1><p style="color: #9ca3af;">Your AI Stock Analyst</p></div>', unsafe_allow_html=True)
@@ -377,7 +383,9 @@ def main():
             st.session_state.charts_to_display = []
             st.rerun()
     with col3:
-        if st.button("🔄", help="Refresh"): st.rerun()
+        if st.button("🔄", help="Refresh"): 
+            st.cache_data.clear()
+            st.rerun()
     
     st.markdown("---")
     
@@ -402,85 +410,138 @@ def main():
         cols = st.columns(len(examples))
         for i, ex in enumerate(examples):
             if cols[i].button(ex, key=f"ex_{i}", use_container_width=True):
-                st.session_state.chat_messages.append({"role": "user", "content": ex})
+                process_and_display(ex)
                 st.rerun()
     
     st.markdown("---")
     
-    # Single input with voice button
-    st.markdown("**💬 Ask Paula** *(type or use 🎤 voice)*")
+    # Voice Input Section
+    st.markdown("### 🎤 Voice Input")
+    st.caption("Click the button, speak, then click 'Send to Paula'")
     
-    # Voice component - just a button that triggers browser speech recognition
-    voice_html = """
-    <div style="margin-bottom: 10px;">
-        <button id="voiceBtn" onclick="startVoice()" style="
-            background: linear-gradient(135deg, #8b5cf6, #6366f1);
-            color: white; border: none; padding: 10px 20px;
-            border-radius: 20px; cursor: pointer; font-size: 14px;
-        ">🎤 Click to Speak</button>
-        <span id="voiceStatus" style="margin-left: 10px; color: #9ca3af;"></span>
-    </div>
-    <script>
-    function startVoice() {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-            alert('Voice not supported. Use Chrome or Edge.');
-            return;
-        }
-        
-        const recognition = new SpeechRecognition();
-        recognition.lang = 'en-US';
-        recognition.interimResults = false;
-        
-        document.getElementById('voiceBtn').innerText = '🔴 Listening...';
-        document.getElementById('voiceBtn').style.background = '#ef4444';
-        document.getElementById('voiceStatus').innerText = 'Speak now...';
-        
-        recognition.onresult = (event) => {
-            const text = event.results[0][0].transcript;
-            document.getElementById('voiceStatus').innerText = 'Heard: ' + text;
+    # Create columns for voice UI
+    vcol1, vcol2 = st.columns([3, 1])
+    
+    with vcol1:
+        # Voice recorder component
+        voice_component = components.html("""
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <button id="recordBtn" onclick="toggleRecording()" style="
+                    background: linear-gradient(135deg, #8b5cf6, #6366f1);
+                    color: white; border: none; padding: 12px 24px;
+                    border-radius: 25px; cursor: pointer; font-size: 16px;
+                    font-weight: 600; transition: all 0.3s;
+                ">🎤 Start Recording</button>
+                <span id="status" style="color: #9ca3af; font-size: 14px;"></span>
+            </div>
+            <div id="result" style="
+                margin-top: 15px; padding: 15px; 
+                background: rgba(139, 92, 246, 0.1); 
+                border: 1px solid rgba(139, 92, 246, 0.3);
+                border-radius: 10px; display: none;
+            ">
+                <div style="color: #a78bfa; font-size: 12px; margin-bottom: 5px;">YOU SAID:</div>
+                <div id="transcript" style="color: white; font-size: 16px;"></div>
+            </div>
+            <input type="hidden" id="hiddenTranscript" />
             
-            // Redirect with the voice text as query param
-            const url = new URL(window.parent.location.href);
-            url.searchParams.set('q', text);
-            window.parent.location.href = url.toString();
-        };
-        
-        recognition.onerror = (e) => {
-            document.getElementById('voiceBtn').innerText = '🎤 Click to Speak';
-            document.getElementById('voiceBtn').style.background = 'linear-gradient(135deg, #8b5cf6, #6366f1)';
-            document.getElementById('voiceStatus').innerText = e.error === 'not-allowed' ? 'Mic blocked!' : 'Error, try again';
-        };
-        
-        recognition.onend = () => {
-            document.getElementById('voiceBtn').innerText = '🎤 Click to Speak';
-            document.getElementById('voiceBtn').style.background = 'linear-gradient(135deg, #8b5cf6, #6366f1)';
-        };
-        
-        recognition.start();
-    }
-    </script>
-    """
+            <script>
+                let recognition;
+                let isRecording = false;
+                let finalTranscript = '';
+                
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                
+                if (SpeechRecognition) {
+                    recognition = new SpeechRecognition();
+                    recognition.continuous = true;
+                    recognition.interimResults = true;
+                    recognition.lang = 'en-US';
+                    
+                    recognition.onresult = (event) => {
+                        let interim = '';
+                        finalTranscript = '';
+                        
+                        for (let i = 0; i < event.results.length; i++) {
+                            if (event.results[i].isFinal) {
+                                finalTranscript += event.results[i][0].transcript;
+                            } else {
+                                interim += event.results[i][0].transcript;
+                            }
+                        }
+                        
+                        const text = finalTranscript || interim;
+                        if (text) {
+                            document.getElementById('result').style.display = 'block';
+                            document.getElementById('transcript').innerText = text;
+                            document.getElementById('hiddenTranscript').value = text;
+                            
+                            // Store in parent window for Streamlit to access
+                            window.parent.postMessage({type: 'voice_result', text: text}, '*');
+                        }
+                    };
+                    
+                    recognition.onend = () => {
+                        isRecording = false;
+                        document.getElementById('recordBtn').innerText = '🎤 Start Recording';
+                        document.getElementById('recordBtn').style.background = 'linear-gradient(135deg, #8b5cf6, #6366f1)';
+                        document.getElementById('status').innerText = finalTranscript ? 'Recording complete!' : '';
+                    };
+                    
+                    recognition.onerror = (e) => {
+                        isRecording = false;
+                        document.getElementById('recordBtn').innerText = '🎤 Start Recording';
+                        document.getElementById('recordBtn').style.background = 'linear-gradient(135deg, #8b5cf6, #6366f1)';
+                        document.getElementById('status').innerText = e.error === 'not-allowed' ? '⚠️ Microphone access denied' : '⚠️ Error: ' + e.error;
+                    };
+                } else {
+                    document.getElementById('recordBtn').disabled = true;
+                    document.getElementById('recordBtn').innerText = '❌ Not Supported';
+                    document.getElementById('status').innerText = 'Use Chrome or Edge';
+                }
+                
+                function toggleRecording() {
+                    if (!recognition) return;
+                    
+                    if (isRecording) {
+                        recognition.stop();
+                    } else {
+                        finalTranscript = '';
+                        document.getElementById('result').style.display = 'none';
+                        document.getElementById('transcript').innerText = '';
+                        recognition.start();
+                        isRecording = true;
+                        document.getElementById('recordBtn').innerText = '⏹️ Stop Recording';
+                        document.getElementById('recordBtn').style.background = '#ef4444';
+                        document.getElementById('status').innerText = '🔴 Listening...';
+                    }
+                }
+            </script>
+        """, height=150)
     
-    import streamlit.components.v1 as components
-    components.html(voice_html, height=60)
+    # Voice text input - user can see/edit what was transcribed
+    voice_text = st.text_input(
+        "Transcribed text (edit if needed):", 
+        value=st.session_state.voice_transcript,
+        key="voice_input_field",
+        placeholder="Your speech will appear here..."
+    )
     
-    # Text input
-    if prompt := st.chat_input("Type your question here..."):
-        st.session_state.chat_messages.append({"role": "user", "content": prompt})
-        
-        with st.chat_message("user"):
-            st.markdown(prompt)
-        
-        with st.chat_message("assistant"):
-            with st.spinner("📡 Fetching data..."):
-                response, data = process_message(prompt, st.session_state.chat_messages[:-1])
-            st.markdown(response)
-            if data and "table" in data: display_table(data)
-        
-        msg_data = {"role": "assistant", "content": response}
-        if data and "table" in data: msg_data["table_data"] = data
-        st.session_state.chat_messages.append(msg_data)
+    # Send voice button
+    if st.button("📤 Send to Paula", type="primary", use_container_width=True):
+        if voice_text.strip():
+            process_and_display(voice_text.strip())
+            st.session_state.voice_transcript = ""
+            st.rerun()
+        else:
+            st.warning("Please record something first or type in the box above.")
+    
+    st.markdown("---")
+    
+    # Regular text input  
+    st.markdown("### ⌨️ Or Type Here")
+    if prompt := st.chat_input("Type your question..."):
+        process_and_display(prompt)
         st.rerun()
     
     st.markdown('<div style="text-align:center;color:#6b7280;font-size:12px;margin-top:20px;">👩‍💼 Paula • Yahoo Finance • ⚠️ Educational only</div>', unsafe_allow_html=True)
