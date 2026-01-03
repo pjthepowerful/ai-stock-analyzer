@@ -135,7 +135,7 @@ st.markdown("""
         outline: none !important;
     }
     
-    /* Form container styling */
+    /* Form container styling - FIXED TO BOTTOM */
     [data-testid="stForm"] {
         background: rgba(17, 24, 39, 0.95) !important;
         backdrop-filter: blur(10px) !important;
@@ -144,12 +144,27 @@ st.markdown("""
         padding: 12px 16px !important;
         position: fixed !important;
         bottom: 20px !important;
+        top: auto !important;
         left: 50% !important;
         transform: translateX(-50%) !important;
         width: calc(100% - 40px) !important;
         max-width: 800px !important;
-        z-index: 1000 !important;
+        z-index: 9999 !important;
         box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3) !important;
+    }
+    
+    /* Ensure form stays at bottom */
+    [data-testid="stFormSubmitButton"] {
+        margin-bottom: 0 !important;
+    }
+    
+    /* Add padding to main content so it doesn't hide behind input */
+    .main .block-container {
+        padding-bottom: 120px !important;
+    }
+    
+    section[data-testid="stMain"] {
+        padding-bottom: 100px !important;
     }
     
     /* Dataframe / table styling */
