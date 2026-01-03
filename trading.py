@@ -244,7 +244,8 @@ def get_live_stock_data(ticker):
     try:
         stock = yf.Ticker(ticker)
         info = stock.info
-        if not info: return None
+        if not info: 
+            return None
         
         current_price = info.get('regularMarketPrice') or info.get('currentPrice') or info.get('previousClose')
         if current_price is None:
@@ -267,7 +268,9 @@ def get_live_stock_data(ticker):
             "current_ratio": info.get('currentRatio'), "dividend_yield": info.get('dividendYield'),
             "sector": info.get('sector', 'N/A'), "industry": info.get('industry', 'N/A'), "market": market,
         }
-    except: return None
+    except Exception as e:
+        st.error(f"❌ Error fetching {ticker}: {str(e)}")
+        return None
 
 # ==================== ANALYSIS ====================
 def analyze_stock(ticker):
