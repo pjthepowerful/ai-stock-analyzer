@@ -83,9 +83,9 @@ st.markdown("""
         padding: 8px 16px; border-radius: 20px; font-size: 14px; color: #9ca3af !important;
     }
     
-    /* Unified input styling */
+    /* Unified input styling - ALWAYS DARK */
     .stTextInput > div > div > input {
-        background: rgba(255, 255, 255, 0.08) !important;
+        background: #1a1a2e !important;
         border: 1px solid rgba(255, 255, 255, 0.2) !important;
         border-radius: 12px !important;
         padding: 14px 18px !important;
@@ -100,6 +100,33 @@ st.markdown("""
     .stTextInput > div > div > input:focus {
         border-color: #8b5cf6 !important;
         box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25) !important;
+        background: #1a1a2e !important;
+    }
+    
+    /* Force form container dark */
+    [data-testid="stForm"] {
+        background: #0d1117 !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 16px !important;
+        padding: 12px !important;
+    }
+    
+    /* Force submit button dark */
+    .stFormSubmitButton > button {
+        background: #1a1a2e !important;
+        color: #ffffff !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        border-radius: 12px !important;
+    }
+    
+    .stFormSubmitButton > button:hover {
+        background: #2d2d44 !important;
+        border-color: #8b5cf6 !important;
+    }
+    
+    /* Force mic button area dark */
+    [data-testid="stForm"] [data-testid="column"] {
+        background: transparent !important;
     }
     
     /* Dataframe styling */
@@ -243,21 +270,9 @@ def create_technical_chart(ticker, period="6mo"):
 def get_live_stock_data(ticker):
     try:
         stock = yf.Ticker(ticker)
+        info = stock.info
         
-        # Debug: Show what we're getting
-        try:
-            info = stock.info
-        except Exception as e:
-            st.error(f"❌ Failed to get info for {ticker}: {e}")
-            return None
-        
-        if not info:
-            st.warning(f"⚠️ No info returned for {ticker}")
-            return None
-        
-        # Debug: Show if info is just empty or has error
-        if len(info) < 5:
-            st.warning(f"⚠️ Incomplete data for {ticker}: {info}")
+        if not info or len(info) < 5:
             return None
         
         current_price = info.get('regularMarketPrice') or info.get('currentPrice') or info.get('previousClose')
@@ -266,7 +281,6 @@ def get_live_stock_data(ticker):
             if not hist.empty: 
                 current_price = hist['Close'].iloc[-1]
             else: 
-                st.warning(f"⚠️ No price data for {ticker}")
                 return None
         
         market = 'India' if '.NS' in ticker or '.BO' in ticker else 'US'
@@ -284,8 +298,7 @@ def get_live_stock_data(ticker):
             "current_ratio": info.get('currentRatio'), "dividend_yield": info.get('dividendYield'),
             "sector": info.get('sector', 'N/A'), "industry": info.get('industry', 'N/A'), "market": market,
         }
-    except Exception as e:
-        st.error(f"❌ Error fetching {ticker}: {type(e).__name__}: {str(e)}")
+    except:
         return None
 
 # ==================== ANALYSIS ====================
@@ -300,9 +313,11 @@ def analyze_stock(ticker):
         data = get_live_stock_data(alt_ticker)
         full_ticker = alt_ticker
     
-    if not data: return {"success": False, "error": f"Could not fetch data for {original}"}
-    
+    # Always try to show chart, even if detailed data failed
     st.session_state.charts_to_display = [full_ticker]
+    
+    if not data: 
+        return {"success": False, "error": f"Could not fetch detailed data for {original}", "ticker": original}
     
     score = 0
     if data['pe_ratio'] and 0 < data['pe_ratio'] < 25: score += 2
