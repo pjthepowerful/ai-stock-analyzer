@@ -498,9 +498,16 @@ def display_charts():
     
     st.markdown("### 📈 Charts")
     period = st.selectbox("Period", ["1mo", "3mo", "6mo", "1y"], index=2, key="chart_period")
+    
+    charts_loaded = False
     for ticker in charts[:3]:
         fig = create_technical_chart(ticker, period)
-        if fig: st.plotly_chart(fig, use_container_width=True)
+        if fig: 
+            st.plotly_chart(fig, use_container_width=True)
+            charts_loaded = True
+    
+    if not charts_loaded:
+        st.warning("📊 Unable to load charts right now. Yahoo Finance may be temporarily unavailable.")
 
 def process_and_display(prompt):
     st.session_state.chat_messages.append({"role": "user", "content": prompt})
