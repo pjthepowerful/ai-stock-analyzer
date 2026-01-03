@@ -313,11 +313,12 @@ def analyze_stock(ticker):
         data = get_live_stock_data(alt_ticker)
         full_ticker = alt_ticker
     
-    # Always try to show chart, even if detailed data failed
-    st.session_state.charts_to_display = [full_ticker]
-    
     if not data: 
+        # Don't set charts if data fetch failed
         return {"success": False, "error": f"Could not fetch detailed data for {original}", "ticker": original}
+    
+    # Only show chart if we got valid data
+    st.session_state.charts_to_display = [full_ticker]
     
     score = 0
     if data['pe_ratio'] and 0 < data['pe_ratio'] < 25: score += 2
@@ -403,12 +404,21 @@ def screen_stocks(screen_type):
 def detect_and_execute(message):
     msg = message.lower()
     
-    if any(w in msg for w in ['undervalued', 'value', 'cheap']): return screen_stocks("undervalued")
-    if any(w in msg for w in ['growth', 'growing']): return screen_stocks("growth")
-    if any(w in msg for w in ['dividend', 'yield', 'income']): return screen_stocks("dividend")
+    # Clear charts for non-stock queries
+    st.session_state.charts_to_display = []
+    
+    # Check for screening keywords first
+    if any(w in msg for w in ['undervalued', 'value stocks', 'cheap stocks']): return screen_stocks("undervalued")
+    if any(w in msg for w in ['growth stocks', 'growing companies']): return screen_stocks("growth")
+    if any(w in msg for w in ['dividend', 'yield', 'income stocks']): return screen_stocks("dividend")
+    
+    # Check for stock-related intent (must have these words to trigger stock analysis)
+    stock_intent_words = ['stock', 'price', 'analyze', 'analysis', 'ticker', 'share', 'shares', 
+                          'buy', 'sell', 'invest', 'trading', 'market cap', 'pe ratio', 'compare']
+    has_stock_intent = any(w in msg for w in stock_intent_words)
     
     # Handle comparisons - check for company names AND tickers
-    if any(w in msg for w in ['compare', 'vs', 'versus', ' and ', ' or ']):
+    if any(w in msg for w in ['compare', 'vs', 'versus']):
         found_tickers = []
         
         # First, find company names in message
@@ -437,21 +447,25 @@ def detect_and_execute(message):
         if company_name in msg:
             return analyze_stock(COMPANY_TO_TICKER[company_name])
     
-    # Fall back to ticker symbol detection
-    tickers = re.findall(r'\b([A-Z]{2,6})\b', message.upper())
-    exclude = ['PE', 'ROE', 'VS', 'AND', 'THE', 'FOR', 'AI', 'OK', 'HI', 'RSI', 'MACD', 
-               'ANALYZE', 'ANALYSIS', 'TELL', 'ME', 'ABOUT', 'SHOW', 'GET', 'FIND']
+    # Only look for ticker symbols if there's stock intent
+    if has_stock_intent:
+        tickers = re.findall(r'\b([A-Z]{2,6})\b', message.upper())
+        exclude = ['PE', 'ROE', 'VS', 'AND', 'THE', 'FOR', 'AI', 'OK', 'HI', 'RSI', 'MACD', 
+                   'ANALYZE', 'ANALYSIS', 'TELL', 'ME', 'ABOUT', 'SHOW', 'GET', 'FIND', 
+                   'STOCK', 'PRICE', 'BUY', 'SELL', 'WHAT', 'HOW', 'WHY', 'CAN', 'YOU']
+        
+        for t in tickers:
+            if t in US_STOCKS and t not in exclude: return analyze_stock(t)
+        
+        indian_names = [s.replace('.NS', '') for s in INDIAN_STOCKS]
+        for t in tickers:
+            if t in indian_names and t not in exclude: return analyze_stock(t)
+        
+        # Only try unknown tickers if there's clear stock intent
+        for t in tickers:
+            if t not in exclude and len(t) >= 3: return analyze_stock(t)
     
-    for t in tickers:
-        if t in US_STOCKS and t not in exclude: return analyze_stock(t)
-    
-    indian_names = [s.replace('.NS', '') for s in INDIAN_STOCKS]
-    for t in tickers:
-        if t in indian_names and t not in exclude: return analyze_stock(t)
-    
-    for t in tickers:
-        if t not in exclude and len(t) >= 2: return analyze_stock(t)
-    
+    # No stock query detected - return None for general conversation
     return None
 
 def process_message(user_message, history):
@@ -572,44 +586,51 @@ def main():
     st.markdown("---")
     
     # ==================== UNIFIED INPUT (Voice + Text) ====================
-    # Use a form to properly handle submission and clearing
-    with st.form(key="chat_form", clear_on_submit=True):
-        input_col1, input_col2, input_col3 = st.columns([5, 1, 1])
-        
-        with input_col1:
-            text_input = st.text_input(
-                "Message Paula",
-                placeholder="Ask about any stock or click 🎤 to speak...",
-                key="unified_input",
-                label_visibility="collapsed"
-            )
-        
-        with input_col2:
-            try:
-                from streamlit_mic_recorder import speech_to_text
-                voice_text = speech_to_text(
-                    language='en',
-                    start_prompt="🎤",
-                    stop_prompt="⏹️",
-                    just_once=True,
-                    use_container_width=True,
-                    key='voice_input'
-                )
-            except ImportError:
-                voice_text = None
-                st.write("")  # Placeholder
-        
-        with input_col3:
-            submitted = st.form_submit_button("➤", use_container_width=True)
     
-    # Process input only when form is submitted
+    # Check for voice input first (auto-sends)
+    try:
+        from streamlit_mic_recorder import speech_to_text
+        has_voice = True
+    except ImportError:
+        has_voice = False
+        voice_text = None
+    
+    # Layout: [Text Input] [Mic] [Send]
+    col1, col2, col3 = st.columns([5, 0.7, 0.7])
+    
+    with col1:
+        with st.form(key="chat_form", clear_on_submit=True):
+            form_col1, form_col2 = st.columns([5, 1])
+            with form_col1:
+                text_input = st.text_input(
+                    "Message Paula",
+                    placeholder="Ask about any stock or click 🎤 to speak...",
+                    key="unified_input",
+                    label_visibility="collapsed"
+                )
+            with form_col2:
+                submitted = st.form_submit_button("➤", use_container_width=True)
+    
+    with col2:
+        if has_voice:
+            voice_text = speech_to_text(
+                language='en',
+                start_prompt="🎤",
+                stop_prompt="⏹️",
+                just_once=True,
+                use_container_width=True,
+                key='voice_input'
+            )
+        else:
+            st.button("🎤", disabled=True, help="pip install streamlit-mic-recorder", use_container_width=True)
+    
+    # Process text input
     if submitted and text_input:
         process_and_display(text_input)
         st.rerun()
     
-    # Handle voice input separately (outside form)
-    if voice_text:
-        st.toast(f"🗣️ You said: {voice_text}")
+    # Auto-send voice input immediately
+    if has_voice and voice_text:
         process_and_display(voice_text)
         st.rerun()
     
