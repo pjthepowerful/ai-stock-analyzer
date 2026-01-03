@@ -586,33 +586,26 @@ def main():
     st.markdown("---")
     
     # ==================== UNIFIED INPUT (Voice + Text) ====================
+    input_col1, input_col2 = st.columns([6, 1])
     
-    # Check for voice input first (auto-sends)
-    try:
-        from streamlit_mic_recorder import speech_to_text
-        has_voice = True
-    except ImportError:
-        has_voice = False
-        voice_text = None
+    with input_col1:
+        # Use callback to handle submission
+        def submit_text():
+            if st.session_state.get('text_input_value'):
+                st.session_state.pending_message = st.session_state.text_input_value
+                st.session_state.text_input_value = ""
+        
+        text_input = st.text_input(
+            "Message Paula",
+            placeholder="Ask about any stock or click 🎤 to speak...",
+            key="text_input_value",
+            on_change=submit_text,
+            label_visibility="collapsed"
+        )
     
-    # Layout: [Text Input] [Mic] [Send]
-    col1, col2, col3 = st.columns([5, 0.7, 0.7])
-    
-    with col1:
-        with st.form(key="chat_form", clear_on_submit=True):
-            form_col1, form_col2 = st.columns([5, 1])
-            with form_col1:
-                text_input = st.text_input(
-                    "Message Paula",
-                    placeholder="Ask about any stock or click 🎤 to speak...",
-                    key="unified_input",
-                    label_visibility="collapsed"
-                )
-            with form_col2:
-                submitted = st.form_submit_button("➤", use_container_width=True)
-    
-    with col2:
-        if has_voice:
+    with input_col2:
+        try:
+            from streamlit_mic_recorder import speech_to_text
             voice_text = speech_to_text(
                 language='en',
                 start_prompt="🎤",
@@ -621,16 +614,18 @@ def main():
                 use_container_width=True,
                 key='voice_input'
             )
-        else:
-            st.button("🎤", disabled=True, help="pip install streamlit-mic-recorder", use_container_width=True)
+        except ImportError:
+            voice_text = None
     
-    # Process text input
-    if submitted and text_input:
-        process_and_display(text_input)
+    # Process pending message from text input
+    if st.session_state.get('pending_message'):
+        msg = st.session_state.pending_message
+        st.session_state.pending_message = None
+        process_and_display(msg)
         st.rerun()
     
-    # Auto-send voice input immediately
-    if has_voice and voice_text:
+    # Process voice input (auto-sends)
+    if voice_text:
         process_and_display(voice_text)
         st.rerun()
     
