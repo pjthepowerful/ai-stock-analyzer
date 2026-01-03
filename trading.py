@@ -322,10 +322,26 @@ def detect_and_execute(message):
     if any(w in msg for w in ['undervalued', 'value', 'cheap']): return screen_stocks("undervalued")
     if any(w in msg for w in ['growth', 'growing']): return screen_stocks("growth")
     if any(w in msg for w in ['dividend', 'yield', 'income']): return screen_stocks("dividend")
-    if any(w in msg for w in ['compare', 'vs', 'versus']):
-        tickers = re.findall(r'\b([A-Z]{2,6})\b', message.upper())
-        tickers = [t for t in tickers if t not in ['PE', 'ROE', 'VS', 'AND', 'THE', 'FOR']]
-        if len(tickers) >= 2: return compare_stocks(','.join(tickers))
+    
+    # Handle comparisons - check for company names AND tickers
+    if any(w in msg for w in ['compare', 'vs', 'versus', ' and ', ' or ']):
+        found_tickers = []
+        
+        # First, find company names in message
+        for company_name, ticker in COMPANY_TO_TICKER.items():
+            if company_name in msg:
+                if ticker not in found_tickers:
+                    found_tickers.append(ticker)
+        
+        # Also find ticker symbols
+        ticker_matches = re.findall(r'\b([A-Z]{2,6})\b', message.upper())
+        exclude = ['PE', 'ROE', 'VS', 'AND', 'THE', 'FOR', 'OR', 'COMPARE', 'WITH']
+        for t in ticker_matches:
+            if t not in exclude and t not in found_tickers:
+                found_tickers.append(t)
+        
+        if len(found_tickers) >= 2:
+            return compare_stocks(','.join(found_tickers))
     
     # First, try to find company name in message
     ticker_from_name = get_ticker_from_name(msg)
