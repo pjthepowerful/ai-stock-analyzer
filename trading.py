@@ -22,61 +22,174 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# CSS
+# Force dark theme via config
+if 'theme' not in st.session_state:
+    st.session_state.theme = 'dark'
+
+# CSS - Force Dark Mode
 st.markdown("""
 <style>
-    .stApp { background: linear-gradient(180deg, #0a0f1a 0%, #111827 100%); }
+    /* Force dark mode */
+    :root {
+        color-scheme: dark !important;
+    }
+    
+    .stApp { 
+        background: linear-gradient(180deg, #0a0f1a 0%, #111827 100%) !important; 
+    }
+    
     #MainMenu, footer, header {visibility: hidden;}
+    
     h1, h2, h3 {color: #ffffff !important; font-weight: 700 !important;}
     p, span, div, label {color: #d1d5db !important;}
+    
+    /* Force all text to be light */
+    .stMarkdown, .stText, .element-container {
+        color: #d1d5db !important;
+    }
+    
     .stChatMessage {
         background: rgba(255, 255, 255, 0.03) !important;
         border: 1px solid rgba(255, 255, 255, 0.08) !important;
         border-radius: 16px !important;
     }
+    
+    /* Chat message text */
+    .stChatMessage p, .stChatMessage span, .stChatMessage div {
+        color: #e5e7eb !important;
+    }
+    
     .stSelectbox > div > div {
         background: rgba(255, 255, 255, 0.08) !important;
         border: 1px solid rgba(255, 255, 255, 0.15) !important;
         border-radius: 10px !important;
+        color: #ffffff !important;
     }
+    
+    .stSelectbox label {
+        color: #9ca3af !important;
+    }
+    
+    /* Buttons */
     .stButton > button {
         background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-        color: white !important; border: none !important; border-radius: 10px !important;
+        color: white !important; 
+        border: none !important; 
+        border-radius: 10px !important;
     }
+    
+    .stButton > button:hover {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+        transform: translateY(-1px);
+    }
+    
+    /* Form submit button */
+    .stFormSubmitButton > button {
+        background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 12px !important;
+        font-size: 18px !important;
+        padding: 8px 16px !important;
+    }
+    
     hr {border-color: rgba(255, 255, 255, 0.1) !important;}
+    
     .main-header {text-align: center; padding: 1rem 0;}
     .main-header h1 {
         font-size: 2.5rem !important;
         background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        -webkit-background-clip: text; 
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
     }
+    
     .market-badge {
-        display: inline-flex; align-items: center; gap: 8px;
+        display: inline-flex; 
+        align-items: center; 
+        gap: 8px;
         background: rgba(255, 255, 255, 0.05);
-        padding: 8px 16px; border-radius: 20px; font-size: 14px; color: #9ca3af;
+        padding: 8px 16px; 
+        border-radius: 20px; 
+        font-size: 14px; 
+        color: #9ca3af !important;
     }
-    /* Voice button styling */
-    .voice-container {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 10px 0;
-    }
-    /* Unified input styling */
+    
+    /* Input field styling */
     .stTextInput > div > div > input {
-        background: rgba(255, 255, 255, 0.05) !important;
-        border: 1px solid rgba(255, 255, 255, 0.15) !important;
-        border-radius: 25px !important;
-        padding: 12px 20px !important;
+        background: rgba(255, 255, 255, 0.08) !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        border-radius: 12px !important;
+        padding: 14px 18px !important;
         color: #ffffff !important;
         font-size: 16px !important;
     }
+    
     .stTextInput > div > div > input::placeholder {
         color: #6b7280 !important;
     }
+    
     .stTextInput > div > div > input:focus {
         border-color: #8b5cf6 !important;
-        box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2) !important;
+        box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25) !important;
+        outline: none !important;
+    }
+    
+    /* Form container styling */
+    [data-testid="stForm"] {
+        background: rgba(17, 24, 39, 0.95) !important;
+        backdrop-filter: blur(10px) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 16px !important;
+        padding: 12px 16px !important;
+        position: fixed !important;
+        bottom: 20px !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        width: calc(100% - 40px) !important;
+        max-width: 800px !important;
+        z-index: 1000 !important;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3) !important;
+    }
+    
+    /* Dataframe / table styling */
+    .stDataFrame {
+        background: rgba(255, 255, 255, 0.03) !important;
+        border-radius: 10px !important;
+    }
+    
+    [data-testid="stDataFrame"] > div {
+        background: transparent !important;
+    }
+    
+    /* Toast notifications */
+    .stToast {
+        background: #1f2937 !important;
+        color: #ffffff !important;
+    }
+    
+    /* Progress bar */
+    .stProgress > div > div {
+        background: linear-gradient(90deg, #8b5cf6, #6d28d9) !important;
+    }
+    
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: #1f2937;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: #4b5563;
+        border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: #6b7280;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -445,6 +558,7 @@ def main():
     if 'chat_messages' not in st.session_state: st.session_state.chat_messages = []
     if 'market' not in st.session_state: st.session_state.market = 'US'
     if 'charts_to_display' not in st.session_state: st.session_state.charts_to_display = []
+    if 'pending_input' not in st.session_state: st.session_state.pending_input = None
     
     # Header
     st.markdown('<div class="main-header"><h1>👩‍💼 Paula</h1><p style="color: #9ca3af;">Your AI Stock Analyst</p></div>', unsafe_allow_html=True)
@@ -472,67 +586,78 @@ def main():
         st.error("⚠️ Add GROQ_API_KEY to secrets")
         return
     
-    # Chat history
-    for m in st.session_state.chat_messages:
-        with st.chat_message(m["role"]):
-            st.markdown(m["content"])
-            if m.get("table_data"): display_table(m["table_data"])
+    # Chat container with padding for bottom input
+    chat_container = st.container()
     
-    # Charts
-    if st.session_state.charts_to_display: display_charts()
+    with chat_container:
+        # Chat history
+        for m in st.session_state.chat_messages:
+            with st.chat_message(m["role"]):
+                st.markdown(m["content"])
+                if m.get("table_data"): display_table(m["table_data"])
+        
+        # Charts
+        if st.session_state.charts_to_display: display_charts()
+        
+        # Welcome
+        if not st.session_state.chat_messages:
+            st.markdown("### 👋 Hi! I'm Paula. Ask me about any stock.")
+            examples = ["Analyze TCS", "Compare RELIANCE INFY", "Find undervalued"] if st.session_state.market == 'India' else ["Analyze Apple", "Compare Tesla and Microsoft", "Find growth stocks"]
+            cols = st.columns(len(examples))
+            for i, ex in enumerate(examples):
+                if cols[i].button(ex, key=f"ex_{i}", use_container_width=True):
+                    process_and_display(ex)
+                    st.rerun()
     
-    # Welcome
-    if not st.session_state.chat_messages:
-        st.markdown("### 👋 Hi! I'm Paula. Ask me about any stock.")
-        examples = ["Analyze TCS", "Compare RELIANCE INFY", "Find undervalued"] if st.session_state.market == 'India' else ["Analyze AAPL", "Compare AAPL MSFT", "Find growth stocks"]
-        cols = st.columns(len(examples))
-        for i, ex in enumerate(examples):
-            if cols[i].button(ex, key=f"ex_{i}", use_container_width=True):
-                process_and_display(ex)
-                st.rerun()
+    # Add spacing for the fixed bottom bar
+    st.markdown("<div style='height: 100px;'></div>", unsafe_allow_html=True)
     
-    st.markdown("---")
-    
-    # ==================== UNIFIED INPUT (Voice + Text) ====================
-    input_col1, input_col2 = st.columns([6, 1])
-    
-    with input_col1:
-        # Text input
-        text_input = st.text_input(
-            "Message Paula",
-            placeholder="Ask about any stock or click 🎤 to speak...",
-            key="unified_input",
-            label_visibility="collapsed"
-        )
-    
-    with input_col2:
-        # Voice button using streamlit-mic-recorder
-        try:
-            from streamlit_mic_recorder import speech_to_text
-            
-            voice_text = speech_to_text(
-                language='en',
-                start_prompt="🎤",
-                stop_prompt="⏹️",
-                just_once=True,
-                use_container_width=True,
-                key='voice_input'
+    # ==================== FLOATING INPUT BAR ====================
+    # Hidden input to capture voice/text via form
+    with st.form(key="input_form", clear_on_submit=True):
+        input_cols = st.columns([5, 1, 1])
+        
+        with input_cols[0]:
+            user_input = st.text_input(
+                "Message",
+                placeholder="Ask Paula anything...",
+                key="user_text_input",
+                label_visibility="collapsed"
             )
-        except ImportError:
-            voice_text = None
-            if st.button("🎤", use_container_width=True, help="Install streamlit-mic-recorder for voice"):
-                st.toast("Install voice: pip install streamlit-mic-recorder")
+        
+        with input_cols[1]:
+            # Voice input
+            try:
+                from streamlit_mic_recorder import speech_to_text
+                voice_result = speech_to_text(
+                    language='en',
+                    start_prompt="🎤",
+                    stop_prompt="⏹️",
+                    just_once=True,
+                    use_container_width=True,
+                    key='stt'
+                )
+                if voice_result:
+                    st.session_state.pending_input = voice_result
+            except ImportError:
+                voice_result = None
+                st.markdown("<div style='text-align:center;padding:8px;'>🎤</div>", unsafe_allow_html=True)
+        
+        with input_cols[2]:
+            submit = st.form_submit_button("➤", use_container_width=True)
     
-    # Process whichever input was provided
-    if text_input:
-        process_and_display(text_input)
+    # Process input
+    if submit and user_input:
+        process_and_display(user_input)
         st.rerun()
-    elif voice_text:
-        st.toast(f"🗣️ You said: {voice_text}")
-        process_and_display(voice_text)
+    elif st.session_state.pending_input:
+        text = st.session_state.pending_input
+        st.session_state.pending_input = None
+        process_and_display(text)
         st.rerun()
     
-    st.markdown('<div style="text-align:center;color:#6b7280;font-size:12px;margin-top:20px;">👩‍💼 Paula • Yahoo Finance • ⚠️ Educational only</div>', unsafe_allow_html=True)
+    # Footer
+    st.markdown('<div style="text-align:center;color:#6b7280;font-size:12px;margin-top:10px;">👩‍💼 Paula • Yahoo Finance • ⚠️ Educational only</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
