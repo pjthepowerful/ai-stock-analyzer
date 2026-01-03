@@ -243,15 +243,31 @@ def create_technical_chart(ticker, period="6mo"):
 def get_live_stock_data(ticker):
     try:
         stock = yf.Ticker(ticker)
-        info = stock.info
-        if not info: 
+        
+        # Debug: Show what we're getting
+        try:
+            info = stock.info
+        except Exception as e:
+            st.error(f"❌ Failed to get info for {ticker}: {e}")
+            return None
+        
+        if not info:
+            st.warning(f"⚠️ No info returned for {ticker}")
+            return None
+        
+        # Debug: Show if info is just empty or has error
+        if len(info) < 5:
+            st.warning(f"⚠️ Incomplete data for {ticker}: {info}")
             return None
         
         current_price = info.get('regularMarketPrice') or info.get('currentPrice') or info.get('previousClose')
         if current_price is None:
             hist = stock.history(period='5d')
-            if not hist.empty: current_price = hist['Close'].iloc[-1]
-            else: return None
+            if not hist.empty: 
+                current_price = hist['Close'].iloc[-1]
+            else: 
+                st.warning(f"⚠️ No price data for {ticker}")
+                return None
         
         market = 'India' if '.NS' in ticker or '.BO' in ticker else 'US'
         prev_close = info.get('previousClose') or current_price
@@ -269,7 +285,7 @@ def get_live_stock_data(ticker):
             "sector": info.get('sector', 'N/A'), "industry": info.get('industry', 'N/A'), "market": market,
         }
     except Exception as e:
-        st.error(f"❌ Error fetching {ticker}: {str(e)}")
+        st.error(f"❌ Error fetching {ticker}: {type(e).__name__}: {str(e)}")
         return None
 
 # ==================== ANALYSIS ====================
