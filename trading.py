@@ -447,24 +447,27 @@ def process_message(user_message, history):
     client = Groq(api_key=api_key)
     market = st.session_state.get('market', 'US')
     
-    system = f"""You are Paula, a friendly stock analyst. Use ONLY the live data provided. 
+    system = f"""You are Paula, a friendly AI assistant who specializes in stock analysis but can chat about anything.
 Market: {market} | Time: {datetime.now().strftime("%Y-%m-%d %H:%M")}
-End responses with: "⚠️ Educational only, not financial advice" """
+
+If stock data is provided, analyze it. If not, just have a helpful conversation.
+For stock-related responses, end with: "⚠️ Educational only, not financial advice" """
 
     messages = [{"role": "system", "content": system}]
     for m in history[-4:]: messages.append({"role": m["role"], "content": m["content"]})
     
-    if data:
+    if data and data.get("success"):
         data_for_ai = {k: v for k, v in data.items() if k != 'table'}
         if 'table' in data: data_for_ai['top_stocks'] = [row.get('Ticker', '') for row in data['table'][:5]]
         prompt = f"Question: {user_message}\n\nLIVE DATA:\n{json.dumps(data_for_ai, indent=2, default=str)}"
     else:
-        prompt = f"Question: {user_message}\n\nNo stock data found. Help user with a valid ticker."
+        # No stock data - just have a normal conversation
+        prompt = user_message
     
     messages.append({"role": "user", "content": prompt})
     
     try:
-        response = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=1500, temperature=0.5)
+        response = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=1500, temperature=0.7)
         return response.choices[0].message.content, data
     except Exception as e:
         return f"Error: {e}", None
