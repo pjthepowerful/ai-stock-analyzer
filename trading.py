@@ -528,37 +528,43 @@ def main():
     st.markdown("---")
     
     # ==================== UNIFIED INPUT (Voice + Text) ====================
-    input_col1, input_col2 = st.columns([6, 1])
-    
-    with input_col1:
-        text_input = st.text_input(
-            "Message Paula",
-            placeholder="Ask about any stock or click 🎤 to speak...",
-            key="unified_input",
-            label_visibility="collapsed"
-        )
-    
-    with input_col2:
-        try:
-            from streamlit_mic_recorder import speech_to_text
-            voice_text = speech_to_text(
-                language='en',
-                start_prompt="🎤",
-                stop_prompt="⏹️",
-                just_once=True,
-                use_container_width=True,
-                key='voice_input'
+    # Use a form to properly handle submission and clearing
+    with st.form(key="chat_form", clear_on_submit=True):
+        input_col1, input_col2, input_col3 = st.columns([5, 1, 1])
+        
+        with input_col1:
+            text_input = st.text_input(
+                "Message Paula",
+                placeholder="Ask about any stock or click 🎤 to speak...",
+                key="unified_input",
+                label_visibility="collapsed"
             )
-        except ImportError:
-            voice_text = None
-            if st.button("🎤", use_container_width=True, help="Install streamlit-mic-recorder for voice"):
-                st.toast("Install voice: pip install streamlit-mic-recorder")
+        
+        with input_col2:
+            try:
+                from streamlit_mic_recorder import speech_to_text
+                voice_text = speech_to_text(
+                    language='en',
+                    start_prompt="🎤",
+                    stop_prompt="⏹️",
+                    just_once=True,
+                    use_container_width=True,
+                    key='voice_input'
+                )
+            except ImportError:
+                voice_text = None
+                st.write("")  # Placeholder
+        
+        with input_col3:
+            submitted = st.form_submit_button("➤", use_container_width=True)
     
-    # Process input
-    if text_input:
+    # Process input only when form is submitted
+    if submitted and text_input:
         process_and_display(text_input)
         st.rerun()
-    elif voice_text:
+    
+    # Handle voice input separately (outside form)
+    if voice_text:
         st.toast(f"🗣️ You said: {voice_text}")
         process_and_display(voice_text)
         st.rerun()
