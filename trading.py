@@ -26,82 +26,104 @@ st.set_page_config(
 if 'theme' not in st.session_state:
     st.session_state.theme = 'dark'
 
-# CSS - Clean Professional Design
+# CSS - Modern Full-Width Design
 st.markdown("""
 <style>
-    /* Clean dark theme */
+    /* Full width layout */
     .stApp { 
-        background: #0f0f0f !important; 
+        background: #09090b !important; 
+    }
+    
+    .block-container {
+        padding: 2rem 3rem !important;
+        max-width: 100% !important;
     }
     
     #MainMenu, footer, header {visibility: hidden;}
     
-    /* Typography - clean and simple */
+    /* Typography */
     h1, h2, h3 {
-        color: #ffffff !important; 
+        color: #fafafa !important; 
         font-weight: 600 !important;
-        letter-spacing: -0.02em !important;
     }
+    
+    h1 { font-size: 2rem !important; }
+    h4 { color: #a1a1aa !important; font-weight: 500 !important; }
     
     p, span, div, label {
-        color: #a0a0a0 !important;
+        color: #a1a1aa !important;
     }
     
-    /* Chat messages - minimal */
+    /* Chat messages */
     .stChatMessage {
-        background: #1a1a1a !important;
-        border: none !important;
-        border-radius: 8px !important;
-        padding: 16px !important;
+        background: #18181b !important;
+        border: 1px solid #27272a !important;
+        border-radius: 12px !important;
+        padding: 1rem !important;
+        max-width: 100% !important;
     }
     
     .stChatMessage p, .stChatMessage span, .stChatMessage div {
-        color: #e0e0e0 !important;
+        color: #e4e4e7 !important;
     }
     
-    /* Inputs */
+    /* Cards/containers */
+    [data-testid="stVerticalBlock"] > [data-testid="stVerticalBlock"] {
+        background: transparent !important;
+    }
+    
+    /* Selectbox */
     .stSelectbox > div > div {
-        background: #1a1a1a !important;
-        border: 1px solid #2a2a2a !important;
-        border-radius: 6px !important;
-        color: #ffffff !important;
+        background: #18181b !important;
+        border: 1px solid #27272a !important;
+        border-radius: 8px !important;
+        color: #fafafa !important;
     }
     
-    /* Buttons - subtle */
+    .stSelectbox [data-baseweb="select"] > div {
+        background: #18181b !important;
+        border-color: #27272a !important;
+    }
+    
+    /* Buttons */
     .stButton > button {
-        background: #1a1a1a !important;
-        color: #ffffff !important; 
-        border: 1px solid #2a2a2a !important; 
-        border-radius: 6px !important;
+        background: #18181b !important;
+        color: #fafafa !important; 
+        border: 1px solid #27272a !important; 
+        border-radius: 8px !important;
         font-weight: 500 !important;
-        transition: all 0.15s ease !important;
+        padding: 0.5rem 1rem !important;
+        transition: all 0.2s ease !important;
     }
     
     .stButton > button:hover {
-        background: #252525 !important;
-        border-color: #3a3a3a !important;
+        background: #27272a !important;
+        border-color: #3f3f46 !important;
     }
     
     hr {
-        border-color: #1a1a1a !important;
+        border-color: #27272a !important;
         margin: 1.5rem 0 !important;
     }
     
-    /* Header - simple */
+    /* Header */
     .main-header {
-        padding: 2rem 0 1rem 0;
+        padding: 1rem 0 0.5rem 0;
+        border-bottom: 1px solid #27272a;
+        margin-bottom: 1.5rem;
     }
     
     .main-header h1 {
-        font-size: 1.75rem !important;
-        color: #ffffff !important;
-        font-weight: 600 !important;
-        margin-bottom: 0.25rem !important;
+        font-size: 1.5rem !important;
+        color: #fafafa !important;
+        margin-bottom: 0 !important;
+        display: inline-block;
     }
     
     .main-header p {
-        color: #666 !important;
-        font-size: 0.9rem !important;
+        color: #52525b !important;
+        font-size: 0.85rem !important;
+        margin-top: 0.25rem !important;
     }
     
     /* Market badge */
@@ -109,32 +131,32 @@ st.markdown("""
         display: inline-flex; 
         align-items: center; 
         gap: 6px;
-        background: #1a1a1a;
-        padding: 6px 12px; 
-        border-radius: 4px; 
+        background: #18181b;
+        padding: 8px 14px; 
+        border-radius: 6px; 
         font-size: 13px; 
-        color: #888 !important;
-        border: 1px solid #2a2a2a;
+        color: #a1a1aa !important;
+        border: 1px solid #27272a;
     }
     
-    /* Text input - clean */
+    /* Text input */
     .stTextInput > div > div > input {
-        background: #1a1a1a !important;
-        border: 1px solid #2a2a2a !important;
-        border-radius: 6px !important;
-        padding: 12px 14px !important;
-        color: #ffffff !important;
+        background: #18181b !important;
+        border: 1px solid #27272a !important;
+        border-radius: 8px !important;
+        padding: 14px 16px !important;
+        color: #fafafa !important;
         font-size: 15px !important;
     }
     
     .stTextInput > div > div > input::placeholder {
-        color: #555 !important;
+        color: #52525b !important;
     }
     
     .stTextInput > div > div > input:focus {
-        border-color: #444 !important;
-        box-shadow: none !important;
-        background: #1a1a1a !important;
+        border-color: #3f3f46 !important;
+        box-shadow: 0 0 0 2px rgba(63, 63, 70, 0.3) !important;
+        background: #18181b !important;
     }
     
     /* Form */
@@ -144,44 +166,55 @@ st.markdown("""
         padding: 0 !important;
     }
     
-    .stFormSubmitButton > button {
-        background: #1a1a1a !important;
-        color: #fff !important;
-        border: 1px solid #2a2a2a !important;
-        border-radius: 6px !important;
-    }
-    
-    .stFormSubmitButton > button:hover {
-        background: #252525 !important;
-    }
-    
     /* Dataframe */
     .stDataFrame { 
-        background: #1a1a1a !important; 
-        border-radius: 6px !important; 
+        background: #18181b !important; 
+        border-radius: 8px !important;
+        border: 1px solid #27272a !important;
+    }
+    
+    [data-testid="stDataFrame"] {
+        background: #18181b !important;
     }
     
     /* Progress bar */
     .stProgress > div > div { 
-        background: #333 !important; 
+        background: linear-gradient(90deg, #3f3f46, #52525b) !important; 
     }
     
-    /* Warning/info boxes */
-    .stWarning, .stInfo {
-        background: #1a1a1a !important;
-        border: 1px solid #2a2a2a !important;
-        color: #a0a0a0 !important;
+    /* Warning/info */
+    .stWarning {
+        background: #18181b !important;
+        border: 1px solid #27272a !important;
+        border-radius: 8px !important;
+    }
+    
+    /* Spinner */
+    .stSpinner > div {
+        border-color: #3f3f46 !important;
+    }
+    
+    /* Plotly chart background */
+    .js-plotly-plot {
+        background: transparent !important;
     }
     
     /* Scrollbar */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: #0f0f0f; }
-    ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #09090b; }
+    ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
     
-    /* Remove extra spacing */
-    .block-container {
-        padding-top: 2rem !important;
-        max-width: 900px !important;
+    /* Columns spacing */
+    [data-testid="column"] {
+        padding: 0 0.5rem !important;
+    }
+    
+    /* Welcome section */
+    .welcome-text {
+        color: #71717a !important;
+        font-size: 1.1rem !important;
+        margin-bottom: 1rem !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -606,56 +639,53 @@ def main():
     if 'market' not in st.session_state: st.session_state.market = 'US'
     if 'charts_to_display' not in st.session_state: st.session_state.charts_to_display = []
     
-    # Header - clean and simple
-    st.markdown('<div class="main-header"><h1>Paula</h1><p>Stock Analysis</p></div>', unsafe_allow_html=True)
-    
-    # Controls - minimal
-    col1, col2, col3 = st.columns([2, 1, 0.5])
-    with col1:
+    # Header row
+    header_col1, header_col2 = st.columns([4, 1])
+    with header_col1:
+        st.markdown('<div class="main-header"><h1>Paula</h1><p>Stock Analysis Assistant</p></div>', unsafe_allow_html=True)
+    with header_col2:
         flag = "🇺🇸" if st.session_state.market == "US" else "🇮🇳"
-        st.markdown(f'<div class="market-badge">{flag} {st.session_state.market}</div>', unsafe_allow_html=True)
-    with col2:
-        market = st.selectbox("Market", ['US', 'India'], index=0 if st.session_state.market == 'US' else 1, label_visibility="collapsed")
+        market = st.selectbox(f"{flag} Market", ['US', 'India'], index=0 if st.session_state.market == 'US' else 1, label_visibility="collapsed")
         if market != st.session_state.market:
             st.session_state.market = market
             st.session_state.chat_messages = []
             st.session_state.charts_to_display = []
             st.rerun()
-    with col3:
-        if st.button("↻", help="Refresh"): 
-            st.cache_data.clear()
-            st.rerun()
-    
-    st.markdown("---")
     
     # API check
     if not (st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")):
         st.error("Add GROQ_API_KEY to secrets")
         return
     
-    # Chat history
-    for m in st.session_state.chat_messages:
-        with st.chat_message(m["role"]):
-            st.markdown(m["content"])
-            if m.get("table_data"): display_table(m["table_data"])
-    
-    # Charts
-    if st.session_state.charts_to_display: display_charts()
-    
-    # Welcome - simple
-    if not st.session_state.chat_messages:
-        st.markdown("#### What would you like to know?")
-        examples = ["Analyze TCS", "Compare RELIANCE and INFY", "Undervalued stocks"] if st.session_state.market == 'India' else ["Analyze Apple", "Compare Tesla and Microsoft", "Growth stocks"]
+    # Main content area
+    if st.session_state.chat_messages:
+        # Show chat history
+        for m in st.session_state.chat_messages:
+            with st.chat_message(m["role"]):
+                st.markdown(m["content"])
+                if m.get("table_data"): display_table(m["table_data"])
+        
+        # Charts below chat
+        if st.session_state.charts_to_display: 
+            st.markdown("---")
+            display_charts()
+    else:
+        # Welcome state
+        st.markdown("")
+        st.markdown("")
+        st.markdown('<p class="welcome-text">What would you like to analyze?</p>', unsafe_allow_html=True)
+        
+        # Example buttons
+        examples = ["Analyze TCS", "Compare RELIANCE vs INFY", "Undervalued stocks"] if st.session_state.market == 'India' else ["Analyze Apple", "Compare Tesla vs Microsoft", "Growth stocks"]
         cols = st.columns(len(examples))
         for i, ex in enumerate(examples):
             if cols[i].button(ex, key=f"ex_{i}", use_container_width=True):
                 process_and_display(ex)
                 st.rerun()
     
+    # Input area
     st.markdown("---")
-    
-    # Input
-    input_col1, input_col2 = st.columns([6, 1])
+    input_col1, input_col2 = st.columns([12, 1])
     
     with input_col1:
         def submit_text():
@@ -696,9 +726,6 @@ def main():
     if voice_text:
         process_and_display(voice_text)
         st.rerun()
-    
-    # Footer - minimal
-    st.markdown('<p style="text-align:center;color:#444;font-size:11px;margin-top:2rem;">Data from Yahoo Finance • Not financial advice</p>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
