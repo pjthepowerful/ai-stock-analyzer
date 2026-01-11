@@ -266,39 +266,70 @@ def create_technical_chart(ticker, period="6mo"):
     except: return None
 
 # ==================== DATA ====================
-@st.cache_data(ttl=120)
 def get_live_stock_data(ticker):
+    """Get fresh stock data - no caching for accurate prices"""
     try:
         stock = yf.Ticker(ticker)
-        info = stock.info
         
-        if not info or len(info) < 5:
-            return None
+        # Use fast_info for more reliable current price
+        try:
+            fast = stock.fast_info
+            current_price = fast.get('lastPrice') or fast.get('regularMarketPrice')
+            prev_close = fast.get('previousClose') or fast.get('regularMarketPreviousClose')
+            market_cap = fast.get('marketCap')
+        except:
+            fast = None
+            current_price = None
+            prev_close = None
+            market_cap = None
         
-        current_price = info.get('regularMarketPrice') or info.get('currentPrice') or info.get('previousClose')
+        # Fallback to info if fast_info didn't work
+        info = stock.info or {}
+        
         if current_price is None:
-            hist = stock.history(period='5d')
-            if not hist.empty: 
+            current_price = info.get('regularMarketPrice') or info.get('currentPrice') or info.get('previousClose')
+        
+        if current_price is None:
+            # Last resort: get from recent history
+            hist = stock.history(period='1d', interval='1m')
+            if not hist.empty:
                 current_price = hist['Close'].iloc[-1]
-            else: 
-                return None
+            else:
+                hist = stock.history(period='5d')
+                if not hist.empty:
+                    current_price = hist['Close'].iloc[-1]
+                else:
+                    return None
+        
+        if prev_close is None:
+            prev_close = info.get('previousClose') or info.get('regularMarketPreviousClose') or current_price
+        
+        if market_cap is None:
+            market_cap = info.get('marketCap')
         
         market = 'India' if '.NS' in ticker or '.BO' in ticker else 'US'
-        prev_close = info.get('previousClose') or current_price
         change = current_price - prev_close if prev_close else 0
         change_pct = (change / prev_close * 100) if prev_close else 0
         
         return {
             "ticker": ticker, "display_ticker": get_display_ticker(ticker),
             "name": info.get('longName') or info.get('shortName') or get_display_ticker(ticker),
-            "price": round(current_price, 2), "change": round(change, 2), "change_pct": round(change_pct, 2),
-            "market_cap": info.get('marketCap'), "market_cap_fmt": format_market_cap(info.get('marketCap'), market),
-            "pe_ratio": info.get('trailingPE'), "roe": info.get('returnOnEquity'),
-            "profit_margin": info.get('profitMargins'), "debt_to_equity": info.get('debtToEquity'),
-            "current_ratio": info.get('currentRatio'), "dividend_yield": info.get('dividendYield'),
-            "sector": info.get('sector', 'N/A'), "industry": info.get('industry', 'N/A'), "market": market,
+            "price": round(float(current_price), 2), 
+            "change": round(float(change), 2), 
+            "change_pct": round(float(change_pct), 2),
+            "market_cap": market_cap, 
+            "market_cap_fmt": format_market_cap(market_cap, market),
+            "pe_ratio": info.get('trailingPE'), 
+            "roe": info.get('returnOnEquity'),
+            "profit_margin": info.get('profitMargins'), 
+            "debt_to_equity": info.get('debtToEquity'),
+            "current_ratio": info.get('currentRatio'), 
+            "dividend_yield": info.get('dividendYield'),
+            "sector": info.get('sector', 'N/A'), 
+            "industry": info.get('industry', 'N/A'), 
+            "market": market,
         }
-    except:
+    except Exception as e:
         return None
 
 # ==================== ANALYSIS ====================
