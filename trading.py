@@ -26,119 +26,163 @@ st.set_page_config(
 if 'theme' not in st.session_state:
     st.session_state.theme = 'dark'
 
-# CSS - Force Dark Mode
+# CSS - Clean Professional Design
 st.markdown("""
 <style>
-    /* Force dark mode */
-    :root { color-scheme: dark !important; }
+    /* Clean dark theme */
+    .stApp { 
+        background: #0f0f0f !important; 
+    }
     
-    .stApp { background: linear-gradient(180deg, #0a0f1a 0%, #111827 100%) !important; }
     #MainMenu, footer, header {visibility: hidden;}
     
-    h1, h2, h3 {color: #ffffff !important; font-weight: 700 !important;}
-    p, span, div, label {color: #d1d5db !important;}
+    /* Typography - clean and simple */
+    h1, h2, h3 {
+        color: #ffffff !important; 
+        font-weight: 600 !important;
+        letter-spacing: -0.02em !important;
+    }
     
+    p, span, div, label {
+        color: #a0a0a0 !important;
+    }
+    
+    /* Chat messages - minimal */
     .stChatMessage {
-        background: rgba(255, 255, 255, 0.03) !important;
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
-        border-radius: 16px !important;
+        background: #1a1a1a !important;
+        border: none !important;
+        border-radius: 8px !important;
+        padding: 16px !important;
     }
     
     .stChatMessage p, .stChatMessage span, .stChatMessage div {
-        color: #e5e7eb !important;
+        color: #e0e0e0 !important;
     }
     
+    /* Inputs */
     .stSelectbox > div > div {
-        background: rgba(255, 255, 255, 0.08) !important;
-        border: 1px solid rgba(255, 255, 255, 0.15) !important;
-        border-radius: 10px !important;
+        background: #1a1a1a !important;
+        border: 1px solid #2a2a2a !important;
+        border-radius: 6px !important;
         color: #ffffff !important;
     }
     
+    /* Buttons - subtle */
     .stButton > button {
-        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-        color: white !important; 
-        border: none !important; 
-        border-radius: 10px !important;
+        background: #1a1a1a !important;
+        color: #ffffff !important; 
+        border: 1px solid #2a2a2a !important; 
+        border-radius: 6px !important;
+        font-weight: 500 !important;
+        transition: all 0.15s ease !important;
     }
     
     .stButton > button:hover {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+        background: #252525 !important;
+        border-color: #3a3a3a !important;
     }
     
-    hr {border-color: rgba(255, 255, 255, 0.1) !important;}
+    hr {
+        border-color: #1a1a1a !important;
+        margin: 1.5rem 0 !important;
+    }
     
-    .main-header {text-align: center; padding: 1rem 0;}
+    /* Header - simple */
+    .main-header {
+        padding: 2rem 0 1rem 0;
+    }
+    
     .main-header h1 {
-        font-size: 2.5rem !important;
-        background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
-        -webkit-background-clip: text; 
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-    }
-    
-    .market-badge {
-        display: inline-flex; align-items: center; gap: 8px;
-        background: rgba(255, 255, 255, 0.05);
-        padding: 8px 16px; border-radius: 20px; font-size: 14px; color: #9ca3af !important;
-    }
-    
-    /* Unified input styling - ALWAYS DARK */
-    .stTextInput > div > div > input {
-        background: #1a1a2e !important;
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
-        border-radius: 12px !important;
-        padding: 14px 18px !important;
+        font-size: 1.75rem !important;
         color: #ffffff !important;
-        font-size: 16px !important;
+        font-weight: 600 !important;
+        margin-bottom: 0.25rem !important;
+    }
+    
+    .main-header p {
+        color: #666 !important;
+        font-size: 0.9rem !important;
+    }
+    
+    /* Market badge */
+    .market-badge {
+        display: inline-flex; 
+        align-items: center; 
+        gap: 6px;
+        background: #1a1a1a;
+        padding: 6px 12px; 
+        border-radius: 4px; 
+        font-size: 13px; 
+        color: #888 !important;
+        border: 1px solid #2a2a2a;
+    }
+    
+    /* Text input - clean */
+    .stTextInput > div > div > input {
+        background: #1a1a1a !important;
+        border: 1px solid #2a2a2a !important;
+        border-radius: 6px !important;
+        padding: 12px 14px !important;
+        color: #ffffff !important;
+        font-size: 15px !important;
     }
     
     .stTextInput > div > div > input::placeholder {
-        color: #6b7280 !important;
+        color: #555 !important;
     }
     
     .stTextInput > div > div > input:focus {
-        border-color: #8b5cf6 !important;
-        box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25) !important;
-        background: #1a1a2e !important;
+        border-color: #444 !important;
+        box-shadow: none !important;
+        background: #1a1a1a !important;
     }
     
-    /* Force form container dark */
+    /* Form */
     [data-testid="stForm"] {
-        background: #0d1117 !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
-        border-radius: 16px !important;
-        padding: 12px !important;
+        background: transparent !important;
+        border: none !important;
+        padding: 0 !important;
     }
     
-    /* Force submit button dark */
     .stFormSubmitButton > button {
-        background: #1a1a2e !important;
-        color: #ffffff !important;
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
-        border-radius: 12px !important;
+        background: #1a1a1a !important;
+        color: #fff !important;
+        border: 1px solid #2a2a2a !important;
+        border-radius: 6px !important;
     }
     
     .stFormSubmitButton > button:hover {
-        background: #2d2d44 !important;
-        border-color: #8b5cf6 !important;
+        background: #252525 !important;
     }
     
-    /* Force mic button area dark */
-    [data-testid="stForm"] [data-testid="column"] {
-        background: transparent !important;
+    /* Dataframe */
+    .stDataFrame { 
+        background: #1a1a1a !important; 
+        border-radius: 6px !important; 
     }
-    
-    /* Dataframe styling */
-    .stDataFrame { background: rgba(255, 255, 255, 0.03) !important; border-radius: 10px !important; }
     
     /* Progress bar */
-    .stProgress > div > div { background: linear-gradient(90deg, #8b5cf6, #6d28d9) !important; }
+    .stProgress > div > div { 
+        background: #333 !important; 
+    }
+    
+    /* Warning/info boxes */
+    .stWarning, .stInfo {
+        background: #1a1a1a !important;
+        border: 1px solid #2a2a2a !important;
+        color: #a0a0a0 !important;
+    }
     
     /* Scrollbar */
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: #1f2937; }
-    ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f0f0f; }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+    
+    /* Remove extra spacing */
+    .block-container {
+        padding-top: 2rem !important;
+        max-width: 900px !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -501,17 +545,16 @@ def detect_and_execute(message):
 
 def process_message(user_message, history):
     api_key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
-    if not api_key: return "⚠️ Please add GROQ_API_KEY to Streamlit Secrets", None
+    if not api_key: return "Add GROQ_API_KEY to secrets", None
     
     data = detect_and_execute(user_message)
     client = Groq(api_key=api_key)
     market = st.session_state.get('market', 'US')
     
-    system = f"""You are Paula, a friendly AI assistant who specializes in stock analysis but can chat about anything.
-Market: {market} | Time: {datetime.now().strftime("%Y-%m-%d %H:%M")}
-
-If stock data is provided, analyze it. If not, just have a helpful conversation.
-For stock-related responses, end with: "⚠️ Educational only, not financial advice" """
+    system = f"""You are a stock analyst assistant. Be concise and direct.
+Market: {market} | Date: {datetime.now().strftime("%Y-%m-%d")}
+If stock data is provided, analyze it briefly. Otherwise, answer the question directly.
+Don't be overly enthusiastic or use excessive emojis. Keep responses professional."""
 
     messages = [{"role": "system", "content": system}]
     for m in history[-4:]: messages.append({"role": m["role"], "content": m["content"]})
@@ -519,15 +562,14 @@ For stock-related responses, end with: "⚠️ Educational only, not financial a
     if data and data.get("success"):
         data_for_ai = {k: v for k, v in data.items() if k != 'table'}
         if 'table' in data: data_for_ai['top_stocks'] = [row.get('Ticker', '') for row in data['table'][:5]]
-        prompt = f"Question: {user_message}\n\nLIVE DATA:\n{json.dumps(data_for_ai, indent=2, default=str)}"
+        prompt = f"{user_message}\n\nData:\n{json.dumps(data_for_ai, indent=2, default=str)}"
     else:
-        # No stock data - just have a normal conversation
         prompt = user_message
     
     messages.append({"role": "user", "content": prompt})
     
     try:
-        response = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=1500, temperature=0.7)
+        response = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=1000, temperature=0.5)
         return response.choices[0].message.content, data
     except Exception as e:
         return f"Error: {e}", None
@@ -541,18 +583,13 @@ def display_charts():
     charts = st.session_state.get('charts_to_display', [])
     if not charts: return
     
-    st.markdown("### 📈 Charts")
-    period = st.selectbox("Period", ["1mo", "3mo", "6mo", "1y"], index=2, key="chart_period")
+    st.markdown("#### Price Chart")
+    period = st.selectbox("Period", ["1mo", "3mo", "6mo", "1y"], index=2, key="chart_period", label_visibility="collapsed")
     
-    charts_loaded = False
     for ticker in charts[:3]:
         fig = create_technical_chart(ticker, period)
         if fig: 
             st.plotly_chart(fig, use_container_width=True)
-            charts_loaded = True
-    
-    if not charts_loaded:
-        st.warning("📊 Unable to load charts right now. Yahoo Finance may be temporarily unavailable.")
 
 def process_and_display(prompt):
     st.session_state.chat_messages.append({"role": "user", "content": prompt})
@@ -569,13 +606,14 @@ def main():
     if 'market' not in st.session_state: st.session_state.market = 'US'
     if 'charts_to_display' not in st.session_state: st.session_state.charts_to_display = []
     
-    # Header
-    st.markdown('<div class="main-header"><h1>👩‍💼 Paula</h1><p style="color: #9ca3af;">Your AI Stock Analyst</p></div>', unsafe_allow_html=True)
+    # Header - clean and simple
+    st.markdown('<div class="main-header"><h1>Paula</h1><p>Stock Analysis</p></div>', unsafe_allow_html=True)
     
-    # Controls
+    # Controls - minimal
     col1, col2, col3 = st.columns([2, 1, 0.5])
     with col1:
-        st.markdown(f'<div class="market-badge">{"🇺🇸" if st.session_state.market == "US" else "🇮🇳"} <strong>{st.session_state.market} Market</strong></div>', unsafe_allow_html=True)
+        flag = "🇺🇸" if st.session_state.market == "US" else "🇮🇳"
+        st.markdown(f'<div class="market-badge">{flag} {st.session_state.market}</div>', unsafe_allow_html=True)
     with col2:
         market = st.selectbox("Market", ['US', 'India'], index=0 if st.session_state.market == 'US' else 1, label_visibility="collapsed")
         if market != st.session_state.market:
@@ -584,7 +622,7 @@ def main():
             st.session_state.charts_to_display = []
             st.rerun()
     with col3:
-        if st.button("🔄", help="Refresh"): 
+        if st.button("↻", help="Refresh"): 
             st.cache_data.clear()
             st.rerun()
     
@@ -592,7 +630,7 @@ def main():
     
     # API check
     if not (st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")):
-        st.error("⚠️ Add GROQ_API_KEY to secrets")
+        st.error("Add GROQ_API_KEY to secrets")
         return
     
     # Chat history
@@ -604,10 +642,10 @@ def main():
     # Charts
     if st.session_state.charts_to_display: display_charts()
     
-    # Welcome
+    # Welcome - simple
     if not st.session_state.chat_messages:
-        st.markdown("### 👋 Hi! I'm Paula. Ask me about any stock.")
-        examples = ["Analyze TCS", "Compare RELIANCE INFY", "Find undervalued"] if st.session_state.market == 'India' else ["Analyze Apple", "Compare Tesla and Microsoft", "Find growth stocks"]
+        st.markdown("#### What would you like to know?")
+        examples = ["Analyze TCS", "Compare RELIANCE and INFY", "Undervalued stocks"] if st.session_state.market == 'India' else ["Analyze Apple", "Compare Tesla and Microsoft", "Growth stocks"]
         cols = st.columns(len(examples))
         for i, ex in enumerate(examples):
             if cols[i].button(ex, key=f"ex_{i}", use_container_width=True):
@@ -616,19 +654,18 @@ def main():
     
     st.markdown("---")
     
-    # ==================== UNIFIED INPUT (Voice + Text) ====================
+    # Input
     input_col1, input_col2 = st.columns([6, 1])
     
     with input_col1:
-        # Use callback to handle submission
         def submit_text():
             if st.session_state.get('text_input_value'):
                 st.session_state.pending_message = st.session_state.text_input_value
                 st.session_state.text_input_value = ""
         
-        text_input = st.text_input(
-            "Message Paula",
-            placeholder="Ask about any stock or click 🎤 to speak...",
+        st.text_input(
+            "Message",
+            placeholder="Ask about any stock...",
             key="text_input_value",
             on_change=submit_text,
             label_visibility="collapsed"
@@ -640,7 +677,7 @@ def main():
             voice_text = speech_to_text(
                 language='en',
                 start_prompt="🎤",
-                stop_prompt="⏹️",
+                stop_prompt="■",
                 just_once=True,
                 use_container_width=True,
                 key='voice_input'
@@ -648,19 +685,20 @@ def main():
         except ImportError:
             voice_text = None
     
-    # Process pending message from text input
+    # Process pending message
     if st.session_state.get('pending_message'):
         msg = st.session_state.pending_message
         st.session_state.pending_message = None
         process_and_display(msg)
         st.rerun()
     
-    # Process voice input (auto-sends)
+    # Process voice input
     if voice_text:
         process_and_display(voice_text)
         st.rerun()
     
-    st.markdown('<div style="text-align:center;color:#6b7280;font-size:12px;margin-top:20px;">👩‍💼 Paula • Yahoo Finance • ⚠️ Educational only</div>', unsafe_allow_html=True)
+    # Footer - minimal
+    st.markdown('<p style="text-align:center;color:#444;font-size:11px;margin-top:2rem;">Data from Yahoo Finance • Not financial advice</p>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
