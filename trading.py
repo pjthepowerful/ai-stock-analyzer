@@ -216,6 +216,40 @@ st.markdown("""
         font-size: 1.1rem !important;
         margin-bottom: 1rem !important;
     }
+    
+    /* Fix microphone recorder styling */
+    .stAudioInput, [data-testid="stAudioInput"] {
+        background: transparent !important;
+        border: none !important;
+    }
+    
+    iframe[title="streamlit_mic_recorder.speech_to_text"] {
+        border: none !important;
+        background: transparent !important;
+    }
+    
+    /* Settings expander */
+    .streamlit-expanderHeader {
+        background: #18181b !important;
+        border: 1px solid #27272a !important;
+        border-radius: 8px !important;
+        color: #a1a1aa !important;
+    }
+    
+    .streamlit-expanderContent {
+        background: #18181b !important;
+        border: 1px solid #27272a !important;
+        border-top: none !important;
+    }
+    
+    /* Toggle switch */
+    .stCheckbox {
+        color: #a1a1aa !important;
+    }
+    
+    .stCheckbox > label > span {
+        color: #e4e4e7 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -454,7 +488,11 @@ def get_live_stock_data(ticker):
         return None
 
 # ==================== ANALYSIS ====================
-def analyze_stock(ticker, show_chart=True):
+def analyze_stock(ticker, show_chart=None):
+    # Use settings if not explicitly specified
+    if show_chart is None:
+        show_chart = st.session_state.get('show_charts', True)
+    
     original = ticker.upper().strip().replace('.NS', '').replace('.BO', '')
     market = st.session_state.get('market', 'US')
     full_ticker = f"{original}.NS" if market == 'India' else original
@@ -468,7 +506,7 @@ def analyze_stock(ticker, show_chart=True):
     if not data: 
         return {"success": False, "error": f"Could not fetch detailed data for {original}", "ticker": original}
     
-    # Auto-show chart unless disabled
+    # Auto-show chart based on settings
     if show_chart:
         st.session_state.charts_to_display = [full_ticker]
     
@@ -721,16 +759,37 @@ def detect_and_execute(message):
     # Clear charts for new queries
     st.session_state.charts_to_display = []
     
-    # Check if user doesn't want a chart
+    # Check if user explicitly wants/doesn't want a chart
     no_chart = any(w in msg for w in ['no chart', 'no graph', 'without chart', 'without graph', 'just data', 'data only'])
+    want_chart = any(w in msg for w in ['show chart', 'show graph', 'with chart', 'with graph'])
+    
+    # Determine if we should show chart
+    if no_chart:
+        show_chart = False
+    elif want_chart:
+        show_chart = True
+    else:
+        show_chart = st.session_state.get('show_charts', True)
     
     # Handle greetings and casual conversation - don't trigger stock analysis
     greetings = ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening', 
                  'howdy', 'sup', 'what\'s up', 'whats up', 'yo', 'hola', 'greetings',
                  'how are you', 'how r u', 'thanks', 'thank you', 'bye', 'goodbye',
-                 'help', 'what can you do', 'who are you']
+                 'help', 'what can you do', 'who are you', 'how\'s it going']
     
     if any(msg == g or msg.startswith(g + ' ') or msg.startswith(g + ',') or msg.startswith(g + '!') for g in greetings):
+        return None
+    
+    # General knowledge questions - let AI handle without stock lookup
+    general_topics = ['weather', 'news', 'explain', 'what is', 'who is', 'how does', 'why do', 
+                      'tell me about', 'opinion on', 'think about', 'thoughts on', 'advice',
+                      'recommend a', 'suggest a', 'help me', 'can you']
+    
+    # If it's clearly a general question without stock mentions, skip stock analysis
+    is_general = any(t in msg for t in general_topics)
+    has_company = any(c in msg for c in COMPANY_TO_TICKER.keys())
+    
+    if is_general and not has_company and 'stock' not in msg and 'invest' not in msg:
         return None
     
     market = st.session_state.get('market', 'US')
@@ -745,52 +804,36 @@ def detect_and_execute(message):
         stock_list = NIFTY_50
     
     # Strategy-based queries
-    if any(w in msg for w in ['best', 'top', 'recommend', 'suggest', 'find']):
-        # Momentum / Top performers
+    if any(w in msg for w in ['best', 'top', 'recommend', 'suggest', 'find']) and ('stock' in msg or stock_list):
         if any(w in msg for w in ['momentum', 'performing', 'performer', 'winners', 'gaining']):
             return screen_by_strategy("momentum", stock_list)
-        
-        # Value investing
         if any(w in msg for w in ['value', 'undervalued', 'cheap', 'bargain']):
             return screen_by_strategy("value", stock_list)
-        
-        # Quality stocks
         if any(w in msg for w in ['quality', 'strong', 'solid', 'reliable']):
             return screen_by_strategy("quality", stock_list)
-        
-        # Dividend
         if any(w in msg for w in ['dividend', 'yield', 'income', 'passive']):
             return screen_by_strategy("dividend", stock_list)
-        
-        # Large cap
         if any(w in msg for w in ['large', 'biggest', 'largest', 'mega', 'blue chip', 'bluechip']):
             return screen_by_strategy("large_cap", stock_list)
-        
-        # Low P/E
         if any(w in msg for w in ['low pe', 'low p/e', 'cheap pe', 'lowest pe']):
             return screen_by_strategy("low_pe", stock_list)
-        
-        # Growth
         if any(w in msg for w in ['growth', 'growing', 'fast growing']):
             return screen_by_strategy("quality", stock_list)
-        
-        # If asking for "best stocks" without specific strategy, use quality
-        if 'stock' in msg and stock_list:
+        if stock_list:
             return screen_by_strategy("quality", stock_list)
     
     # Top gainers / losers
     if any(w in msg for w in ['gainer', 'gaining', 'up today', 'rising']):
         return screen_by_strategy("top_gainers", stock_list or (NASDAQ_100 if market == 'US' else NIFTY_50))
-    
     if any(w in msg for w in ['loser', 'losing', 'down today', 'falling', 'dropping']):
         return screen_by_strategy("top_losers", stock_list or (NASDAQ_100 if market == 'US' else NIFTY_50))
     
-    # Simple screening keywords (original functionality)
+    # Simple screening keywords
     if any(w in msg for w in ['undervalued', 'value stocks', 'cheap stocks']): 
         return screen_stocks("undervalued")
     if any(w in msg for w in ['growth stocks', 'growing companies']): 
         return screen_stocks("growth")
-    if any(w in msg for w in ['dividend', 'yield', 'income stocks']): 
+    if any(w in msg for w in ['dividend stocks', 'income stocks']): 
         return screen_stocks("dividend")
     
     # Check for stock-related intent
@@ -802,29 +845,26 @@ def detect_and_execute(message):
     # Handle comparisons
     if any(w in msg for w in ['compare', 'vs', 'versus']):
         found_tickers = []
-        
         for company_name, ticker in COMPANY_TO_TICKER.items():
             if company_name in msg:
                 if ticker not in found_tickers:
                     found_tickers.append(ticker)
-        
         ticker_matches = re.findall(r'\b([A-Z]{2,6})\b', message.upper())
         exclude = ['PE', 'ROE', 'VS', 'AND', 'THE', 'FOR', 'OR', 'COMPARE', 'WITH', 'NASDAQ', 'NIFTY']
         for t in ticker_matches:
             if t not in exclude and t not in found_tickers:
                 found_tickers.append(t)
-        
         if len(found_tickers) >= 2:
             return compare_stocks(','.join(found_tickers))
     
-    # Check for company names - auto show chart unless user says no
+    # Check for company names
     ticker_from_name = get_ticker_from_name(msg)
     if ticker_from_name:
-        return analyze_stock(ticker_from_name, show_chart=not no_chart)
+        return analyze_stock(ticker_from_name, show_chart=show_chart)
     
     for company_name in COMPANY_TO_TICKER.keys():
         if company_name in msg:
-            return analyze_stock(COMPANY_TO_TICKER[company_name], show_chart=not no_chart)
+            return analyze_stock(COMPANY_TO_TICKER[company_name], show_chart=show_chart)
     
     # Look for ticker symbols if there's stock intent
     if has_stock_intent:
@@ -836,20 +876,20 @@ def detect_and_execute(message):
         
         for t in tickers:
             if t in US_STOCKS and t not in exclude: 
-                return analyze_stock(t, show_chart=not no_chart)
+                return analyze_stock(t, show_chart=show_chart)
             if t in NASDAQ_100 and t not in exclude: 
-                return analyze_stock(t, show_chart=not no_chart)
+                return analyze_stock(t, show_chart=show_chart)
             if t in SP500_TOP and t not in exclude: 
-                return analyze_stock(t, show_chart=not no_chart)
+                return analyze_stock(t, show_chart=show_chart)
         
         indian_names = [s.replace('.NS', '') for s in INDIAN_STOCKS + NIFTY_50]
         for t in tickers:
             if t in indian_names and t not in exclude: 
-                return analyze_stock(t, show_chart=not no_chart)
+                return analyze_stock(t, show_chart=show_chart)
         
         for t in tickers:
             if t not in exclude and len(t) >= 3: 
-                return analyze_stock(t, show_chart=not no_chart)
+                return analyze_stock(t, show_chart=show_chart)
     
     return None
 
@@ -861,15 +901,29 @@ def process_message(user_message, history):
     client = Groq(api_key=api_key)
     market = st.session_state.get('market', 'US')
     
-    system = f"""You are Paula, a stock analysis assistant. Be helpful and conversational.
+    system = f"""You are Paula, a knowledgeable and friendly assistant. While you specialize in stock analysis, you're happy to chat about anything - technology, business, economics, current events, general questions, or just casual conversation.
 
-If someone greets you (hi, hello, etc.), respond naturally - introduce yourself briefly as a stock analysis assistant and ask how you can help.
+Personality:
+- Friendly and conversational, but not overly enthusiastic
+- Give your honest opinions when asked
+- Be helpful with any topic, not just stocks
+- Keep responses concise but informative
 
-If stock data is provided, analyze it concisely. Keep responses focused and professional.
-Market: {market} | Date: {datetime.now().strftime("%Y-%m-%d")}"""
+For stock-related queries:
+- Market: {market} | Date: {datetime.now().strftime("%Y-%m-%d")}
+- If data is provided, analyze it and give your honest assessment
+- Share opinions on whether a stock looks good or concerning
+- Mention risks and opportunities you see
+
+For general conversation:
+- Chat naturally about any topic
+- Share your perspective when asked
+- Be helpful and engaging
+
+You have knowledge about business, technology, economics, finance, investing strategies, market trends, and general world knowledge."""
 
     messages = [{"role": "system", "content": system}]
-    for m in history[-4:]: messages.append({"role": m["role"], "content": m["content"]})
+    for m in history[-6:]: messages.append({"role": m["role"], "content": m["content"]})
     
     if data and data.get("success"):
         data_for_ai = {k: v for k, v in data.items() if k != 'table'}
@@ -881,7 +935,7 @@ Market: {market} | Date: {datetime.now().strftime("%Y-%m-%d")}"""
     messages.append({"role": "user", "content": prompt})
     
     try:
-        response = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=1000, temperature=0.5)
+        response = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=1500, temperature=0.7)
         return response.choices[0].message.content, data
     except Exception as e:
         return f"Error: {e}", None
@@ -935,6 +989,7 @@ def main():
     if 'chat_messages' not in st.session_state: st.session_state.chat_messages = []
     if 'market' not in st.session_state: st.session_state.market = 'US'
     if 'charts_to_display' not in st.session_state: st.session_state.charts_to_display = []
+    if 'show_charts' not in st.session_state: st.session_state.show_charts = True
     
     # Header row
     header_col1, header_col2 = st.columns([4, 1])
@@ -948,6 +1003,19 @@ def main():
             st.session_state.chat_messages = []
             st.session_state.charts_to_display = []
             st.rerun()
+    
+    # Settings (collapsible)
+    with st.expander("⚙️ Settings", expanded=False):
+        col1, col2 = st.columns(2)
+        with col1:
+            show_charts = st.checkbox("Show charts automatically", value=st.session_state.show_charts)
+            if show_charts != st.session_state.show_charts:
+                st.session_state.show_charts = show_charts
+        with col2:
+            if st.button("Clear chat"):
+                st.session_state.chat_messages = []
+                st.session_state.charts_to_display = []
+                st.rerun()
     
     # API check
     if not (st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")):
