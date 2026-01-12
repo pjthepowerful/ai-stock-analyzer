@@ -454,7 +454,7 @@ def get_live_stock_data(ticker):
         return None
 
 # ==================== ANALYSIS ====================
-def analyze_stock(ticker):
+def analyze_stock(ticker, show_chart=True):
     original = ticker.upper().strip().replace('.NS', '').replace('.BO', '')
     market = st.session_state.get('market', 'US')
     full_ticker = f"{original}.NS" if market == 'India' else original
@@ -466,11 +466,11 @@ def analyze_stock(ticker):
         full_ticker = alt_ticker
     
     if not data: 
-        # Don't set charts if data fetch failed
         return {"success": False, "error": f"Could not fetch detailed data for {original}", "ticker": original}
     
-    # Only show chart if we got valid data
-    st.session_state.charts_to_display = [full_ticker]
+    # Auto-show chart unless disabled
+    if show_chart:
+        st.session_state.charts_to_display = [full_ticker]
     
     score = 0
     if data['pe_ratio'] and 0 < data['pe_ratio'] < 25: score += 2
@@ -721,6 +721,9 @@ def detect_and_execute(message):
     # Clear charts for new queries
     st.session_state.charts_to_display = []
     
+    # Check if user doesn't want a chart
+    no_chart = any(w in msg for w in ['no chart', 'no graph', 'without chart', 'without graph', 'just data', 'data only'])
+    
     # Handle greetings and casual conversation - don't trigger stock analysis
     greetings = ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening', 
                  'howdy', 'sup', 'what\'s up', 'whats up', 'yo', 'hola', 'greetings',
@@ -769,7 +772,7 @@ def detect_and_execute(message):
         
         # Growth
         if any(w in msg for w in ['growth', 'growing', 'fast growing']):
-            return screen_by_strategy("quality", stock_list)  # Quality often = growth
+            return screen_by_strategy("quality", stock_list)
         
         # If asking for "best stocks" without specific strategy, use quality
         if 'stock' in msg and stock_list:
@@ -814,14 +817,14 @@ def detect_and_execute(message):
         if len(found_tickers) >= 2:
             return compare_stocks(','.join(found_tickers))
     
-    # Check for company names
+    # Check for company names - auto show chart unless user says no
     ticker_from_name = get_ticker_from_name(msg)
     if ticker_from_name:
-        return analyze_stock(ticker_from_name)
+        return analyze_stock(ticker_from_name, show_chart=not no_chart)
     
     for company_name in COMPANY_TO_TICKER.keys():
         if company_name in msg:
-            return analyze_stock(COMPANY_TO_TICKER[company_name])
+            return analyze_stock(COMPANY_TO_TICKER[company_name], show_chart=not no_chart)
     
     # Look for ticker symbols if there's stock intent
     if has_stock_intent:
@@ -832,16 +835,21 @@ def detect_and_execute(message):
                    'CHART', 'GRAPH', 'NASDAQ', 'NIFTY', 'TOP', 'BEST']
         
         for t in tickers:
-            if t in US_STOCKS and t not in exclude: return analyze_stock(t)
-            if t in NASDAQ_100 and t not in exclude: return analyze_stock(t)
-            if t in SP500_TOP and t not in exclude: return analyze_stock(t)
+            if t in US_STOCKS and t not in exclude: 
+                return analyze_stock(t, show_chart=not no_chart)
+            if t in NASDAQ_100 and t not in exclude: 
+                return analyze_stock(t, show_chart=not no_chart)
+            if t in SP500_TOP and t not in exclude: 
+                return analyze_stock(t, show_chart=not no_chart)
         
         indian_names = [s.replace('.NS', '') for s in INDIAN_STOCKS + NIFTY_50]
         for t in tickers:
-            if t in indian_names and t not in exclude: return analyze_stock(t)
+            if t in indian_names and t not in exclude: 
+                return analyze_stock(t, show_chart=not no_chart)
         
         for t in tickers:
-            if t not in exclude and len(t) >= 3: return analyze_stock(t)
+            if t not in exclude and len(t) >= 3: 
+                return analyze_stock(t, show_chart=not no_chart)
     
     return None
 
@@ -890,20 +898,20 @@ def display_charts():
     st.markdown("#### Price Chart")
     period = st.selectbox("Period", ["1mo", "3mo", "6mo", "1y"], index=2, key="chart_period", label_visibility="collapsed")
     
-    for ticker in charts[:3]:
+    for i, ticker in enumerate(charts[:3]):
         fig = create_technical_chart(ticker, period)
         if fig: 
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key=f"chart_main_{ticker}_{i}")
 
-def display_charts_inline(charts):
+def display_charts_inline(charts, msg_index=0):
     """Display charts inline with a message"""
     if not charts: return
     
-    period = "6mo"  # Default period for inline charts
-    for ticker in charts[:3]:
+    period = "6mo"
+    for i, ticker in enumerate(charts[:3]):
         fig = create_technical_chart(ticker, period)
         if fig: 
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key=f"chart_inline_{msg_index}_{ticker}_{i}")
 
 def process_and_display(prompt):
     st.session_state.chat_messages.append({"role": "user", "content": prompt})
@@ -949,14 +957,14 @@ def main():
     # Main content area
     if st.session_state.chat_messages:
         # Show chat history
-        for m in st.session_state.chat_messages:
+        for idx, m in enumerate(st.session_state.chat_messages):
             with st.chat_message(m["role"]):
                 st.markdown(m["content"])
                 if m.get("table_data"): 
                     display_table(m["table_data"])
                 # Show charts inline with this message
                 if m.get("charts"):
-                    display_charts_inline(m["charts"])
+                    display_charts_inline(m["charts"], idx)
     else:
         # Welcome state
         st.markdown("")
