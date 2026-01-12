@@ -226,10 +226,54 @@ US_STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B', '
     'DHR', 'CRM', 'VZ', 'ADBE', 'NKE', 'NEE', 'WFC', 'TXN', 'PM', 'UPS',
     'RTX', 'HON', 'ORCL', 'BMY', 'QCOM', 'UNP', 'INTU', 'LOW', 'AMD', 'COP']
 
+# NASDAQ 100 stocks
+NASDAQ_100 = [
+    'AAPL', 'MSFT', 'AMZN', 'NVDA', 'GOOGL', 'META', 'GOOG', 'TSLA', 'AVGO', 'COST',
+    'PEP', 'ADBE', 'CSCO', 'NFLX', 'CMCSA', 'AMD', 'TMUS', 'INTC', 'INTU', 'QCOM',
+    'TXN', 'AMGN', 'AMAT', 'ISRG', 'HON', 'BKNG', 'SBUX', 'MDLZ', 'VRTX', 'GILD',
+    'ADI', 'ADP', 'REGN', 'LRCX', 'PANW', 'MU', 'KLAC', 'SNPS', 'CDNS', 'ASML',
+    'PYPL', 'MELI', 'CRWD', 'ORLY', 'MAR', 'MNST', 'CTAS', 'NXPI', 'MRVL', 'ADSK',
+    'FTNT', 'ABNB', 'PCAR', 'WDAY', 'CHTR', 'KDP', 'AEP', 'PAYX', 'CPRT', 'ROST',
+    'KHC', 'MCHP', 'ODFL', 'EXC', 'DXCM', 'LULU', 'EA', 'VRSK', 'IDXX', 'FAST',
+    'CTSH', 'XEL', 'GEHC', 'CSGP', 'BKR', 'FANG', 'TEAM', 'ANSS', 'ZS', 'DDOG',
+    'ILMN', 'WBD', 'ALGN', 'EBAY', 'BIIB', 'ENPH', 'SIRI', 'JD', 'ZM', 'LCID',
+    'RIVN', 'CEG', 'TTWO', 'WBA', 'DLTR', 'SGEN', 'MRNA', 'AZN', 'PDD', 'SPLK'
+]
+
+# S&P 500 top 100 by market cap (simplified)
+SP500_TOP = [
+    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B', 'V', 'UNH',
+    'JNJ', 'WMT', 'JPM', 'MA', 'PG', 'XOM', 'HD', 'CVX', 'MRK', 'ABBV',
+    'PEP', 'KO', 'AVGO', 'COST', 'LLY', 'TMO', 'ACN', 'MCD', 'CSCO', 'ABT',
+    'DHR', 'CRM', 'VZ', 'ADBE', 'NKE', 'NEE', 'WFC', 'TXN', 'PM', 'UPS',
+    'RTX', 'HON', 'ORCL', 'BMY', 'QCOM', 'UNP', 'INTU', 'LOW', 'AMD', 'COP',
+    'SPGI', 'CAT', 'BA', 'GE', 'AMGN', 'IBM', 'SBUX', 'GS', 'BLK', 'GILD',
+    'MDT', 'CVS', 'AXP', 'ISRG', 'DE', 'NOW', 'BKNG', 'ADI', 'MDLZ', 'TJX',
+    'SYK', 'MMC', 'VRTX', 'REGN', 'PLD', 'LMT', 'CB', 'ZTS', 'MO', 'CI',
+    'TMUS', 'SO', 'DUK', 'CL', 'CME', 'BDX', 'EOG', 'SLB', 'EQIX', 'NOC',
+    'ITW', 'AON', 'CSX', 'BSX', 'FI', 'APD', 'ICE', 'WM', 'MPC', 'PNC'
+]
+
 INDIAN_STOCKS = ['RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
     'HINDUNILVR.NS', 'ITC.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'KOTAKBANK.NS',
     'LT.NS', 'HCLTECH.NS', 'AXISBANK.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
-    'SUNPHARMA.NS', 'TITAN.NS', 'BAJFINANCE.NS', 'DMART.NS', 'WIPRO.NS']
+    'SUNPHARMA.NS', 'TITAN.NS', 'BAJFINANCE.NS', 'DMART.NS', 'WIPRO.NS',
+    'NTPC.NS', 'POWERGRID.NS', 'ONGC.NS', 'TATAMOTORS.NS', 'ADANIENT.NS',
+    'ADANIPORTS.NS', 'COALINDIA.NS', 'JSWSTEEL.NS', 'TATASTEEL.NS', 'HINDALCO.NS']
+
+# NIFTY 50
+NIFTY_50 = [
+    'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
+    'HINDUNILVR.NS', 'ITC.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'KOTAKBANK.NS',
+    'LT.NS', 'HCLTECH.NS', 'AXISBANK.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
+    'SUNPHARMA.NS', 'TITAN.NS', 'BAJFINANCE.NS', 'WIPRO.NS', 'NTPC.NS',
+    'POWERGRID.NS', 'ONGC.NS', 'TATAMOTORS.NS', 'ADANIENT.NS', 'ADANIPORTS.NS',
+    'COALINDIA.NS', 'JSWSTEEL.NS', 'TATASTEEL.NS', 'HINDALCO.NS', 'M&M.NS',
+    'BAJAJ-AUTO.NS', 'ULTRACEMCO.NS', 'NESTLEIND.NS', 'TECHM.NS', 'DIVISLAB.NS',
+    'DRREDDY.NS', 'CIPLA.NS', 'GRASIM.NS', 'APOLLOHOSP.NS', 'EICHERMOT.NS',
+    'HEROMOTOCO.NS', 'TATACONSUM.NS', 'BPCL.NS', 'BRITANNIA.NS', 'INDUSINDBK.NS',
+    'SBILIFE.NS', 'HDFCLIFE.NS', 'UPL.NS', 'BAJAJFINSV.NS', 'SHREECEM.NS'
+]
 
 # Company name to ticker mapping (case-insensitive)
 COMPANY_TO_TICKER = {
@@ -508,36 +552,261 @@ def screen_stocks(screen_type):
     if results: return {"success": True, "screen_type": screen_type.title(), "found": len(results), "table": results[:15]}
     return {"success": False, "message": f"No {screen_type} stocks found"}
 
+def screen_by_strategy(strategy, stock_list=None):
+    """Screen stocks using various investment strategies"""
+    market = st.session_state.get('market', 'US')
+    
+    # Determine which list to use
+    if stock_list is None:
+        stock_list = NASDAQ_100 if market == 'US' else NIFTY_50
+    
+    results = []
+    found_tickers = []
+    
+    progress = st.progress(0)
+    stock_data_list = []
+    
+    # First pass: collect all data
+    for i, ticker in enumerate(stock_list[:50]):  # Limit to 50 for speed
+        progress.progress((i + 1) / min(len(stock_list), 50))
+        data = get_live_stock_data(ticker)
+        if data:
+            stock_data_list.append(data)
+    
+    progress.empty()
+    
+    currency = '₹' if market == 'India' else '$'
+    
+    if strategy == "momentum":
+        # Best performers (highest % change)
+        sorted_stocks = sorted(stock_data_list, key=lambda x: x['change_pct'] or 0, reverse=True)
+        for data in sorted_stocks[:15]:
+            if data['change_pct'] and data['change_pct'] > 0:
+                found_tickers.append(data['ticker'])
+                results.append({
+                    "Ticker": data['display_ticker'],
+                    "Price": f"{currency}{data['price']:,.2f}",
+                    "Change": f"+{data['change_pct']:.2f}%",
+                    "Sector": data['sector'][:12] if data['sector'] else "N/A"
+                })
+    
+    elif strategy == "value":
+        # Low P/E with good ROE (Warren Buffett style)
+        value_stocks = [d for d in stock_data_list if d['pe_ratio'] and 0 < d['pe_ratio'] < 20 and d['roe'] and d['roe'] > 0.10]
+        sorted_stocks = sorted(value_stocks, key=lambda x: x['pe_ratio'])
+        for data in sorted_stocks[:15]:
+            found_tickers.append(data['ticker'])
+            results.append({
+                "Ticker": data['display_ticker'],
+                "Price": f"{currency}{data['price']:,.2f}",
+                "P/E": round(data['pe_ratio'], 1),
+                "ROE": f"{data['roe']*100:.0f}%"
+            })
+    
+    elif strategy == "quality":
+        # High ROE, good margins, low debt (quality companies)
+        quality_stocks = [d for d in stock_data_list if d['roe'] and d['roe'] > 0.15 and d['profit_margin'] and d['profit_margin'] > 0.10]
+        sorted_stocks = sorted(quality_stocks, key=lambda x: x['roe'] or 0, reverse=True)
+        for data in sorted_stocks[:15]:
+            found_tickers.append(data['ticker'])
+            results.append({
+                "Ticker": data['display_ticker'],
+                "Price": f"{currency}{data['price']:,.2f}",
+                "ROE": f"{data['roe']*100:.0f}%",
+                "Margin": f"{data['profit_margin']*100:.0f}%"
+            })
+    
+    elif strategy == "dividend":
+        # High dividend yield
+        div_stocks = [d for d in stock_data_list if d['dividend_yield'] and d['dividend_yield'] > 0.02]
+        sorted_stocks = sorted(div_stocks, key=lambda x: x['dividend_yield'] or 0, reverse=True)
+        for data in sorted_stocks[:15]:
+            found_tickers.append(data['ticker'])
+            results.append({
+                "Ticker": data['display_ticker'],
+                "Price": f"{currency}{data['price']:,.2f}",
+                "Yield": f"{data['dividend_yield']*100:.2f}%",
+                "Sector": data['sector'][:12] if data['sector'] else "N/A"
+            })
+    
+    elif strategy == "large_cap":
+        # Largest by market cap
+        cap_stocks = [d for d in stock_data_list if d['market_cap']]
+        sorted_stocks = sorted(cap_stocks, key=lambda x: x['market_cap'] or 0, reverse=True)
+        for data in sorted_stocks[:15]:
+            found_tickers.append(data['ticker'])
+            results.append({
+                "Ticker": data['display_ticker'],
+                "Price": f"{currency}{data['price']:,.2f}",
+                "Market Cap": data['market_cap_fmt'],
+                "Change": f"{data['change_pct']:+.2f}%"
+            })
+    
+    elif strategy == "low_pe":
+        # Lowest P/E ratios
+        pe_stocks = [d for d in stock_data_list if d['pe_ratio'] and d['pe_ratio'] > 0]
+        sorted_stocks = sorted(pe_stocks, key=lambda x: x['pe_ratio'])
+        for data in sorted_stocks[:15]:
+            found_tickers.append(data['ticker'])
+            results.append({
+                "Ticker": data['display_ticker'],
+                "Price": f"{currency}{data['price']:,.2f}",
+                "P/E": round(data['pe_ratio'], 1),
+                "Sector": data['sector'][:12] if data['sector'] else "N/A"
+            })
+    
+    elif strategy == "top_gainers":
+        # Today's top gainers
+        sorted_stocks = sorted(stock_data_list, key=lambda x: x['change_pct'] or 0, reverse=True)
+        for data in sorted_stocks[:15]:
+            found_tickers.append(data['ticker'])
+            color = "🟢" if data['change_pct'] >= 0 else "🔴"
+            results.append({
+                "Ticker": data['display_ticker'],
+                "Price": f"{currency}{data['price']:,.2f}",
+                "Change": f"{color} {data['change_pct']:+.2f}%",
+                "Sector": data['sector'][:12] if data['sector'] else "N/A"
+            })
+    
+    elif strategy == "top_losers":
+        # Today's top losers
+        sorted_stocks = sorted(stock_data_list, key=lambda x: x['change_pct'] or 0)
+        for data in sorted_stocks[:15]:
+            found_tickers.append(data['ticker'])
+            color = "🟢" if data['change_pct'] >= 0 else "🔴"
+            results.append({
+                "Ticker": data['display_ticker'],
+                "Price": f"{currency}{data['price']:,.2f}",
+                "Change": f"{color} {data['change_pct']:+.2f}%",
+                "Sector": data['sector'][:12] if data['sector'] else "N/A"
+            })
+    
+    else:
+        # Default: show all with basic info
+        for data in stock_data_list[:15]:
+            found_tickers.append(data['ticker'])
+            results.append({
+                "Ticker": data['display_ticker'],
+                "Price": f"{currency}{data['price']:,.2f}",
+                "Change": f"{data['change_pct']:+.2f}%",
+                "P/E": round(data['pe_ratio'], 1) if data['pe_ratio'] else "N/A"
+            })
+    
+    st.session_state.charts_to_display = found_tickers[:3]
+    
+    strategy_names = {
+        "momentum": "Momentum (Top Performers)",
+        "value": "Value Investing (Low P/E, High ROE)",
+        "quality": "Quality (High ROE & Margins)",
+        "dividend": "Dividend Income",
+        "large_cap": "Largest Companies",
+        "low_pe": "Lowest P/E Ratios",
+        "top_gainers": "Today's Top Gainers",
+        "top_losers": "Today's Top Losers"
+    }
+    
+    if results:
+        return {
+            "success": True, 
+            "strategy": strategy_names.get(strategy, strategy.title()),
+            "found": len(results), 
+            "table": results
+        }
+    return {"success": False, "message": f"No stocks found for {strategy} strategy"}
+
 # ==================== AI ====================
 def detect_and_execute(message):
-    msg = message.lower()
+    msg = message.lower().strip()
     
-    # Clear charts for non-stock queries
+    # Clear charts for new queries
     st.session_state.charts_to_display = []
     
-    # Check for screening keywords first
-    if any(w in msg for w in ['undervalued', 'value stocks', 'cheap stocks']): return screen_stocks("undervalued")
-    if any(w in msg for w in ['growth stocks', 'growing companies']): return screen_stocks("growth")
-    if any(w in msg for w in ['dividend', 'yield', 'income stocks']): return screen_stocks("dividend")
+    # Handle greetings and casual conversation - don't trigger stock analysis
+    greetings = ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening', 
+                 'howdy', 'sup', 'what\'s up', 'whats up', 'yo', 'hola', 'greetings',
+                 'how are you', 'how r u', 'thanks', 'thank you', 'bye', 'goodbye',
+                 'help', 'what can you do', 'who are you']
     
-    # Check for stock-related intent (must have these words to trigger stock analysis)
+    if any(msg == g or msg.startswith(g + ' ') or msg.startswith(g + ',') or msg.startswith(g + '!') for g in greetings):
+        return None
+    
+    market = st.session_state.get('market', 'US')
+    
+    # Determine which stock list to use based on query
+    stock_list = None
+    if 'nasdaq' in msg or 'nasdaq 100' in msg or 'nasdaq100' in msg:
+        stock_list = NASDAQ_100
+    elif 's&p' in msg or 'sp500' in msg or 's&p 500' in msg or 'sp 500' in msg:
+        stock_list = SP500_TOP
+    elif 'nifty' in msg or 'nifty 50' in msg or 'nifty50' in msg:
+        stock_list = NIFTY_50
+    
+    # Strategy-based queries
+    if any(w in msg for w in ['best', 'top', 'recommend', 'suggest', 'find']):
+        # Momentum / Top performers
+        if any(w in msg for w in ['momentum', 'performing', 'performer', 'winners', 'gaining']):
+            return screen_by_strategy("momentum", stock_list)
+        
+        # Value investing
+        if any(w in msg for w in ['value', 'undervalued', 'cheap', 'bargain']):
+            return screen_by_strategy("value", stock_list)
+        
+        # Quality stocks
+        if any(w in msg for w in ['quality', 'strong', 'solid', 'reliable']):
+            return screen_by_strategy("quality", stock_list)
+        
+        # Dividend
+        if any(w in msg for w in ['dividend', 'yield', 'income', 'passive']):
+            return screen_by_strategy("dividend", stock_list)
+        
+        # Large cap
+        if any(w in msg for w in ['large', 'biggest', 'largest', 'mega', 'blue chip', 'bluechip']):
+            return screen_by_strategy("large_cap", stock_list)
+        
+        # Low P/E
+        if any(w in msg for w in ['low pe', 'low p/e', 'cheap pe', 'lowest pe']):
+            return screen_by_strategy("low_pe", stock_list)
+        
+        # Growth
+        if any(w in msg for w in ['growth', 'growing', 'fast growing']):
+            return screen_by_strategy("quality", stock_list)  # Quality often = growth
+        
+        # If asking for "best stocks" without specific strategy, use quality
+        if 'stock' in msg and stock_list:
+            return screen_by_strategy("quality", stock_list)
+    
+    # Top gainers / losers
+    if any(w in msg for w in ['gainer', 'gaining', 'up today', 'rising']):
+        return screen_by_strategy("top_gainers", stock_list or (NASDAQ_100 if market == 'US' else NIFTY_50))
+    
+    if any(w in msg for w in ['loser', 'losing', 'down today', 'falling', 'dropping']):
+        return screen_by_strategy("top_losers", stock_list or (NASDAQ_100 if market == 'US' else NIFTY_50))
+    
+    # Simple screening keywords (original functionality)
+    if any(w in msg for w in ['undervalued', 'value stocks', 'cheap stocks']): 
+        return screen_stocks("undervalued")
+    if any(w in msg for w in ['growth stocks', 'growing companies']): 
+        return screen_stocks("growth")
+    if any(w in msg for w in ['dividend', 'yield', 'income stocks']): 
+        return screen_stocks("dividend")
+    
+    # Check for stock-related intent
     stock_intent_words = ['stock', 'price', 'analyze', 'analysis', 'ticker', 'share', 'shares', 
-                          'buy', 'sell', 'invest', 'trading', 'market cap', 'pe ratio', 'compare']
+                          'buy', 'sell', 'invest', 'trading', 'market cap', 'pe ratio', 'compare',
+                          'chart', 'graph']
     has_stock_intent = any(w in msg for w in stock_intent_words)
     
-    # Handle comparisons - check for company names AND tickers
+    # Handle comparisons
     if any(w in msg for w in ['compare', 'vs', 'versus']):
         found_tickers = []
         
-        # First, find company names in message
         for company_name, ticker in COMPANY_TO_TICKER.items():
             if company_name in msg:
                 if ticker not in found_tickers:
                     found_tickers.append(ticker)
         
-        # Also find ticker symbols
         ticker_matches = re.findall(r'\b([A-Z]{2,6})\b', message.upper())
-        exclude = ['PE', 'ROE', 'VS', 'AND', 'THE', 'FOR', 'OR', 'COMPARE', 'WITH']
+        exclude = ['PE', 'ROE', 'VS', 'AND', 'THE', 'FOR', 'OR', 'COMPARE', 'WITH', 'NASDAQ', 'NIFTY']
         for t in ticker_matches:
             if t not in exclude and t not in found_tickers:
                 found_tickers.append(t)
@@ -545,35 +814,35 @@ def detect_and_execute(message):
         if len(found_tickers) >= 2:
             return compare_stocks(','.join(found_tickers))
     
-    # First, try to find company name in message
+    # Check for company names
     ticker_from_name = get_ticker_from_name(msg)
     if ticker_from_name:
         return analyze_stock(ticker_from_name)
     
-    # Also check for multi-word company names
     for company_name in COMPANY_TO_TICKER.keys():
         if company_name in msg:
             return analyze_stock(COMPANY_TO_TICKER[company_name])
     
-    # Only look for ticker symbols if there's stock intent
+    # Look for ticker symbols if there's stock intent
     if has_stock_intent:
         tickers = re.findall(r'\b([A-Z]{2,6})\b', message.upper())
         exclude = ['PE', 'ROE', 'VS', 'AND', 'THE', 'FOR', 'AI', 'OK', 'HI', 'RSI', 'MACD', 
                    'ANALYZE', 'ANALYSIS', 'TELL', 'ME', 'ABOUT', 'SHOW', 'GET', 'FIND', 
-                   'STOCK', 'PRICE', 'BUY', 'SELL', 'WHAT', 'HOW', 'WHY', 'CAN', 'YOU']
+                   'STOCK', 'PRICE', 'BUY', 'SELL', 'WHAT', 'HOW', 'WHY', 'CAN', 'YOU',
+                   'CHART', 'GRAPH', 'NASDAQ', 'NIFTY', 'TOP', 'BEST']
         
         for t in tickers:
             if t in US_STOCKS and t not in exclude: return analyze_stock(t)
+            if t in NASDAQ_100 and t not in exclude: return analyze_stock(t)
+            if t in SP500_TOP and t not in exclude: return analyze_stock(t)
         
-        indian_names = [s.replace('.NS', '') for s in INDIAN_STOCKS]
+        indian_names = [s.replace('.NS', '') for s in INDIAN_STOCKS + NIFTY_50]
         for t in tickers:
             if t in indian_names and t not in exclude: return analyze_stock(t)
         
-        # Only try unknown tickers if there's clear stock intent
         for t in tickers:
             if t not in exclude and len(t) >= 3: return analyze_stock(t)
     
-    # No stock query detected - return None for general conversation
     return None
 
 def process_message(user_message, history):
@@ -584,10 +853,12 @@ def process_message(user_message, history):
     client = Groq(api_key=api_key)
     market = st.session_state.get('market', 'US')
     
-    system = f"""You are a stock analyst assistant. Be concise and direct.
-Market: {market} | Date: {datetime.now().strftime("%Y-%m-%d")}
-If stock data is provided, analyze it briefly. Otherwise, answer the question directly.
-Don't be overly enthusiastic or use excessive emojis. Keep responses professional."""
+    system = f"""You are Paula, a stock analysis assistant. Be helpful and conversational.
+
+If someone greets you (hi, hello, etc.), respond naturally - introduce yourself briefly as a stock analysis assistant and ask how you can help.
+
+If stock data is provided, analyze it concisely. Keep responses focused and professional.
+Market: {market} | Date: {datetime.now().strftime("%Y-%m-%d")}"""
 
     messages = [{"role": "system", "content": system}]
     for m in history[-4:]: messages.append({"role": m["role"], "content": m["content"]})
@@ -624,12 +895,30 @@ def display_charts():
         if fig: 
             st.plotly_chart(fig, use_container_width=True)
 
+def display_charts_inline(charts):
+    """Display charts inline with a message"""
+    if not charts: return
+    
+    period = "6mo"  # Default period for inline charts
+    for ticker in charts[:3]:
+        fig = create_technical_chart(ticker, period)
+        if fig: 
+            st.plotly_chart(fig, use_container_width=True)
+
 def process_and_display(prompt):
     st.session_state.chat_messages.append({"role": "user", "content": prompt})
-    with st.spinner("📡 Fetching data..."):
+    with st.spinner("Analyzing..."):
         response, data = process_message(prompt, st.session_state.chat_messages[:-1])
+    
     msg_data = {"role": "assistant", "content": response}
-    if data and "table" in data: msg_data["table_data"] = data
+    if data and "table" in data: 
+        msg_data["table_data"] = data
+    
+    # Store charts WITH the message, not globally
+    if st.session_state.charts_to_display:
+        msg_data["charts"] = st.session_state.charts_to_display.copy()
+        st.session_state.charts_to_display = []  # Clear global
+    
     st.session_state.chat_messages.append(msg_data)
 
 # ==================== MAIN ====================
@@ -663,12 +952,11 @@ def main():
         for m in st.session_state.chat_messages:
             with st.chat_message(m["role"]):
                 st.markdown(m["content"])
-                if m.get("table_data"): display_table(m["table_data"])
-        
-        # Charts below chat
-        if st.session_state.charts_to_display: 
-            st.markdown("---")
-            display_charts()
+                if m.get("table_data"): 
+                    display_table(m["table_data"])
+                # Show charts inline with this message
+                if m.get("charts"):
+                    display_charts_inline(m["charts"])
     else:
         # Welcome state
         st.markdown("")
