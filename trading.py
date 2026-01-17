@@ -11,9 +11,52 @@ import re
 from groq import Groq
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import requests
 
 warnings.filterwarnings('ignore')
 load_dotenv()
+
+# ==================== NEWS ====================
+def get_stock_news(ticker, limit=5):
+    """Fetch recent news for a stock"""
+    display_ticker = ticker.replace('.NS', '').replace('.BO', '')
+    
+    # Try yfinance news first (most reliable)
+    try:
+        stock = yf.Ticker(ticker if '.NS' in ticker or '.BO' in ticker else display_ticker)
+        news = stock.news
+        if news:
+            return [{
+                'title': item.get('title', ''),
+                'link': item.get('link', ''),
+                'publisher': item.get('publisher', ''),
+                'date': datetime.fromtimestamp(item.get('providerPublishTime', 0)).strftime('%Y-%m-%d %H:%M') if item.get('providerPublishTime') else ''
+            } for item in news[:limit]]
+    except:
+        pass
+    
+    return []
+
+def get_market_news(market='US', limit=5):
+    """Get general market news"""
+    tickers_to_try = ['^GSPC', 'SPY', 'AAPL'] if market == 'US' else ['^NSEI', 'RELIANCE.NS', 'TCS.NS']
+    
+    for ticker in tickers_to_try:
+        news = get_stock_news(ticker, limit)
+        if news:
+            return news
+    return []
+
+def format_news_for_ai(news_items):
+    """Format news items for AI context"""
+    if not news_items:
+        return "No recent news available."
+    
+    formatted = []
+    for item in news_items[:5]:
+        source = f" ({item['publisher']})" if item.get('publisher') else ""
+        formatted.append(f"• {item['title']}{source}")
+    return "\n".join(formatted)
 
 st.set_page_config(
     page_title="Paula - AI Stock Analyst",
@@ -523,6 +566,10 @@ def analyze_stock(ticker, show_chart=None):
     elif pct >= 35: rating, emoji = "Hold", "🟠"
     else: rating, emoji = "Caution", "🔴"
     
+    # Get recent news for this stock
+    news = get_stock_news(full_ticker, limit=5)
+    news_summary = format_news_for_ai(news)
+    
     currency = '₹' if data['market'] == 'India' else '$'
     return {
         "success": True, "ticker": data['display_ticker'], "name": data['name'],
@@ -531,7 +578,8 @@ def analyze_stock(ticker, show_chart=None):
         "market_cap": data['market_cap_fmt'],
         "pe_ratio": round(data['pe_ratio'], 2) if data['pe_ratio'] else "N/A",
         "roe": f"{data['roe']*100:.1f}%" if data['roe'] else "N/A",
-        "rating": f"{emoji} {rating} ({score}/8)"
+        "rating": f"{emoji} {rating} ({score}/8)",
+        "news": news_summary
     }
 
 def compare_stocks(tickers_str):
@@ -587,7 +635,18 @@ def screen_stocks(screen_type):
     progress.empty()
     st.session_state.charts_to_display = found_tickers[:3]
     
-    if results: return {"success": True, "screen_type": screen_type.title(), "found": len(results), "table": results[:15]}
+    # Get market news for context
+    market_news = get_market_news(market, limit=5)
+    news_summary = format_news_for_ai(market_news)
+    
+    if results: 
+        return {
+            "success": True, 
+            "screen_type": screen_type.title(), 
+            "found": len(results), 
+            "table": results[:15],
+            "market_news": news_summary
+        }
     return {"success": False, "message": f"No {screen_type} stocks found"}
 
 def screen_by_strategy(strategy, stock_list=None):
@@ -743,12 +802,17 @@ def screen_by_strategy(strategy, stock_list=None):
         "top_losers": "Today's Top Losers"
     }
     
+    # Get market news for context
+    market_news = get_market_news(market, limit=5)
+    news_summary = format_news_for_ai(market_news)
+    
     if results:
         return {
             "success": True, 
             "strategy": strategy_names.get(strategy, strategy.title()),
             "found": len(results), 
-            "table": results
+            "table": results,
+            "market_news": news_summary
         }
     return {"success": False, "message": f"No stocks found for {strategy} strategy"}
 
@@ -804,12 +868,12 @@ def detect_and_execute(message):
         stock_list = NIFTY_50
     
     # Strategy-based queries
-    if any(w in msg for w in ['best', 'top', 'recommend', 'suggest', 'find']) and ('stock' in msg or stock_list):
+    if any(w in msg for w in ['best', 'top', 'recommend', 'suggest', 'find', 'scan', 'screen', 'search']) and ('stock' in msg or stock_list):
         if any(w in msg for w in ['momentum', 'performing', 'performer', 'winners', 'gaining']):
             return screen_by_strategy("momentum", stock_list)
         if any(w in msg for w in ['value', 'undervalued', 'cheap', 'bargain']):
             return screen_by_strategy("value", stock_list)
-        if any(w in msg for w in ['quality', 'strong', 'solid', 'reliable']):
+        if any(w in msg for w in ['quality', 'strong', 'solid', 'reliable', 'best']):
             return screen_by_strategy("quality", stock_list)
         if any(w in msg for w in ['dividend', 'yield', 'income', 'passive']):
             return screen_by_strategy("dividend", stock_list)
@@ -911,8 +975,9 @@ Personality:
 
 For stock-related queries:
 - Market: {market} | Date: {datetime.now().strftime("%Y-%m-%d")}
-- If data is provided, analyze it and give your honest assessment
-- Share opinions on whether a stock looks good or concerning
+- Consider the recent news when analyzing stocks
+- If news is provided, factor it into your analysis and mention relevant headlines
+- Share opinions on whether a stock looks good or concerning based on data AND news
 - Mention risks and opportunities you see
 
 For general conversation:
@@ -927,8 +992,19 @@ You have knowledge about business, technology, economics, finance, investing str
     
     if data and data.get("success"):
         data_for_ai = {k: v for k, v in data.items() if k != 'table'}
-        if 'table' in data: data_for_ai['top_stocks'] = [row.get('Ticker', '') for row in data['table'][:5]]
-        prompt = f"{user_message}\n\nData:\n{json.dumps(data_for_ai, indent=2, default=str)}"
+        if 'table' in data: 
+            data_for_ai['top_stocks'] = [row.get('Ticker', '') for row in data['table'][:5]]
+        
+        # Build prompt with news context
+        prompt_parts = [user_message, f"\nStock Data:\n{json.dumps(data_for_ai, indent=2, default=str)}"]
+        
+        # Add news if available
+        if data.get('news'):
+            prompt_parts.append(f"\nRecent News:\n{data['news']}")
+        if data.get('market_news'):
+            prompt_parts.append(f"\nMarket News:\n{data['market_news']}")
+        
+        prompt = "\n".join(prompt_parts)
     else:
         prompt = user_message
     
