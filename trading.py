@@ -475,11 +475,15 @@ def get_live_stock_data(ticker):
             current_price = fast.get('lastPrice') or fast.get('regularMarketPrice')
             prev_close = fast.get('previousClose') or fast.get('regularMarketPreviousClose')
             market_cap = fast.get('marketCap')
+            fifty_two_week_high = fast.get('yearHigh')
+            fifty_two_week_low = fast.get('yearLow')
         except:
             fast = None
             current_price = None
             prev_close = None
             market_cap = None
+            fifty_two_week_high = None
+            fifty_two_week_low = None
         
         # Fallback to info if fast_info didn't work
         info = stock.info or {}
@@ -505,9 +509,18 @@ def get_live_stock_data(ticker):
         if market_cap is None:
             market_cap = info.get('marketCap')
         
+        if fifty_two_week_high is None:
+            fifty_two_week_high = info.get('fiftyTwoWeekHigh')
+        if fifty_two_week_low is None:
+            fifty_two_week_low = info.get('fiftyTwoWeekLow')
+        
         market = 'India' if '.NS' in ticker or '.BO' in ticker else 'US'
         change = current_price - prev_close if prev_close else 0
         change_pct = (change / prev_close * 100) if prev_close else 0
+        
+        # Calculate additional metrics
+        from_52w_high = ((current_price - fifty_two_week_high) / fifty_two_week_high * 100) if fifty_two_week_high else None
+        from_52w_low = ((current_price - fifty_two_week_low) / fifty_two_week_low * 100) if fifty_two_week_low else None
         
         return {
             "ticker": ticker, "display_ticker": get_display_ticker(ticker),
@@ -518,11 +531,26 @@ def get_live_stock_data(ticker):
             "market_cap": market_cap, 
             "market_cap_fmt": format_market_cap(market_cap, market),
             "pe_ratio": info.get('trailingPE'), 
+            "forward_pe": info.get('forwardPE'),
+            "peg_ratio": info.get('pegRatio'),
             "roe": info.get('returnOnEquity'),
             "profit_margin": info.get('profitMargins'), 
+            "revenue_growth": info.get('revenueGrowth'),
+            "earnings_growth": info.get('earningsGrowth'),
             "debt_to_equity": info.get('debtToEquity'),
             "current_ratio": info.get('currentRatio'), 
             "dividend_yield": info.get('dividendYield'),
+            "beta": info.get('beta'),
+            "52w_high": fifty_two_week_high,
+            "52w_low": fifty_two_week_low,
+            "from_52w_high": round(from_52w_high, 1) if from_52w_high else None,
+            "from_52w_low": round(from_52w_low, 1) if from_52w_low else None,
+            "avg_volume": info.get('averageVolume'),
+            "target_price": info.get('targetMeanPrice'),
+            "target_high": info.get('targetHighPrice'),
+            "target_low": info.get('targetLowPrice'),
+            "recommendation": info.get('recommendationKey'),
+            "num_analysts": info.get('numberOfAnalystOpinions'),
             "sector": info.get('sector', 'N/A'), 
             "industry": info.get('industry', 'N/A'), 
             "market": market,
@@ -553,14 +581,37 @@ def analyze_stock(ticker, show_chart=None):
     if show_chart:
         st.session_state.charts_to_display = [full_ticker]
     
+    # Enhanced scoring system
     score = 0
-    if data['pe_ratio'] and 0 < data['pe_ratio'] < 25: score += 2
-    if data['roe'] and data['roe'] > 0.12: score += 2
-    if data['profit_margin'] and data['profit_margin'] > 0.10: score += 2
-    if data['current_ratio'] and data['current_ratio'] > 1.2: score += 1
-    if data['debt_to_equity'] and data['debt_to_equity'] < 100: score += 1
+    score_details = []
     
-    pct = (score / 8) * 100
+    if data['pe_ratio'] and 0 < data['pe_ratio'] < 25: 
+        score += 2
+        score_details.append("Reasonable P/E")
+    if data['forward_pe'] and data['pe_ratio'] and data['forward_pe'] < data['pe_ratio']:
+        score += 1
+        score_details.append("Earnings expected to grow")
+    if data['roe'] and data['roe'] > 0.12: 
+        score += 2
+        score_details.append("Strong ROE")
+    if data['profit_margin'] and data['profit_margin'] > 0.10: 
+        score += 1
+        score_details.append("Good margins")
+    if data['revenue_growth'] and data['revenue_growth'] > 0.10:
+        score += 1
+        score_details.append("Revenue growing")
+    if data['current_ratio'] and data['current_ratio'] > 1.2: 
+        score += 1
+        score_details.append("Healthy balance sheet")
+    if data['debt_to_equity'] and data['debt_to_equity'] < 100: 
+        score += 1
+        score_details.append("Low debt")
+    if data['recommendation'] in ['buy', 'strong_buy']:
+        score += 1
+        score_details.append("Analyst buy rating")
+    
+    max_score = 10
+    pct = (score / max_score) * 100
     if pct >= 70: rating, emoji = "Strong Buy", "🟢"
     elif pct >= 50: rating, emoji = "Buy", "🟡"
     elif pct >= 35: rating, emoji = "Hold", "🟠"
@@ -571,16 +622,56 @@ def analyze_stock(ticker, show_chart=None):
     news_summary = format_news_for_ai(news)
     
     currency = '₹' if data['market'] == 'India' else '$'
-    return {
-        "success": True, "ticker": data['display_ticker'], "name": data['name'],
-        "sector": data['sector'], "price": f"{currency}{data['price']:,.2f}",
-        "change": f"{data['change']:+.2f} ({data['change_pct']:+.2f}%)",
+    
+    # Build comprehensive response
+    result = {
+        "success": True, 
+        "ticker": data['display_ticker'], 
+        "name": data['name'],
+        "sector": data['sector'],
+        "industry": data['industry'],
+        "price": f"{currency}{data['price']:,.2f}",
+        "change_today": f"{data['change']:+.2f} ({data['change_pct']:+.2f}%)",
         "market_cap": data['market_cap_fmt'],
+        
+        # Valuation
         "pe_ratio": round(data['pe_ratio'], 2) if data['pe_ratio'] else "N/A",
+        "forward_pe": round(data['forward_pe'], 2) if data['forward_pe'] else "N/A",
+        "peg_ratio": round(data['peg_ratio'], 2) if data['peg_ratio'] else "N/A",
+        
+        # Performance
         "roe": f"{data['roe']*100:.1f}%" if data['roe'] else "N/A",
-        "rating": f"{emoji} {rating} ({score}/8)",
+        "profit_margin": f"{data['profit_margin']*100:.1f}%" if data['profit_margin'] else "N/A",
+        "revenue_growth": f"{data['revenue_growth']*100:.1f}%" if data['revenue_growth'] else "N/A",
+        "earnings_growth": f"{data['earnings_growth']*100:.1f}%" if data['earnings_growth'] else "N/A",
+        
+        # Technical
+        "52_week_high": f"{currency}{data['52w_high']:,.2f}" if data['52w_high'] else "N/A",
+        "52_week_low": f"{currency}{data['52w_low']:,.2f}" if data['52w_low'] else "N/A",
+        "from_52w_high": f"{data['from_52w_high']}%" if data['from_52w_high'] else "N/A",
+        "beta": round(data['beta'], 2) if data['beta'] else "N/A",
+        
+        # Analyst
+        "analyst_rating": data['recommendation'].replace('_', ' ').title() if data['recommendation'] else "N/A",
+        "num_analysts": data['num_analysts'] if data['num_analysts'] else "N/A",
+        "target_price": f"{currency}{data['target_price']:,.2f}" if data['target_price'] else "N/A",
+        "target_high": f"{currency}{data['target_high']:,.2f}" if data['target_high'] else "N/A",
+        "target_low": f"{currency}{data['target_low']:,.2f}" if data['target_low'] else "N/A",
+        
+        # Our rating
+        "rating": f"{emoji} {rating} ({score}/{max_score})",
+        "score_reasons": score_details,
+        
+        # News
         "news": news_summary
     }
+    
+    # Calculate upside to target
+    if data['target_price'] and data['price']:
+        upside = ((data['target_price'] - data['price']) / data['price']) * 100
+        result['upside_to_target'] = f"{upside:+.1f}%"
+    
+    return result
 
 def compare_stocks(tickers_str):
     tickers = [t.strip().upper().replace('.NS', '') for t in re.split(r'[,\s]+', tickers_str) if t.strip()]
@@ -965,27 +1056,28 @@ def process_message(user_message, history):
     client = Groq(api_key=api_key)
     market = st.session_state.get('market', 'US')
     
-    system = f"""You are Paula, a knowledgeable and friendly assistant. While you specialize in stock analysis, you're happy to chat about anything - technology, business, economics, current events, general questions, or just casual conversation.
+    system = f"""You are Paula, a sharp stock analyst and friendly assistant. You give the kind of analysis a smart investor would want - combining fundamentals, technicals, news catalysts, and market context.
 
-Personality:
-- Friendly and conversational, but not overly enthusiastic
-- Give your honest opinions when asked
-- Be helpful with any topic, not just stocks
-- Keep responses concise but informative
+Market: {market} | Date: {datetime.now().strftime("%Y-%m-%d")}
 
-For stock-related queries:
-- Market: {market} | Date: {datetime.now().strftime("%Y-%m-%d")}
-- Consider the recent news when analyzing stocks
-- If news is provided, factor it into your analysis and mention relevant headlines
-- Share opinions on whether a stock looks good or concerning based on data AND news
-- Mention risks and opportunities you see
+For stock analysis, provide insights like a professional analyst:
+- Start with the key thesis: Is this stock bullish, bearish, or neutral right now? Why?
+- Highlight important catalysts: earnings, news, sector trends, AI demand, etc.
+- Discuss valuation: Is the P/E reasonable? How does forward P/E compare to trailing? What's the PEG ratio telling us?
+- Mention analyst sentiment: What's the target price? How much upside/downside?
+- Note technical position: Where is it vs 52-week high/low? Is it extended or beaten down?
+- Consider risks: What could go wrong? High valuation, competition, macro risks?
+- Factor in news: What are recent headlines saying? Any earnings surprises, upgrades, or catalysts?
 
-For general conversation:
-- Chat naturally about any topic
-- Share your perspective when asked
-- Be helpful and engaging
+Be direct with your opinion. Don't just list data - interpret it. Say things like:
+- "This looks attractive because..."
+- "I'd be cautious here due to..."
+- "The recent earnings beat suggests..."
+- "Analysts are bullish with a $X target, implying Y% upside"
 
-You have knowledge about business, technology, economics, finance, investing strategies, market trends, and general world knowledge."""
+For general conversation, be helpful and engaging on any topic.
+
+Keep responses focused and insightful, not just data dumps."""
 
     messages = [{"role": "system", "content": system}]
     for m in history[-6:]: messages.append({"role": m["role"], "content": m["content"]})
