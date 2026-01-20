@@ -58,6 +58,402 @@ def format_news_for_ai(news_items):
         formatted.append(f"• {item['title']}{source}")
     return "\n".join(formatted)
 
+# ==================== ADVANCED TECHNICAL ANALYSIS ====================
+def get_advanced_technicals(ticker, period="3mo"):
+    """Calculate advanced technical indicators for trading signals"""
+    try:
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period=period)
+        if hist.empty or len(hist) < 50:
+            return None
+        
+        df = hist.copy()
+        close = df['Close']
+        high = df['High']
+        low = df['Low']
+        volume = df['Volume']
+        
+        # Moving Averages
+        df['SMA_20'] = close.rolling(window=20).mean()
+        df['SMA_50'] = close.rolling(window=50).mean()
+        df['SMA_200'] = close.rolling(window=200).mean() if len(close) >= 200 else None
+        df['EMA_9'] = close.ewm(span=9, adjust=False).mean()
+        df['EMA_21'] = close.ewm(span=21, adjust=False).mean()
+        
+        # RSI
+        delta = close.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        df['RSI'] = 100 - (100 / (1 + rs))
+        
+        # MACD
+        exp1 = close.ewm(span=12, adjust=False).mean()
+        exp2 = close.ewm(span=26, adjust=False).mean()
+        df['MACD'] = exp1 - exp2
+        df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+        df['MACD_Hist'] = df['MACD'] - df['MACD_Signal']
+        
+        # Bollinger Bands
+        df['BB_Middle'] = close.rolling(window=20).mean()
+        bb_std = close.rolling(window=20).std()
+        df['BB_Upper'] = df['BB_Middle'] + (bb_std * 2)
+        df['BB_Lower'] = df['BB_Middle'] - (bb_std * 2)
+        df['BB_Position'] = (close - df['BB_Lower']) / (df['BB_Upper'] - df['BB_Lower'])
+        
+        # Average True Range (ATR) for volatility
+        tr1 = high - low
+        tr2 = abs(high - close.shift())
+        tr3 = abs(low - close.shift())
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        df['ATR'] = tr.rolling(window=14).mean()
+        df['ATR_Percent'] = (df['ATR'] / close) * 100
+        
+        # Volume Analysis
+        df['Volume_SMA'] = volume.rolling(window=20).mean()
+        df['Volume_Ratio'] = volume / df['Volume_SMA']
+        
+        # Stochastic Oscillator
+        lowest_low = low.rolling(window=14).min()
+        highest_high = high.rolling(window=14).max()
+        df['Stoch_K'] = 100 * ((close - lowest_low) / (highest_high - lowest_low))
+        df['Stoch_D'] = df['Stoch_K'].rolling(window=3).mean()
+        
+        # Price momentum
+        df['ROC_5'] = ((close - close.shift(5)) / close.shift(5)) * 100  # 5-day rate of change
+        df['ROC_20'] = ((close - close.shift(20)) / close.shift(20)) * 100  # 20-day rate of change
+        
+        # Get latest values
+        latest = df.iloc[-1]
+        prev = df.iloc[-2]
+        
+        return {
+            'current_price': latest['Close'],
+            'sma_20': latest['SMA_20'],
+            'sma_50': latest['SMA_50'],
+            'ema_9': latest['EMA_9'],
+            'ema_21': latest['EMA_21'],
+            'rsi': latest['RSI'],
+            'macd': latest['MACD'],
+            'macd_signal': latest['MACD_Signal'],
+            'macd_hist': latest['MACD_Hist'],
+            'macd_hist_prev': prev['MACD_Hist'],
+            'bb_upper': latest['BB_Upper'],
+            'bb_lower': latest['BB_Lower'],
+            'bb_position': latest['BB_Position'],
+            'atr': latest['ATR'],
+            'atr_percent': latest['ATR_Percent'],
+            'volume_ratio': latest['Volume_Ratio'],
+            'stoch_k': latest['Stoch_K'],
+            'stoch_d': latest['Stoch_D'],
+            'roc_5': latest['ROC_5'],
+            'roc_20': latest['ROC_20'],
+            'price_vs_sma20': ((latest['Close'] - latest['SMA_20']) / latest['SMA_20']) * 100,
+            'price_vs_sma50': ((latest['Close'] - latest['SMA_50']) / latest['SMA_50']) * 100,
+            'ema_crossover': 'bullish' if latest['EMA_9'] > latest['EMA_21'] and prev['EMA_9'] <= prev['EMA_21'] else 
+                           ('bearish' if latest['EMA_9'] < latest['EMA_21'] and prev['EMA_9'] >= prev['EMA_21'] else 'none'),
+            'macd_crossover': 'bullish' if latest['MACD'] > latest['MACD_Signal'] and prev['MACD'] <= prev['MACD_Signal'] else
+                            ('bearish' if latest['MACD'] < latest['MACD_Signal'] and prev['MACD'] >= prev['MACD_Signal'] else 'none'),
+        }
+    except Exception as e:
+        return None
+
+def get_earnings_data(ticker):
+    """Get earnings and financial calendar data"""
+    try:
+        stock = yf.Ticker(ticker)
+        
+        # Get earnings dates
+        try:
+            calendar = stock.calendar
+            earnings_date = calendar.get('Earnings Date', [None])[0] if calendar else None
+        except:
+            earnings_date = None
+        
+        # Get earnings history
+        try:
+            earnings_hist = stock.earnings_history
+            if earnings_hist is not None and len(earnings_hist) > 0:
+                recent_earnings = []
+                for _, row in earnings_hist.tail(4).iterrows():
+                    surprise_pct = row.get('surprisePercent', 0)
+                    recent_earnings.append({
+                        'date': str(row.name)[:10] if hasattr(row, 'name') else 'N/A',
+                        'actual': row.get('epsActual', 'N/A'),
+                        'estimate': row.get('epsEstimate', 'N/A'),
+                        'surprise': f"{surprise_pct*100:+.1f}%" if surprise_pct else 'N/A'
+                    })
+            else:
+                recent_earnings = []
+        except:
+            recent_earnings = []
+        
+        # Get quarterly financials
+        try:
+            quarterly = stock.quarterly_financials
+            if quarterly is not None and not quarterly.empty:
+                revenue_growth = None
+                if 'Total Revenue' in quarterly.index and len(quarterly.columns) >= 4:
+                    recent_rev = quarterly.loc['Total Revenue'].iloc[0]
+                    year_ago_rev = quarterly.loc['Total Revenue'].iloc[3]
+                    if recent_rev and year_ago_rev:
+                        revenue_growth = ((recent_rev - year_ago_rev) / year_ago_rev) * 100
+            else:
+                revenue_growth = None
+        except:
+            revenue_growth = None
+        
+        return {
+            'next_earnings': str(earnings_date)[:10] if earnings_date else 'N/A',
+            'recent_earnings': recent_earnings,
+            'revenue_growth_yoy': revenue_growth
+        }
+    except:
+        return None
+
+def calculate_trading_score(data, technicals, earnings, news_sentiment):
+    """Calculate comprehensive trading score for swing/short-term trading"""
+    
+    score = 0
+    signals = []
+    warnings = []
+    
+    # ===== TECHNICAL SIGNALS (40 points max) =====
+    if technicals:
+        # RSI Analysis (8 points)
+        rsi = technicals.get('rsi', 50)
+        if 30 <= rsi <= 40:
+            score += 8
+            signals.append("RSI oversold bounce zone (30-40) - strong buy signal")
+        elif 40 < rsi <= 60:
+            score += 5
+            signals.append("RSI neutral (40-60) - healthy momentum")
+        elif 60 < rsi <= 70:
+            score += 3
+            signals.append("RSI elevated (60-70) - momentum but watch for pullback")
+        elif rsi > 70:
+            score += 0
+            warnings.append("RSI overbought (>70) - potential pullback risk")
+        elif rsi < 30:
+            score += 4
+            signals.append("RSI deeply oversold (<30) - could bounce but risky")
+        
+        # MACD Analysis (8 points)
+        macd_cross = technicals.get('macd_crossover', 'none')
+        macd_hist = technicals.get('macd_hist', 0)
+        if macd_cross == 'bullish':
+            score += 8
+            signals.append("MACD bullish crossover - strong buy signal")
+        elif macd_hist > 0 and technicals.get('macd_hist_prev', 0) < macd_hist:
+            score += 5
+            signals.append("MACD histogram expanding positive - momentum building")
+        elif macd_cross == 'bearish':
+            warnings.append("MACD bearish crossover - caution")
+        
+        # EMA Crossover (6 points)
+        ema_cross = technicals.get('ema_crossover', 'none')
+        if ema_cross == 'bullish':
+            score += 6
+            signals.append("EMA 9/21 bullish crossover - short-term buy signal")
+        elif technicals.get('ema_9', 0) > technicals.get('ema_21', 0):
+            score += 3
+            signals.append("Price above short-term EMAs - uptrend intact")
+        elif ema_cross == 'bearish':
+            warnings.append("EMA bearish crossover - short-term weakness")
+        
+        # Trend Analysis - Price vs SMAs (8 points)
+        price_vs_20 = technicals.get('price_vs_sma20', 0)
+        price_vs_50 = technicals.get('price_vs_sma50', 0)
+        if price_vs_20 > 0 and price_vs_50 > 0:
+            score += 6
+            signals.append("Price above 20 & 50 SMA - strong uptrend")
+        elif price_vs_20 > 0:
+            score += 3
+            signals.append("Price above 20 SMA - short-term uptrend")
+        elif price_vs_20 < -5 and price_vs_50 < -10:
+            score += 2
+            signals.append("Price well below SMAs - potential bounce play")
+        
+        # Bollinger Band Position (5 points)
+        bb_pos = technicals.get('bb_position', 0.5)
+        if 0.2 <= bb_pos <= 0.4:
+            score += 5
+            signals.append("Near lower Bollinger Band - potential bounce")
+        elif 0.4 < bb_pos <= 0.6:
+            score += 3
+            signals.append("Middle of Bollinger Bands - neutral")
+        elif bb_pos > 0.9:
+            warnings.append("At upper Bollinger Band - extended, may pullback")
+        
+        # Volume Confirmation (5 points)
+        vol_ratio = technicals.get('volume_ratio', 1)
+        if vol_ratio > 1.5:
+            score += 5
+            signals.append(f"High volume ({vol_ratio:.1f}x avg) - strong conviction")
+        elif vol_ratio > 1.2:
+            score += 3
+            signals.append("Above average volume - good participation")
+        elif vol_ratio < 0.7:
+            warnings.append("Below average volume - weak conviction")
+    
+    # ===== FUNDAMENTAL SIGNALS (30 points max) =====
+    if data:
+        # Valuation (10 points)
+        pe = data.get('pe_ratio')
+        forward_pe = data.get('forward_pe')
+        peg = data.get('peg_ratio')
+        
+        if forward_pe and pe and forward_pe < pe * 0.7:
+            score += 8
+            signals.append(f"Forward P/E ({forward_pe:.1f}) much lower than trailing ({pe:.1f}) - earnings growth expected")
+        elif pe and 10 < pe < 25:
+            score += 5
+            signals.append(f"Reasonable P/E of {pe:.1f}")
+        elif pe and pe > 40:
+            warnings.append(f"High P/E of {pe:.1f} - expensive valuation")
+        
+        if peg and 0 < peg < 1.5:
+            score += 4
+            signals.append(f"Attractive PEG ratio of {peg:.2f}")
+        
+        # Analyst Sentiment (10 points)
+        recommendation = data.get('recommendation', '')
+        target_price = data.get('target_price')
+        current_price = data.get('price')
+        
+        if recommendation in ['strong_buy', 'buy']:
+            score += 6
+            signals.append(f"Analyst rating: {recommendation.replace('_', ' ').title()}")
+        
+        if target_price and current_price:
+            try:
+                current_val = float(str(current_price).replace('$', '').replace('₹', '').replace(',', ''))
+                upside = ((target_price - current_val) / current_val) * 100
+                if upside > 20:
+                    score += 4
+                    signals.append(f"Analyst target implies {upside:.0f}% upside")
+                elif upside > 10:
+                    score += 2
+                    signals.append(f"Analyst target implies {upside:.0f}% upside")
+                elif upside < 0:
+                    warnings.append(f"Trading above analyst target by {abs(upside):.0f}%")
+            except:
+                pass
+        
+        # Growth Metrics (10 points)
+        revenue_growth = data.get('revenue_growth')
+        earnings_growth = data.get('earnings_growth')
+        roe = data.get('roe')
+        
+        if revenue_growth and revenue_growth > 0.20:
+            score += 4
+            signals.append(f"Strong revenue growth: {revenue_growth*100:.0f}%")
+        elif revenue_growth and revenue_growth > 0.10:
+            score += 2
+            signals.append(f"Solid revenue growth: {revenue_growth*100:.0f}%")
+        
+        if roe and roe > 0.20:
+            score += 3
+            signals.append(f"Excellent ROE: {roe*100:.0f}%")
+        elif roe and roe > 0.15:
+            score += 2
+    
+    # ===== EARNINGS SIGNALS (15 points max) =====
+    if earnings:
+        recent = earnings.get('recent_earnings', [])
+        if recent:
+            beats = sum(1 for e in recent if e.get('surprise', '').startswith('+'))
+            if beats >= 3:
+                score += 10
+                signals.append(f"Beat earnings {beats}/4 recent quarters - consistent performer")
+            elif beats >= 2:
+                score += 6
+                signals.append(f"Beat earnings {beats}/4 recent quarters")
+            
+            # Check most recent surprise magnitude
+            if recent and recent[0].get('surprise'):
+                try:
+                    surprise_str = recent[0]['surprise'].replace('%', '').replace('+', '')
+                    surprise_val = float(surprise_str)
+                    if surprise_val > 10:
+                        score += 5
+                        signals.append(f"Last earnings beat by {surprise_val:.0f}% - strong surprise")
+                except:
+                    pass
+        
+        # Upcoming earnings catalyst
+        next_earnings = earnings.get('next_earnings', 'N/A')
+        if next_earnings != 'N/A':
+            signals.append(f"Next earnings: {next_earnings}")
+    
+    # ===== NEWS SENTIMENT (15 points max) =====
+    if news_sentiment:
+        if news_sentiment > 0.5:
+            score += 10
+            signals.append("Strong positive news sentiment")
+        elif news_sentiment > 0.2:
+            score += 6
+            signals.append("Positive news sentiment")
+        elif news_sentiment < -0.3:
+            warnings.append("Negative news sentiment")
+    
+    # Calculate final rating
+    max_score = 100
+    pct = (score / max_score) * 100
+    
+    if pct >= 70:
+        rating = "🟢 STRONG BUY"
+        action = "High conviction setup - consider entering position"
+    elif pct >= 55:
+        rating = "🟢 BUY"
+        action = "Good setup - favorable risk/reward"
+    elif pct >= 40:
+        rating = "🟡 HOLD/ACCUMULATE"
+        action = "Neutral - wait for better entry or add to existing position"
+    elif pct >= 25:
+        rating = "🟠 CAUTION"
+        action = "Weak setup - avoid new positions"
+    else:
+        rating = "🔴 AVOID"
+        action = "Poor setup - stay away or consider shorting"
+    
+    return {
+        'score': score,
+        'max_score': max_score,
+        'percentage': pct,
+        'rating': rating,
+        'action': action,
+        'signals': signals,
+        'warnings': warnings
+    }
+
+def analyze_news_sentiment(news_items):
+    """Simple sentiment analysis on news headlines"""
+    if not news_items:
+        return 0
+    
+    positive_words = ['surge', 'jump', 'soar', 'rally', 'beat', 'exceed', 'upgrade', 'buy', 'bullish',
+                     'record', 'high', 'growth', 'profit', 'gain', 'positive', 'strong', 'boost',
+                     'outperform', 'success', 'win', 'breakthrough', 'innovation', 'demand', 'raise']
+    
+    negative_words = ['fall', 'drop', 'plunge', 'crash', 'miss', 'downgrade', 'sell', 'bearish',
+                     'low', 'loss', 'decline', 'negative', 'weak', 'cut', 'concern', 'risk',
+                     'underperform', 'fail', 'lawsuit', 'investigation', 'recall', 'warning']
+    
+    score = 0
+    for item in news_items:
+        title = item.get('title', '').lower()
+        for word in positive_words:
+            if word in title:
+                score += 1
+        for word in negative_words:
+            if word in title:
+                score -= 1
+    
+    # Normalize to -1 to 1 range
+    max_possible = len(news_items) * 2
+    return score / max_possible if max_possible > 0 else 0
+
 st.set_page_config(
     page_title="Paula - AI Stock Analyst",
     page_icon="📈",
@@ -581,45 +977,19 @@ def analyze_stock(ticker, show_chart=None):
     if show_chart:
         st.session_state.charts_to_display = [full_ticker]
     
-    # Enhanced scoring system
-    score = 0
-    score_details = []
+    # Get advanced technicals
+    technicals = get_advanced_technicals(full_ticker)
     
-    if data['pe_ratio'] and 0 < data['pe_ratio'] < 25: 
-        score += 2
-        score_details.append("Reasonable P/E")
-    if data['forward_pe'] and data['pe_ratio'] and data['forward_pe'] < data['pe_ratio']:
-        score += 1
-        score_details.append("Earnings expected to grow")
-    if data['roe'] and data['roe'] > 0.12: 
-        score += 2
-        score_details.append("Strong ROE")
-    if data['profit_margin'] and data['profit_margin'] > 0.10: 
-        score += 1
-        score_details.append("Good margins")
-    if data['revenue_growth'] and data['revenue_growth'] > 0.10:
-        score += 1
-        score_details.append("Revenue growing")
-    if data['current_ratio'] and data['current_ratio'] > 1.2: 
-        score += 1
-        score_details.append("Healthy balance sheet")
-    if data['debt_to_equity'] and data['debt_to_equity'] < 100: 
-        score += 1
-        score_details.append("Low debt")
-    if data['recommendation'] in ['buy', 'strong_buy']:
-        score += 1
-        score_details.append("Analyst buy rating")
+    # Get earnings data
+    earnings = get_earnings_data(full_ticker)
     
-    max_score = 10
-    pct = (score / max_score) * 100
-    if pct >= 70: rating, emoji = "Strong Buy", "🟢"
-    elif pct >= 50: rating, emoji = "Buy", "🟡"
-    elif pct >= 35: rating, emoji = "Hold", "🟠"
-    else: rating, emoji = "Caution", "🔴"
-    
-    # Get recent news for this stock
-    news = get_stock_news(full_ticker, limit=5)
+    # Get news and sentiment
+    news = get_stock_news(full_ticker, limit=8)
     news_summary = format_news_for_ai(news)
+    news_sentiment = analyze_news_sentiment(news)
+    
+    # Calculate comprehensive trading score
+    trading_analysis = calculate_trading_score(data, technicals, earnings, news_sentiment)
     
     currency = '₹' if data['market'] == 'India' else '$'
     
@@ -634,6 +1004,13 @@ def analyze_stock(ticker, show_chart=None):
         "change_today": f"{data['change']:+.2f} ({data['change_pct']:+.2f}%)",
         "market_cap": data['market_cap_fmt'],
         
+        # Trading Rating (the main score)
+        "trading_rating": trading_analysis['rating'],
+        "trading_score": f"{trading_analysis['score']}/{trading_analysis['max_score']} ({trading_analysis['percentage']:.0f}%)",
+        "trading_action": trading_analysis['action'],
+        "buy_signals": trading_analysis['signals'],
+        "warnings": trading_analysis['warnings'],
+        
         # Valuation
         "pe_ratio": round(data['pe_ratio'], 2) if data['pe_ratio'] else "N/A",
         "forward_pe": round(data['forward_pe'], 2) if data['forward_pe'] else "N/A",
@@ -645,7 +1022,7 @@ def analyze_stock(ticker, show_chart=None):
         "revenue_growth": f"{data['revenue_growth']*100:.1f}%" if data['revenue_growth'] else "N/A",
         "earnings_growth": f"{data['earnings_growth']*100:.1f}%" if data['earnings_growth'] else "N/A",
         
-        # Technical
+        # 52-Week Range
         "52_week_high": f"{currency}{data['52w_high']:,.2f}" if data['52w_high'] else "N/A",
         "52_week_low": f"{currency}{data['52w_low']:,.2f}" if data['52w_low'] else "N/A",
         "from_52w_high": f"{data['from_52w_high']}%" if data['from_52w_high'] else "N/A",
@@ -658,13 +1035,32 @@ def analyze_stock(ticker, show_chart=None):
         "target_high": f"{currency}{data['target_high']:,.2f}" if data['target_high'] else "N/A",
         "target_low": f"{currency}{data['target_low']:,.2f}" if data['target_low'] else "N/A",
         
-        # Our rating
-        "rating": f"{emoji} {rating} ({score}/{max_score})",
-        "score_reasons": score_details,
-        
         # News
-        "news": news_summary
+        "news": news_summary,
+        "news_sentiment": "Positive" if news_sentiment > 0.2 else ("Negative" if news_sentiment < -0.2 else "Neutral"),
     }
+    
+    # Add technicals if available
+    if technicals:
+        result["technicals"] = {
+            "rsi": round(technicals['rsi'], 1) if technicals.get('rsi') else "N/A",
+            "macd_signal": technicals.get('macd_crossover', 'none'),
+            "ema_signal": technicals.get('ema_crossover', 'none'),
+            "price_vs_sma20": f"{technicals['price_vs_sma20']:+.1f}%" if technicals.get('price_vs_sma20') else "N/A",
+            "price_vs_sma50": f"{technicals['price_vs_sma50']:+.1f}%" if technicals.get('price_vs_sma50') else "N/A",
+            "bollinger_position": f"{technicals['bb_position']*100:.0f}%" if technicals.get('bb_position') else "N/A",
+            "volume_ratio": f"{technicals['volume_ratio']:.1f}x avg" if technicals.get('volume_ratio') else "N/A",
+            "atr_volatility": f"{technicals['atr_percent']:.1f}%" if technicals.get('atr_percent') else "N/A",
+            "momentum_5d": f"{technicals['roc_5']:+.1f}%" if technicals.get('roc_5') else "N/A",
+            "momentum_20d": f"{technicals['roc_20']:+.1f}%" if technicals.get('roc_20') else "N/A",
+        }
+    
+    # Add earnings data if available
+    if earnings:
+        result["earnings"] = {
+            "next_earnings_date": earnings.get('next_earnings', 'N/A'),
+            "recent_quarters": earnings.get('recent_earnings', []),
+        }
     
     # Calculate upside to target
     if data['target_price'] and data['price']:
@@ -1056,28 +1452,52 @@ def process_message(user_message, history):
     client = Groq(api_key=api_key)
     market = st.session_state.get('market', 'US')
     
-    system = f"""You are Paula, a sharp stock analyst and friendly assistant. You give the kind of analysis a smart investor would want - combining fundamentals, technicals, news catalysts, and market context.
+    system = f"""You are Paula, an expert swing/short-term trading analyst. You provide actionable trading insights combining technicals, fundamentals, news catalysts, and sentiment.
 
 Market: {market} | Date: {datetime.now().strftime("%Y-%m-%d")}
 
-For stock analysis, provide insights like a professional analyst:
-- Start with the key thesis: Is this stock bullish, bearish, or neutral right now? Why?
-- Highlight important catalysts: earnings, news, sector trends, AI demand, etc.
-- Discuss valuation: Is the P/E reasonable? How does forward P/E compare to trailing? What's the PEG ratio telling us?
-- Mention analyst sentiment: What's the target price? How much upside/downside?
-- Note technical position: Where is it vs 52-week high/low? Is it extended or beaten down?
-- Consider risks: What could go wrong? High valuation, competition, macro risks?
-- Factor in news: What are recent headlines saying? Any earnings surprises, upgrades, or catalysts?
+When analyzing a stock for trading, follow this structure:
 
-Be direct with your opinion. Don't just list data - interpret it. Say things like:
-- "This looks attractive because..."
-- "I'd be cautious here due to..."
-- "The recent earnings beat suggests..."
-- "Analysts are bullish with a $X target, implying Y% upside"
+1. **TRADING VERDICT** (Start with this!)
+   - State the trading_rating clearly (e.g., "🟢 STRONG BUY", "🟡 HOLD", etc.)
+   - Give the action recommendation
+   - Mention the score (e.g., "Score: 72/100")
 
-For general conversation, be helpful and engaging on any topic.
+2. **KEY SIGNALS** (Why to buy/sell)
+   - List the most important buy signals from the data
+   - Highlight any bullish crossovers (MACD, EMA)
+   - Note RSI position (oversold bounce? overbought risk?)
+   - Mention volume confirmation
 
-Keep responses focused and insightful, not just data dumps."""
+3. **CATALYSTS & NEWS**
+   - What's driving the stock? Earnings beat? Product launch? AI demand?
+   - Summarize news sentiment
+   - Note upcoming earnings date if relevant
+
+4. **VALUATION CHECK**
+   - Is forward P/E lower than trailing? (earnings growth expected)
+   - How's the PEG ratio?
+   - What do analysts say? (target price, upside %)
+
+5. **TECHNICALS SNAPSHOT**
+   - Price vs 20/50 SMA (trend)
+   - RSI level
+   - Bollinger Band position
+   - Recent momentum (5-day, 20-day)
+
+6. **RISKS/WARNINGS**
+   - List any warning signals
+   - High valuation? Overbought? Negative news?
+
+7. **TRADING PLAN** (Be specific!)
+   - Entry zone suggestion
+   - Stop loss level (use ATR or support)
+   - Target price (use analyst targets or resistance)
+
+Be direct and actionable. Traders want clear signals, not lengthy explanations.
+Use the buy_signals and warnings from the data - they're pre-calculated for you.
+
+For general conversation, be helpful and friendly."""
 
     messages = [{"role": "system", "content": system}]
     for m in history[-6:]: messages.append({"role": m["role"], "content": m["content"]})
@@ -1087,14 +1507,14 @@ Keep responses focused and insightful, not just data dumps."""
         if 'table' in data: 
             data_for_ai['top_stocks'] = [row.get('Ticker', '') for row in data['table'][:5]]
         
-        # Build prompt with news context
-        prompt_parts = [user_message, f"\nStock Data:\n{json.dumps(data_for_ai, indent=2, default=str)}"]
+        # Build prompt with all context
+        prompt_parts = [user_message, f"\n\n=== ANALYSIS DATA ===\n{json.dumps(data_for_ai, indent=2, default=str)}"]
         
         # Add news if available
         if data.get('news'):
-            prompt_parts.append(f"\nRecent News:\n{data['news']}")
+            prompt_parts.append(f"\n=== RECENT NEWS ===\n{data['news']}")
         if data.get('market_news'):
-            prompt_parts.append(f"\nMarket News:\n{data['market_news']}")
+            prompt_parts.append(f"\n=== MARKET NEWS ===\n{data['market_news']}")
         
         prompt = "\n".join(prompt_parts)
     else:
