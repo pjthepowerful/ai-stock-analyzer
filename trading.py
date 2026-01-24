@@ -465,76 +465,95 @@ def get_performance_data(ticker):
             return None
         
         current_price = hist_1y['Close'].iloc[-1]
+        if current_price is None or current_price <= 0:
+            return None
         
         # Calculate performance for different periods
         performance = {}
         
+        def safe_calc_return(current, past):
+            """Safely calculate return percentage"""
+            if past is None or past <= 0:
+                return None
+            return ((current - past) / past) * 100
+        
         # 1 Week
         if len(hist_1y) >= 5:
-            week_ago = hist_1y['Close'].iloc[-5] if len(hist_1y) >= 5 else hist_1y['Close'].iloc[0]
-            performance['1w'] = ((current_price - week_ago) / week_ago) * 100
+            week_ago = hist_1y['Close'].iloc[-5]
+            performance['1w'] = safe_calc_return(current_price, week_ago)
         
         # 1 Month (~21 trading days)
         if len(hist_1y) >= 21:
             month_ago = hist_1y['Close'].iloc[-21]
-            performance['1m'] = ((current_price - month_ago) / month_ago) * 100
+            performance['1m'] = safe_calc_return(current_price, month_ago)
         
         # 3 Months (~63 trading days)
         if len(hist_1y) >= 63:
             three_month_ago = hist_1y['Close'].iloc[-63]
-            performance['3m'] = ((current_price - three_month_ago) / three_month_ago) * 100
+            performance['3m'] = safe_calc_return(current_price, three_month_ago)
         
         # 6 Months (~126 trading days)
         if len(hist_1y) >= 126:
             six_month_ago = hist_1y['Close'].iloc[-126]
-            performance['6m'] = ((current_price - six_month_ago) / six_month_ago) * 100
+            performance['6m'] = safe_calc_return(current_price, six_month_ago)
         
         # YTD
         try:
             year_start = datetime(datetime.now().year, 1, 1)
-            ytd_data = hist_1y[hist_1y.index >= year_start.strftime('%Y-%m-%d')]
+            # Convert index to timezone-naive for comparison
+            hist_dates = hist_1y.index.tz_localize(None) if hist_1y.index.tz else hist_1y.index
+            ytd_mask = hist_dates >= year_start
+            ytd_data = hist_1y[ytd_mask]
             if len(ytd_data) > 0:
                 ytd_start = ytd_data['Close'].iloc[0]
-                performance['ytd'] = ((current_price - ytd_start) / ytd_start) * 100
-        except:
+                performance['ytd'] = safe_calc_return(current_price, ytd_start)
+        except Exception:
             pass
         
         # 1 Year
-        if len(hist_1y) >= 252:
+        if len(hist_1y) >= 200:  # Changed from 252 to be more lenient
             year_ago = hist_1y['Close'].iloc[0]
-            performance['1y'] = ((current_price - year_ago) / year_ago) * 100
+            performance['1y'] = safe_calc_return(current_price, year_ago)
         
         return performance
-    except:
+    except Exception:
         return None
 
 def scan_hot_stocks(timeframe='1m', min_gain=10, limit=20):
     """Scan for hot stocks with strong recent performance"""
     market = st.session_state.get('market', 'US')
     
-    # Use all stocks including trending ones
+    # Use smaller list for speed - prioritize trending stocks
     if market == 'US':
-        stocks_to_scan = ALL_US_STOCKS[:100]  # Limit for speed
+        stocks_to_scan = TRENDING_US[:50] + NASDAQ_100[:30]  # 80 stocks max
     else:
-        stocks_to_scan = ALL_INDIA_STOCKS[:60]
+        stocks_to_scan = TRENDING_INDIA[:30] + NIFTY_50[:20]  # 50 stocks max
+    
+    # Remove duplicates while preserving order
+    stocks_to_scan = list(dict.fromkeys(stocks_to_scan))
     
     results = []
     progress = st.progress(0)
+    status = st.empty()
     
+    failed_count = 0
     for i, ticker in enumerate(stocks_to_scan):
         progress.progress((i + 1) / len(stocks_to_scan))
+        status.text(f"Scanning {ticker}... ({i+1}/{len(stocks_to_scan)})")
         
         try:
             data = get_live_stock_data(ticker)
             if not data:
+                failed_count += 1
                 continue
             
             perf = get_performance_data(ticker)
             if not perf:
+                failed_count += 1
                 continue
             
             # Get the relevant timeframe performance
-            gain = perf.get(timeframe, 0)
+            gain = perf.get(timeframe)
             if gain is None:
                 continue
             
@@ -560,10 +579,16 @@ def scan_hot_stocks(timeframe='1m', min_gain=10, limit=20):
                     'pe_ratio': data['pe_ratio'],
                     'recommendation': data['recommendation'],
                 })
-        except:
+        except Exception:
+            failed_count += 1
             continue
     
     progress.empty()
+    status.empty()
+    
+    # Show warning if many failed
+    if failed_count > len(stocks_to_scan) * 0.5:
+        st.warning(f"⚠️ {failed_count} stocks couldn't be fetched. Data may be incomplete.")
     
     # Sort by the target timeframe gain
     results.sort(key=lambda x: x['target_gain'], reverse=True)
@@ -1321,10 +1346,27 @@ def get_live_stock_data(ticker):
         return None
 
 # ==================== ANALYSIS ====================
+def validate_ticker(ticker):
+    """Validate ticker symbol format"""
+    if not ticker or not isinstance(ticker, str):
+        return False
+    # Remove suffix for validation
+    clean = ticker.upper().strip().replace('.NS', '').replace('.BO', '')
+    # Valid ticker: 1-10 alphanumeric chars, may include hyphen
+    if not clean or len(clean) > 10:
+        return False
+    if not re.match(r'^[A-Z0-9\-]+$', clean):
+        return False
+    return True
+
 def analyze_stock(ticker, show_chart=None):
     # Use settings if not explicitly specified
     if show_chart is None:
         show_chart = st.session_state.get('show_charts', True)
+    
+    # Validate input
+    if not validate_ticker(ticker):
+        return {"success": False, "error": f"Invalid ticker symbol: {ticker}", "ticker": ticker}
     
     original = ticker.upper().strip().replace('.NS', '').replace('.BO', '')
     market = st.session_state.get('market', 'US')
@@ -1337,7 +1379,7 @@ def analyze_stock(ticker, show_chart=None):
         full_ticker = alt_ticker
     
     if not data: 
-        return {"success": False, "error": f"Could not fetch detailed data for {original}", "ticker": original}
+        return {"success": False, "error": f"Could not fetch data for {original}. The stock may be delisted or the symbol is incorrect.", "ticker": original}
     
     # Auto-show chart based on settings
     if show_chart:
@@ -1938,10 +1980,23 @@ For general conversation, be helpful and friendly."""
     messages.append({"role": "user", "content": prompt})
     
     try:
-        response = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=1500, temperature=0.7)
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile", 
+            messages=messages, 
+            max_tokens=1500, 
+            temperature=0.7
+        )
         return response.choices[0].message.content, data
     except Exception as e:
-        return f"Error: {e}", None
+        error_msg = str(e)
+        if "rate limit" in error_msg.lower():
+            return "⚠️ Rate limit reached. Please wait a moment and try again.", None
+        elif "api key" in error_msg.lower() or "authentication" in error_msg.lower():
+            return "⚠️ API key issue. Please check your GROQ_API_KEY in settings.", None
+        elif "timeout" in error_msg.lower():
+            return "⚠️ Request timed out. Please try again.", None
+        else:
+            return f"⚠️ An error occurred: {error_msg[:100]}", None
 
 # ==================== DISPLAY ====================
 def display_table(data):
@@ -2093,6 +2148,16 @@ def main():
     if voice_text:
         process_and_display(voice_text)
         st.rerun()
+    
+    # Disclaimer footer
+    st.markdown("---")
+    st.markdown(
+        '<p style="text-align:center;color:#52525b;font-size:11px;">'
+        '⚠️ <strong>Disclaimer:</strong> This is for educational purposes only, not financial advice. '
+        'Always do your own research before investing. Data may be delayed or inaccurate.'
+        '</p>', 
+        unsafe_allow_html=True
+    )
 
 if __name__ == "__main__":
     main()
