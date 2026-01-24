@@ -454,6 +454,333 @@ def analyze_news_sentiment(news_items):
     max_possible = len(news_items) * 2
     return score / max_possible if max_possible > 0 else 0
 
+def get_performance_data(ticker):
+    """Get stock performance over different time periods"""
+    try:
+        stock = yf.Ticker(ticker)
+        
+        # Get historical data
+        hist_1y = stock.history(period="1y")
+        if hist_1y.empty or len(hist_1y) < 5:
+            return None
+        
+        current_price = hist_1y['Close'].iloc[-1]
+        
+        # Calculate performance for different periods
+        performance = {}
+        
+        # 1 Week
+        if len(hist_1y) >= 5:
+            week_ago = hist_1y['Close'].iloc[-5] if len(hist_1y) >= 5 else hist_1y['Close'].iloc[0]
+            performance['1w'] = ((current_price - week_ago) / week_ago) * 100
+        
+        # 1 Month (~21 trading days)
+        if len(hist_1y) >= 21:
+            month_ago = hist_1y['Close'].iloc[-21]
+            performance['1m'] = ((current_price - month_ago) / month_ago) * 100
+        
+        # 3 Months (~63 trading days)
+        if len(hist_1y) >= 63:
+            three_month_ago = hist_1y['Close'].iloc[-63]
+            performance['3m'] = ((current_price - three_month_ago) / three_month_ago) * 100
+        
+        # 6 Months (~126 trading days)
+        if len(hist_1y) >= 126:
+            six_month_ago = hist_1y['Close'].iloc[-126]
+            performance['6m'] = ((current_price - six_month_ago) / six_month_ago) * 100
+        
+        # YTD
+        try:
+            year_start = datetime(datetime.now().year, 1, 1)
+            ytd_data = hist_1y[hist_1y.index >= year_start.strftime('%Y-%m-%d')]
+            if len(ytd_data) > 0:
+                ytd_start = ytd_data['Close'].iloc[0]
+                performance['ytd'] = ((current_price - ytd_start) / ytd_start) * 100
+        except:
+            pass
+        
+        # 1 Year
+        if len(hist_1y) >= 252:
+            year_ago = hist_1y['Close'].iloc[0]
+            performance['1y'] = ((current_price - year_ago) / year_ago) * 100
+        
+        return performance
+    except:
+        return None
+
+def scan_hot_stocks(timeframe='1m', min_gain=10, limit=20):
+    """Scan for hot stocks with strong recent performance"""
+    market = st.session_state.get('market', 'US')
+    
+    # Use all stocks including trending ones
+    if market == 'US':
+        stocks_to_scan = ALL_US_STOCKS[:100]  # Limit for speed
+    else:
+        stocks_to_scan = ALL_INDIA_STOCKS[:60]
+    
+    results = []
+    progress = st.progress(0)
+    
+    for i, ticker in enumerate(stocks_to_scan):
+        progress.progress((i + 1) / len(stocks_to_scan))
+        
+        try:
+            data = get_live_stock_data(ticker)
+            if not data:
+                continue
+            
+            perf = get_performance_data(ticker)
+            if not perf:
+                continue
+            
+            # Get the relevant timeframe performance
+            gain = perf.get(timeframe, 0)
+            if gain is None:
+                continue
+            
+            # Filter by minimum gain
+            if gain >= min_gain:
+                currency = '₹' if data['market'] == 'India' else '$'
+                results.append({
+                    'ticker': data['display_ticker'],
+                    'full_ticker': ticker,
+                    'name': data['name'][:20] if data['name'] else data['display_ticker'],
+                    'price': data['price'],
+                    'price_fmt': f"{currency}{data['price']:,.2f}",
+                    'change_today': data['change_pct'],
+                    'perf_1w': perf.get('1w'),
+                    'perf_1m': perf.get('1m'),
+                    'perf_3m': perf.get('3m'),
+                    'perf_ytd': perf.get('ytd'),
+                    'perf_1y': perf.get('1y'),
+                    'target_gain': gain,
+                    'sector': data['sector'],
+                    'market_cap': data['market_cap'],
+                    'market_cap_fmt': data['market_cap_fmt'],
+                    'pe_ratio': data['pe_ratio'],
+                    'recommendation': data['recommendation'],
+                })
+        except:
+            continue
+    
+    progress.empty()
+    
+    # Sort by the target timeframe gain
+    results.sort(key=lambda x: x['target_gain'], reverse=True)
+    
+    return results[:limit]
+
+def screen_by_performance(timeframe='1m', direction='gainers'):
+    """Screen stocks by performance over a timeframe"""
+    market = st.session_state.get('market', 'US')
+    
+    # Determine minimum gain based on direction
+    if direction == 'gainers':
+        min_gain = 5  # At least 5% gain
+        stocks = scan_hot_stocks(timeframe, min_gain=min_gain, limit=20)
+    else:  # losers
+        stocks = scan_hot_stocks(timeframe, min_gain=-100, limit=50)  # Get all, then filter
+        stocks = [s for s in stocks if s['target_gain'] < -5]  # At least 5% loss
+        stocks.sort(key=lambda x: x['target_gain'])  # Worst first
+        stocks = stocks[:20]
+    
+    if not stocks:
+        return {"success": False, "message": f"No {direction} found for {timeframe}"}
+    
+    # Format for display
+    currency = '₹' if market == 'India' else '$'
+    table = []
+    found_tickers = []
+    
+    for s in stocks:
+        found_tickers.append(s['full_ticker'])
+        
+        # Color code performance
+        def fmt_perf(val):
+            if val is None:
+                return "N/A"
+            color = "🟢" if val >= 0 else "🔴"
+            return f"{color} {val:+.1f}%"
+        
+        table.append({
+            "Ticker": s['ticker'],
+            "Price": s['price_fmt'],
+            "Today": fmt_perf(s['change_today']),
+            "1W": fmt_perf(s['perf_1w']),
+            "1M": fmt_perf(s['perf_1m']),
+            "YTD": fmt_perf(s['perf_ytd']),
+        })
+    
+    st.session_state.charts_to_display = found_tickers[:3]
+    
+    # Get market news
+    market_news = get_market_news(market, limit=5)
+    news_summary = format_news_for_ai(market_news)
+    
+    timeframe_names = {
+        '1w': 'Week', '1m': 'Month', '3m': '3 Months', 
+        '6m': '6 Months', 'ytd': 'YTD', '1y': 'Year'
+    }
+    
+    return {
+        "success": True,
+        "screen_type": f"Top {direction.title()} ({timeframe_names.get(timeframe, timeframe)})",
+        "timeframe": timeframe,
+        "found": len(table),
+        "table": table,
+        "stocks_data": stocks,  # Full data for AI
+        "market_news": news_summary
+    }
+
+def find_breakout_stocks():
+    """Find stocks breaking out - near 52-week highs with volume"""
+    market = st.session_state.get('market', 'US')
+    stocks_to_scan = ALL_US_STOCKS[:80] if market == 'US' else ALL_INDIA_STOCKS[:50]
+    
+    results = []
+    progress = st.progress(0)
+    
+    for i, ticker in enumerate(stocks_to_scan):
+        progress.progress((i + 1) / len(stocks_to_scan))
+        
+        try:
+            data = get_live_stock_data(ticker)
+            if not data or not data['52w_high']:
+                continue
+            
+            # Check if near 52-week high (within 5%)
+            pct_from_high = data.get('from_52w_high', -100)
+            if pct_from_high is None or pct_from_high < -5:
+                continue
+            
+            # Get technicals for volume check
+            technicals = get_advanced_technicals(ticker)
+            if not technicals:
+                continue
+            
+            vol_ratio = technicals.get('volume_ratio', 0)
+            
+            # Want stocks with above average volume
+            if vol_ratio < 1.0:
+                continue
+            
+            currency = '₹' if data['market'] == 'India' else '$'
+            results.append({
+                'ticker': data['display_ticker'],
+                'full_ticker': ticker,
+                'price': f"{currency}{data['price']:,.2f}",
+                'from_high': f"{pct_from_high:+.1f}%",
+                'volume': f"{vol_ratio:.1f}x",
+                'rsi': technicals.get('rsi', 0),
+                'sector': data['sector'][:15] if data['sector'] else 'N/A',
+            })
+        except:
+            continue
+    
+    progress.empty()
+    
+    # Sort by closest to 52-week high
+    results.sort(key=lambda x: float(x['from_high'].replace('%', '').replace('+', '')), reverse=True)
+    
+    if not results:
+        return {"success": False, "message": "No breakout stocks found"}
+    
+    st.session_state.charts_to_display = [r['full_ticker'] for r in results[:3]]
+    
+    # Get market news
+    market_news = get_market_news(market, limit=5)
+    
+    table = [{
+        "Ticker": r['ticker'],
+        "Price": r['price'],
+        "From 52W High": r['from_high'],
+        "Volume": r['volume'],
+        "RSI": f"{r['rsi']:.0f}" if r['rsi'] else "N/A",
+        "Sector": r['sector']
+    } for r in results[:15]]
+    
+    return {
+        "success": True,
+        "screen_type": "Breakout Stocks (Near 52-Week Highs)",
+        "found": len(table),
+        "table": table,
+        "market_news": format_news_for_ai(market_news)
+    }
+
+def find_oversold_bounces():
+    """Find oversold stocks that could bounce"""
+    market = st.session_state.get('market', 'US')
+    stocks_to_scan = ALL_US_STOCKS[:80] if market == 'US' else ALL_INDIA_STOCKS[:50]
+    
+    results = []
+    progress = st.progress(0)
+    
+    for i, ticker in enumerate(stocks_to_scan):
+        progress.progress((i + 1) / len(stocks_to_scan))
+        
+        try:
+            technicals = get_advanced_technicals(ticker)
+            if not technicals:
+                continue
+            
+            rsi = technicals.get('rsi', 50)
+            bb_pos = technicals.get('bb_position', 0.5)
+            
+            # Looking for oversold conditions
+            if rsi > 35 or bb_pos > 0.3:
+                continue
+            
+            data = get_live_stock_data(ticker)
+            if not data:
+                continue
+            
+            # Check it's not a total disaster (some fundamentals)
+            if data['pe_ratio'] and data['pe_ratio'] < 0:
+                continue
+            
+            currency = '₹' if data['market'] == 'India' else '$'
+            results.append({
+                'ticker': data['display_ticker'],
+                'full_ticker': ticker,
+                'price': f"{currency}{data['price']:,.2f}",
+                'rsi': rsi,
+                'bb_position': bb_pos * 100,
+                'from_high': data.get('from_52w_high', 0),
+                'sector': data['sector'][:15] if data['sector'] else 'N/A',
+                'pe': data['pe_ratio'],
+            })
+        except:
+            continue
+    
+    progress.empty()
+    
+    # Sort by most oversold (lowest RSI)
+    results.sort(key=lambda x: x['rsi'])
+    
+    if not results:
+        return {"success": False, "message": "No oversold stocks found"}
+    
+    st.session_state.charts_to_display = [r['full_ticker'] for r in results[:3]]
+    
+    market_news = get_market_news(market, limit=5)
+    
+    table = [{
+        "Ticker": r['ticker'],
+        "Price": r['price'],
+        "RSI": f"🔴 {r['rsi']:.0f}",
+        "BB Position": f"{r['bb_position']:.0f}%",
+        "From High": f"{r['from_high']}%" if r['from_high'] else "N/A",
+        "Sector": r['sector']
+    } for r in results[:15]]
+    
+    return {
+        "success": True,
+        "screen_type": "Oversold Bounce Candidates",
+        "found": len(table),
+        "table": table,
+        "market_news": format_news_for_ai(market_news)
+    }
+
 st.set_page_config(
     page_title="Paula - AI Stock Analyst",
     page_icon="📈",
@@ -747,6 +1074,45 @@ NIFTY_50 = [
     'HEROMOTOCO.NS', 'TATACONSUM.NS', 'BPCL.NS', 'BRITANNIA.NS', 'INDUSINDBK.NS',
     'SBILIFE.NS', 'HDFCLIFE.NS', 'UPL.NS', 'BAJAJFINSV.NS', 'SHREECEM.NS'
 ]
+
+# Hot/Trending stocks outside main indices (small/mid caps, meme stocks, AI plays, etc.)
+TRENDING_US = [
+    # AI & Tech plays
+    'PLTR', 'SMCI', 'ARM', 'IONQ', 'RGTI', 'QUBT', 'SOUN', 'BBAI', 'AI', 'PATH',
+    # Semiconductor
+    'MRVL', 'ON', 'MPWR', 'LSCC', 'WOLF', 'ACLS', 'CRUS', 'RMBS', 'SWKS', 'QRVO',
+    # EV & Clean Energy
+    'RIVN', 'LCID', 'NIO', 'XPEV', 'LI', 'FSR', 'CHPT', 'BLNK', 'QS', 'PLUG',
+    'FCEL', 'BE', 'ENPH', 'SEDG', 'RUN', 'NOVA', 'ARRY',
+    # Biotech/Pharma
+    'MRNA', 'BNTX', 'CRSP', 'EDIT', 'NTLA', 'BEAM', 'VERV', 'RXRX', 'DNA',
+    # Fintech & Crypto-related
+    'SQ', 'AFRM', 'UPST', 'SOFI', 'NU', 'MSTR', 'COIN', 'HOOD', 'RIOT', 'MARA',
+    # Growth/Momentum
+    'DUOL', 'RKLB', 'ASTS', 'LUNR', 'RDW', 'AEHR', 'CELH', 'HIMS', 'TMDX',
+    # Meme/Retail favorites
+    'GME', 'AMC', 'BBBY', 'BB', 'WISH', 'CLOV', 'SPCE', 'OPEN',
+    # Other popular
+    'NET', 'DDOG', 'CRWD', 'ZS', 'OKTA', 'MDB', 'SNOW', 'U', 'RBLX', 'TTWO',
+    'SE', 'SHOP', 'SQ', 'ROKU', 'PINS', 'SNAP', 'TWLO', 'DOCU', 'ZM'
+]
+
+# Small/Mid cap Indian stocks
+TRENDING_INDIA = [
+    'ZOMATO.NS', 'PAYTM.NS', 'NYKAA.NS', 'POLICYBZR.NS', 'CARTRADE.NS',
+    'IRCTC.NS', 'TATAELXSI.NS', 'PERSISTENT.NS', 'COFORGE.NS', 'MPHASIS.NS',
+    'LTTS.NS', 'HAPPSTMNDS.NS', 'ROUTE.NS', 'INTELLECT.NS', 'KPITTECH.NS',
+    'ANGELONE.NS', 'CDSL.NS', 'BSE.NS', 'MCX.NS', 'CAMS.NS',
+    'DELHIVERY.NS', 'MAPMYINDIA.NS', 'LATENTVIEW.NS', 'CAMPUS.NS', 'MEDANTA.NS',
+    'RAINBOW.NS', 'METROPOLIS.NS', 'LALPATHLAB.NS', 'SYNGENE.NS', 'AFFLE.NS',
+    'NAZARA.NS', 'TANLA.NS', 'RATEGAIN.NS', 'SBICARD.NS', 'MUTHOOTFIN.NS',
+    'CHOLAFIN.NS', 'BAJFINANCE.NS', 'ICICIGI.NS', 'HDFCAMC.NS', 'NAM-INDIA.NS',
+    'TRENT.NS', 'PAGEIND.NS', 'RELAXO.NS', 'BATAINDIA.NS', 'VBL.NS'
+]
+
+# All stocks combined for scanning
+ALL_US_STOCKS = list(set(US_STOCKS + NASDAQ_100 + SP500_TOP + TRENDING_US))
+ALL_INDIA_STOCKS = list(set(INDIAN_STOCKS + NIFTY_50 + TRENDING_INDIA))
 
 # Company name to ticker mapping (case-insensitive)
 COMPANY_TO_TICKER = {
@@ -1347,15 +1713,61 @@ def detect_and_execute(message):
     
     # Determine which stock list to use based on query
     stock_list = None
+    scan_all = False  # Whether to scan beyond main indices
+    
     if 'nasdaq' in msg or 'nasdaq 100' in msg or 'nasdaq100' in msg:
         stock_list = NASDAQ_100
     elif 's&p' in msg or 'sp500' in msg or 's&p 500' in msg or 'sp 500' in msg:
         stock_list = SP500_TOP
     elif 'nifty' in msg or 'nifty 50' in msg or 'nifty50' in msg:
         stock_list = NIFTY_50
+    elif any(w in msg for w in ['all stocks', 'any stock', 'all market', 'trending', 'hot stocks', 'small cap', 'mid cap', 'meme']):
+        scan_all = True  # Scan beyond main indices
+    
+    # ===== PERFORMANCE-BASED QUERIES =====
+    # Weekly performance
+    if any(w in msg for w in ['this week', 'weekly', 'week', '1w', 'past week', 'last week']):
+        if any(w in msg for w in ['best', 'top', 'winner', 'gainer', 'up', 'hot']):
+            return screen_by_performance('1w', 'gainers')
+        if any(w in msg for w in ['worst', 'loser', 'down', 'falling']):
+            return screen_by_performance('1w', 'losers')
+    
+    # Monthly performance
+    if any(w in msg for w in ['this month', 'monthly', 'month', '1m', 'past month', 'last month', '30 day']):
+        if any(w in msg for w in ['best', 'top', 'winner', 'gainer', 'up', 'hot']):
+            return screen_by_performance('1m', 'gainers')
+        if any(w in msg for w in ['worst', 'loser', 'down', 'falling']):
+            return screen_by_performance('1m', 'losers')
+    
+    # YTD performance
+    if any(w in msg for w in ['ytd', 'year to date', 'this year']):
+        if any(w in msg for w in ['best', 'top', 'winner', 'gainer', 'up']):
+            return screen_by_performance('ytd', 'gainers')
+        if any(w in msg for w in ['worst', 'loser', 'down']):
+            return screen_by_performance('ytd', 'losers')
+    
+    # 3 month / quarterly performance
+    if any(w in msg for w in ['3 month', '3m', 'quarter', 'quarterly', '90 day']):
+        if any(w in msg for w in ['best', 'top', 'winner', 'gainer', 'up']):
+            return screen_by_performance('3m', 'gainers')
+        if any(w in msg for w in ['worst', 'loser', 'down']):
+            return screen_by_performance('3m', 'losers')
+    
+    # ===== SPECIAL SCANS =====
+    # Breakout stocks
+    if any(w in msg for w in ['breakout', 'breaking out', '52 week high', '52w high', 'new high', 'all time high', 'ath']):
+        return find_breakout_stocks()
+    
+    # Oversold bounce plays
+    if any(w in msg for w in ['oversold', 'bounce', 'beaten down', 'crashed', 'capitulation', 'bottom']):
+        return find_oversold_bounces()
+    
+    # Hot/trending stocks (scan all)
+    if any(w in msg for w in ['hot', 'trending', 'meme', 'retail favorite', 'wsb', 'wallstreetbets']):
+        return screen_by_performance('1w', 'gainers')
     
     # Strategy-based queries
-    if any(w in msg for w in ['best', 'top', 'recommend', 'suggest', 'find', 'scan', 'screen', 'search']) and ('stock' in msg or stock_list):
+    if any(w in msg for w in ['best', 'top', 'recommend', 'suggest', 'find', 'scan', 'screen', 'search']) and ('stock' in msg or stock_list or scan_all):
         if any(w in msg for w in ['momentum', 'performing', 'performer', 'winners', 'gaining']):
             return screen_by_strategy("momentum", stock_list)
         if any(w in msg for w in ['value', 'undervalued', 'cheap', 'bargain']):
@@ -1370,6 +1782,9 @@ def detect_and_execute(message):
             return screen_by_strategy("low_pe", stock_list)
         if any(w in msg for w in ['growth', 'growing', 'fast growing']):
             return screen_by_strategy("quality", stock_list)
+        # Default to performance scan if asking for "best stocks" without index
+        if scan_all or ('stock' in msg and not stock_list):
+            return screen_by_performance('1m', 'gainers')
         if stock_list:
             return screen_by_strategy("quality", stock_list)
     
