@@ -58,7 +58,350 @@ def format_news_for_ai(news_items):
         formatted.append(f"• {item['title']}{source}")
     return "\n".join(formatted)
 
-# ==================== ADVANCED TECHNICAL ANALYSIS ====================
+# ==================== SMART STOCK DISCOVERY ====================
+def discover_trending_stocks():
+    """Discover trending stocks from market news and gainers - not just fixed lists"""
+    market = st.session_state.get('market', 'US')
+    discovered = []
+    
+    # 1. Get stocks from market movers/gainers via yfinance
+    try:
+        if market == 'US':
+            # Get day gainers - these are stocks moving NOW
+            gainers = yf.Tickers("^GSPC ^NDX ^DJI SPY QQQ").tickers
+            
+            # Try to get trending tickers from major indices movement
+            for idx_ticker in ['^GSPC', '^NDX']:
+                try:
+                    idx = yf.Ticker(idx_ticker)
+                    # Get news which often mentions hot stocks
+                    news = idx.news or []
+                    for item in news[:10]:
+                        # Extract ticker symbols from news titles
+                        title = item.get('title', '')
+                        # Look for stock mentions in parentheses like (AAPL) or (NVDA)
+                        import re
+                        tickers_in_news = re.findall(r'\(([A-Z]{2,5})\)', title)
+                        for t in tickers_in_news:
+                            if t not in discovered and len(t) >= 2:
+                                discovered.append(t)
+                except:
+                    pass
+        else:
+            # Indian market
+            for idx_ticker in ['^NSEI', '^BSESN']:
+                try:
+                    idx = yf.Ticker(idx_ticker)
+                    news = idx.news or []
+                    for item in news[:10]:
+                        title = item.get('title', '')
+                        # Indian tickers often mentioned directly
+                        for indian_stock in NIFTY_50 + TRENDING_INDIA:
+                            name = indian_stock.replace('.NS', '').replace('.BO', '')
+                            if name.lower() in title.lower():
+                                if indian_stock not in discovered:
+                                    discovered.append(indian_stock)
+                except:
+                    pass
+    except:
+        pass
+    
+    return discovered[:20]
+
+def get_market_movers():
+    """Get today's biggest movers from a quick scan"""
+    market = st.session_state.get('market', 'US')
+    
+    # Use a smaller, high-quality list for speed
+    if market == 'US':
+        # Mix of large caps and known volatile stocks
+        quick_scan = ['NVDA', 'TSLA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'AMD', 'SMCI', 
+                      'PLTR', 'COIN', 'MSTR', 'ARM', 'AVGO', 'MU', 'INTC', 'CRM', 'ORCL',
+                      'NFLX', 'DIS', 'PYPL', 'SQ', 'SHOP', 'SNOW', 'NET', 'CRWD', 'ZS',
+                      'RIVN', 'LCID', 'NIO', 'F', 'GM', 'BA', 'CAT', 'DE', 'UNH', 'JNJ',
+                      'JPM', 'BAC', 'GS', 'V', 'MA', 'WMT', 'COST', 'HD', 'LOW']
+    else:
+        quick_scan = [s.replace('.NS', '') for s in NIFTY_50[:30]]
+    
+    movers = []
+    for ticker in quick_scan:
+        try:
+            full_ticker = f"{ticker}.NS" if market == 'India' else ticker
+            stock = yf.Ticker(full_ticker)
+            fast = stock.fast_info
+            
+            price = fast.get('lastPrice') or fast.get('regularMarketPrice')
+            prev = fast.get('previousClose')
+            
+            if price and prev and prev > 0:
+                change_pct = ((price - prev) / prev) * 100
+                movers.append({
+                    'ticker': ticker,
+                    'full_ticker': full_ticker,
+                    'price': price,
+                    'change_pct': change_pct
+                })
+        except:
+            continue
+    
+    # Sort by absolute change (biggest movers either direction)
+    movers.sort(key=lambda x: abs(x['change_pct']), reverse=True)
+    return movers
+
+def smart_scan_stocks(scan_type='hot'):
+    """
+    Smart scanning that discovers stocks rather than just checking fixed lists.
+    scan_type: 'hot' (trending), 'gainers', 'losers', 'news'
+    """
+    market = st.session_state.get('market', 'US')
+    results = []
+    
+    status = st.empty()
+    progress = st.progress(0)
+    
+    status.text("🔍 Finding market movers...")
+    progress.progress(0.2)
+    
+    # Step 1: Get today's movers
+    movers = get_market_movers()
+    progress.progress(0.4)
+    
+    # Step 2: Discover stocks from news
+    status.text("📰 Scanning news for trending stocks...")
+    news_stocks = discover_trending_stocks()
+    progress.progress(0.6)
+    
+    # Combine and dedupe
+    all_tickers = []
+    seen = set()
+    
+    # Add movers first (sorted by movement)
+    for m in movers:
+        if m['ticker'] not in seen:
+            all_tickers.append(m)
+            seen.add(m['ticker'])
+    
+    # Add news-discovered stocks
+    for t in news_stocks:
+        clean = t.replace('.NS', '').replace('.BO', '')
+        if clean not in seen:
+            all_tickers.append({'ticker': clean, 'full_ticker': t, 'price': None, 'change_pct': None})
+            seen.add(clean)
+    
+    progress.progress(0.7)
+    status.text("📊 Analyzing top candidates...")
+    
+    # Step 3: Get full data for top candidates
+    candidates = all_tickers[:25]  # Limit for speed
+    
+    for i, stock in enumerate(candidates):
+        progress.progress(0.7 + (0.3 * (i + 1) / len(candidates)))
+        
+        try:
+            ticker = stock['full_ticker'] if stock.get('full_ticker') else stock['ticker']
+            if market == 'India' and '.NS' not in ticker and '.BO' not in ticker:
+                ticker = f"{stock['ticker']}.NS"
+            
+            data = get_live_stock_data(ticker)
+            if not data:
+                continue
+            
+            perf = get_performance_data(ticker)
+            
+            currency = '₹' if market == 'India' else '$'
+            
+            result = {
+                'ticker': data['display_ticker'],
+                'full_ticker': ticker,
+                'name': data['name'][:25] if data['name'] else data['display_ticker'],
+                'price': data['price'],
+                'price_fmt': f"{currency}{data['price']:,.2f}",
+                'change_pct': data['change_pct'],
+                'perf_1w': perf.get('1w') if perf else None,
+                'perf_1m': perf.get('1m') if perf else None,
+                'perf_ytd': perf.get('ytd') if perf else None,
+                'sector': data['sector'],
+                'market_cap': data['market_cap'],
+                'market_cap_fmt': data['market_cap_fmt'],
+                'pe_ratio': data['pe_ratio'],
+                'recommendation': data.get('recommendation'),
+            }
+            results.append(result)
+        except:
+            continue
+    
+    progress.empty()
+    status.empty()
+    
+    # Sort based on scan type
+    if scan_type == 'gainers':
+        results.sort(key=lambda x: x['change_pct'] or 0, reverse=True)
+        results = [r for r in results if (r['change_pct'] or 0) > 0]
+    elif scan_type == 'losers':
+        results.sort(key=lambda x: x['change_pct'] or 0)
+        results = [r for r in results if (r['change_pct'] or 0) < 0]
+    elif scan_type == 'hot':
+        # Hot = biggest absolute movers
+        results.sort(key=lambda x: abs(x['change_pct'] or 0), reverse=True)
+    elif scan_type == 'momentum':
+        # Best weekly/monthly performance
+        results.sort(key=lambda x: (x['perf_1w'] or 0) + (x['perf_1m'] or 0), reverse=True)
+    
+    return results[:15]
+
+def scan_from_news():
+    """Find stocks being mentioned in news with sentiment"""
+    market = st.session_state.get('market', 'US')
+    
+    status = st.empty()
+    progress = st.progress(0)
+    status.text("📰 Scanning market news...")
+    
+    # Get news from major sources
+    news_sources = ['^GSPC', 'SPY', '^NDX'] if market == 'US' else ['^NSEI', '^BSESN']
+    
+    all_news = []
+    mentioned_stocks = {}
+    
+    for source in news_sources:
+        try:
+            ticker = yf.Ticker(source)
+            news = ticker.news or []
+            for item in news[:15]:
+                title = item.get('title', '')
+                all_news.append(title)
+                
+                # Find stock mentions
+                tickers_found = re.findall(r'\b([A-Z]{2,5})\b', title)
+                exclude = {'CEO', 'IPO', 'ETF', 'NYSE', 'SEC', 'FDA', 'AI', 'US', 'UK', 'GDP', 'CPI', 'FED', 'THE', 'FOR', 'AND'}
+                
+                for t in tickers_found:
+                    if t not in exclude and len(t) >= 2:
+                        if t not in mentioned_stocks:
+                            mentioned_stocks[t] = {'count': 0, 'titles': []}
+                        mentioned_stocks[t]['count'] += 1
+                        mentioned_stocks[t]['titles'].append(title[:100])
+        except:
+            continue
+    
+    progress.progress(0.5)
+    status.text("🔍 Analyzing mentioned stocks...")
+    
+    # Get data for most mentioned stocks
+    sorted_mentions = sorted(mentioned_stocks.items(), key=lambda x: x[1]['count'], reverse=True)
+    
+    results = []
+    for ticker, info in sorted_mentions[:15]:
+        progress.progress(0.5 + (0.5 * len(results) / 15))
+        
+        try:
+            full_ticker = f"{ticker}.NS" if market == 'India' else ticker
+            data = get_live_stock_data(full_ticker)
+            
+            if not data:
+                continue
+            
+            # Analyze sentiment of news mentioning this stock
+            sentiment = analyze_news_sentiment([{'title': t} for t in info['titles']])
+            
+            currency = '₹' if market == 'India' else '$'
+            results.append({
+                'ticker': data['display_ticker'],
+                'full_ticker': full_ticker,
+                'price_fmt': f"{currency}{data['price']:,.2f}",
+                'change_pct': data['change_pct'],
+                'mentions': info['count'],
+                'sentiment': 'Positive' if sentiment > 0.1 else ('Negative' if sentiment < -0.1 else 'Neutral'),
+                'sentiment_score': sentiment,
+                'sample_news': info['titles'][0] if info['titles'] else '',
+                'sector': data['sector'],
+            })
+        except:
+            continue
+    
+    progress.empty()
+    status.empty()
+    
+    # Sort by mentions and positive sentiment
+    results.sort(key=lambda x: (x['mentions'], x['sentiment_score']), reverse=True)
+    
+    return results
+
+def screen_smart(scan_type='hot'):
+    """Smart screening that uses discovery instead of fixed lists"""
+    market = st.session_state.get('market', 'US')
+    
+    if scan_type == 'news':
+        stocks = scan_from_news()
+        if not stocks:
+            return {"success": False, "message": "Couldn't find stocks in news"}
+        
+        table = []
+        found_tickers = []
+        for s in stocks:
+            found_tickers.append(s['full_ticker'])
+            color = "🟢" if s['change_pct'] >= 0 else "🔴"
+            table.append({
+                "Ticker": s['ticker'],
+                "Price": s['price_fmt'],
+                "Change": f"{color} {s['change_pct']:+.1f}%",
+                "News Mentions": s['mentions'],
+                "Sentiment": s['sentiment'],
+            })
+        
+        st.session_state.charts_to_display = found_tickers[:3]
+        
+        return {
+            "success": True,
+            "screen_type": "Stocks in the News",
+            "found": len(table),
+            "table": table,
+            "description": "Stocks being mentioned in today's market news"
+        }
+    
+    else:
+        stocks = smart_scan_stocks(scan_type)
+        if not stocks:
+            return {"success": False, "message": f"No {scan_type} stocks found"}
+        
+        table = []
+        found_tickers = []
+        
+        def fmt_perf(val):
+            if val is None: return "N/A"
+            color = "🟢" if val >= 0 else "🔴"
+            return f"{color} {val:+.1f}%"
+        
+        for s in stocks:
+            found_tickers.append(s['full_ticker'])
+            table.append({
+                "Ticker": s['ticker'],
+                "Price": s['price_fmt'],
+                "Today": fmt_perf(s['change_pct']),
+                "1W": fmt_perf(s['perf_1w']),
+                "1M": fmt_perf(s['perf_1m']),
+            })
+        
+        st.session_state.charts_to_display = found_tickers[:3]
+        
+        # Get some market news for context
+        market_news = get_market_news(market, limit=5)
+        
+        type_names = {
+            'hot': 'Hot Stocks (Biggest Movers)',
+            'gainers': "Today's Gainers",
+            'losers': "Today's Losers", 
+            'momentum': 'Momentum Stocks'
+        }
+        
+        return {
+            "success": True,
+            "screen_type": type_names.get(scan_type, scan_type.title()),
+            "found": len(table),
+            "table": table,
+            "market_news": format_news_for_ai(market_news),
+            "description": "Dynamically discovered from market activity and news"
+        }
 def get_advanced_technicals(ticker, period="3mo"):
     """Calculate advanced technical indicators for trading signals"""
     try:
@@ -1751,6 +2094,31 @@ def detect_and_execute(message):
     if is_general and not has_company and 'stock' not in msg and 'invest' not in msg:
         return None
     
+    # ===== AUTO-DETECT MARKET =====
+    # Indian market indicators
+    indian_indicators = ['nifty', 'sensex', 'bse', 'nse', 'rupee', '₹', 'india', 'indian',
+                         'reliance', 'tcs', 'infosys', 'hdfc', 'icici', 'bharti', 'airtel',
+                         'wipro', 'hcl', 'adani', 'tata', 'bajaj', 'kotak', 'sbi', 'axis',
+                         'maruti', 'asian paints', 'titan', 'sun pharma', 'mahindra', 'larsen']
+    
+    # US market indicators  
+    us_indicators = ['nasdaq', 's&p', 'sp500', 'dow', 'nyse', 'dollar', '$', 'us', 'american',
+                     'apple', 'microsoft', 'google', 'amazon', 'meta', 'tesla', 'nvidia', 
+                     'amd', 'intel', 'netflix', 'disney', 'nike', 'coca cola', 'pepsi',
+                     'walmart', 'costco', 'starbucks', 'mcdonalds', 'boeing', 'ford']
+    
+    # Check for market hints in message
+    has_indian = any(ind in msg for ind in indian_indicators)
+    has_us = any(ind in msg for ind in us_indicators)
+    
+    # Auto-switch market if clear indicator (and not conflicting)
+    if has_indian and not has_us:
+        if st.session_state.get('market') != 'India':
+            st.session_state.market = 'India'
+    elif has_us and not has_indian:
+        if st.session_state.get('market') != 'US':
+            st.session_state.market = 'US'
+    
     market = st.session_state.get('market', 'US')
     
     # Determine which stock list to use based on query
@@ -1763,8 +2131,18 @@ def detect_and_execute(message):
         stock_list = SP500_TOP
     elif 'nifty' in msg or 'nifty 50' in msg or 'nifty50' in msg:
         stock_list = NIFTY_50
+        st.session_state.market = 'India'  # Auto-switch for NIFTY
     elif any(w in msg for w in ['all stocks', 'any stock', 'all market', 'trending', 'hot stocks', 'small cap', 'mid cap', 'meme']):
         scan_all = True  # Scan beyond main indices
+    
+    # ===== SMART DISCOVERY SCANS (News-based, dynamic) =====
+    # Stocks in the news
+    if any(w in msg for w in ['in the news', 'news today', 'whats in the news', "what's in the news", 'being talked about', 'headlines']):
+        return screen_smart('news')
+    
+    # Hot/trending/movers - use smart scan
+    if any(w in msg for w in ['hot', 'trending', 'movers', 'moving', 'action', 'whats moving', "what's moving"]):
+        return screen_smart('hot')
     
     # ===== PERFORMANCE-BASED QUERIES =====
     # Weekly performance
@@ -1804,17 +2182,26 @@ def detect_and_execute(message):
     if any(w in msg for w in ['oversold', 'bounce', 'beaten down', 'crashed', 'capitulation', 'bottom']):
         return find_oversold_bounces()
     
-    # Hot/trending stocks (scan all)
-    if any(w in msg for w in ['hot', 'trending', 'meme', 'retail favorite', 'wsb', 'wallstreetbets']):
-        return screen_by_performance('1w', 'gainers')
+    # Today's gainers/losers - use smart scan
+    if any(w in msg for w in ['gainer', 'gaining', 'up today', 'rising', 'green']):
+        if not stock_list:  # If no specific index, use smart scan
+            return screen_smart('gainers')
+        return screen_by_strategy("top_gainers", stock_list)
+    
+    if any(w in msg for w in ['loser', 'losing', 'down today', 'falling', 'dropping', 'red']):
+        if not stock_list:
+            return screen_smart('losers')
+        return screen_by_strategy("top_losers", stock_list)
     
     # Strategy-based queries
     if any(w in msg for w in ['best', 'top', 'recommend', 'suggest', 'find', 'scan', 'screen', 'search']) and ('stock' in msg or stock_list or scan_all):
         if any(w in msg for w in ['momentum', 'performing', 'performer', 'winners', 'gaining']):
-            return screen_by_strategy("momentum", stock_list)
+            if stock_list:
+                return screen_by_strategy("momentum", stock_list)
+            return screen_smart('momentum')
         if any(w in msg for w in ['value', 'undervalued', 'cheap', 'bargain']):
             return screen_by_strategy("value", stock_list)
-        if any(w in msg for w in ['quality', 'strong', 'solid', 'reliable', 'best']):
+        if any(w in msg for w in ['quality', 'strong', 'solid', 'reliable']):
             return screen_by_strategy("quality", stock_list)
         if any(w in msg for w in ['dividend', 'yield', 'income', 'passive']):
             return screen_by_strategy("dividend", stock_list)
@@ -1824,9 +2211,11 @@ def detect_and_execute(message):
             return screen_by_strategy("low_pe", stock_list)
         if any(w in msg for w in ['growth', 'growing', 'fast growing']):
             return screen_by_strategy("quality", stock_list)
-        # Default to performance scan if asking for "best stocks" without index
+        # Default: use smart scan for generic "best stocks" queries
         if scan_all or ('stock' in msg and not stock_list):
-            return screen_by_performance('1m', 'gainers')
+            return screen_smart('hot')
+        if 'best' in msg and not stock_list:
+            return screen_smart('hot')
         if stock_list:
             return screen_by_strategy("quality", stock_list)
     
@@ -2050,26 +2439,29 @@ def main():
     if 'show_charts' not in st.session_state: st.session_state.show_charts = True
     
     # Header row
-    header_col1, header_col2 = st.columns([4, 1])
+    header_col1, header_col2 = st.columns([6, 1])
     with header_col1:
         st.markdown('<div class="main-header"><h1>Paula</h1><p>Stock Analysis Assistant</p></div>', unsafe_allow_html=True)
     with header_col2:
+        # Small market indicator (auto-switches based on query)
         flag = "🇺🇸" if st.session_state.market == "US" else "🇮🇳"
-        market = st.selectbox(f"{flag} Market", ['US', 'India'], index=0 if st.session_state.market == 'US' else 1, label_visibility="collapsed")
-        if market != st.session_state.market:
-            st.session_state.market = market
-            st.session_state.chat_messages = []
-            st.session_state.charts_to_display = []
-            st.rerun()
+        st.markdown(f'<p style="text-align:right;color:#52525b;font-size:12px;margin-top:20px;">{flag} {st.session_state.market}</p>', unsafe_allow_html=True)
     
     # Settings (collapsible)
     with st.expander("⚙️ Settings", expanded=False):
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         with col1:
             show_charts = st.checkbox("Show charts automatically", value=st.session_state.show_charts)
             if show_charts != st.session_state.show_charts:
                 st.session_state.show_charts = show_charts
         with col2:
+            market_options = ['US', 'India']
+            current_idx = 0 if st.session_state.market == 'US' else 1
+            new_market = st.selectbox("Market", market_options, index=current_idx)
+            if new_market != st.session_state.market:
+                st.session_state.market = new_market
+                st.rerun()
+        with col3:
             if st.button("Clear chat"):
                 st.session_state.chat_messages = []
                 st.session_state.charts_to_display = []
@@ -2092,18 +2484,10 @@ def main():
                 if m.get("charts"):
                     display_charts_inline(m["charts"], idx)
     else:
-        # Welcome state
+        # Welcome state - simple and clean
         st.markdown("")
         st.markdown("")
-        st.markdown('<p class="welcome-text">What would you like to analyze?</p>', unsafe_allow_html=True)
-        
-        # Example buttons
-        examples = ["Analyze TCS", "Compare RELIANCE vs INFY", "Undervalued stocks"] if st.session_state.market == 'India' else ["Analyze Apple", "Compare Tesla vs Microsoft", "Growth stocks"]
-        cols = st.columns(len(examples))
-        for i, ex in enumerate(examples):
-            if cols[i].button(ex, key=f"ex_{i}", use_container_width=True):
-                process_and_display(ex)
-                st.rerun()
+        st.markdown('<p style="color:#71717a;text-align:center;">Ask me about any stock, anywhere.</p>', unsafe_allow_html=True)
     
     # Input area
     st.markdown("---")
