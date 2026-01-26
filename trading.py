@@ -2381,10 +2381,16 @@ def detect_and_execute(message):
     # Look for ticker symbols if there's stock intent
     if has_stock_intent:
         tickers = re.findall(r'\b([A-Z]{2,6})\b', message.upper())
+        # Extensive exclude list to avoid matching common words
         exclude = ['PE', 'ROE', 'VS', 'AND', 'THE', 'FOR', 'AI', 'OK', 'HI', 'RSI', 'MACD', 
                    'ANALYZE', 'ANALYSIS', 'TELL', 'ME', 'ABOUT', 'SHOW', 'GET', 'FIND', 
                    'STOCK', 'PRICE', 'BUY', 'SELL', 'WHAT', 'HOW', 'WHY', 'CAN', 'YOU',
-                   'CHART', 'GRAPH', 'NASDAQ', 'NIFTY', 'TOP', 'BEST']
+                   'CHART', 'GRAPH', 'NASDAQ', 'NIFTY', 'TOP', 'BEST', 'TODAY', 'MARKET',
+                   'SHOULD', 'WOULD', 'COULD', 'WHICH', 'WHERE', 'WHEN', 'THIS', 'THAT',
+                   'MORE', 'MONEY', 'MAKE', 'WANT', 'NEED', 'HELP', 'PLEASE', 'THANKS',
+                   'RIGHT', 'BEFORE', 'AFTER', 'CLOSE', 'OPEN', 'HIGH', 'LOW', 'NOW',
+                   'JUST', 'LIKE', 'GOOD', 'BAD', 'ANY', 'ALL', 'SOME', 'GIVE', 'TAKE',
+                   'INVEST', 'TRADING', 'TRADE', 'PICK', 'PICKS', 'WILL', 'WITH', 'INTO']
         
         for t in tickers:
             if t in US_STOCKS and t not in exclude: 
@@ -2399,9 +2405,16 @@ def detect_and_execute(message):
             if t in indian_names and t not in exclude: 
                 return analyze_stock(t, show_chart=show_chart)
         
-        for t in tickers:
-            if t not in exclude and len(t) >= 3: 
-                return analyze_stock(t, show_chart=show_chart)
+        # Only try unknown tickers if they're in a known stock list - don't guess
+        # This prevents "SHOULD", "MONEY", etc from being looked up
+        # for t in tickers:
+        #     if t not in exclude and len(t) >= 3: 
+        #         return analyze_stock(t, show_chart=show_chart)
+    
+    # If asking for stock recommendations without a specific ticker, use smart scan
+    if any(w in msg for w in ['what stock', 'which stock', 'recommend', 'suggestion', 'should i buy', 'good stock', 'best stock']):
+        if 'today' in msg or 'now' in msg or 'quick' in msg or 'short' in msg:
+            return screen_smart('hot')
     
     return None
 
