@@ -2430,6 +2430,10 @@ def process_message(user_message, history):
     client = Groq(api_key=api_key)
     market = st.session_state.get('market', 'US')
     
+    # Check if data fetch failed
+    if data and data.get("success") == False and data.get("error"):
+        return f"⚠️ {data.get('error')}\n\nPlease try again or check if the ticker symbol is correct.", data
+    
     system = f"""You are Paula, a stock analysis assistant with LIVE market data access.
 
 CRITICAL: You have REAL-TIME stock data. When stock data is provided below, USE IT - don't say you can't access prices or suggest checking other websites. The data is LIVE and ACCURATE.
@@ -2440,6 +2444,7 @@ When you receive stock data in the "ANALYSIS DATA" section below, you MUST:
 1. Use the exact price, change %, and other numbers provided
 2. Give a trading verdict based on the data
 3. NEVER say "I don't have access to real-time data" - YOU DO HAVE IT
+4. NEVER say "I'm a large language model" - just analyze the data
 
 For stock analysis, follow this structure:
 
@@ -2493,7 +2498,7 @@ Be direct. Use the provided data. Never claim you lack access to prices."""
         if data.get('market_news'):
             prompt_parts.append(f"\n=== MARKET NEWS ===\n{data['market_news']}")
         
-        prompt_parts.append("\n\nAnalyze using the data above. State the exact price and give your trading verdict.")
+        prompt_parts.append("\n\nIMPORTANT: Analyze using the EXACT data above. State the price shown. Give your trading verdict. Do NOT say you don't have data - it's right there above.")
         prompt = "\n".join(prompt_parts)
     else:
         prompt = user_message
