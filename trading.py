@@ -2434,49 +2434,43 @@ def process_message(user_message, history):
     if data and data.get("success") == False and data.get("error"):
         return f"⚠️ {data.get('error')}\n\nPlease try again or check if the ticker symbol is correct.", data
     
+    # Simple price query - just return the price, don't over-explain
+    if data and data.get("type") == "quick_price":
+        ticker = data.get('ticker', '')
+        price = data.get('price', 'N/A')
+        change = data.get('change', '')
+        return f"**{ticker}**: {price} ({change})", data
+    
+    # Detect if user just wants price (simple query)
+    msg_lower = user_message.lower()
+    is_simple_price_query = any(phrase in msg_lower for phrase in [
+        'price of', 'price for', 'what is', "what's", 'how much is', 
+        'current price', 'stock price', 'whats the price', 'give me the price'
+    ]) and not any(word in msg_lower for word in ['analyze', 'analysis', 'should i', 'buy', 'sell', 'verdict', 'recommend'])
+    
     system = f"""You are Paula, a stock analysis assistant with LIVE market data access.
 
-CRITICAL: You have REAL-TIME stock data. When stock data is provided below, USE IT - don't say you can't access prices or suggest checking other websites. The data is LIVE and ACCURATE.
+CRITICAL RULES:
+1. You have REAL-TIME stock data provided below - USE IT
+2. NEVER say "I'm a large language model" or "I don't have access to real-time data"
+3. Use the EXACT price and numbers from the data provided
+4. If user just asks for a price, give a SHORT answer (1-2 sentences max)
 
 Market: {market} | Date: {datetime.now().strftime("%Y-%m-%d")}
 
-When you receive stock data in the "ANALYSIS DATA" section below, you MUST:
-1. Use the exact price, change %, and other numbers provided
-2. Give a trading verdict based on the data
-3. NEVER say "I don't have access to real-time data" - YOU DO HAVE IT
-4. NEVER say "I'm a large language model" - just analyze the data
+RESPONSE LENGTH:
+- Simple price question → 1-2 sentences only (e.g., "CRWD is at $X, up/down Y% today")
+- "Analyze X" or "Should I buy X" → Full trading analysis
 
-For stock analysis, follow this structure:
+For FULL analysis only (when user asks for analysis/verdict/recommendation):
 
-**TRADING VERDICT**
-- State the trading_rating (🟢 STRONG BUY, 🟢 BUY, 🟡 HOLD, 🟠 CAUTION, 🔴 AVOID)
-- Give the score (e.g., "Score: 72/100")
-- One-line action recommendation
+**TRADING VERDICT** - Rating + Score
+**KEY SIGNALS** - Buy signals, RSI, MACD
+**VALUATION** - P/E, analyst targets  
+**RISKS** - Warnings
+**TRADING PLAN** - Entry, stop, target
 
-**KEY SIGNALS**
-- List buy_signals from the data
-- Note RSI, MACD, volume signals
-
-**CATALYSTS & NEWS**
-- Summarize news sentiment
-- Note upcoming earnings if available
-
-**VALUATION**
-- P/E, Forward P/E, PEG ratio
-- Analyst targets and upside %
-
-**TECHNICALS**
-- Price vs SMAs
-- RSI, Bollinger position
-- Momentum
-
-**RISKS**
-- List any warnings from the data
-
-**TRADING PLAN**
-- Entry zone, stop loss, target price
-
-Be direct. Use the provided data. Never claim you lack access to prices."""
+Keep responses concise. Match your response length to the question complexity."""
 
     messages = [{"role": "system", "content": system}]
     for m in history[-6:]: messages.append({"role": m["role"], "content": m["content"]})
@@ -2486,20 +2480,18 @@ Be direct. Use the provided data. Never claim you lack access to prices."""
         if 'table' in data: 
             data_for_ai['top_stocks'] = [row.get('Ticker', '') for row in data['table'][:5]]
         
-        # Build prompt with all context - make it very clear this is real data
-        prompt_parts = [
-            f"User asked: {user_message}",
-            f"\n\n=== LIVE STOCK DATA (USE THIS - IT'S REAL-TIME) ===\n{json.dumps(data_for_ai, indent=2, default=str)}"
-        ]
-        
-        # Add news if available
-        if data.get('news'):
-            prompt_parts.append(f"\n=== RECENT NEWS ===\n{data['news']}")
-        if data.get('market_news'):
-            prompt_parts.append(f"\n=== MARKET NEWS ===\n{data['market_news']}")
-        
-        prompt_parts.append("\n\nIMPORTANT: Analyze using the EXACT data above. State the price shown. Give your trading verdict. Do NOT say you don't have data - it's right there above.")
-        prompt = "\n".join(prompt_parts)
+        # Build prompt
+        if is_simple_price_query:
+            prompt = f"User asked: {user_message}\n\nData: {json.dumps(data_for_ai, indent=2, default=str)}\n\nGive a SHORT 1-2 sentence answer with just the price and daily change. Don't give a full analysis."
+        else:
+            prompt_parts = [
+                f"User asked: {user_message}",
+                f"\n\n=== LIVE STOCK DATA ===\n{json.dumps(data_for_ai, indent=2, default=str)}"
+            ]
+            if data.get('news'):
+                prompt_parts.append(f"\n=== NEWS ===\n{data['news']}")
+            prompt_parts.append("\n\nUse the EXACT numbers from the data above.")
+            prompt = "\n".join(prompt_parts)
     else:
         prompt = user_message
     
