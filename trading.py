@@ -16,6 +16,62 @@ import requests
 warnings.filterwarnings('ignore')
 load_dotenv()
 
+# ==================== FINNHUB API (More accurate than Yahoo) ====================
+def get_finnhub_quote(ticker):
+    """Get real-time quote from Finnhub API"""
+    api_key = st.secrets.get("FINNHUB_API_KEY") or os.environ.get("FINNHUB_API_KEY")
+    if not api_key:
+        return None
+    
+    try:
+        url = f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={api_key}"
+        response = requests.get(url, timeout=5)
+        
+        if response.status_code == 200:
+            data = response.json()
+            # c = current price, pc = previous close, d = change, dp = percent change
+            if data and data.get('c') and data.get('c') > 0:
+                return {
+                    'price': data['c'],
+                    'prev_close': data.get('pc', 0),
+                    'change': data.get('d', 0),
+                    'change_pct': data.get('dp', 0),
+                    'high': data.get('h', 0),
+                    'low': data.get('l', 0),
+                    'open': data.get('o', 0),
+                    'source': 'finnhub'
+                }
+    except Exception as e:
+        pass
+    
+    return None
+
+def get_finnhub_profile(ticker):
+    """Get company profile from Finnhub"""
+    api_key = st.secrets.get("FINNHUB_API_KEY") or os.environ.get("FINNHUB_API_KEY")
+    if not api_key:
+        return None
+    
+    try:
+        url = f"https://finnhub.io/api/v1/stock/profile2?symbol={ticker}&token={api_key}"
+        response = requests.get(url, timeout=5)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data and data.get('name'):
+                return {
+                    'name': data.get('name'),
+                    'ticker': data.get('ticker'),
+                    'industry': data.get('finnhubIndustry'),
+                    'market_cap': data.get('marketCapitalization', 0) * 1_000_000,  # Finnhub returns in millions
+                    'logo': data.get('logo'),
+                    'weburl': data.get('weburl'),
+                }
+    except:
+        pass
+    
+    return None
+
 # ==================== NEWS ====================
 def get_stock_news(ticker, limit=5):
     """Fetch recent news for a stock"""
@@ -1541,10 +1597,22 @@ def get_display_ticker(ticker):
 
 def get_quick_price(ticker):
     """Get just the price quickly - for simple price queries"""
+    
+    # Try Finnhub first (most accurate)
+    finnhub_data = get_finnhub_quote(ticker)
+    if finnhub_data and finnhub_data.get('price'):
+        return {
+            'price': round(finnhub_data['price'], 2),
+            'change': round(finnhub_data.get('change', 0), 2),
+            'change_pct': round(finnhub_data.get('change_pct', 0), 2),
+            'source': 'finnhub'
+        }
+    
+    # Fallback to Yahoo Finance
     try:
         stock = yf.Ticker(ticker)
         
-        # Try intraday data first (most accurate for current price)
+        # Try intraday data first
         try:
             hist = stock.history(period='1d', interval='1m')
             if not hist.empty:
@@ -1556,7 +1624,7 @@ def get_quick_price(ticker):
                     'price': round(price, 2),
                     'change': round(change, 2),
                     'change_pct': round(change_pct, 2),
-                    'source': 'realtime'
+                    'source': 'yahoo'
                 }
         except:
             pass
@@ -1575,24 +1643,7 @@ def get_quick_price(ticker):
                     'price': round(price, 2),
                     'change': round(change, 2),
                     'change_pct': round(change_pct, 2),
-                    'source': 'fast_info'
-                }
-        except:
-            pass
-        
-        # Last fallback
-        try:
-            hist = stock.history(period='5d')
-            if not hist.empty:
-                price = float(hist['Close'].iloc[-1])
-                prev = float(hist['Close'].iloc[-2]) if len(hist) > 1 else price
-                change = price - prev
-                change_pct = (change / prev * 100) if prev > 0 else 0
-                return {
-                    'price': round(price, 2),
-                    'change': round(change, 2),
-                    'change_pct': round(change_pct, 2),
-                    'source': 'history'
+                    'source': 'yahoo'
                 }
         except:
             pass
@@ -1659,21 +1710,39 @@ def create_technical_chart(ticker, period="6mo"):
 def get_live_stock_data(ticker):
     """Get fresh stock data - prioritize real-time price accuracy"""
     try:
-        stock = yf.Ticker(ticker)
-        
         current_price = None
         prev_close = None
+        change = None
+        change_pct = None
         market_cap = None
         fifty_two_week_high = None
         fifty_two_week_low = None
         
-        # Method 1: Get latest price from intraday history (MOST ACCURATE)
-        try:
-            hist_1d = stock.history(period='1d', interval='1m')
-            if not hist_1d.empty:
-                current_price = float(hist_1d['Close'].iloc[-1])
-        except:
-            pass
+        # Try Finnhub first for US stocks (most accurate)
+        if '.NS' not in ticker and '.BO' not in ticker:
+            finnhub_data = get_finnhub_quote(ticker)
+            if finnhub_data and finnhub_data.get('price'):
+                current_price = finnhub_data['price']
+                prev_close = finnhub_data.get('prev_close')
+                change = finnhub_data.get('change', 0)
+                change_pct = finnhub_data.get('change_pct', 0)
+            
+            # Get company profile from Finnhub
+            profile = get_finnhub_profile(ticker)
+            if profile:
+                market_cap = profile.get('market_cap')
+        
+        stock = yf.Ticker(ticker)
+        
+        # If Finnhub didn't work, try Yahoo Finance
+        if current_price is None:
+            # Method 1: Get latest price from intraday history
+            try:
+                hist_1d = stock.history(period='1d', interval='1m')
+                if not hist_1d.empty:
+                    current_price = float(hist_1d['Close'].iloc[-1])
+            except:
+                pass
         
         # Method 2: Try fast_info
         if current_price is None:
@@ -1682,14 +1751,16 @@ def get_live_stock_data(ticker):
                 current_price = fast.get('lastPrice') or fast.get('regularMarketPrice')
                 if current_price:
                     current_price = float(current_price)
-                prev_close = fast.get('previousClose')
-                market_cap = fast.get('marketCap')
+                if prev_close is None:
+                    prev_close = fast.get('previousClose')
+                if market_cap is None:
+                    market_cap = fast.get('marketCap')
                 fifty_two_week_high = fast.get('yearHigh')
                 fifty_two_week_low = fast.get('yearLow')
             except:
                 pass
         
-        # Method 3: Get from info dict
+        # Method 3: Get from info dict (for fundamentals)
         info = {}
         try:
             info = stock.info or {}
@@ -1713,7 +1784,7 @@ def get_live_stock_data(ticker):
         if current_price is None:
             return None
         
-        # Get previous close
+        # Get previous close if not already set
         if prev_close is None:
             prev_close = info.get('previousClose') or info.get('regularMarketPreviousClose')
         
@@ -1730,7 +1801,13 @@ def get_live_stock_data(ticker):
         else:
             prev_close = current_price
         
-        # Get other data
+        # Calculate change if not already set
+        if change is None:
+            change = current_price - prev_close if prev_close else 0
+        if change_pct is None:
+            change_pct = (change / prev_close * 100) if prev_close and prev_close > 0 else 0
+        
+        # Get other data from Yahoo
         if market_cap is None:
             market_cap = info.get('marketCap')
         if fifty_two_week_high is None:
@@ -1739,8 +1816,6 @@ def get_live_stock_data(ticker):
             fifty_two_week_low = info.get('fiftyTwoWeekLow')
         
         market = 'India' if '.NS' in ticker or '.BO' in ticker else 'US'
-        change = current_price - prev_close if prev_close else 0
-        change_pct = (change / prev_close * 100) if prev_close and prev_close > 0 else 0
         
         # Calculate additional metrics
         from_52w_high = ((current_price - fifty_two_week_high) / fifty_two_week_high * 100) if fifty_two_week_high and fifty_two_week_high > 0 else None
