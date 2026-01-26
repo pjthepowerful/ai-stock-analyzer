@@ -1539,6 +1539,68 @@ def get_stock_list():
 def get_display_ticker(ticker):
     return ticker.replace('.NS', '').replace('.BO', '')
 
+def get_quick_price(ticker):
+    """Get just the price quickly - for simple price queries"""
+    try:
+        stock = yf.Ticker(ticker)
+        
+        # Try intraday data first (most accurate for current price)
+        try:
+            hist = stock.history(period='1d', interval='1m')
+            if not hist.empty:
+                price = float(hist['Close'].iloc[-1])
+                prev_close = float(hist['Open'].iloc[0])
+                change = price - prev_close
+                change_pct = (change / prev_close * 100) if prev_close > 0 else 0
+                return {
+                    'price': round(price, 2),
+                    'change': round(change, 2),
+                    'change_pct': round(change_pct, 2),
+                    'source': 'realtime'
+                }
+        except:
+            pass
+        
+        # Fallback to fast_info
+        try:
+            fast = stock.fast_info
+            price = fast.get('lastPrice') or fast.get('regularMarketPrice')
+            prev = fast.get('previousClose')
+            if price:
+                price = float(price)
+                prev = float(prev) if prev else price
+                change = price - prev
+                change_pct = (change / prev * 100) if prev > 0 else 0
+                return {
+                    'price': round(price, 2),
+                    'change': round(change, 2),
+                    'change_pct': round(change_pct, 2),
+                    'source': 'fast_info'
+                }
+        except:
+            pass
+        
+        # Last fallback
+        try:
+            hist = stock.history(period='5d')
+            if not hist.empty:
+                price = float(hist['Close'].iloc[-1])
+                prev = float(hist['Close'].iloc[-2]) if len(hist) > 1 else price
+                change = price - prev
+                change_pct = (change / prev * 100) if prev > 0 else 0
+                return {
+                    'price': round(price, 2),
+                    'change': round(change, 2),
+                    'change_pct': round(change_pct, 2),
+                    'source': 'history'
+                }
+        except:
+            pass
+        
+        return None
+    except:
+        return None
+
 def format_market_cap(value, market='US'):
     if value is None: return "N/A"
     symbol = '₹' if market == 'India' else '$'
@@ -1595,50 +1657,82 @@ def create_technical_chart(ticker, period="6mo"):
 
 # ==================== DATA ====================
 def get_live_stock_data(ticker):
-    """Get fresh stock data - no caching for accurate prices"""
+    """Get fresh stock data - prioritize real-time price accuracy"""
     try:
         stock = yf.Ticker(ticker)
         
-        # Use fast_info for more reliable current price
+        current_price = None
+        prev_close = None
+        market_cap = None
+        fifty_two_week_high = None
+        fifty_two_week_low = None
+        
+        # Method 1: Get latest price from intraday history (MOST ACCURATE)
         try:
-            fast = stock.fast_info
-            current_price = fast.get('lastPrice') or fast.get('regularMarketPrice')
-            prev_close = fast.get('previousClose') or fast.get('regularMarketPreviousClose')
-            market_cap = fast.get('marketCap')
-            fifty_two_week_high = fast.get('yearHigh')
-            fifty_two_week_low = fast.get('yearLow')
+            hist_1d = stock.history(period='1d', interval='1m')
+            if not hist_1d.empty:
+                current_price = float(hist_1d['Close'].iloc[-1])
         except:
-            fast = None
-            current_price = None
-            prev_close = None
-            market_cap = None
-            fifty_two_week_high = None
-            fifty_two_week_low = None
+            pass
         
-        # Fallback to info if fast_info didn't work
-        info = stock.info or {}
+        # Method 2: Try fast_info
+        if current_price is None:
+            try:
+                fast = stock.fast_info
+                current_price = fast.get('lastPrice') or fast.get('regularMarketPrice')
+                if current_price:
+                    current_price = float(current_price)
+                prev_close = fast.get('previousClose')
+                market_cap = fast.get('marketCap')
+                fifty_two_week_high = fast.get('yearHigh')
+                fifty_two_week_low = fast.get('yearLow')
+            except:
+                pass
+        
+        # Method 3: Get from info dict
+        info = {}
+        try:
+            info = stock.info or {}
+        except:
+            pass
         
         if current_price is None:
-            current_price = info.get('regularMarketPrice') or info.get('currentPrice') or info.get('previousClose')
+            current_price = info.get('regularMarketPrice') or info.get('currentPrice')
+            if current_price:
+                current_price = float(current_price)
+        
+        # Method 4: Try 5-day history
+        if current_price is None:
+            try:
+                hist_5d = stock.history(period='5d')
+                if not hist_5d.empty:
+                    current_price = float(hist_5d['Close'].iloc[-1])
+            except:
+                pass
         
         if current_price is None:
-            # Last resort: get from recent history
-            hist = stock.history(period='1d', interval='1m')
-            if not hist.empty:
-                current_price = hist['Close'].iloc[-1]
-            else:
-                hist = stock.history(period='5d')
-                if not hist.empty:
-                    current_price = hist['Close'].iloc[-1]
-                else:
-                    return None
+            return None
+        
+        # Get previous close
+        if prev_close is None:
+            prev_close = info.get('previousClose') or info.get('regularMarketPreviousClose')
         
         if prev_close is None:
-            prev_close = info.get('previousClose') or info.get('regularMarketPreviousClose') or current_price
+            try:
+                hist_5d = stock.history(period='5d')
+                if len(hist_5d) >= 2:
+                    prev_close = float(hist_5d['Close'].iloc[-2])
+            except:
+                prev_close = current_price
         
+        if prev_close:
+            prev_close = float(prev_close)
+        else:
+            prev_close = current_price
+        
+        # Get other data
         if market_cap is None:
             market_cap = info.get('marketCap')
-        
         if fifty_two_week_high is None:
             fifty_two_week_high = info.get('fiftyTwoWeekHigh')
         if fifty_two_week_low is None:
@@ -1646,11 +1740,11 @@ def get_live_stock_data(ticker):
         
         market = 'India' if '.NS' in ticker or '.BO' in ticker else 'US'
         change = current_price - prev_close if prev_close else 0
-        change_pct = (change / prev_close * 100) if prev_close else 0
+        change_pct = (change / prev_close * 100) if prev_close and prev_close > 0 else 0
         
         # Calculate additional metrics
-        from_52w_high = ((current_price - fifty_two_week_high) / fifty_two_week_high * 100) if fifty_two_week_high else None
-        from_52w_low = ((current_price - fifty_two_week_low) / fifty_two_week_low * 100) if fifty_two_week_low else None
+        from_52w_high = ((current_price - fifty_two_week_high) / fifty_two_week_high * 100) if fifty_two_week_high and fifty_two_week_high > 0 else None
+        from_52w_low = ((current_price - fifty_two_week_low) / fifty_two_week_low * 100) if fifty_two_week_low and fifty_two_week_low > 0 else None
         
         return {
             "ticker": ticker, "display_ticker": get_display_ticker(ticker),
@@ -2233,11 +2327,49 @@ def detect_and_execute(message):
     if any(w in msg for w in ['dividend stocks', 'income stocks']): 
         return screen_stocks("dividend")
     
+    # ===== SIMPLE PRICE QUERIES =====
+    # Check if this is just a simple "what is X price" query
+    is_simple_price_query = any(w in msg for w in ['price of', 'price for', 'how much is', 'what is', 'whats the price', "what's the price", 'current price', 'stock price'])
+    
     # Check for stock-related intent
     stock_intent_words = ['stock', 'price', 'analyze', 'analysis', 'ticker', 'share', 'shares', 
                           'buy', 'sell', 'invest', 'trading', 'market cap', 'pe ratio', 'compare',
                           'chart', 'graph']
     has_stock_intent = any(w in msg for w in stock_intent_words)
+    
+    # For simple price queries, try to get quick accurate price
+    if is_simple_price_query:
+        # Try to find the ticker
+        ticker_from_name = get_ticker_from_name(msg)
+        if ticker_from_name:
+            full_ticker = f"{ticker_from_name}.NS" if market == 'India' else ticker_from_name
+            quick = get_quick_price(full_ticker)
+            if quick:
+                currency = '₹' if market == 'India' else '$'
+                color = "🟢" if quick['change_pct'] >= 0 else "🔴"
+                return {
+                    "success": True,
+                    "type": "quick_price",
+                    "ticker": ticker_from_name,
+                    "price": f"{currency}{quick['price']:,.2f}",
+                    "change": f"{color} {quick['change']:+.2f} ({quick['change_pct']:+.2f}%)",
+                }
+        
+        # Check for company names
+        for company_name, ticker in COMPANY_TO_TICKER.items():
+            if company_name in msg:
+                full_ticker = f"{ticker}.NS" if market == 'India' else ticker
+                quick = get_quick_price(full_ticker)
+                if quick:
+                    currency = '₹' if market == 'India' else '$'
+                    color = "🟢" if quick['change_pct'] >= 0 else "🔴"
+                    return {
+                        "success": True,
+                        "type": "quick_price",
+                        "ticker": ticker,
+                        "price": f"{currency}{quick['price']:,.2f}",
+                        "change": f"{color} {quick['change']:+.2f} ({quick['change_pct']:+.2f}%)",
+                    }
     
     # Handle comparisons
     if any(w in msg for w in ['compare', 'vs', 'versus']):
