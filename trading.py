@@ -318,28 +318,52 @@ def calc_score(data):
 def make_chart(ticker, period='3mo'):
     """Create price chart"""
     try:
-        hist = yf.Ticker(ticker).history(period=period)
-        if hist is None or hist.empty:
-            return None
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period=period)
+        
+        if hist is None or hist.empty or len(hist) < 5:
+            # Try shorter period
+            hist = stock.history(period='1mo')
+            if hist is None or hist.empty:
+                return None
         
         fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.7, 0.3])
         
-        fig.add_trace(go.Candlestick(x=hist.index, open=hist['Open'], high=hist['High'],
-            low=hist['Low'], close=hist['Close'], name='Price',
-            increasing_line_color='#22c55e', decreasing_line_color='#ef4444'), row=1, col=1)
+        # Candlestick chart
+        fig.add_trace(go.Candlestick(
+            x=hist.index, 
+            open=hist['Open'], 
+            high=hist['High'],
+            low=hist['Low'], 
+            close=hist['Close'], 
+            name='Price',
+            increasing_line_color='#22c55e', 
+            decreasing_line_color='#ef4444'
+        ), row=1, col=1)
         
+        # Moving averages
         if len(hist) >= 20:
             sma20 = hist['Close'].rolling(20).mean()
-            fig.add_trace(go.Scatter(x=hist.index, y=sma20, name='SMA 20',
-                line=dict(color='#3b82f6', width=1.5)), row=1, col=1)
+            fig.add_trace(go.Scatter(
+                x=hist.index, y=sma20, name='SMA 20',
+                line=dict(color='#3b82f6', width=1.5)
+            ), row=1, col=1)
+        
         if len(hist) >= 50:
             sma50 = hist['Close'].rolling(50).mean()
-            fig.add_trace(go.Scatter(x=hist.index, y=sma50, name='SMA 50',
-                line=dict(color='#f59e0b', width=1.5)), row=1, col=1)
+            fig.add_trace(go.Scatter(
+                x=hist.index, y=sma50, name='SMA 50',
+                line=dict(color='#f59e0b', width=1.5)
+            ), row=1, col=1)
         
+        # Volume bars
         colors = ['#22c55e' if c >= o else '#ef4444' for c, o in zip(hist['Close'], hist['Open'])]
-        fig.add_trace(go.Bar(x=hist.index, y=hist['Volume'], marker_color=colors, opacity=0.5, name='Volume'), row=2, col=1)
+        fig.add_trace(go.Bar(
+            x=hist.index, y=hist['Volume'], 
+            marker_color=colors, opacity=0.5, name='Volume'
+        ), row=2, col=1)
         
+        # Layout
         fig.update_layout(
             template='plotly_dark',
             paper_bgcolor='#0a0a0a',
@@ -351,11 +375,12 @@ def make_chart(ticker, period='3mo'):
             margin=dict(l=10, r=10, t=40, b=10),
             xaxis_rangeslider_visible=False
         )
-        fig.update_xaxes(showgrid=False, gridcolor='#27272a')
+        fig.update_xaxes(showgrid=False)
         fig.update_yaxes(showgrid=True, gridcolor='#1f1f1f')
         
         return fig
-    except:
+    except Exception as e:
+        # Return None silently - chart just won't show
         return None
 
 
@@ -684,7 +709,7 @@ def main():
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
             
-            # Show chart
+            # Show chart for assistant messages
             if m["role"] == "assistant" and m.get("chart") and st.session_state.show_charts:
                 ch = make_chart(m["chart"])
                 if ch:
@@ -798,11 +823,14 @@ def main():
                 
                 st.markdown(resp)
                 
-                # Show chart
+                # Show chart - ALWAYS try for stock queries
                 if chart_ticker and st.session_state.show_charts:
-                    ch = make_chart(chart_ticker)
-                    if ch:
-                        st.plotly_chart(ch, use_container_width=True)
+                    with st.spinner("Loading chart..."):
+                        ch = make_chart(chart_ticker)
+                        if ch:
+                            st.plotly_chart(ch, use_container_width=True)
+                        else:
+                            st.caption(f"📊 Chart unavailable for {chart_ticker}")
                 
                 # Show table
                 if table_data:
