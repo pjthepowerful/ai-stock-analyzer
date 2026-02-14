@@ -942,19 +942,32 @@ def inject_css():
         padding: 2rem 1.5rem 5rem 1.5rem !important;
     }
 
-    /* Typography */
+    /* Typography — exclude material icon spans from font override */
     h1, h2, h3 {
         font-family: var(--sans) !important;
         color: var(--text-primary) !important;
         font-weight: 600 !important;
         letter-spacing: -0.02em !important;
     }
-    p, span, div, label, li {
+    p, label, li {
         font-family: var(--sans) !important;
+        color: var(--text-secondary) !important;
+    }
+    div, span {
         color: var(--text-secondary) !important;
     }
     code, pre {
         font-family: var(--mono) !important;
+    }
+
+    /* Preserve Streamlit's icon font for avatars */
+    .stChatMessage [data-testid="chatAvatarIcon-assistant"],
+    .stChatMessage [data-testid="chatAvatarIcon-user"],
+    .stChatMessage .stAvatar span,
+    [data-testid="chatAvatarIcon-assistant"],
+    [data-testid="chatAvatarIcon-user"] {
+        font-family: 'Material Symbols Rounded', 'Material Icons', sans-serif !important;
+        font-size: 20px !important;
     }
 
     /* Chat messages */
@@ -1030,6 +1043,15 @@ def inject_css():
         background: var(--surface) !important;
         border: 1px solid var(--border) !important;
         border-radius: 6px !important;
+    }
+    .stExpander summary,
+    .stExpander summary span,
+    .stExpander [data-testid="stExpanderToggleDetails"] {
+        font-family: var(--mono) !important;
+        font-size: 0.8rem !important;
+        letter-spacing: 0.02em !important;
+        color: var(--text-secondary) !important;
+        overflow: visible !important;
     }
 
     /* Dataframe */
@@ -1131,7 +1153,8 @@ def main():
 
     # Render history
     for m in st.session_state.messages:
-        with st.chat_message(m["role"]):
+        avatar = "◆" if m["role"] == "assistant" else "›"
+        with st.chat_message(m["role"], avatar=avatar):
             st.markdown(m["content"])
             if m["role"] == "assistant" and m.get("chart") and st.session_state.show_charts:
                 ch = build_chart(m["chart"])
@@ -1145,10 +1168,10 @@ def main():
 
     if prompt:
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
+        with st.chat_message("user", avatar="›"):
             st.markdown(prompt)
 
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar="◆"):
             with st.spinner(""):
                 # Auto-detect market
                 detected = detect_market(prompt)
