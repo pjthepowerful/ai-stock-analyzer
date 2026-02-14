@@ -996,6 +996,9 @@ def inject_css():
     code, pre {
         font-family: var(--mono) !important;
     }
+    strong, b, em, i {
+        font-family: inherit !important;
+    }
 
     /* Preserve Streamlit's icon font for avatars */
     [data-testid="stChatMessageAvatarCustom"],
@@ -1013,13 +1016,21 @@ def inject_css():
         padding: 1rem 1.2rem !important;
         margin-bottom: 0.5rem !important;
     }
-    .stChatMessage p, .stChatMessage span, .stChatMessage li, .stChatMessage div {
+    .stChatMessage p, .stChatMessage span, .stChatMessage li,
+    .stChatMessage div, .stChatMessage strong, .stChatMessage b,
+    .stChatMessage em, .stChatMessage i, .stChatMessage a,
+    .stChatMessage code {
         color: var(--text-primary) !important;
         font-size: 0.92rem !important;
         line-height: 1.6 !important;
+        font-family: var(--sans) !important;
     }
-    .stChatMessage strong {
+    .stChatMessage strong, .stChatMessage b {
         color: #fff !important;
+        font-weight: 600 !important;
+    }
+    .stChatMessage em, .stChatMessage i {
+        font-style: italic !important;
     }
 
     /* Input */
