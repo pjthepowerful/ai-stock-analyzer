@@ -155,6 +155,28 @@ TICKER_BLACKLIST = {
     "VS", "RUN", "SET", "TRY", "SAY", "SEE", "NOW", "WAY", "MAY", "DAY",
     "TOO", "ANY", "FEW", "GOT", "HER", "HIM", "HIS", "OLD", "PUT",
     "OWN", "SAY", "SHE", "USE", "HER", "BOT", "ASK", "API",
+    # Common words that slip through
+    "ABOVE", "BELOW", "AFTER", "BEFORE", "ALSO", "THAN", "THEN", "THEM",
+    "THESE", "THOSE", "BEING", "DOES", "DONE", "DOWN", "EACH", "EVEN",
+    "EVER", "EVERY", "FIRST", "GAVE", "GOES", "GONE", "GREAT", "HAD",
+    "HERE", "HOLD", "KEEP", "LAST", "LEFT", "LONG", "LOOK", "MADE",
+    "MANY", "MUCH", "MUST", "NAME", "NEAR", "NEXT", "ONCE", "OPEN",
+    "PART", "PLAN", "PLAY", "REAL", "SAME", "SAID", "SHOW", "SIDE",
+    "SURE", "TELL", "TEND", "TOLD", "TURN", "UPON", "USED", "WANT",
+    "WELL", "WENT", "WERE", "WHAT", "WORK", "YEAR", "YOUR", "ZERO",
+    "CALL", "CAME", "CASE", "CHAT", "DEAL", "DROP", "ELSE", "FALL",
+    "FEEL", "FULL", "GAVE", "GROW", "HALF", "HAND", "HARD", "HEAD",
+    "HEAR", "IDEA", "JUMP", "KIND", "LATE", "LEAD", "LESS", "LINE",
+    "LIST", "LIVE", "LOSE", "LOST", "MAIN", "MEAN", "MIND", "MISS",
+    "MOVE", "NOTE", "OKAY", "PASS", "PAST", "PICK", "PULL", "PUSH",
+    "RATE", "READ", "REST", "RISE", "RISK", "ROLE", "RULE", "SAFE",
+    "SAVE", "SEEM", "SELL", "SEND", "SHUT", "SIGN", "SORT", "STAR",
+    "STAY", "STEP", "STOP", "TALK", "TEAM", "TEST", "THINK", "TRADE",
+    "TRUE", "TYPE", "WAIT", "WALK", "WEAK", "WEEK", "WHAT", "WIDE",
+    "WINS", "WISE", "WORD", "YEAH", "LOOKS", "THINK", "GOING", "STILL",
+    "THING", "THERE", "WHERE", "WHILE", "MIGHT", "COULD", "NEVER",
+    "MAYBE", "QUITE", "RIGHT", "SINCE", "SMALL", "START", "THREE",
+    "WATCH", "WHOLE", "WORLD", "WORSE", "WORTH", "WRONG", "WROTE",
 }
 
 
@@ -714,13 +736,16 @@ def find_ticker(msg: str, market: str = "US") -> tuple[str | None, str]:
             if clean in all_market_tickers:
                 return clean, all_market_tickers[clean]
 
-    # 3. Check for anything that looks like a ticker (2-5 uppercase letters)
+    # 3. Only treat it as a ticker if it's ALL CAPS in the original message
+    #    (user intentionally typed "PLTR" not "pltr" in a sentence)
     for word in msg.split():
-        clean = re.sub(r"[^A-Z]", "", word.upper())
-        if clean and 2 <= len(clean) <= 5 and clean not in TICKER_BLACKLIST:
-            # Try it on yfinance as a last resort — only if it looks intentional
-            if clean == word.upper().strip("?.,!"):
-                return clean, market
+        clean = re.sub(r"[^A-Z0-9]", "", word)
+        if (clean and 2 <= len(clean) <= 5
+                and clean == word.strip("?.,!:;\"'()[]")
+                and clean not in TICKER_BLACKLIST
+                and clean.isupper()
+                and not any(c.isdigit() for c in clean)):
+            return clean, market
 
     return None, market
 
@@ -729,8 +754,12 @@ def classify_intent(msg: str, market: str = "US") -> dict:
     """Classify the user's message into an actionable intent."""
     low = msg.lower().strip()
 
-    # Greetings / meta
-    if low in ("hi", "hello", "hey", "thanks", "thank you", "help", "bye", "ok", "okay"):
+    # Greetings / meta / conversational
+    greetings = {"hi", "hello", "hey", "thanks", "thank you", "help", "bye",
+                 "ok", "okay", "sure", "yes", "no", "yep", "nope", "cool",
+                 "great", "awesome", "nice", "wow", "lol", "haha", "hmm",
+                 "what can you do", "who are you", "what are you"}
+    if low in greetings or low.rstrip("?!. ") in greetings:
         return {"type": "chat"}
 
     ticker, detected_market = find_ticker(msg, market)
@@ -767,9 +796,17 @@ def classify_intent(msg: str, market: str = "US") -> dict:
     if any(k in low for k in ["hot", "trending", "moving", "movers", "what's moving", "most active"]):
         return {"type": "hot"}
 
-    # If a ticker was found, default to analyze
+    # If a ticker was found AND the message is short / stock-focused, analyze
     if ticker:
-        return {"type": "analyze", "ticker": ticker, "market": detected_market}
+        word_count = len(low.split())
+        # Short messages with a ticker are almost certainly stock queries
+        if word_count <= 6:
+            return {"type": "analyze", "ticker": ticker, "market": detected_market}
+        # Longer messages: only if they contain stock-related words
+        stock_words = ["stock", "price", "buy", "sell", "hold", "trade", "invest",
+                       "chart", "target", "earning", "valuation", "worth", "position"]
+        if any(w in low for w in stock_words):
+            return {"type": "analyze", "ticker": ticker, "market": detected_market}
 
     return {"type": "chat"}
 
