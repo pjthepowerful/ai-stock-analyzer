@@ -961,13 +961,11 @@ def inject_css():
     }
 
     /* Preserve Streamlit's icon font for avatars */
-    .stChatMessage [data-testid="chatAvatarIcon-assistant"],
-    .stChatMessage [data-testid="chatAvatarIcon-user"],
-    .stChatMessage .stAvatar span,
-    [data-testid="chatAvatarIcon-assistant"],
-    [data-testid="chatAvatarIcon-user"] {
+    [data-testid="stChatMessageAvatarCustom"],
+    [data-testid="stChatMessageAvatarAssistant"],
+    [data-testid="stChatMessageAvatarUser"],
+    .stChatMessage [data-testid] > span {
         font-family: 'Material Symbols Rounded', 'Material Icons', sans-serif !important;
-        font-size: 20px !important;
     }
 
     /* Chat messages */
@@ -1022,38 +1020,6 @@ def inject_css():
         border-color: var(--border-hover) !important;
     }
 
-    /* Selectbox */
-    .stSelectbox > div > div {
-        background: var(--surface) !important;
-        border: 1px solid var(--border) !important;
-        border-radius: 6px !important;
-        font-family: var(--mono) !important;
-        font-size: 0.82rem !important;
-    }
-    .stSelectbox label {
-        font-family: var(--mono) !important;
-        font-size: 0.75rem !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.05em !important;
-        color: var(--text-muted) !important;
-    }
-
-    /* Expander */
-    .stExpander {
-        background: var(--surface) !important;
-        border: 1px solid var(--border) !important;
-        border-radius: 6px !important;
-    }
-    .stExpander summary,
-    .stExpander summary span,
-    .stExpander [data-testid="stExpanderToggleDetails"] {
-        font-family: var(--mono) !important;
-        font-size: 0.8rem !important;
-        letter-spacing: 0.02em !important;
-        color: var(--text-secondary) !important;
-        overflow: visible !important;
-    }
-
     /* Dataframe */
     .stDataFrame {
         border-radius: 6px !important;
@@ -1081,24 +1047,13 @@ def inject_css():
         letter-spacing: 0.02em !important;
     }
 
-    /* Checkbox */
-    .stCheckbox label span {
-        font-family: var(--mono) !important;
-        font-size: 0.8rem !important;
-    }
-
-    /* Toast */
-    .stToast {
-        font-family: var(--mono) !important;
-    }
-
     /* Scrollbar */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: var(--bg); }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
 
-    /* Plotly overrides */
+    /* Plotly */
     .js-plotly-plot { border-radius: 6px; overflow: hidden; }
     </style>
     """, unsafe_allow_html=True)
@@ -1119,44 +1074,18 @@ def main():
         st.session_state.messages = []
     if "market" not in st.session_state:
         st.session_state.market = "US"
-    if "show_charts" not in st.session_state:
-        st.session_state.show_charts = True
 
     # Header
-    mkt = st.session_state.market
-    cfg = MARKETS.get(mkt, MARKETS["US"])
-
-    col_title, col_settings = st.columns([5, 1])
-    with col_title:
-        st.markdown(f"### ◆ Paula")
-        st.caption(f"{cfg['flag']} {mkt} market  ·  ask about any stock, anywhere")
-    with col_settings:
-        with st.expander("settings"):
-            new_market = st.selectbox(
-                "MARKET",
-                list(MARKETS.keys()),
-                index=list(MARKETS.keys()).index(mkt),
-                help="Auto-detects from your message",
-            )
-            if new_market != mkt:
-                st.session_state.market = new_market
-                st.rerun()
-
-            st.session_state.show_charts = st.checkbox(
-                "Show charts", value=st.session_state.show_charts
-            )
-            if st.button("Clear chat"):
-                st.session_state.messages = []
-                st.rerun()
+    st.markdown(f"### ◆ Paula")
+    st.caption("ask about any stock, anywhere")
 
     st.markdown("---")
 
     # Render history
     for m in st.session_state.messages:
-        avatar = "◆" if m["role"] == "assistant" else "›"
-        with st.chat_message(m["role"], avatar=avatar):
+        with st.chat_message(m["role"]):
             st.markdown(m["content"])
-            if m["role"] == "assistant" and m.get("chart") and st.session_state.show_charts:
+            if m["role"] == "assistant" and m.get("chart") :
                 ch = build_chart(m["chart"])
                 if ch:
                     st.plotly_chart(ch, use_container_width=True)
@@ -1168,10 +1097,10 @@ def main():
 
     if prompt:
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user", avatar="›"):
+        with st.chat_message("user"):
             st.markdown(prompt)
 
-        with st.chat_message("assistant", avatar="◆"):
+        with st.chat_message("assistant"):
             with st.spinner(""):
                 # Auto-detect market
                 detected = detect_market(prompt)
@@ -1224,7 +1153,7 @@ def main():
 
                 st.markdown(resp)
 
-                if chart_ticker and st.session_state.show_charts:
+                if chart_ticker :
                     ch = build_chart(chart_ticker)
                     if ch:
                         st.plotly_chart(ch, use_container_width=True)
