@@ -1,5 +1,5 @@
 """
-Paula - Stock Analysis Assistant
+Paula — Stock Analysis Terminal
 """
 
 import streamlit as st
@@ -11,842 +11,1214 @@ from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 from groq import Groq
 from dotenv import load_dotenv
-import os
-import json
-import re
-import warnings
+import os, json, re, warnings
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 load_dotenv()
 
-# Stock Lists
-NASDAQ_100 = ['AAPL', 'MSFT', 'AMZN', 'NVDA', 'GOOGL', 'META', 'TSLA', 'AVGO', 'COST', 'NFLX',
-    'AMD', 'ADBE', 'PEP', 'CSCO', 'TMUS', 'INTC', 'CMCSA', 'INTU', 'QCOM', 'TXN',
-    'AMGN', 'HON', 'AMAT', 'ISRG', 'BKNG', 'SBUX', 'VRTX', 'LRCX', 'MU', 'ADI',
-    'MDLZ', 'REGN', 'ADP', 'PANW', 'KLAC', 'SNPS', 'CDNS', 'MELI', 'CRWD', 'ASML',
-    'PYPL', 'MAR', 'ORLY', 'CTAS', 'MRVL', 'ABNB', 'NXPI', 'PCAR', 'WDAY', 'CPRT']
+# ─── Market Universes ────────────────────────────────────────────────────────
 
-SP500_TOP = ['AAPL', 'MSFT', 'AMZN', 'NVDA', 'GOOGL', 'META', 'BRK-B', 'LLY', 'TSLA', 'UNH',
-    'JPM', 'XOM', 'V', 'JNJ', 'PG', 'MA', 'AVGO', 'HD', 'MRK', 'CVX',
-    'COST', 'ABBV', 'PEP', 'KO', 'WMT', 'ADBE', 'MCD', 'CSCO', 'CRM', 'BAC']
-
-NIFTY_50 = ['RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS', 'HINDUNILVR.NS',
-    'BHARTIARTL.NS', 'SBIN.NS', 'BAJFINANCE.NS', 'ITC.NS', 'KOTAKBANK.NS', 'LT.NS',
-    'HCLTECH.NS', 'AXISBANK.NS', 'ASIANPAINT.NS', 'MARUTI.NS', 'SUNPHARMA.NS', 'TITAN.NS',
-    'WIPRO.NS', 'NTPC.NS', 'TATAMOTORS.NS', 'TATASTEEL.NS', 'ADANIENT.NS']
-
-TRENDING = ['PLTR', 'SMCI', 'ARM', 'IONQ', 'RGTI', 'MSTR', 'COIN', 'HOOD', 'SOFI', 'RKLB',
-    'RIVN', 'LCID', 'NIO', 'GME', 'AMC', 'DKNG', 'SNOW', 'NET', 'OKTA']
-
-COMPANIES = {
-    'apple': 'AAPL', 'microsoft': 'MSFT', 'amazon': 'AMZN', 'google': 'GOOGL',
-    'meta': 'META', 'facebook': 'META', 'tesla': 'TSLA', 'nvidia': 'NVDA', 'netflix': 'NFLX',
-    'amd': 'AMD', 'intel': 'INTC', 'adobe': 'ADBE', 'salesforce': 'CRM', 'oracle': 'ORCL',
-    'paypal': 'PYPL', 'shopify': 'SHOP', 'spotify': 'SPOT', 'uber': 'UBER',
-    'airbnb': 'ABNB', 'disney': 'DIS', 'nike': 'NKE', 'starbucks': 'SBUX', 
-    'mcdonalds': 'MCD', 'walmart': 'WMT', 'costco': 'COST', 'boeing': 'BA',
-    'coca cola': 'KO', 'pepsi': 'PEP', 'pfizer': 'PFE', 'moderna': 'MRNA', 
-    'palantir': 'PLTR', 'crowdstrike': 'CRWD', 'snowflake': 'SNOW',
-    'coinbase': 'COIN', 'robinhood': 'HOOD', 'sofi': 'SOFI', 'gamestop': 'GME',
-    'reliance': 'RELIANCE', 'tcs': 'TCS', 'infosys': 'INFY', 'hdfc': 'HDFCBANK',
-    'wipro': 'WIPRO', 'tata motors': 'TATAMOTORS', 'sbi': 'SBIN', 'itc': 'ITC',
-    'icici': 'ICICIBANK', 'kotak': 'KOTAKBANK', 'airtel': 'BHARTIARTL', 'bharti': 'BHARTIARTL'
+MARKETS = {
+    "US": {
+        "suffix": "",
+        "currency": "$",
+        "flag": "🇺🇸",
+        "stocks": [
+            "AAPL", "MSFT", "AMZN", "NVDA", "GOOGL", "META", "TSLA", "AVGO",
+            "COST", "NFLX", "AMD", "ADBE", "PEP", "CSCO", "TMUS", "INTC",
+            "CMCSA", "INTU", "QCOM", "TXN", "AMGN", "HON", "AMAT", "ISRG",
+            "BKNG", "SBUX", "VRTX", "LRCX", "MU", "ADI", "REGN", "ADP",
+            "PANW", "KLAC", "SNPS", "CDNS", "CRWD", "ASML", "PYPL", "MAR",
+            "ORLY", "CTAS", "MRVL", "ABNB", "NXPI", "PCAR", "WDAY", "CPRT",
+            "JPM", "V", "MA", "BAC", "WMT", "UNH", "JNJ", "PG", "HD", "MRK",
+            "LLY", "ABBV", "CVX", "XOM", "CRM", "BRK-B", "KO", "MCD", "DIS",
+            "BA", "NKE", "ORCL", "UBER", "SHOP", "SPOT",
+            # Trending / meme
+            "PLTR", "SMCI", "ARM", "IONQ", "RGTI", "MSTR", "COIN", "HOOD",
+            "SOFI", "RKLB", "RIVN", "LCID", "NIO", "GME", "AMC", "DKNG",
+            "SNOW", "NET", "OKTA",
+        ],
+    },
+    "India": {
+        "suffix": ".NS",
+        "currency": "₹",
+        "flag": "🇮🇳",
+        "stocks": [
+            "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "HINDUNILVR",
+            "BHARTIARTL", "SBIN", "BAJFINANCE", "ITC", "KOTAKBANK", "LT",
+            "HCLTECH", "AXISBANK", "ASIANPAINT", "MARUTI", "SUNPHARMA",
+            "TITAN", "WIPRO", "NTPC", "TATAMOTORS", "TATASTEEL", "ADANIENT",
+            "BAJAJFINSV", "NESTLEIND", "ONGC", "POWERGRID", "M&M",
+            "JSWSTEEL", "ULTRACEMCO",
+        ],
+    },
+    "UK": {
+        "suffix": ".L",
+        "currency": "£",
+        "flag": "🇬🇧",
+        "stocks": [
+            "SHEL", "AZN", "HSBA", "ULVR", "BP", "RIO", "GSK", "DGE",
+            "BATS", "LSEG", "REL", "NG", "VOD", "BARC", "LLOY", "GLEN",
+        ],
+    },
+    "Europe": {
+        "suffix": "",  # mixed exchanges
+        "currency": "€",
+        "flag": "🇪🇺",
+        "stocks": [
+            "ASML", "MC.PA", "SAP.DE", "SIE.DE", "OR.PA", "TTE.PA",
+            "ALV.DE", "AI.PA", "SAN.PA", "BNP.PA", "ENEL.MI", "IBE.MC",
+        ],
+    },
+    "Japan": {
+        "suffix": ".T",
+        "currency": "¥",
+        "flag": "🇯🇵",
+        "stocks": [
+            "7203", "6758", "9984", "8306", "6861", "6902", "7267",
+            "9432", "4063", "6501",
+        ],
+    },
+    "Crypto": {
+        "suffix": "-USD",
+        "currency": "$",
+        "flag": "₿",
+        "stocks": [
+            "BTC", "ETH", "SOL", "BNB", "XRP", "ADA", "DOGE", "AVAX",
+            "DOT", "MATIC", "LINK", "UNI",
+        ],
+    },
 }
 
-# Indian market indicators for auto-detect
-INDIA_KEYWORDS = ['nifty', 'sensex', 'bse', 'nse', 'india', 'indian', 'rupee', '₹',
-    'reliance', 'tcs', 'infosys', 'hdfc', 'icici', 'sbi', 'wipro', 'tata', 'airtel',
-    'bharti', 'kotak', 'axis', 'maruti', 'titan', 'itc', 'adani', 'bajaj', 'mahindra']
+# ─── Company Name → Ticker Map ───────────────────────────────────────────────
 
-US_KEYWORDS = ['nasdaq', 's&p', 'sp500', 'dow', 'nyse', 'dollar', '$', 'us market',
-    'apple', 'microsoft', 'google', 'amazon', 'meta', 'tesla', 'nvidia', 'amd',
-    'netflix', 'disney', 'nike', 'starbucks', 'walmart', 'costco', 'boeing']
+COMPANY_NAMES = {
+    # US
+    "apple": ("AAPL", "US"), "microsoft": ("MSFT", "US"), "amazon": ("AMZN", "US"),
+    "google": ("GOOGL", "US"), "alphabet": ("GOOGL", "US"), "meta": ("META", "US"),
+    "facebook": ("META", "US"), "tesla": ("TSLA", "US"), "nvidia": ("NVDA", "US"),
+    "netflix": ("NFLX", "US"), "amd": ("AMD", "US"), "intel": ("INTC", "US"),
+    "adobe": ("ADBE", "US"), "salesforce": ("CRM", "US"), "oracle": ("ORCL", "US"),
+    "paypal": ("PYPL", "US"), "shopify": ("SHOP", "US"), "spotify": ("SPOT", "US"),
+    "uber": ("UBER", "US"), "airbnb": ("ABNB", "US"), "disney": ("DIS", "US"),
+    "nike": ("NKE", "US"), "starbucks": ("SBUX", "US"), "mcdonalds": ("MCD", "US"),
+    "walmart": ("WMT", "US"), "costco": ("COST", "US"), "boeing": ("BA", "US"),
+    "coca cola": ("KO", "US"), "pepsi": ("PEP", "US"), "pfizer": ("PFE", "US"),
+    "moderna": ("MRNA", "US"), "palantir": ("PLTR", "US"), "crowdstrike": ("CRWD", "US"),
+    "snowflake": ("SNOW", "US"), "coinbase": ("COIN", "US"), "robinhood": ("HOOD", "US"),
+    "sofi": ("SOFI", "US"), "gamestop": ("GME", "US"), "broadcom": ("AVGO", "US"),
+    "eli lilly": ("LLY", "US"), "lilly": ("LLY", "US"), "jpmorgan": ("JPM", "US"),
+    "jp morgan": ("JPM", "US"), "visa": ("V", "US"), "mastercard": ("MA", "US"),
+    # India
+    "reliance": ("RELIANCE", "India"), "tcs": ("TCS", "India"),
+    "infosys": ("INFY", "India"), "hdfc": ("HDFCBANK", "India"),
+    "icici": ("ICICIBANK", "India"), "sbi": ("SBIN", "India"),
+    "wipro": ("WIPRO", "India"), "tata motors": ("TATAMOTORS", "India"),
+    "itc": ("ITC", "India"), "kotak": ("KOTAKBANK", "India"),
+    "airtel": ("BHARTIARTL", "India"), "bharti": ("BHARTIARTL", "India"),
+    "titan": ("TITAN", "India"), "maruti": ("MARUTI", "India"),
+    # UK
+    "shell": ("SHEL", "UK"), "astrazeneca": ("AZN", "UK"), "hsbc": ("HSBA", "UK"),
+    "unilever": ("ULVR", "UK"), "bp": ("BP", "UK"), "vodafone": ("VOD", "UK"),
+    "barclays": ("BARC", "UK"), "lloyds": ("LLOY", "UK"),
+    # Crypto
+    "bitcoin": ("BTC", "Crypto"), "btc": ("BTC", "Crypto"),
+    "ethereum": ("ETH", "Crypto"), "eth": ("ETH", "Crypto"),
+    "solana": ("SOL", "Crypto"), "sol": ("SOL", "Crypto"),
+    "dogecoin": ("DOGE", "Crypto"), "doge": ("DOGE", "Crypto"),
+    "ripple": ("XRP", "Crypto"), "xrp": ("XRP", "Crypto"),
+    "cardano": ("ADA", "Crypto"), "ada": ("ADA", "Crypto"),
+}
+
+# Keywords for market auto-detection
+MARKET_KEYWORDS = {
+    "India": ["nifty", "sensex", "bse", "nse", "₹", "rupee", "indian market"],
+    "UK": ["ftse", "lse", "london stock", "£", "pence", "uk market"],
+    "Europe": ["dax", "cac", "stoxx", "euronext", "€", "european market"],
+    "Japan": ["nikkei", "topix", "tse", "tokyo stock", "yen", "¥", "japanese market"],
+    "Crypto": ["crypto", "bitcoin", "blockchain", "defi", "web3", "altcoin", "token"],
+    "US": ["nasdaq", "s&p", "sp500", "dow", "nyse", "$", "wall street", "us market"],
+}
+
+# Words that look like tickers but aren't
+TICKER_BLACKLIST = {
+    "THE", "AND", "FOR", "ARE", "BUT", "NOT", "YOU", "ALL", "CAN", "BUY",
+    "SELL", "WHAT", "WHICH", "STOCK", "PRICE", "MARKET", "TODAY", "SHOULD",
+    "WOULD", "COULD", "ABOUT", "THEIR", "WILL", "WITH", "THIS", "THAT",
+    "FROM", "HAVE", "BEEN", "MORE", "ANALYZE", "TELL", "SHOW", "GIVE",
+    "FIND", "BEST", "GOOD", "HIGH", "LOW", "MONEY", "WHEN", "WHERE",
+    "SOME", "INTO", "TIME", "VERY", "JUST", "KNOW", "TAKE", "COME",
+    "MAKE", "LIKE", "BACK", "ONLY", "OVER", "SUCH", "MOST", "NEED",
+    "HELP", "THANK", "HOW", "WHY", "WHO", "HAS", "GET", "OUR", "NEW",
+    "TOP", "HOT", "UP", "DO", "SO", "IF", "IT", "IS", "MY", "ME", "BE",
+    "AT", "TO", "IN", "OF", "ON", "OR", "AN", "AS", "BY", "GO", "NO",
+    "VS", "RUN", "SET", "TRY", "SAY", "SEE", "NOW", "WAY", "MAY", "DAY",
+    "TOO", "ANY", "FEW", "GOT", "HER", "HIM", "HIS", "OLD", "PUT",
+    "OWN", "SAY", "SHE", "USE", "HER", "BOT", "ASK", "API",
+}
 
 
-def get_stock_price(ticker):
-    """Get current stock price with multiple fallbacks"""
+# ─── Data Layer ──────────────────────────────────────────────────────────────
+
+def _resolve_ticker(raw_ticker: str, market: str) -> str:
+    """Add the correct exchange suffix to a raw ticker."""
+    if "." in raw_ticker or "-USD" in raw_ticker:
+        return raw_ticker  # already qualified
+    cfg = MARKETS.get(market, MARKETS["US"])
+    suffix = cfg["suffix"]
+    if suffix and not raw_ticker.endswith(suffix):
+        return raw_ticker + suffix
+    return raw_ticker
+
+
+def fetch_price(ticker: str) -> dict | None:
+    """Fetch current price data for a single ticker."""
     try:
         stock = yf.Ticker(ticker)
-        
-        # Method 1: info dict
+
+        # Try fast_info first (yfinance 0.2+)
+        try:
+            fi = stock.fast_info
+            price = fi.get("lastPrice") or fi.get("last_price")
+            prev = fi.get("previousClose") or fi.get("previous_close")
+            if price and price > 0:
+                prev = prev or price
+                info = {}
+                try:
+                    info = stock.info or {}
+                except Exception:
+                    pass
+                return _build_price_dict(price, prev, ticker, info)
+        except Exception:
+            pass
+
+        # Fallback: info dict
         try:
             info = stock.info
             if info:
-                price = info.get('currentPrice') or info.get('regularMarketPrice')
-                prev = info.get('previousClose') or info.get('regularMarketPreviousClose')
+                price = info.get("currentPrice") or info.get("regularMarketPrice")
+                prev = info.get("previousClose") or info.get("regularMarketPreviousClose")
                 if price and price > 0:
                     prev = prev or price
-                    return {
-                        'price': round(price, 2),
-                        'prev_close': round(prev, 2),
-                        'change': round(price - prev, 2),
-                        'change_pct': round((price - prev) / prev * 100, 2) if prev > 0 else 0,
-                        'name': info.get('shortName') or ticker,
-                        'market_cap': info.get('marketCap'),
-                        'pe_ratio': info.get('trailingPE'),
-                        'forward_pe': info.get('forwardPE'),
-                        '52w_high': info.get('fiftyTwoWeekHigh'),
-                        '52w_low': info.get('fiftyTwoWeekLow'),
-                        'sector': info.get('sector'),
-                        'target_price': info.get('targetMeanPrice'),
-                        'recommendation': info.get('recommendationKey'),
-                    }
-        except:
+                    return _build_price_dict(price, prev, ticker, info)
+        except Exception:
             pass
-        
-        # Method 2: history
+
+        # Fallback: history
         try:
-            hist = stock.history(period='5d')
+            hist = stock.history(period="5d")
             if hist is not None and not hist.empty:
-                price = float(hist['Close'].iloc[-1])
-                prev = float(hist['Close'].iloc[-2]) if len(hist) >= 2 else price
+                price = float(hist["Close"].iloc[-1])
+                prev = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else price
                 if price > 0:
                     info = {}
                     try:
                         info = stock.info or {}
-                    except:
+                    except Exception:
                         pass
-                    return {
-                        'price': round(price, 2),
-                        'prev_close': round(prev, 2),
-                        'change': round(price - prev, 2),
-                        'change_pct': round((price - prev) / prev * 100, 2) if prev > 0 else 0,
-                        'name': info.get('shortName') or ticker,
-                        'market_cap': info.get('marketCap'),
-                        'pe_ratio': info.get('trailingPE'),
-                        'forward_pe': info.get('forwardPE'),
-                        '52w_high': info.get('fiftyTwoWeekHigh'),
-                        '52w_low': info.get('fiftyTwoWeekLow'),
-                        'sector': info.get('sector'),
-                        'target_price': info.get('targetMeanPrice'),
-                        'recommendation': info.get('recommendationKey'),
-                    }
-        except:
+                    return _build_price_dict(price, prev, ticker, info)
+        except Exception:
             pass
-        
+
         return None
-    except:
+    except Exception:
         return None
 
 
-def get_full_data(ticker):
-    """Get comprehensive stock data"""
-    basic = get_stock_price(ticker)
+def _build_price_dict(price, prev, ticker, info):
+    change = price - prev
+    change_pct = (change / prev * 100) if prev > 0 else 0.0
+    return {
+        "price": round(price, 2),
+        "prev_close": round(prev, 2),
+        "change": round(change, 2),
+        "change_pct": round(change_pct, 2),
+        "name": info.get("shortName") or info.get("longName") or ticker.split(".")[0],
+        "market_cap": info.get("marketCap"),
+        "pe_ratio": info.get("trailingPE"),
+        "forward_pe": info.get("forwardPE"),
+        "52w_high": info.get("fiftyTwoWeekHigh"),
+        "52w_low": info.get("fiftyTwoWeekLow"),
+        "sector": info.get("sector"),
+        "industry": info.get("industry"),
+        "target_price": info.get("targetMeanPrice"),
+        "target_high": info.get("targetHighPrice"),
+        "target_low": info.get("targetLowPrice"),
+        "recommendation": info.get("recommendationKey"),
+        "num_analysts": info.get("numberOfAnalystOpinions"),
+        "dividend_yield": info.get("dividendYield"),
+        "beta": info.get("beta"),
+        "peg_ratio": info.get("pegRatio"),
+        "roe": info.get("returnOnEquity"),
+        "profit_margin": info.get("profitMargins"),
+        "revenue_growth": info.get("revenueGrowth"),
+        "debt_to_equity": info.get("debtToEquity"),
+    }
+
+
+def fetch_full(ticker: str) -> dict | None:
+    """Fetch comprehensive data: price + technicals + news."""
+    basic = fetch_price(ticker)
     if not basic:
         return None
-    
+
     try:
         stock = yf.Ticker(ticker)
-        info = stock.info or {}
-        hist = stock.history(period='3mo')
-        
-        tech = {}
-        if hist is not None and not hist.empty and len(hist) >= 20:
-            c = hist['Close']
-            tech['sma_20'] = round(c.rolling(20).mean().iloc[-1], 2)
-            if len(c) >= 50:
-                tech['sma_50'] = round(c.rolling(50).mean().iloc[-1], 2)
-            
-            delta = c.diff()
-            gain = delta.where(delta > 0, 0).rolling(14).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-            rs = gain / loss
-            tech['rsi'] = round(100 - (100 / (1 + rs.iloc[-1])), 1)
-            
-            sma20 = c.rolling(20).mean()
-            std20 = c.rolling(20).std()
-            tech['bb_upper'] = round((sma20 + 2 * std20).iloc[-1], 2)
-            tech['bb_lower'] = round((sma20 - 2 * std20).iloc[-1], 2)
-            
-            if len(c) >= 5:
-                tech['mom_5d'] = round((c.iloc[-1] / c.iloc[-5] - 1) * 100, 2)
-            if len(c) >= 20:
-                tech['mom_20d'] = round((c.iloc[-1] / c.iloc[-20] - 1) * 100, 2)
-            
-            if 'Volume' in hist.columns:
-                avg_vol = hist['Volume'].rolling(20).mean().iloc[-1]
-                today_vol = hist['Volume'].iloc[-1]
-                tech['vol_ratio'] = round(today_vol / avg_vol, 2) if avg_vol > 0 else 1
-        
-        news = []
-        try:
-            for n in (stock.news or [])[:5]:
-                news.append({'title': n.get('title', ''), 'publisher': n.get('publisher', '')})
-        except:
-            pass
-        
+        hist = stock.history(period="6mo")
+
+        tech = _compute_technicals(hist)
+        news = _fetch_news(stock)
+
         return {
             **basic,
-            'ticker': ticker.replace('.NS', ''),
-            'full_ticker': ticker,
-            'peg_ratio': info.get('pegRatio'),
-            'roe': info.get('returnOnEquity'),
-            'profit_margin': info.get('profitMargins'),
-            'revenue_growth': info.get('revenueGrowth'),
-            'debt_to_equity': info.get('debtToEquity'),
-            'dividend_yield': info.get('dividendYield'),
-            'beta': info.get('beta'),
-            'target_high': info.get('targetHighPrice'),
-            'target_low': info.get('targetLowPrice'),
-            'num_analysts': info.get('numberOfAnalystOpinions'),
-            'industry': info.get('industry', 'N/A'),
-            'technicals': tech,
-            'news': news
+            "ticker": ticker.replace(".NS", "").replace(".L", "").replace(".T", "").replace("-USD", ""),
+            "full_ticker": ticker,
+            "technicals": tech,
+            "news": news,
         }
-    except:
+    except Exception:
+        basic["technicals"] = {}
+        basic["news"] = []
         return basic
 
 
-def calc_score(data):
-    """Calculate trading score"""
-    score = 50
-    signals, warns = [], []
-    tech = data.get('technicals', {})
-    price = data.get('price', 0)
-    
-    rsi = tech.get('rsi')
-    if rsi:
-        if rsi < 30:
-            score += 15
-            signals.append(f"RSI oversold at {rsi:.0f} - potential bounce opportunity")
-        elif rsi < 40:
-            score += 8
-            signals.append(f"RSI in buy zone at {rsi:.0f}")
-        elif rsi > 70:
-            score -= 15
-            warns.append(f"RSI overbought at {rsi:.0f} - risk of pullback")
-        elif rsi > 60:
-            score -= 5
-    
-    sma20 = tech.get('sma_20')
-    sma50 = tech.get('sma_50')
+def _compute_technicals(hist) -> dict:
+    if hist is None or hist.empty or len(hist) < 14:
+        return {}
+
+    c = hist["Close"]
+    tech = {}
+
+    # Moving averages
+    if len(c) >= 20:
+        tech["sma_20"] = round(float(c.rolling(20).mean().iloc[-1]), 2)
+    if len(c) >= 50:
+        tech["sma_50"] = round(float(c.rolling(50).mean().iloc[-1]), 2)
+    if len(c) >= 100:
+        tech["sma_100"] = round(float(c.rolling(100).mean().iloc[-1]), 2)
+
+    # EMA 12, 26 for MACD
+    if len(c) >= 26:
+        ema12 = c.ewm(span=12, adjust=False).mean()
+        ema26 = c.ewm(span=26, adjust=False).mean()
+        macd_line = ema12 - ema26
+        signal_line = macd_line.ewm(span=9, adjust=False).mean()
+        tech["macd"] = round(float(macd_line.iloc[-1]), 4)
+        tech["macd_signal"] = round(float(signal_line.iloc[-1]), 4)
+        tech["macd_hist"] = round(float((macd_line - signal_line).iloc[-1]), 4)
+
+    # RSI
+    delta = c.diff()
+    gain = delta.where(delta > 0, 0.0).rolling(14).mean()
+    loss = (-delta.where(delta < 0, 0.0)).rolling(14).mean()
+    rs = gain / loss.replace(0, np.nan)
+    rsi_series = 100 - (100 / (1 + rs))
+    if not rsi_series.dropna().empty:
+        tech["rsi"] = round(float(rsi_series.iloc[-1]), 1)
+
+    # Bollinger Bands
+    if len(c) >= 20:
+        sma20 = c.rolling(20).mean()
+        std20 = c.rolling(20).std()
+        tech["bb_upper"] = round(float((sma20 + 2 * std20).iloc[-1]), 2)
+        tech["bb_lower"] = round(float((sma20 - 2 * std20).iloc[-1]), 2)
+
+    # ATR (14-day)
+    if len(hist) >= 14 and all(col in hist.columns for col in ["High", "Low", "Close"]):
+        h = hist["High"]
+        l = hist["Low"]
+        prev_c = c.shift(1)
+        tr = pd.concat([h - l, (h - prev_c).abs(), (l - prev_c).abs()], axis=1).max(axis=1)
+        tech["atr_14"] = round(float(tr.rolling(14).mean().iloc[-1]), 2)
+
+    # Momentum
+    if len(c) >= 5:
+        tech["mom_5d"] = round(float((c.iloc[-1] / c.iloc[-5] - 1) * 100), 2)
+    if len(c) >= 20:
+        tech["mom_20d"] = round(float((c.iloc[-1] / c.iloc[-20] - 1) * 100), 2)
+    if len(c) >= 60:
+        tech["mom_60d"] = round(float((c.iloc[-1] / c.iloc[-60] - 1) * 100), 2)
+
+    # Volume ratio
+    if "Volume" in hist.columns and len(hist) >= 20:
+        avg_vol = hist["Volume"].rolling(20).mean().iloc[-1]
+        today_vol = hist["Volume"].iloc[-1]
+        tech["vol_ratio"] = round(float(today_vol / avg_vol), 2) if avg_vol > 0 else 1.0
+
+    # Volatility (20-day annualized)
+    if len(c) >= 20:
+        returns = c.pct_change().dropna()
+        if len(returns) >= 20:
+            tech["volatility_20d"] = round(float(returns.tail(20).std() * np.sqrt(252) * 100), 1)
+
+    return tech
+
+
+def _fetch_news(stock) -> list:
+    news = []
+    try:
+        raw = stock.news or []
+        for n in raw[:5]:
+            title = n.get("title", "")
+            publisher = n.get("publisher", "")
+            if title:
+                news.append({"title": title, "publisher": publisher})
+    except Exception:
+        pass
+    return news
+
+
+# ─── Scoring Engine ──────────────────────────────────────────────────────────
+
+def compute_score(data: dict) -> dict:
+    """
+    Multi-factor scoring: technicals, fundamentals, sentiment.
+    Returns score 0-100, rating, signals list, warnings list.
+    """
+    score = 50.0
+    signals, warnings = [], []
+    tech = data.get("technicals", {})
+    price = data.get("price", 0)
+
+    # ── Technical Factors ──
+
+    rsi = tech.get("rsi")
+    if rsi is not None:
+        if rsi < 25:
+            score += 12
+            signals.append(f"RSI deeply oversold ({rsi:.0f}) — high probability bounce zone")
+        elif rsi < 35:
+            score += 7
+            signals.append(f"RSI in buy zone ({rsi:.0f})")
+        elif rsi > 75:
+            score -= 12
+            warnings.append(f"RSI overbought ({rsi:.0f}) — pullback risk elevated")
+        elif rsi > 65:
+            score -= 4
+            warnings.append(f"RSI running warm ({rsi:.0f})")
+
+    # Trend: price vs SMAs
+    sma20 = tech.get("sma_20")
+    sma50 = tech.get("sma_50")
+    sma100 = tech.get("sma_100")
+
+    above_count = 0
     if sma20 and price > sma20:
-        score += 5
-        signals.append(f"Trading above 20-day SMA (${sma20:.2f}) - short-term uptrend")
-    elif sma20 and price < sma20:
-        score -= 5
-        warns.append(f"Below 20-day SMA (${sma20:.2f})")
-    
+        above_count += 1
     if sma50 and price > sma50:
-        score += 5
-        signals.append(f"Above 50-day SMA - medium-term uptrend intact")
-    
-    mom5 = tech.get('mom_5d')
-    mom20 = tech.get('mom_20d')
-    if mom5:
-        if mom5 > 5:
-            score += 8
-            signals.append(f"Strong 5-day momentum: +{mom5:.1f}%")
-        elif mom5 > 0:
+        above_count += 1
+    if sma100 and price > sma100:
+        above_count += 1
+
+    if above_count == 3:
+        score += 8
+        signals.append("Price above all key SMAs — strong uptrend")
+    elif above_count >= 2:
+        score += 4
+        signals.append("Price above major moving averages — uptrend intact")
+    elif above_count == 0 and sma20:
+        score -= 6
+        warnings.append("Price below all key SMAs — downtrend")
+
+    # Golden / death cross
+    if sma20 and sma50:
+        if sma20 > sma50:
             score += 3
+            signals.append("20 SMA > 50 SMA — bullish alignment")
+        elif sma20 < sma50 * 0.98:
+            score -= 3
+            warnings.append("20 SMA < 50 SMA — bearish alignment")
+
+    # MACD
+    macd_hist = tech.get("macd_hist")
+    if macd_hist is not None:
+        if macd_hist > 0:
+            score += 3
+            signals.append("MACD histogram positive — bullish momentum")
+        else:
+            score -= 2
+            warnings.append("MACD histogram negative — momentum fading")
+
+    # Momentum
+    mom5 = tech.get("mom_5d")
+    mom20 = tech.get("mom_20d")
+    if mom5 is not None:
+        if mom5 > 5:
+            score += 6
+            signals.append(f"5-day momentum +{mom5:.1f}%")
         elif mom5 < -5:
-            score -= 8
-            warns.append(f"Weak 5-day momentum: {mom5:.1f}%")
-    
-    if mom20:
+            score -= 6
+            warnings.append(f"5-day momentum {mom5:.1f}%")
+
+    if mom20 is not None:
         if mom20 > 10:
-            signals.append(f"20-day momentum: +{mom20:.1f}%")
-        elif mom20 < -10:
-            warns.append(f"20-day momentum: {mom20:.1f}%")
-    
-    vol = tech.get('vol_ratio')
-    if vol:
-        if vol > 1.5:
-            score += 5
-            signals.append(f"Volume {vol:.1f}x average - strong conviction")
-        elif vol < 0.5:
-            warns.append("Low volume - weak conviction")
-    
-    pe = data.get('pe_ratio')
-    fwd_pe = data.get('forward_pe')
-    if pe and fwd_pe:
-        if fwd_pe < pe * 0.9:
-            score += 5
-            signals.append(f"Forward P/E ({fwd_pe:.1f}) < Trailing P/E ({pe:.1f}) - earnings growth expected")
-    
-    rec = data.get('recommendation')
-    if rec:
-        if rec in ['strongBuy', 'strong_buy']:
-            score += 10
-            signals.append("Wall Street consensus: Strong Buy")
-        elif rec == 'buy':
-            score += 5
-            signals.append("Wall Street consensus: Buy")
-        elif rec in ['sell', 'strongSell']:
-            score -= 10
-            warns.append(f"Wall Street consensus: {rec}")
-    
-    target = data.get('target_price')
-    if target and price:
-        upside = (target - price) / price * 100
-        if upside > 20:
-            score += 8
-            signals.append(f"Analyst target ${target:.2f} implies {upside:.0f}% upside")
-        elif upside > 10:
             score += 4
-            signals.append(f"Analyst target ${target:.2f} ({upside:.0f}% upside)")
-        elif upside < -10:
-            score -= 5
-            warns.append(f"Trading {abs(upside):.0f}% above analyst target")
-    
-    high_52 = data.get('52w_high')
-    low_52 = data.get('52w_low')
-    if high_52 and low_52 and price:
-        range_pct = (price - low_52) / (high_52 - low_52) * 100 if (high_52 - low_52) > 0 else 50
-        if range_pct < 20:
+            signals.append(f"20-day momentum +{mom20:.1f}%")
+        elif mom20 < -10:
+            score -= 4
+            warnings.append(f"20-day momentum {mom20:.1f}%")
+
+    # Volume conviction
+    vol = tech.get("vol_ratio")
+    if vol is not None:
+        if vol > 2.0:
             score += 5
-            signals.append(f"Near 52-week low - potential value play")
-        elif range_pct > 90:
-            warns.append(f"Near 52-week high - extended")
-    
+            signals.append(f"Volume {vol:.1f}× average — high conviction")
+        elif vol > 1.3:
+            score += 2
+        elif vol < 0.5:
+            warnings.append("Volume well below average — low conviction")
+
+    # Bollinger position
+    bb_upper = tech.get("bb_upper")
+    bb_lower = tech.get("bb_lower")
+    if bb_upper and bb_lower and price:
+        bb_range = bb_upper - bb_lower
+        if bb_range > 0:
+            bb_pos = (price - bb_lower) / bb_range
+            if bb_pos < 0.1:
+                score += 5
+                signals.append("Near lower Bollinger Band — potential reversion")
+            elif bb_pos > 0.95:
+                score -= 3
+                warnings.append("At upper Bollinger Band — extended")
+
+    # ── Fundamental Factors ──
+
+    pe = data.get("pe_ratio")
+    fwd_pe = data.get("forward_pe")
+    if pe and fwd_pe and pe > 0 and fwd_pe > 0:
+        compression = (fwd_pe - pe) / pe * 100
+        if compression < -15:
+            score += 5
+            signals.append(f"Forward P/E ({fwd_pe:.1f}) well below trailing ({pe:.1f}) — strong earnings growth expected")
+        elif compression < -5:
+            score += 2
+            signals.append(f"Forward P/E ({fwd_pe:.1f}) < trailing ({pe:.1f}) — earnings improving")
+        elif compression > 15:
+            score -= 3
+            warnings.append(f"Forward P/E ({fwd_pe:.1f}) > trailing ({pe:.1f}) — earnings expected to decline")
+
+    peg = data.get("peg_ratio")
+    if peg is not None and peg > 0:
+        if peg < 1.0:
+            score += 4
+            signals.append(f"PEG ratio {peg:.2f} — undervalued relative to growth")
+        elif peg > 2.5:
+            score -= 2
+            warnings.append(f"PEG ratio {peg:.2f} — expensive vs growth")
+
+    roe = data.get("roe")
+    if roe is not None:
+        if roe > 0.25:
+            score += 3
+            signals.append(f"ROE {roe*100:.0f}% — excellent capital efficiency")
+        elif roe < 0:
+            score -= 3
+            warnings.append("Negative ROE")
+
+    rev_growth = data.get("revenue_growth")
+    if rev_growth is not None:
+        if rev_growth > 0.2:
+            score += 4
+            signals.append(f"Revenue growing {rev_growth*100:.0f}% YoY")
+        elif rev_growth < -0.05:
+            score -= 3
+            warnings.append(f"Revenue declining {rev_growth*100:.0f}% YoY")
+
+    dte = data.get("debt_to_equity")
+    if dte is not None:
+        if dte > 200:
+            score -= 4
+            warnings.append(f"High debt-to-equity ({dte:.0f})")
+        elif dte < 30:
+            score += 2
+            signals.append("Low leverage — clean balance sheet")
+
+    # ── Analyst Sentiment ──
+
+    rec = data.get("recommendation")
+    if rec:
+        rec_lower = rec.lower().replace("_", "")
+        if rec_lower in ("strongbuy",):
+            score += 8
+            signals.append("Analyst consensus: Strong Buy")
+        elif rec_lower in ("buy",):
+            score += 4
+            signals.append("Analyst consensus: Buy")
+        elif rec_lower in ("sell", "strongsell"):
+            score -= 8
+            warnings.append(f"Analyst consensus: {rec.replace('_', ' ').title()}")
+
+    target = data.get("target_price")
+    if target and price and price > 0:
+        upside = (target - price) / price * 100
+        if upside > 25:
+            score += 7
+            signals.append(f"Analyst target ${target:.2f} → {upside:.0f}% upside")
+        elif upside > 10:
+            score += 3
+            signals.append(f"Analyst target ${target:.2f} → {upside:.0f}% upside")
+        elif upside < -10:
+            score -= 4
+            warnings.append(f"Trading {abs(upside):.0f}% above analyst target")
+
+    # 52-week range position
+    high_52 = data.get("52w_high")
+    low_52 = data.get("52w_low")
+    if high_52 and low_52 and price and (high_52 - low_52) > 0:
+        range_pct = (price - low_52) / (high_52 - low_52) * 100
+        if range_pct < 15:
+            score += 4
+            signals.append("Near 52-week low — potential value entry")
+        elif range_pct > 95:
+            warnings.append("At 52-week high — may be extended")
+
+    # Clamp
     score = max(0, min(100, score))
-    
-    if score >= 70:
-        rating = "🟢 STRONG BUY"
-    elif score >= 55:
-        rating = "🟢 BUY"
-    elif score >= 40:
-        rating = "🟡 HOLD"
-    elif score >= 25:
-        rating = "🟠 CAUTION"
+
+    # Rating
+    if score >= 72:
+        rating = "STRONG BUY"
+    elif score >= 58:
+        rating = "BUY"
+    elif score >= 42:
+        rating = "HOLD"
+    elif score >= 28:
+        rating = "WEAK"
     else:
-        rating = "🔴 AVOID"
-    
-    return {'score': score, 'rating': rating, 'signals': signals, 'warnings': warns}
+        rating = "AVOID"
+
+    return {
+        "score": round(score),
+        "rating": rating,
+        "signals": signals,
+        "warnings": warnings,
+    }
 
 
-def make_chart(ticker, period='3mo'):
-    """Create price chart"""
+# ─── Chart Builder ───────────────────────────────────────────────────────────
+
+def build_chart(ticker: str, period: str = "3mo") -> go.Figure | None:
     try:
         stock = yf.Ticker(ticker)
         hist = stock.history(period=period)
-        
+
         if hist is None or hist.empty or len(hist) < 5:
-            # Try shorter period
-            hist = stock.history(period='1mo')
+            hist = stock.history(period="1mo")
             if hist is None or hist.empty:
                 return None
-        
-        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03, row_heights=[0.7, 0.3])
-        
-        # Candlestick chart
-        fig.add_trace(go.Candlestick(
-            x=hist.index, 
-            open=hist['Open'], 
-            high=hist['High'],
-            low=hist['Low'], 
-            close=hist['Close'], 
-            name='Price',
-            increasing_line_color='#22c55e', 
-            decreasing_line_color='#ef4444'
-        ), row=1, col=1)
-        
-        # Moving averages
-        if len(hist) >= 20:
-            sma20 = hist['Close'].rolling(20).mean()
-            fig.add_trace(go.Scatter(
-                x=hist.index, y=sma20, name='SMA 20',
-                line=dict(color='#3b82f6', width=1.5)
-            ), row=1, col=1)
-        
-        if len(hist) >= 50:
-            sma50 = hist['Close'].rolling(50).mean()
-            fig.add_trace(go.Scatter(
-                x=hist.index, y=sma50, name='SMA 50',
-                line=dict(color='#f59e0b', width=1.5)
-            ), row=1, col=1)
-        
-        # Volume bars
-        colors = ['#22c55e' if c >= o else '#ef4444' for c, o in zip(hist['Close'], hist['Open'])]
-        fig.add_trace(go.Bar(
-            x=hist.index, y=hist['Volume'], 
-            marker_color=colors, opacity=0.5, name='Volume'
-        ), row=2, col=1)
-        
-        # Layout
-        fig.update_layout(
-            template='plotly_dark',
-            paper_bgcolor='#0a0a0a',
-            plot_bgcolor='#0a0a0a',
-            font=dict(color='#a1a1aa', size=12),
-            showlegend=True,
-            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
-            height=450,
-            margin=dict(l=10, r=10, t=40, b=10),
-            xaxis_rangeslider_visible=False
+
+        fig = make_subplots(
+            rows=2, cols=1,
+            shared_xaxes=True,
+            vertical_spacing=0.04,
+            row_heights=[0.75, 0.25],
         )
-        fig.update_xaxes(showgrid=False)
-        fig.update_yaxes(showgrid=True, gridcolor='#1f1f1f')
-        
+
+        # Candlestick
+        fig.add_trace(
+            go.Candlestick(
+                x=hist.index,
+                open=hist["Open"], high=hist["High"],
+                low=hist["Low"], close=hist["Close"],
+                name="Price",
+                increasing_line_color="#16a34a",
+                decreasing_line_color="#dc2626",
+                increasing_fillcolor="#16a34a",
+                decreasing_fillcolor="#dc2626",
+            ),
+            row=1, col=1,
+        )
+
+        # SMAs
+        if len(hist) >= 20:
+            sma20 = hist["Close"].rolling(20).mean()
+            fig.add_trace(
+                go.Scatter(x=hist.index, y=sma20, name="SMA 20",
+                           line=dict(color="#60a5fa", width=1.2, dash="dot")),
+                row=1, col=1,
+            )
+        if len(hist) >= 50:
+            sma50 = hist["Close"].rolling(50).mean()
+            fig.add_trace(
+                go.Scatter(x=hist.index, y=sma50, name="SMA 50",
+                           line=dict(color="#fbbf24", width=1.2, dash="dot")),
+                row=1, col=1,
+            )
+
+        # Volume
+        colors = [
+            "#16a34a" if c >= o else "#dc2626"
+            for c, o in zip(hist["Close"], hist["Open"])
+        ]
+        fig.add_trace(
+            go.Bar(x=hist.index, y=hist["Volume"], marker_color=colors,
+                   opacity=0.4, name="Volume", showlegend=False),
+            row=2, col=1,
+        )
+
+        fig.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(family="JetBrains Mono, monospace", color="#71717a", size=11),
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
+                        font=dict(size=10)),
+            height=400,
+            margin=dict(l=0, r=0, t=20, b=0),
+            xaxis_rangeslider_visible=False,
+        )
+        fig.update_xaxes(showgrid=False, zeroline=False)
+        fig.update_yaxes(showgrid=True, gridcolor="rgba(63,63,70,0.3)", zeroline=False)
+
         return fig
-    except Exception as e:
-        # Return None silently - chart just won't show
+    except Exception:
         return None
 
 
-def auto_detect_market(msg):
-    """Auto-detect which market based on message content"""
-    m = msg.lower()
-    
-    india_score = sum(1 for k in INDIA_KEYWORDS if k in m)
-    us_score = sum(1 for k in US_KEYWORDS if k in m)
-    
-    if india_score > us_score:
-        return 'India'
-    elif us_score > india_score:
-        return 'US'
-    return None  # No clear signal
+# ─── Intent Detection ────────────────────────────────────────────────────────
+
+def detect_market(msg: str) -> str | None:
+    """Return a market key if the message clearly references one, else None."""
+    low = msg.lower()
+    scores = {}
+    for market, keywords in MARKET_KEYWORDS.items():
+        scores[market] = sum(1 for k in keywords if k in low)
+    best = max(scores, key=scores.get)
+    if scores[best] > 0:
+        return best
+    return None
 
 
-def find_ticker(msg, market='US'):
-    """Find ticker in message"""
-    m = msg.lower()
-    
-    # Check company names first
-    for name, tick in COMPANIES.items():
-        if name in m:
-            # Check if it's an Indian company
-            if tick in ['RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 'ICICIBANK', 'WIPRO', 'SBIN', 'ITC', 'KOTAKBANK', 'BHARTIARTL', 'TATAMOTORS']:
-                return tick, 'India'
-            return tick, 'US'
-    
-    exclude = {'THE', 'AND', 'FOR', 'ARE', 'BUT', 'NOT', 'YOU', 'ALL', 'CAN', 'BUY', 'SELL',
-               'WHAT', 'WHICH', 'STOCK', 'PRICE', 'MARKET', 'TODAY', 'SHOULD', 'WOULD', 'COULD',
-               'ABOUT', 'THEIR', 'WILL', 'WITH', 'THIS', 'THAT', 'FROM', 'HAVE', 'BEEN', 'MORE',
-               'ANALYZE', 'TELL', 'SHOW', 'GIVE', 'FIND', 'BEST', 'GOOD', 'HIGH', 'LOW', 'MONEY',
-               'WHEN', 'WHERE', 'SOME', 'INTO', 'TIME', 'VERY', 'JUST', 'KNOW', 'TAKE', 'COME',
-               'MAKE', 'LIKE', 'BACK', 'ONLY', 'OVER', 'SUCH', 'MOST', 'NEED', 'HELP', 'THANK'}
-    
-    us_stocks = set(NASDAQ_100 + SP500_TOP + TRENDING)
-    india_stocks = set(s.replace('.NS', '') for s in NIFTY_50)
-    
+def find_ticker(msg: str, market: str = "US") -> tuple[str | None, str]:
+    """Extract a ticker and its market from a user message."""
+    low = msg.lower()
+
+    # 1. Check company name map
+    for name, (tick, mkt) in COMPANY_NAMES.items():
+        if name in low:
+            return tick, mkt
+
+    # 2. Check all market stock lists for exact word matches
+    all_market_tickers = {}
+    for mkt, cfg in MARKETS.items():
+        for s in cfg["stocks"]:
+            raw = s.replace(cfg["suffix"], "") if cfg["suffix"] else s
+            all_market_tickers[raw.upper()] = mkt
+
     for word in msg.upper().split():
-        clean = re.sub(r'[^A-Z]', '', word)
-        if clean and 2 <= len(clean) <= 5 and clean not in exclude:
-            if clean in india_stocks:
-                return clean, 'India'
-            if clean in us_stocks:
-                return clean, 'US'
-    
+        clean = re.sub(r"[^A-Z0-9&\-]", "", word)
+        if clean and len(clean) >= 1 and clean not in TICKER_BLACKLIST:
+            if clean in all_market_tickers:
+                return clean, all_market_tickers[clean]
+
+    # 3. Check for anything that looks like a ticker (2-5 uppercase letters)
+    for word in msg.split():
+        clean = re.sub(r"[^A-Z]", "", word.upper())
+        if clean and 2 <= len(clean) <= 5 and clean not in TICKER_BLACKLIST:
+            # Try it on yfinance as a last resort — only if it looks intentional
+            if clean == word.upper().strip("?.,!"):
+                return clean, market
+
     return None, market
 
 
-def detect_intent(msg, market='US'):
-    """Detect user intent"""
-    m = msg.lower()
-    
-    if any(m.strip() == g for g in ['hi', 'hello', 'hey', 'thanks', 'help', 'bye']):
-        return {'type': 'chat'}
-    
+def classify_intent(msg: str, market: str = "US") -> dict:
+    """Classify the user's message into an actionable intent."""
+    low = msg.lower().strip()
+
+    # Greetings / meta
+    if low in ("hi", "hello", "hey", "thanks", "thank you", "help", "bye", "ok", "okay"):
+        return {"type": "chat"}
+
     ticker, detected_market = find_ticker(msg, market)
-    
-    # Simple price query
-    if any(w in m for w in ['price of', "what's the price", 'what is the price', 'how much is', 'current price']):
-        if ticker:
-            return {'type': 'price', 'ticker': ticker, 'market': detected_market}
-    
-    # Analysis request
-    if any(w in m for w in ['analyze', 'analysis', 'should i buy', 'should i sell', 'verdict', 'recommendation', 'what do you think']):
-        if ticker:
-            return {'type': 'analyze', 'ticker': ticker, 'market': detected_market}
-    
-    # Gainers/Losers
-    if any(w in m for w in ['gainer', 'gaining', 'best stock', 'top performer', 'top stocks', 'winners']):
-        return {'type': 'gainers'}
-    if any(w in m for w in ['loser', 'losing', 'worst', 'dropping', 'falling', 'down today']):
-        return {'type': 'losers'}
-    if any(w in m for w in ['hot', 'trending', 'moving', 'recommend', 'movers', "what's moving"]):
-        return {'type': 'hot'}
-    
-    # If ticker found, default to analysis
+
+    # Price query
+    price_kw = ["price of", "what's the price", "what is the price", "how much is",
+                 "current price", "quote for", "what is", "how is"]
+    if any(k in low for k in price_kw) and ticker:
+        return {"type": "price", "ticker": ticker, "market": detected_market}
+
+    # Compare
+    if any(k in low for k in ["compare", "vs", "versus", "against"]):
+        # Try to find two tickers
+        tickers_found = []
+        for word in msg.upper().split():
+            clean = re.sub(r"[^A-Z]", "", word)
+            if clean and clean not in TICKER_BLACKLIST and len(clean) >= 2:
+                tickers_found.append(clean)
+        if len(tickers_found) >= 2:
+            return {"type": "compare", "tickers": tickers_found[:2], "market": detected_market}
+
+    # Analysis
+    analysis_kw = ["analyze", "analysis", "should i buy", "should i sell", "verdict",
+                   "recommendation", "what do you think", "outlook", "forecast",
+                   "worth buying", "good buy", "deep dive", "bull case", "bear case"]
+    if any(k in low for k in analysis_kw) and ticker:
+        return {"type": "analyze", "ticker": ticker, "market": detected_market}
+
+    # Screener: gainers / losers / movers
+    if any(k in low for k in ["gainer", "gaining", "best stock", "top performer", "top stocks", "winners", "green"]):
+        return {"type": "gainers"}
+    if any(k in low for k in ["loser", "losing", "worst", "dropping", "falling", "down today", "red"]):
+        return {"type": "losers"}
+    if any(k in low for k in ["hot", "trending", "moving", "movers", "what's moving", "most active"]):
+        return {"type": "hot"}
+
+    # If a ticker was found, default to analyze
     if ticker:
-        return {'type': 'analyze', 'ticker': ticker, 'market': detected_market}
-    
-    return {'type': 'chat'}
+        return {"type": "analyze", "ticker": ticker, "market": detected_market}
+
+    return {"type": "chat"}
 
 
-def run_intent(intent, market='US'):
-    """Execute intent"""
-    t = intent.get('type')
-    
-    # Use detected market if available
-    if intent.get('market'):
-        market = intent['market']
-    
-    if t == 'price':
-        ticker = intent['ticker']
-        if market == 'India' and '.' not in ticker:
-            ticker = f"{ticker}.NS"
-        data = get_stock_price(ticker)
+# ─── Intent Execution ────────────────────────────────────────────────────────
+
+def execute(intent: dict, market: str = "US") -> dict:
+    """Execute an intent and return structured results."""
+    itype = intent.get("type")
+    market = intent.get("market", market)
+
+    if itype == "price":
+        ticker = _resolve_ticker(intent["ticker"], market)
+        data = fetch_price(ticker)
         if data:
-            sym = '$' if market == 'US' else '₹'
-            clr = '🟢' if data['change_pct'] >= 0 else '🔴'
+            cfg = MARKETS.get(market, MARKETS["US"])
+            sym = cfg["currency"]
+            arrow = "▲" if data["change_pct"] >= 0 else "▼"
+            clr = "green" if data["change_pct"] >= 0 else "red"
+            display = intent["ticker"]
             return {
-                'ok': True, 'type': 'price', 'market': market,
-                'msg': f"**{ticker.replace('.NS', '')}** is currently at {sym}{data['price']:,.2f} ({clr} {data['change_pct']:+.2f}% today)",
-                'data': data, 'ticker': ticker
+                "ok": True, "type": "price", "market": market,
+                "msg": f"**{display}** — {sym}{data['price']:,.2f}  {arrow} {data['change_pct']:+.2f}%",
+                "data": data, "ticker": ticker,
             }
-        return {'ok': False, 'error': f"Could not fetch data for {ticker}"}
-    
-    if t == 'analyze':
-        ticker = intent['ticker']
-        if market == 'India' and '.' not in ticker:
-            ticker = f"{ticker}.NS"
-        data = get_full_data(ticker)
+        return {"ok": False, "error": f"Couldn't fetch data for {intent['ticker']}"}
+
+    if itype == "analyze":
+        ticker = _resolve_ticker(intent["ticker"], market)
+        data = fetch_full(ticker)
         if data:
-            sc = calc_score(data)
-            return {'ok': True, 'type': 'analysis', 'data': {**data, **sc}, 'ticker': ticker, 'market': market}
-        return {'ok': False, 'error': f"Could not fetch data for {ticker}"}
-    
-    if t == 'gainers':
-        stocks = NIFTY_50 if market == 'India' else NASDAQ_100
+            sc = compute_score(data)
+            return {
+                "ok": True, "type": "analysis", "market": market,
+                "data": {**data, **sc}, "ticker": ticker,
+            }
+        return {"ok": False, "error": f"Couldn't fetch data for {intent['ticker']}"}
+
+    if itype == "compare":
+        results = {}
+        for t in intent.get("tickers", []):
+            ticker = _resolve_ticker(t, market)
+            data = fetch_full(ticker)
+            if data:
+                sc = compute_score(data)
+                results[t] = {**data, **sc}
+        if results:
+            return {"ok": True, "type": "compare", "market": market, "data": results}
+        return {"ok": False, "error": "Couldn't fetch data for comparison"}
+
+    if itype in ("gainers", "losers", "hot"):
+        cfg = MARKETS.get(market, MARKETS["US"])
+        stocks = cfg["stocks"]
         results = []
-        for s in stocks[:35]:
-            d = get_stock_price(s)
-            if d and d['change_pct'] > 0:
-                results.append({'ticker': s.replace('.NS', ''), 'price': d['price'], 'change_pct': d['change_pct']})
-        results.sort(key=lambda x: x['change_pct'], reverse=True)
-        return {'ok': True, 'type': 'list', 'title': 'Top Gainers', 'data': results[:10], 'market': market}
-    
-    if t == 'losers':
-        stocks = NIFTY_50 if market == 'India' else NASDAQ_100
-        results = []
-        for s in stocks[:35]:
-            d = get_stock_price(s)
-            if d and d['change_pct'] < 0:
-                results.append({'ticker': s.replace('.NS', ''), 'price': d['price'], 'change_pct': d['change_pct']})
-        results.sort(key=lambda x: x['change_pct'])
-        return {'ok': True, 'type': 'list', 'title': 'Top Losers', 'data': results[:10], 'market': market}
-    
-    if t == 'hot':
-        stocks = NIFTY_50 if market == 'India' else (TRENDING + NASDAQ_100[:20])
-        results = []
-        for s in stocks[:35]:
-            d = get_stock_price(s)
+        for s in stocks[:30]:
+            full = _resolve_ticker(s, market)
+            d = fetch_price(full)
             if d:
-                results.append({'ticker': s.replace('.NS', ''), 'price': d['price'], 'change_pct': d['change_pct']})
-        results.sort(key=lambda x: abs(x['change_pct']), reverse=True)
-        return {'ok': True, 'type': 'list', 'title': 'Hot Stocks (Biggest Movers)', 'data': results[:12], 'market': market}
-    
-    return {'ok': False, 'type': 'chat'}
+                results.append({
+                    "ticker": s.replace(".NS", "").replace(".L", "").replace(".T", "").replace("-USD", ""),
+                    "price": d["price"],
+                    "change_pct": d["change_pct"],
+                })
+
+        if itype == "gainers":
+            results = sorted([r for r in results if r["change_pct"] > 0],
+                             key=lambda x: x["change_pct"], reverse=True)[:10]
+            title = "Top Gainers"
+        elif itype == "losers":
+            results = sorted([r for r in results if r["change_pct"] < 0],
+                             key=lambda x: x["change_pct"])[:10]
+            title = "Top Losers"
+        else:
+            results = sorted(results, key=lambda x: abs(x["change_pct"]), reverse=True)[:12]
+            title = "Biggest Movers"
+
+        return {"ok": True, "type": "list", "title": title, "data": results, "market": market}
+
+    return {"ok": False, "type": "chat"}
 
 
-def get_ai(msg, data, history, market='US'):
-    """Get AI response"""
+# ─── AI Response ─────────────────────────────────────────────────────────────
+
+SYSTEM_PROMPT = """You are Paula, a sharp, experienced stock analyst. You speak like a real trader — direct, specific, no filler.
+
+Today: {date} | Market focus: {market}
+
+You always have real-time data injected into the conversation. USE IT — cite exact numbers.
+
+When analyzing a stock:
+1. Lead with the verdict (score + rating) and one-line thesis
+2. Technical setup — RSI, MACD, SMA positioning, momentum, volume. Be specific.
+3. Fundamentals — P/E, growth, margins, balance sheet. Only what matters.
+4. Catalyst / risk — news, earnings, macro. What could move this?
+5. Trade plan — entry zone, stop loss level, price targets (1-3 month). Be concrete.
+
+Style rules:
+- Numbers, not adjectives. "$142.50" not "the stock is doing well"
+- Short paragraphs. No walls of text.
+- Bold the rating and key numbers
+- If the data shows mixed signals, say so — don't force a narrative
+- Never claim you can't access data. You always have it.
+- Don't hedge everything with disclaimers — you're an analyst, give a clear view
+- For simple price queries, be brief: price + quick context
+- For compare requests, structure side-by-side
+"""
+
+
+def get_ai_response(msg: str, data, history: list, market: str = "US") -> str:
     key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
     if not key:
-        return "Please add GROQ_API_KEY to your Streamlit secrets."
-    
+        return "⚠️ Add `GROQ_API_KEY` to your Streamlit secrets or environment."
+
     try:
         client = Groq(api_key=key)
-        
-        sys = f"""You are Paula, an expert stock trading analyst. You have access to real-time market data.
 
-Date: {datetime.now().strftime("%Y-%m-%d")} | Market: {market}
+        system = SYSTEM_PROMPT.format(date=datetime.now().strftime("%Y-%m-%d"), market=market)
+        messages = [{"role": "system", "content": system}]
 
-When analyzing stocks, provide comprehensive insights:
+        for h in history[-8:]:
+            messages.append({"role": h["role"], "content": h["content"][:2000]})
 
-1. **Trading Verdict** - Start with the rating and score from the data
-2. **Key Signals** - Explain the buy/sell signals from the technicals  
-3. **Valuation** - Discuss P/E, analyst targets, upside potential
-4. **Technicals** - RSI, moving averages, momentum, volume
-5. **Risks** - List any warning signs
-6. **Trading Plan** - Entry zone, stop loss, target price suggestions
-
-Guidelines:
-- Use ALL the data provided - prices, technicals, signals, warnings
-- Be specific with numbers: "RSI at 42" not just "RSI is low"
-- Give actionable advice: entry points, stop losses, targets
-- Mention the news/catalysts if relevant
-- Keep a conversational but professional tone
-- For simple price queries, just give the price and a brief outlook
-- NEVER say you don't have access to data - you DO have it"""
-
-        msgs = [{"role": "system", "content": sys}]
-        for h in history[-6:]:
-            msgs.append({"role": h["role"], "content": h["content"]})
-        
         if data:
-            content = f"{msg}\n\n--- STOCK DATA ---\n{json.dumps(data, indent=2, default=str)}"
+            content = f"{msg}\n\n---DATA---\n{json.dumps(data, indent=2, default=str)}"
         else:
             content = msg
-        msgs.append({"role": "user", "content": content})
-        
+        messages.append({"role": "user", "content": content})
+
         resp = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
-            messages=msgs,
-            max_tokens=1500,
-            temperature=0.7
+            messages=messages,
+            max_tokens=1800,
+            temperature=0.6,
         )
         return resp.choices[0].message.content
     except Exception as e:
-        return f"Error getting response: {str(e)[:100]}"
+        return f"Error: {str(e)[:120]}"
+
+
+# ─── UI ──────────────────────────────────────────────────────────────────────
+
+def inject_css():
+    st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600;700&display=swap');
+
+    :root {
+        --bg: #0c0c0c;
+        --surface: #141414;
+        --border: #1e1e1e;
+        --border-hover: #2a2a2a;
+        --text-primary: #e8e8e8;
+        --text-secondary: #737373;
+        --text-muted: #525252;
+        --accent: #22c55e;
+        --accent-dim: #16a34a;
+        --red: #ef4444;
+        --mono: 'JetBrains Mono', monospace;
+        --sans: 'Instrument Sans', -apple-system, sans-serif;
+    }
+
+    .stApp {
+        background: var(--bg) !important;
+    }
+
+    header, footer, #MainMenu { visibility: hidden !important; }
+
+    .block-container {
+        max-width: 860px !important;
+        padding: 2rem 1.5rem 5rem 1.5rem !important;
+    }
+
+    /* Typography */
+    h1, h2, h3 {
+        font-family: var(--sans) !important;
+        color: var(--text-primary) !important;
+        font-weight: 600 !important;
+        letter-spacing: -0.02em !important;
+    }
+    p, span, div, label, li {
+        font-family: var(--sans) !important;
+        color: var(--text-secondary) !important;
+    }
+    code, pre {
+        font-family: var(--mono) !important;
+    }
+
+    /* Chat messages */
+    .stChatMessage {
+        background: var(--surface) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+        padding: 1rem 1.2rem !important;
+        margin-bottom: 0.5rem !important;
+    }
+    .stChatMessage p, .stChatMessage span, .stChatMessage li, .stChatMessage div {
+        color: var(--text-primary) !important;
+        font-size: 0.92rem !important;
+        line-height: 1.6 !important;
+    }
+    .stChatMessage strong {
+        color: #fff !important;
+    }
+
+    /* Input */
+    .stChatInput > div > div > textarea,
+    .stTextInput > div > div > input {
+        background: var(--surface) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+        color: var(--text-primary) !important;
+        font-family: var(--sans) !important;
+        font-size: 0.92rem !important;
+    }
+    .stChatInput > div > div > textarea:focus,
+    .stTextInput > div > div > input:focus {
+        border-color: var(--border-hover) !important;
+        box-shadow: none !important;
+    }
+
+    /* Buttons */
+    .stButton > button {
+        background: var(--surface) !important;
+        color: var(--text-secondary) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 6px !important;
+        font-family: var(--mono) !important;
+        font-size: 0.78rem !important;
+        letter-spacing: 0.03em !important;
+        text-transform: uppercase !important;
+        padding: 0.4rem 0.8rem !important;
+        transition: all 0.15s ease !important;
+    }
+    .stButton > button:hover {
+        background: var(--border) !important;
+        color: var(--text-primary) !important;
+        border-color: var(--border-hover) !important;
+    }
+
+    /* Selectbox */
+    .stSelectbox > div > div {
+        background: var(--surface) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 6px !important;
+        font-family: var(--mono) !important;
+        font-size: 0.82rem !important;
+    }
+    .stSelectbox label {
+        font-family: var(--mono) !important;
+        font-size: 0.75rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+        color: var(--text-muted) !important;
+    }
+
+    /* Expander */
+    .stExpander {
+        background: var(--surface) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 6px !important;
+    }
+
+    /* Dataframe */
+    .stDataFrame {
+        border-radius: 6px !important;
+        overflow: hidden !important;
+    }
+    .stDataFrame td, .stDataFrame th {
+        background: var(--surface) !important;
+        color: var(--text-primary) !important;
+        border-color: var(--border) !important;
+        font-family: var(--mono) !important;
+        font-size: 0.82rem !important;
+    }
+
+    /* Divider */
+    hr {
+        border-color: var(--border) !important;
+        margin: 1.5rem 0 !important;
+    }
+
+    /* Caption */
+    .stCaption, small {
+        font-family: var(--mono) !important;
+        font-size: 0.72rem !important;
+        color: var(--text-muted) !important;
+        letter-spacing: 0.02em !important;
+    }
+
+    /* Checkbox */
+    .stCheckbox label span {
+        font-family: var(--mono) !important;
+        font-size: 0.8rem !important;
+    }
+
+    /* Toast */
+    .stToast {
+        font-family: var(--mono) !important;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
+
+    /* Plotly overrides */
+    .js-plotly-plot { border-radius: 6px; overflow: hidden; }
+    </style>
+    """, unsafe_allow_html=True)
 
 
 def main():
-    st.set_page_config(page_title="Paula", page_icon="📈", layout="wide", initial_sidebar_state="collapsed")
-    
-    st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap');
-    
-    * { font-family: 'DM Sans', sans-serif; }
-    
-    .stApp { background: #09090b; }
-    
-    header, footer, #MainMenu { visibility: hidden; }
-    
-    .block-container { 
-        max-width: 900px; 
-        padding: 1.5rem 1rem 4rem 1rem;
-    }
-    
-    h1, h2, h3 { color: #fafafa !important; font-weight: 600 !important; }
-    p, span, div, label { color: #a1a1aa !important; }
-    
-    .stChatMessage { 
-        background: #18181b !important; 
-        border: 1px solid #27272a !important; 
-        border-radius: 12px !important;
-        padding: 1rem !important;
-    }
-    .stChatMessage p, .stChatMessage span, .stChatMessage li { 
-        color: #e4e4e7 !important; 
-    }
-    
-    .stChatInputContainer {
-        padding-bottom: 20px;
-    }
-    
-    .stTextInput > div > div > input,
-    .stChatInput > div > div > textarea { 
-        background: #18181b !important; 
-        border: 1px solid #27272a !important; 
-        border-radius: 12px !important;
-        color: #fafafa !important;
-        font-size: 1rem !important;
-    }
-    
-    .stButton > button { 
-        background: #27272a !important; 
-        color: #fafafa !important; 
-        border: 1px solid #3f3f46 !important;
-        border-radius: 8px !important;
-        padding: 0.5rem 1rem !important;
-    }
-    .stButton > button:hover { 
-        background: #3f3f46 !important;
-        border-color: #52525b !important;
-    }
-    
-    .stSelectbox > div > div { 
-        background: #18181b !important; 
-        border: 1px solid #27272a !important;
-        border-radius: 8px !important;
-    }
-    
-    .stExpander { 
-        background: #18181b !important; 
-        border: 1px solid #27272a !important;
-        border-radius: 8px !important;
-    }
-    
-    .stDataFrame {
-        background: #18181b !important;
-        border-radius: 8px !important;
-    }
-    .stDataFrame td, .stDataFrame th {
-        background: #18181b !important;
-        color: #e4e4e7 !important;
-        border-color: #27272a !important;
-    }
-    
-    hr { border-color: #27272a !important; margin: 1rem 0 !important; }
-    
-    .stAudio { margin-top: 10px; }
-    
-    /* Voice input button styling */
-    .stAudioInput > div { background: transparent !important; }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # Initialize state
-    if 'messages' not in st.session_state:
+    st.set_page_config(
+        page_title="Paula",
+        page_icon="◆",
+        layout="wide",
+        initial_sidebar_state="collapsed",
+    )
+
+    inject_css()
+
+    # State
+    if "messages" not in st.session_state:
         st.session_state.messages = []
-    if 'market' not in st.session_state:
-        st.session_state.market = 'US'
-    if 'show_charts' not in st.session_state:
+    if "market" not in st.session_state:
+        st.session_state.market = "US"
+    if "show_charts" not in st.session_state:
         st.session_state.show_charts = True
-    
+
     # Header
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        icon = "🇺🇸" if st.session_state.market == 'US' else "🇮🇳"
-        st.markdown(f"## Paula {icon}")
-        st.caption("Your stock analysis assistant • Ask about any stock")
-    
-    with col2:
-        with st.expander("⚙️ Settings"):
+    mkt = st.session_state.market
+    cfg = MARKETS.get(mkt, MARKETS["US"])
+
+    col_title, col_settings = st.columns([5, 1])
+    with col_title:
+        st.markdown(f"### ◆ Paula")
+        st.caption(f"{cfg['flag']} {mkt} market  ·  ask about any stock, anywhere")
+    with col_settings:
+        with st.expander("settings"):
             new_market = st.selectbox(
-                "Market",
-                ['US', 'India'],
-                index=0 if st.session_state.market == 'US' else 1,
-                help="Auto-detects from your message"
+                "MARKET",
+                list(MARKETS.keys()),
+                index=list(MARKETS.keys()).index(mkt),
+                help="Auto-detects from your message",
             )
-            if new_market != st.session_state.market:
+            if new_market != mkt:
                 st.session_state.market = new_market
-            
-            st.session_state.show_charts = st.checkbox("Show charts", value=st.session_state.show_charts)
-            
-            if st.button("🗑️ Clear chat"):
+                st.rerun()
+
+            st.session_state.show_charts = st.checkbox(
+                "Show charts", value=st.session_state.show_charts
+            )
+            if st.button("Clear chat"):
                 st.session_state.messages = []
                 st.rerun()
-    
+
     st.markdown("---")
-    
-    # Chat messages
+
+    # Render history
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
-            
-            # Show chart for assistant messages
             if m["role"] == "assistant" and m.get("chart") and st.session_state.show_charts:
-                ch = make_chart(m["chart"])
+                ch = build_chart(m["chart"])
                 if ch:
                     st.plotly_chart(ch, use_container_width=True)
-            
-            # Show table
             if m["role"] == "assistant" and m.get("table"):
                 st.dataframe(pd.DataFrame(m["table"]), use_container_width=True, hide_index=True)
-    
-    # Voice input
-    try:
-        from streamlit_mic_recorder import mic_recorder
-        
-        col_input, col_mic = st.columns([6, 1])
-        
-        with col_mic:
-            audio = mic_recorder(
-                start_prompt="🎤",
-                stop_prompt="⏹️",
-                just_once=True,
-                use_container_width=True,
-                key="mic"
-            )
-        
-        # Process voice input
-        voice_text = None
-        if audio and audio.get('bytes'):
-            try:
-                key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
-                if key:
-                    client = Groq(api_key=key)
-                    import tempfile
-                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-                        f.write(audio['bytes'])
-                        f.flush()
-                        with open(f.name, "rb") as audio_file:
-                            transcription = client.audio.transcriptions.create(
-                                file=(f.name, audio_file.read()),
-                                model="whisper-large-v3"
-                            )
-                            voice_text = transcription.text
-            except Exception as e:
-                st.error(f"Voice error: {str(e)[:50]}")
-    except ImportError:
-        voice_text = None
-        col_input = st.container()
-    
-    # Text input
-    prompt = st.chat_input("Ask about any stock... (e.g., 'analyze NVDA' or 'top gainers')")
-    
-    # Use voice text if available
-    if voice_text:
-        prompt = voice_text
-        st.toast(f"🎤 {voice_text}")
-    
+
+    # Input
+    prompt = st.chat_input("analyze NVDA · top gainers · AAPL vs MSFT ...")
+
     if prompt:
-        # Add user message
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
-        
+
         with st.chat_message("assistant"):
-            with st.spinner("Analyzing..."):
-                # Auto-detect market from message
-                detected = auto_detect_market(prompt)
+            with st.spinner(""):
+                # Auto-detect market
+                detected = detect_market(prompt)
                 if detected:
                     st.session_state.market = detected
-                
                 market = st.session_state.market
-                
-                # Process intent
-                intent = detect_intent(prompt, market)
-                res = run_intent(intent, market)
-                
-                # Update market if detected from ticker
-                if res.get('market'):
-                    st.session_state.market = res['market']
-                    market = res['market']
-                
+
+                # Process
+                intent = classify_intent(prompt, market)
+                res = execute(intent, market)
+
+                if res.get("market"):
+                    st.session_state.market = res["market"]
+                    market = res["market"]
+
                 chart_ticker = None
                 table_data = None
-                
-                if res.get('ok'):
-                    if res['type'] == 'price':
-                        chart_ticker = res['ticker']
-                        resp = res['msg']
-                    
-                    elif res['type'] == 'analysis':
-                        chart_ticker = res['ticker']
-                        resp = get_ai(prompt, res['data'], st.session_state.messages, market)
-                    
-                    elif res['type'] == 'list':
-                        table_data = res['data'].copy()
-                        sym = '₹' if market == 'India' else '$'
-                        for i in table_data:
-                            clr = '🟢' if i['change_pct'] >= 0 else '🔴'
-                            i['Change'] = f"{clr} {i['change_pct']:+.2f}%"
-                            i['Price'] = f"{sym}{i['price']:,.2f}"
-                            del i['change_pct']
-                            del i['price']
-                        resp = f"**{res['title']}** ({market} Market)"
-                    
+
+                if res.get("ok"):
+                    if res["type"] == "price":
+                        chart_ticker = res["ticker"]
+                        resp = get_ai_response(prompt, res["data"], st.session_state.messages, market)
+
+                    elif res["type"] == "analysis":
+                        chart_ticker = res["ticker"]
+                        resp = get_ai_response(prompt, res["data"], st.session_state.messages, market)
+
+                    elif res["type"] == "compare":
+                        resp = get_ai_response(prompt, res["data"], st.session_state.messages, market)
+
+                    elif res["type"] == "list":
+                        cfg = MARKETS.get(market, MARKETS["US"])
+                        sym = cfg["currency"]
+                        table_data = []
+                        for i in res["data"]:
+                            arrow = "▲" if i["change_pct"] >= 0 else "▼"
+                            table_data.append({
+                                "Ticker": i["ticker"],
+                                "Price": f"{sym}{i['price']:,.2f}",
+                                "Change": f"{arrow} {i['change_pct']:+.2f}%",
+                            })
+                        resp = f"**{res['title']}** — {cfg['flag']} {market}"
                     else:
-                        resp = get_ai(prompt, None, st.session_state.messages, market)
-                
-                elif res.get('error'):
+                        resp = get_ai_response(prompt, None, st.session_state.messages, market)
+
+                elif res.get("error"):
                     resp = f"⚠️ {res['error']}"
-                
                 else:
-                    resp = get_ai(prompt, None, st.session_state.messages, market)
-                
+                    resp = get_ai_response(prompt, None, st.session_state.messages, market)
+
                 st.markdown(resp)
-                
-                # Show chart - ALWAYS try for stock queries
+
                 if chart_ticker and st.session_state.show_charts:
-                    with st.spinner("Loading chart..."):
-                        ch = make_chart(chart_ticker)
-                        if ch:
-                            st.plotly_chart(ch, use_container_width=True)
-                        else:
-                            st.caption(f"📊 Chart unavailable for {chart_ticker}")
-                
-                # Show table
+                    ch = build_chart(chart_ticker)
+                    if ch:
+                        st.plotly_chart(ch, use_container_width=True)
+
                 if table_data:
                     st.dataframe(pd.DataFrame(table_data), use_container_width=True, hide_index=True)
-        
-        # Save message
+
         st.session_state.messages.append({
             "role": "assistant",
             "content": resp,
             "chart": chart_ticker,
-            "table": table_data
+            "table": table_data,
         })
-    
+
     # Footer
     st.markdown("---")
-    st.caption("Not financial advice. Always do your own research.")
+    st.caption("not financial advice · always do your own research")
 
 
 if __name__ == "__main__":
