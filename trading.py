@@ -951,7 +951,7 @@ def get_ai_response(msg: str, data, history: list, market: str = "US") -> str:
 def inject_css():
     st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap');
 
     :root {
         --bg: #0c0c0c;
@@ -965,7 +965,19 @@ def inject_css():
         --accent-dim: #16a34a;
         --red: #ef4444;
         --mono: 'JetBrains Mono', monospace;
-        --sans: 'Instrument Sans', -apple-system, sans-serif;
+        --sans: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    *, *::before, *::after {
+        font-family: var(--sans);
+    }
+
+    /* Protect Streamlit avatar icons */
+    [data-testid="stChatMessageAvatarAssistant"] *,
+    [data-testid="stChatMessageAvatarUser"] *,
+    .stAvatar *,
+    [class*="Avatar"] * {
+        font-family: 'Material Symbols Rounded', 'Material Icons', sans-serif !important;
     }
 
     .stApp {
