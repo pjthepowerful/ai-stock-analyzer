@@ -979,7 +979,7 @@ def inject_css():
         padding: 2rem 1.5rem 5rem 1.5rem !important;
     }
 
-    /* Typography — exclude material icon spans from font override */
+    /* Typography */
     h1, h2, h3 {
         font-family: var(--sans) !important;
         color: var(--text-primary) !important;
@@ -990,9 +990,6 @@ def inject_css():
         font-family: var(--sans) !important;
         color: var(--text-secondary) !important;
     }
-    div, span {
-        color: var(--text-secondary) !important;
-    }
     code, pre {
         font-family: var(--mono) !important;
     }
@@ -1000,15 +997,7 @@ def inject_css():
         font-family: inherit !important;
     }
 
-    /* Preserve Streamlit's icon font for avatars */
-    [data-testid="stChatMessageAvatarCustom"],
-    [data-testid="stChatMessageAvatarAssistant"],
-    [data-testid="stChatMessageAvatarUser"],
-    .stChatMessage [data-testid] > span {
-        font-family: 'Material Symbols Rounded', 'Material Icons', sans-serif !important;
-    }
-
-    /* Chat messages */
+    /* Chat messages — only target the text container, not avatars */
     .stChatMessage {
         background: var(--surface) !important;
         border: 1px solid var(--border) !important;
@@ -1016,20 +1005,28 @@ def inject_css():
         padding: 1rem 1.2rem !important;
         margin-bottom: 0.5rem !important;
     }
-    .stChatMessage p, .stChatMessage span, .stChatMessage li,
-    .stChatMessage div, .stChatMessage strong, .stChatMessage b,
-    .stChatMessage em, .stChatMessage i, .stChatMessage a,
-    .stChatMessage code {
+    .stChatMessage [data-testid="stMarkdownContainer"] p,
+    .stChatMessage [data-testid="stMarkdownContainer"] span,
+    .stChatMessage [data-testid="stMarkdownContainer"] li,
+    .stChatMessage [data-testid="stMarkdownContainer"] div,
+    .stChatMessage [data-testid="stMarkdownContainer"] strong,
+    .stChatMessage [data-testid="stMarkdownContainer"] b,
+    .stChatMessage [data-testid="stMarkdownContainer"] em,
+    .stChatMessage [data-testid="stMarkdownContainer"] i,
+    .stChatMessage [data-testid="stMarkdownContainer"] a,
+    .stChatMessage [data-testid="stMarkdownContainer"] code {
         color: var(--text-primary) !important;
         font-size: 0.92rem !important;
         line-height: 1.6 !important;
         font-family: var(--sans) !important;
     }
-    .stChatMessage strong, .stChatMessage b {
+    .stChatMessage [data-testid="stMarkdownContainer"] strong,
+    .stChatMessage [data-testid="stMarkdownContainer"] b {
         color: #fff !important;
         font-weight: 600 !important;
     }
-    .stChatMessage em, .stChatMessage i {
+    .stChatMessage [data-testid="stMarkdownContainer"] em,
+    .stChatMessage [data-testid="stMarkdownContainer"] i {
         font-style: italic !important;
     }
 
