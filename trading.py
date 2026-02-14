@@ -1071,7 +1071,14 @@ def main():
 
     # State
     if "messages" not in st.session_state:
-        st.session_state.messages = []
+        st.session_state.messages = [
+            {
+                "role": "assistant",
+                "content": "Hey — I'm Paula. Give me a ticker and I'll break it down for you. Technicals, fundamentals, trade plan, the works.\n\nTry something like **analyze NVDA**, **AAPL vs MSFT**, or **top gainers**.",
+                "chart": None,
+                "table": None,
+            }
+        ]
     if "market" not in st.session_state:
         st.session_state.market = "US"
 
