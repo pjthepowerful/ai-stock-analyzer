@@ -890,29 +890,116 @@ def execute(intent: dict, market: str = "US") -> dict:
 
 # ─── AI Response ─────────────────────────────────────────────────────────────
 
-SYSTEM_PROMPT = """You are Paula, a sharp, experienced stock analyst. You speak like a real trader — direct, specific, no filler.
+SYSTEM_PROMPT = """You are Paula, a sharp stock analyst. Direct, specific, no filler.
 
-Today: {date} | Market focus: {market}
+Today: {date} | Market: {market}
 
-You always have real-time data injected into the conversation. USE IT — cite exact numbers.
+CRITICAL RULES:
+- ONLY use numbers from the DATA section below. NEVER invent, estimate, or round prices.
+- If the data says price is 182.81, you write 182.81. Not 542, not 193, not any other number.
+- Do NOT repeat or duplicate information. Say each fact once.
+- Use clean markdown: **bold** for emphasis. Do not nest or break bold markers.
+- Keep responses concise. No walls of text.
 
 When analyzing a stock:
-1. Lead with the verdict (score + rating) and one-line thesis
-2. Technical setup — RSI, MACD, SMA positioning, momentum, volume. Be specific.
-3. Fundamentals — P/E, growth, margins, balance sheet. Only what matters.
-4. Catalyst / risk — news, earnings, macro. What could move this?
-5. Trade plan — entry zone, stop loss level, price targets (1-3 month). Be concrete.
+1. Verdict — score, rating, one-line thesis
+2. Technicals — RSI, MACD, SMA positioning, momentum, volume (cite exact numbers from data)
+3. Fundamentals — P/E, growth, margins. Only what matters.
+4. Risks — warning signs from the data
+5. Trade plan — entry zone, stop loss, targets
 
-Style rules:
-- Numbers, not adjectives. "$142.50" not "the stock is doing well"
-- Short paragraphs. No walls of text.
-- Bold the rating and key numbers
-- If the data shows mixed signals, say so — don't force a narrative
-- Never claim you can't access data. You always have it.
-- Don't hedge everything with disclaimers — you're an analyst, give a clear view
-- For simple price queries, be brief: price + quick context
-- For compare requests, structure side-by-side
+Style:
+- Cite exact numbers from the data: "$182.81" not "the stock price"
+- Short paragraphs, not bullet-point lists
+- If signals are mixed, say so
+- Never claim you lack data access
+- For price queries, be brief
+- For comparisons, structure side-by-side
 """
+
+
+def _format_price_response(data: dict, ticker: str, market: str) -> str:
+    """Build a price response directly from data — no LLM needed."""
+    cfg = MARKETS.get(market, MARKETS["US"])
+    sym = cfg["currency"]
+    name = data.get("name", ticker)
+    price = data["price"]
+    change = data["change"]
+    pct = data["change_pct"]
+    arrow = "▲" if pct >= 0 else "▼"
+
+    display_ticker = ticker.replace(".NS", "").replace(".L", "").replace(".T", "").replace("-USD", "")
+
+    lines = [f"**{display_ticker}** ({name}) — {sym}{price:,.2f}  {arrow} {pct:+.2f}%"]
+
+    # Add context
+    details = []
+    if data.get("52w_high") and data.get("52w_low"):
+        rng = data["52w_high"] - data["52w_low"]
+        if rng > 0:
+            pos = (price - data["52w_low"]) / rng * 100
+            details.append(f"52-week range: {sym}{data['52w_low']:,.2f} – {sym}{data['52w_high']:,.2f} ({pos:.0f}th percentile)")
+
+    if data.get("market_cap"):
+        mc = data["market_cap"]
+        if mc >= 1e12:
+            details.append(f"Market cap: {sym}{mc/1e12:.2f}T")
+        elif mc >= 1e9:
+            details.append(f"Market cap: {sym}{mc/1e9:.1f}B")
+        elif mc >= 1e6:
+            details.append(f"Market cap: {sym}{mc/1e6:.0f}M")
+
+    if data.get("pe_ratio"):
+        details.append(f"P/E: {data['pe_ratio']:.1f}")
+
+    if data.get("target_price"):
+        upside = (data["target_price"] - price) / price * 100
+        details.append(f"Analyst target: {sym}{data['target_price']:,.2f} ({upside:+.0f}%)")
+
+    if details:
+        lines.append(" · ".join(details))
+
+    return "\n\n".join(lines)
+
+
+def _summarize_data_for_llm(data: dict) -> str:
+    """Create a clean, flat summary string for the LLM instead of raw JSON."""
+    lines = []
+    display = data.get("ticker", "")
+    lines.append(f"TICKER: {display}")
+    lines.append(f"PRICE: {data.get('price')}")
+    lines.append(f"CHANGE: {data.get('change')} ({data.get('change_pct')}%)")
+    lines.append(f"PREV CLOSE: {data.get('prev_close')}")
+
+    for key in ["name", "sector", "industry", "market_cap", "pe_ratio", "forward_pe",
+                 "peg_ratio", "roe", "profit_margin", "revenue_growth", "debt_to_equity",
+                 "dividend_yield", "beta", "52w_high", "52w_low",
+                 "target_price", "target_high", "target_low", "recommendation", "num_analysts"]:
+        val = data.get(key)
+        if val is not None:
+            lines.append(f"{key.upper()}: {val}")
+
+    # Score
+    if data.get("score") is not None:
+        lines.append(f"SCORE: {data['score']}/100")
+        lines.append(f"RATING: {data.get('rating', 'N/A')}")
+
+    if data.get("signals"):
+        lines.append("SIGNALS: " + " | ".join(data["signals"]))
+    if data.get("warnings"):
+        lines.append("WARNINGS: " + " | ".join(data["warnings"]))
+
+    tech = data.get("technicals", {})
+    if tech:
+        tech_parts = [f"{k}: {v}" for k, v in tech.items()]
+        lines.append("TECHNICALS: " + " | ".join(tech_parts))
+
+    if data.get("news"):
+        news_parts = [n.get("title", "") for n in data["news"] if n.get("title")]
+        if news_parts:
+            lines.append("NEWS: " + " | ".join(news_parts[:3]))
+
+    return "\n".join(lines)
 
 
 def get_ai_response(msg: str, data, history: list, market: str = "US") -> str:
@@ -930,7 +1017,15 @@ def get_ai_response(msg: str, data, history: list, market: str = "US") -> str:
             messages.append({"role": h["role"], "content": h["content"][:2000]})
 
         if data:
-            content = f"{msg}\n\n---DATA---\n{json.dumps(data, indent=2, default=str)}"
+            if isinstance(data, dict) and "price" in data:
+                # Single stock analysis data
+                summary = _summarize_data_for_llm(data)
+            elif isinstance(data, dict):
+                # Compare or other pre-formatted data
+                summary = json.dumps(data, indent=2, default=str)
+            else:
+                summary = str(data)
+            content = f"{msg}\n\n---DATA---\n{summary}"
         else:
             content = msg
         messages.append({"role": "user", "content": content})
@@ -939,7 +1034,7 @@ def get_ai_response(msg: str, data, history: list, market: str = "US") -> str:
             model="llama-3.3-70b-versatile",
             messages=messages,
             max_tokens=1800,
-            temperature=0.6,
+            temperature=0.4,
         )
         return resp.choices[0].message.content
     except Exception as e:
@@ -1186,14 +1281,18 @@ def main():
                 if res.get("ok"):
                     if res["type"] == "price":
                         chart_ticker = res["ticker"]
-                        resp = get_ai_response(prompt, res["data"], st.session_state.messages, market)
+                        resp = _format_price_response(res["data"], res["ticker"], market)
 
                     elif res["type"] == "analysis":
                         chart_ticker = res["ticker"]
                         resp = get_ai_response(prompt, res["data"], st.session_state.messages, market)
 
                     elif res["type"] == "compare":
-                        resp = get_ai_response(prompt, res["data"], st.session_state.messages, market)
+                        # Flatten compare data for the LLM
+                        compare_summary = {}
+                        for t, d in res["data"].items():
+                            compare_summary[t] = _summarize_data_for_llm(d)
+                        resp = get_ai_response(prompt, compare_summary, st.session_state.messages, market)
 
                     elif res["type"] == "list":
                         cfg = MARKETS.get(market, MARKETS["US"])
