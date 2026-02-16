@@ -35,6 +35,35 @@ SP500_TOP = [
     "JPM","XOM","V","JNJ","PG","MA","AVGO","HD","MRK","CVX",
     "COST","ABBV","PEP","KO","WMT","ADBE","MCD","CSCO","CRM","BAC",
 ]
+
+# ── Mid-cap & small-cap growth ──
+MIDCAP_GROWTH = [
+    "AXON","DUOL","CELH","TMDX","RELY","HIMS","CAVA","ONON","BIRK","ELF",
+    "WFRD","FTNT","ZS","MNDY","CFLT","GLBE","TOST","BROS","DT","ESTC",
+    "IOT","DOCS","PCOR","BRZE","SMAR","GTLB","DDOG","BILL","DOCN","ASAN",
+    "FRSH","PYCR","INTA","VERX","ALKT","PAYC","LMND","ROOT","OSCR","GDRX",
+]
+# ── Small-cap high-potential ──
+SMALLCAP = [
+    "UPST","AFRM","JOBY","LUNR","ASTS","RKLB","ACHR","VERI","BBAI","SOUN",
+    "BIGC","DM","OUST","IREN","CLSK","MARA","RIOT","HUT","BTBT","BITF",
+    "MVST","QS","PTRA","GOEV","PSNY","BLNK","CHPT","EVGO","SPWR","ARRY",
+    "DNA","RXRX","BEAM","CRSP","NTLA","EDIT","VERA","SDGR","TWST","TGTX",
+]
+# ── Value / Dividend ──
+VALUE_DIVIDEND = [
+    "O","SCHD","VZ","T","MO","PM","BTI","AGNC","NLY","STAG",
+    "EPD","ET","MPLX","OKE","WMB","KMI","EMR","ITW","GPC","SWK",
+    "DOW","LYB","NUE","CLF","X","AA","FCX","VALE","RIO","BHP",
+]
+# ── Sector-specific (energy, biotech, fintech, defense, space) ──
+SECTOR_PICKS = [
+    "FSLR","ENPH","SEDG","NEE","CEG","VST","SMR","NNE","OKLO","LEU",
+    "LMT","RTX","NOC","GD","HII","KTOS","LDOS","BWXT","RCAT","PLTR",
+    "SQ","AFRM","NU","STNE","PAGS","FOUR","RPAY","PSFE","NUVEI","ADYEY",
+    "MRNA","BNTX","REGN","VRTX","ARGX","ALNY","BMRN","IONS","SGEN","RARE",
+]
+
 NIFTY_50 = [
     "RELIANCE.NS","TCS.NS","HDFCBANK.NS","INFY.NS","ICICIBANK.NS",
     "HINDUNILVR.NS","BHARTIARTL.NS","SBIN.NS","BAJFINANCE.NS","ITC.NS",
@@ -45,9 +74,14 @@ NIFTY_50 = [
 TRENDING = [
     "PLTR","SMCI","ARM","IONQ","RGTI","MSTR","COIN","HOOD","SOFI","RKLB",
     "RIVN","LCID","NIO","GME","AMC","DKNG","SNOW","NET","OKTA",
+    "HIMS","CAVA","DUOL","CELH","LUNR","ASTS","SOUN","JOBY","UPST","AFRM",
 ]
 
+# All US tickers for recognition
+ALL_US_TICKERS = set(NASDAQ_100 + SP500_TOP + MIDCAP_GROWTH + SMALLCAP + VALUE_DIVIDEND + SECTOR_PICKS + TRENDING)
+
 COMPANIES: dict[str, str] = {
+    # Mega-cap
     "apple":"AAPL","microsoft":"MSFT","amazon":"AMZN","google":"GOOGL",
     "meta":"META","facebook":"META","tesla":"TSLA","nvidia":"NVDA",
     "netflix":"NFLX","amd":"AMD","intel":"INTC","adobe":"ADBE",
@@ -57,7 +91,18 @@ COMPANIES: dict[str, str] = {
     "costco":"COST","boeing":"BA","coca cola":"KO","pepsi":"PEP",
     "pfizer":"PFE","moderna":"MRNA","palantir":"PLTR","crowdstrike":"CRWD",
     "snowflake":"SNOW","coinbase":"COIN","robinhood":"HOOD","sofi":"SOFI",
-    "gamestop":"GME","reliance":"RELIANCE","tcs":"TCS","infosys":"INFY",
+    "gamestop":"GME",
+    # Mid / small cap
+    "duolingo":"DUOL","celsius":"CELH","cava":"CAVA","on running":"ONON",
+    "hims":"HIMS","elf beauty":"ELF","toast":"TOST","dutch bros":"BROS",
+    "datadog":"DDOG","axon":"AXON","upstart":"UPST","affirm":"AFRM",
+    "joby":"JOBY","rocket lab":"RKLB","archer":"ACHR","intuitive machines":"LUNR",
+    "ast spacemobile":"ASTS","soundhound":"SOUN","marathon digital":"MARA",
+    "riot":"RIOT","crispr":"CRSP","beam":"BEAM","fuelcell":"FCEL",
+    "chargepoint":"CHPT","quantumscape":"QS","lucid":"LCID","rivian":"RIVN",
+    "block":"SQ","square":"SQ","nu bank":"NU","realty income":"O",
+    # Indian
+    "reliance":"RELIANCE","tcs":"TCS","infosys":"INFY",
     "hdfc":"HDFCBANK","wipro":"WIPRO","tata motors":"TATAMOTORS",
     "sbi":"SBIN","itc":"ITC","icici":"ICICIBANK","kotak":"KOTAKBANK",
     "airtel":"BHARTIARTL","bharti":"BHARTIARTL",
@@ -99,7 +144,7 @@ def _find_ticker(text: str) -> tuple[str | None, str]:
     for name, tick in COMPANIES.items():
         if name in low:
             return tick, "India" if tick in _INDIA_TICKERS else "US"
-    us_set = set(NASDAQ_100 + SP500_TOP + TRENDING)
+    us_set = ALL_US_TICKERS
     for word in text.upper().split():
         clean = re.sub(r"[^A-Z]", "", word)
         if clean and 2 <= len(clean) <= 5 and clean not in _NOISE_WORDS:
@@ -733,9 +778,26 @@ def execute(intent: dict) -> dict:
         return {"ok": True, "type": "analysis", "ticker": tick, "market": market, "data": {**data, **signal}, "trade_signal": signal}
 
     if t in ("gainers", "losers", "hot"):
-        pool = NIFTY_50 if market == "India" else (TRENDING + NASDAQ_100[:25] if t == "hot" else NASDAQ_100)
+        if market == "India":
+            pool = NIFTY_50
+        else:
+            # Mix across all market caps for variety — not just mega-caps
+            import random
+            mega = random.sample(NASDAQ_100, min(15, len(NASDAQ_100)))
+            mid = random.sample(MIDCAP_GROWTH, min(12, len(MIDCAP_GROWTH)))
+            small = random.sample(SMALLCAP, min(10, len(SMALLCAP)))
+            hot = TRENDING[:15] if t == "hot" else []
+            val = random.sample(VALUE_DIVIDEND, min(5, len(VALUE_DIVIDEND))) if t != "hot" else []
+            sect = random.sample(SECTOR_PICKS, min(8, len(SECTOR_PICKS)))
+            # Deduplicate while preserving order
+            seen = set()
+            pool = []
+            for s in hot + mega + mid + small + val + sect:
+                if s not in seen:
+                    seen.add(s)
+                    pool.append(s)
         results = []
-        for s in pool[:30]:
+        for s in pool[:50]:  # scan more stocks for better picks
             d = fetch_price(s)
             if d:
                 results.append({"Ticker": s.replace(".NS", ""), "Price": d["price"], "Chg%": d["change_pct"]})
@@ -764,6 +826,17 @@ def ai_response(user_msg: str, stock_data: dict | None, history: list, market: s
 
 You get live stock data attached to each message. This includes a full trade signal with confluence scoring across 5 categories (trend, momentum, mean-reversion, volume, fundamentals), trend regime detection, support/resistance levels, and ATR-based entry/stop/target with risk-reward ratios. USE all of it — that's what makes you useful — but weave the numbers into natural conversation.
 
+CRITICAL — Stock recommendations:
+When asked to suggest, name, or recommend stocks, NEVER just list the same boring mega-caps everyone already knows (AAPL, MSFT, GOOGL, AMZN, TSLA, etc.). Anyone can name those. Instead:
+- Mix market caps: include mid-caps ($2B-$20B) and small-caps (<$2B) alongside any large-caps
+- Think across sectors: biotech, space, fintech, clean energy, cybersecurity, defense, materials, not just Big Tech
+- Include high-growth disruptors: companies like HIMS, CAVA, DUOL, CELH, AXON, UPST, LUNR, RKLB, TOST, ONON
+- Include value/dividend plays when relevant: O, EPD, STAG, NUE, FCX
+- Include sector specialists: FSLR (solar), SMR (nuclear), KTOS (defense drones), RXRX (AI drug discovery)
+- If someone asks for "10 stocks" give them a MIX — maybe 2 large-cap, 4 mid-cap, 3 small-cap, 1 speculative
+- Explain WHY each pick is interesting — don't just list tickers
+- The goal is to surface opportunities people haven't already heard of a thousand times
+
 How you talk:
 - Like you're texting a friend who asked "hey should I buy this?" — direct, opinionated, casual
 - Lead with your gut take, THEN back it up with data. "Honestly this looks pretty solid right now" before diving into numbers
@@ -778,6 +851,7 @@ How you talk:
 - If signals conflict, be honest: "momentum looks great but volume isn't confirming, which bugs me"
 
 What to avoid:
+- NEVER default to just listing AAPL, MSFT, GOOGL, AMZN, META, TSLA when recommending stocks
 - Never start with "Based on the data" or "Let me analyze" — just jump in
 - No robotic headers like "VERDICT:" or "RISK ASSESSMENT:"
 - Don't disclaim you're an AI or say "not financial advice" — the app has that
