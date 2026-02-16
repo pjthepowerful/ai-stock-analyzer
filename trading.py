@@ -16,6 +16,8 @@ from dotenv import load_dotenv
 import os
 import json
 import re
+import random
+import requests
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -141,9 +143,11 @@ def _detect_market(text: str) -> str:
 
 def _find_ticker(text: str) -> tuple[str | None, str]:
     low = text.lower()
+    # 1) Known company names
     for name, tick in COMPANIES.items():
         if name in low:
             return tick, "India" if tick in _INDIA_TICKERS else "US"
+    # 2) Known tickers in our universe
     us_set = ALL_US_TICKERS
     for word in text.upper().split():
         clean = re.sub(r"[^A-Z]", "", word)
@@ -152,6 +156,18 @@ def _find_ticker(text: str) -> tuple[str | None, str]:
                 return clean, "India"
             if clean in us_set:
                 return clean, "US"
+    # 3) Try any 2-5 letter word as a raw ticker (covers stocks not in our lists)
+    for word in text.upper().split():
+        clean = re.sub(r"[^A-Z]", "", word)
+        if clean and 2 <= len(clean) <= 5 and clean not in _NOISE_WORDS:
+            return clean, _detect_market(text)
+    # 4) Polygon search — find ANY stock by name (e.g. "analyze Palomar Holdings")
+    words = [w for w in text.split() if len(w) > 3 and w.upper() not in _NOISE_WORDS]
+    if words:
+        query = " ".join(words[:3])
+        found = polygon_search_ticker(query)
+        if found:
+            return found, "US"
     return None, _detect_market(text)
 
 
@@ -170,6 +186,156 @@ def _safe(val, fallback=None):
         return fallback if np.isnan(v) or np.isinf(v) else v
     except (TypeError, ValueError):
         return fallback
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  POLYGON.IO API — scans the ENTIRE market, not just a hardcoded list
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _polygon_key() -> str | None:
+    """Get Polygon API key from secrets or env."""
+    try:
+        return st.secrets.get("POLYGON_API_KEY") or os.environ.get("POLYGON_API_KEY") or "wzJ5v31KgEA_rwFQxViseXokW5TLoSrG"
+    except Exception:
+        return os.environ.get("POLYGON_API_KEY") or "wzJ5v31KgEA_rwFQxViseXokW5TLoSrG"
+
+POLYGON_BASE = "https://api.polygon.io"
+
+
+@st.cache_data(ttl=180)
+def polygon_gainers(limit: int = 20) -> list[dict] | None:
+    """Top gainers across ALL US stocks — one API call."""
+    key = _polygon_key()
+    if not key:
+        return None
+    try:
+        r = requests.get(
+            f"{POLYGON_BASE}/v2/snapshot/locale/us/markets/stocks/gainers",
+            params={"apiKey": key, "include_otc": "false"},
+            timeout=10,
+        )
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        results = []
+        for t in data.get("tickers", [])[:limit]:
+            ticker = t.get("ticker", "")
+            day = t.get("day", {})
+            prev = t.get("prevDay", {})
+            snap = t.get("todaysChangePerc", 0)
+            price = day.get("c") or t.get("lastTrade", {}).get("p", 0)
+            if price and price > 1 and snap > 0:  # Filter pennystocks
+                results.append({
+                    "Ticker": ticker,
+                    "Price": round(price, 2),
+                    "Chg%": round(snap, 2),
+                    "Volume": day.get("v", 0),
+                })
+        return results if results else None
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=180)
+def polygon_losers(limit: int = 20) -> list[dict] | None:
+    """Top losers across ALL US stocks — one API call."""
+    key = _polygon_key()
+    if not key:
+        return None
+    try:
+        r = requests.get(
+            f"{POLYGON_BASE}/v2/snapshot/locale/us/markets/stocks/losers",
+            params={"apiKey": key, "include_otc": "false"},
+            timeout=10,
+        )
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        results = []
+        for t in data.get("tickers", [])[:limit]:
+            ticker = t.get("ticker", "")
+            day = t.get("day", {})
+            snap = t.get("todaysChangePerc", 0)
+            price = day.get("c") or t.get("lastTrade", {}).get("p", 0)
+            if price and price > 1 and snap < 0:
+                results.append({
+                    "Ticker": ticker,
+                    "Price": round(price, 2),
+                    "Chg%": round(snap, 2),
+                    "Volume": day.get("v", 0),
+                })
+        return results if results else None
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=180)
+def polygon_all_snapshots() -> list[dict] | None:
+    """
+    Get snapshot of ALL tickers — finds the real movers, not just a curated list.
+    Falls back to grouped daily bars if snapshots aren't available on plan.
+    """
+    key = _polygon_key()
+    if not key:
+        return None
+    try:
+        r = requests.get(
+            f"{POLYGON_BASE}/v2/snapshot/locale/us/markets/stocks/tickers",
+            params={"apiKey": key, "include_otc": "false"},
+            timeout=15,
+        )
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        results = []
+        for t in data.get("tickers", []):
+            ticker = t.get("ticker", "")
+            day = t.get("day", {})
+            prev = t.get("prevDay", {})
+            chg_pct = t.get("todaysChangePerc", 0)
+            price = day.get("c") or t.get("lastTrade", {}).get("p", 0)
+            vol = day.get("v", 0)
+            # Filter: real stocks only (price > $1, has volume)
+            if price and price > 1 and vol and vol > 50000:
+                results.append({
+                    "Ticker": ticker,
+                    "Price": round(price, 2),
+                    "Chg%": round(chg_pct, 2),
+                    "Volume": vol,
+                })
+        return results if results else None
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=300)
+def polygon_search_ticker(query: str) -> str | None:
+    """Search for a ticker by company name — finds ANY stock, not just our list."""
+    key = _polygon_key()
+    if not key:
+        return None
+    try:
+        r = requests.get(
+            f"{POLYGON_BASE}/v3/reference/tickers",
+            params={
+                "search": query, "active": "true", "market": "stocks",
+                "limit": 5, "apiKey": key,
+            },
+            timeout=8,
+        )
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        results = data.get("results", [])
+        if results:
+            # Prefer exact match, then first result
+            for res in results:
+                if res.get("ticker", "").upper() == query.upper():
+                    return res["ticker"]
+            return results[0].get("ticker")
+        return None
+    except Exception:
+        return None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -778,39 +944,60 @@ def execute(intent: dict) -> dict:
         return {"ok": True, "type": "analysis", "ticker": tick, "market": market, "data": {**data, **signal}, "trade_signal": signal}
 
     if t in ("gainers", "losers", "hot"):
-        if market == "India":
-            pool = NIFTY_50
-        else:
-            # Mix across all market caps for variety — not just mega-caps
-            import random
-            mega = random.sample(NASDAQ_100, min(15, len(NASDAQ_100)))
-            mid = random.sample(MIDCAP_GROWTH, min(12, len(MIDCAP_GROWTH)))
-            small = random.sample(SMALLCAP, min(10, len(SMALLCAP)))
-            hot = TRENDING[:15] if t == "hot" else []
-            val = random.sample(VALUE_DIVIDEND, min(5, len(VALUE_DIVIDEND))) if t != "hot" else []
-            sect = random.sample(SECTOR_PICKS, min(8, len(SECTOR_PICKS)))
-            # Deduplicate while preserving order
-            seen = set()
-            pool = []
-            for s in hot + mega + mid + small + val + sect:
-                if s not in seen:
-                    seen.add(s)
-                    pool.append(s)
-        results = []
-        for s in pool[:50]:  # scan more stocks for better picks
-            d = fetch_price(s)
-            if d:
-                results.append({"Ticker": s.replace(".NS", ""), "Price": d["price"], "Chg%": d["change_pct"]})
-        if t == "gainers":
-            results = sorted([r for r in results if r["Chg%"] > 0], key=lambda x: x["Chg%"], reverse=True)[:10]
-            title = "Top Gainers"
-        elif t == "losers":
-            results = sorted([r for r in results if r["Chg%"] < 0], key=lambda x: x["Chg%"])[:10]
-            title = "Top Losers"
-        else:
-            results = sorted(results, key=lambda x: abs(x["Chg%"]), reverse=True)[:12]
-            title = "Biggest Movers"
-        return {"ok": True, "type": "list", "title": title, "data": results, "market": market}
+        results = None
+
+        # ── Try Polygon first: scans the ENTIRE market in one API call ──
+        if market != "India":
+            if t == "gainers":
+                results = polygon_gainers(limit=20)
+                title = "Top Gainers"
+            elif t == "losers":
+                results = polygon_losers(limit=20)
+                title = "Top Losers"
+            else:
+                # Hot/movers: get all snapshots and sort by absolute change
+                all_snaps = polygon_all_snapshots()
+                if all_snaps:
+                    results = sorted(all_snaps, key=lambda x: abs(x["Chg%"]), reverse=True)[:20]
+                title = "Biggest Movers"
+
+            # Filter: only stocks with real volume and price > $1
+            if results:
+                results = [r for r in results if r.get("Price", 0) > 1][:15]
+
+        # ── Fallback to yfinance scanning if Polygon fails ──
+        if not results:
+            if market == "India":
+                pool = NIFTY_50
+            else:
+                mega = random.sample(NASDAQ_100, min(15, len(NASDAQ_100)))
+                mid = random.sample(MIDCAP_GROWTH, min(12, len(MIDCAP_GROWTH)))
+                small = random.sample(SMALLCAP, min(10, len(SMALLCAP)))
+                trending = TRENDING[:15] if t == "hot" else []
+                val = random.sample(VALUE_DIVIDEND, min(5, len(VALUE_DIVIDEND))) if t != "hot" else []
+                sect = random.sample(SECTOR_PICKS, min(8, len(SECTOR_PICKS)))
+                seen = set()
+                pool = []
+                for s in trending + mega + mid + small + val + sect:
+                    if s not in seen:
+                        seen.add(s)
+                        pool.append(s)
+            results = []
+            for s in pool[:50]:
+                d = fetch_price(s)
+                if d:
+                    results.append({"Ticker": s.replace(".NS", ""), "Price": d["price"], "Chg%": d["change_pct"]})
+            if t == "gainers":
+                results = sorted([r for r in results if r["Chg%"] > 0], key=lambda x: x["Chg%"], reverse=True)[:10]
+                title = "Top Gainers"
+            elif t == "losers":
+                results = sorted([r for r in results if r["Chg%"] < 0], key=lambda x: x["Chg%"])[:10]
+                title = "Top Losers"
+            else:
+                results = sorted(results, key=lambda x: abs(x["Chg%"]), reverse=True)[:12]
+                title = "Biggest Movers"
+
+        return {"ok": True, "type": "list", "title": title, "data": results or [], "market": market}
 
     return {"ok": False, "type": "chat"}
 
@@ -972,6 +1159,8 @@ def main():
                 sym = "₹" if market == "India" else "$"
                 df["Price"] = df["Price"].apply(lambda x: f"{sym}{x:,.2f}")
                 df["Chg%"] = df["Chg%"].apply(lambda x: f"{'▲' if x>=0 else '▼'} {x:+.2f}%")
+                if "Volume" in df.columns:
+                    df["Volume"] = df["Volume"].apply(lambda x: f"{x/1e6:.1f}M" if x >= 1e6 else (f"{x/1e3:.0f}K" if x >= 1e3 else str(x)))
                 st.dataframe(df, use_container_width=True, hide_index=True)
 
     st.session_state.messages.append({"role": "assistant", "content": resp, "chart": chart_ticker, "table": table_data, "trade_signal": trade_signal})
