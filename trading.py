@@ -1097,41 +1097,194 @@ def main():
 
     st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap');
-    :root { --bg:#0c0c0f; --surface:#141418; --border:#1e1e24; --muted:#63637a; --text:#cdcdd6; --bright:#ededf0; --accent:#34d399; --red:#f87171; }
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+    :root {
+        --bg:       #0a0a0b;
+        --surface:  #111113;
+        --surface2: #19191d;
+        --border:   #222228;
+        --muted:    #555566;
+        --text:     #b0b0be;
+        --bright:   #e8e8f0;
+        --green:    #00d4aa;
+        --red:      #ff4d6a;
+        --amber:    #f0b232;
+        --blue:     #4d94ff;
+    }
+
     .stApp { background: var(--bg) !important; }
-    header, footer, #MainMenu { visibility: hidden !important; }
-    .block-container { max-width: 820px !important; padding: 2rem 1.5rem 5rem 1.5rem !important; }
-    h1,h2,h3 { font-family:'Outfit',sans-serif !important; color:var(--bright) !important; font-weight:600 !important; letter-spacing:-0.02em !important; }
-    p,span,div,label,li { font-family:'Outfit',sans-serif !important; color:var(--text) !important; }
-    code,pre { font-family:'JetBrains Mono',monospace !important; }
-    .stChatMessage { background:var(--surface) !important; border:1px solid var(--border) !important; border-radius:10px !important; padding:1rem 1.2rem !important; }
-    .stChatMessage p,.stChatMessage span,.stChatMessage li,.stChatMessage code { color:var(--text) !important; }
-    .stChatMessage strong { color:var(--bright) !important; }
-    .stChatInput>div>div>textarea,.stTextInput>div>div>input { background:var(--surface) !important; border:1px solid var(--border) !important; border-radius:10px !important; color:var(--bright) !important; font-family:'Outfit',sans-serif !important; font-size:0.95rem !important; }
-    .stChatInput>div>div>textarea:focus { border-color:var(--accent) !important; box-shadow:0 0 0 1px var(--accent) !important; }
-    .stDataFrame { border-radius:8px !important; overflow:hidden; }
-    .stDataFrame td,.stDataFrame th { background:var(--surface) !important; color:var(--text) !important; border-color:var(--border) !important; font-family:'JetBrains Mono',monospace !important; font-size:0.82rem !important; }
-    .stDataFrame th { color:var(--muted) !important; font-weight:500 !important; }
-    hr { border-color:var(--border) !important; margin:0.8rem 0 !important; }
-    .stCaption p { color:var(--muted) !important; font-size:0.78rem !important; }
-    .js-plotly-plot .plotly .modebar { display:none !important; }
-    ::-webkit-scrollbar { width:6px; }
-    ::-webkit-scrollbar-track { background:var(--bg); }
-    ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+    header, footer, #MainMenu, .stDeployButton { visibility: hidden !important; display: none !important; }
+
+    .block-container {
+        max-width: 780px !important;
+        padding: 1.5rem 1.2rem 5rem 1.2rem !important;
+    }
+
+    /* ── Typography ── */
+    h1,h2,h3 {
+        font-family: 'IBM Plex Sans', sans-serif !important;
+        color: var(--bright) !important;
+        font-weight: 600 !important;
+        letter-spacing: -0.03em !important;
+    }
+    p, span, div, label, li {
+        font-family: 'IBM Plex Sans', sans-serif !important;
+        color: var(--text) !important;
+        line-height: 1.6 !important;
+    }
+    code, pre {
+        font-family: 'IBM Plex Mono', monospace !important;
+        background: var(--surface2) !important;
+        color: var(--green) !important;
+        border: none !important;
+    }
+
+    /* ── Kill the chatbot bubble look ── */
+    .stChatMessage {
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        padding: 0.6rem 0 !important;
+        border-bottom: 1px solid var(--border) !important;
+        gap: 0.8rem !important;
+    }
+    /* Hide the avatar icons entirely */
+    .stChatMessage .stMarkdown:first-child img,
+    .stChatMessage [data-testid="chatAvatarIcon-user"],
+    .stChatMessage [data-testid="chatAvatarIcon-assistant"],
+    .stChatMessage .eyeqlp52,
+    .stChatMessage > div:first-child > div:first-child {
+        display: none !important;
+        width: 0 !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    /* Tighten up message container */
+    [data-testid="stChatMessageContent"] {
+        padding: 0 !important;
+    }
+
+    .stChatMessage p, .stChatMessage span, .stChatMessage li {
+        color: var(--text) !important;
+        font-size: 0.92rem !important;
+    }
+    .stChatMessage strong, .stChatMessage b {
+        color: var(--bright) !important;
+        font-weight: 600 !important;
+    }
+
+    /* User messages — styled like terminal input */
+    [data-testid="stChatMessage-user"] {
+        border-bottom: none !important;
+        padding: 0.4rem 0 0.2rem 0 !important;
+    }
+    [data-testid="stChatMessage-user"] p {
+        color: var(--muted) !important;
+        font-family: 'IBM Plex Mono', monospace !important;
+        font-size: 0.85rem !important;
+    }
+    [data-testid="stChatMessage-user"] p::before {
+        content: "→ ";
+        color: var(--green);
+        font-weight: 600;
+    }
+
+    /* ── Input bar — command prompt style ── */
+    .stChatInput > div > div > textarea,
+    .stTextInput > div > div > input {
+        background: var(--surface) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 6px !important;
+        color: var(--bright) !important;
+        font-family: 'IBM Plex Mono', monospace !important;
+        font-size: 0.88rem !important;
+        padding: 0.8rem 1rem !important;
+    }
+    .stChatInput > div > div > textarea:focus {
+        border-color: var(--green) !important;
+        box-shadow: 0 0 0 1px rgba(0,212,170,0.2) !important;
+    }
+    .stChatInput > div > div > textarea::placeholder {
+        color: var(--muted) !important;
+        font-family: 'IBM Plex Mono', monospace !important;
+    }
+
+    /* ── Send button ── */
+    .stChatInput button {
+        background: var(--green) !important;
+        border: none !important;
+        border-radius: 6px !important;
+    }
+    .stChatInput button svg { color: var(--bg) !important; }
+
+    /* ── Data tables — terminal grid look ── */
+    .stDataFrame { border-radius: 4px !important; overflow: hidden !important; }
+    .stDataFrame td, .stDataFrame th {
+        background: var(--surface) !important;
+        color: var(--text) !important;
+        border-color: var(--border) !important;
+        font-family: 'IBM Plex Mono', monospace !important;
+        font-size: 0.8rem !important;
+        padding: 0.4rem 0.8rem !important;
+    }
+    .stDataFrame th {
+        color: var(--muted) !important;
+        font-weight: 500 !important;
+        text-transform: uppercase !important;
+        font-size: 0.7rem !important;
+        letter-spacing: 0.05em !important;
+    }
+
+    /* ── Dividers ── */
+    hr { border-color: var(--border) !important; margin: 0.6rem 0 !important; }
+
+    /* ── Caption ── */
+    .stCaption p {
+        color: var(--muted) !important;
+        font-size: 0.72rem !important;
+        font-family: 'IBM Plex Mono', monospace !important;
+        letter-spacing: 0.02em !important;
+    }
+
+    /* ── Plotly ── */
+    .js-plotly-plot .plotly .modebar { display: none !important; }
+
+    /* ── Spinner ── */
+    .stSpinner > div { border-top-color: var(--green) !important; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+    /* ── Lists in messages — cleaner ── */
+    .stChatMessage ol, .stChatMessage ul {
+        padding-left: 1.2rem !important;
+        margin: 0.4rem 0 !important;
+    }
+    .stChatMessage li {
+        margin-bottom: 0.3rem !important;
+        padding-left: 0.2rem !important;
+    }
+    .stChatMessage li::marker {
+        color: var(--muted) !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    st.markdown("## ◉ Paula")
-    st.caption("Stock analysis terminal — type a ticker or ask anything")
+    # Header — minimal, not chatbot-y
+    st.markdown("## Paula")
+    st.caption(f"market terminal · {datetime.now().strftime('%b %d, %Y')}")
     st.markdown("---")
 
     for m in st.session_state.messages:
-        avatar = "📈" if m["role"] == "assistant" else "👤"
-        with st.chat_message(m["role"], avatar=avatar):
+        with st.chat_message(m["role"]):
             st.markdown(m["content"])
             if m["role"] == "assistant" and m.get("chart"):
                 fig = build_chart(m["chart"], trade_signal=m.get("trade_signal"))
@@ -1140,15 +1293,15 @@ def main():
             if m["role"] == "assistant" and m.get("table"):
                 st.dataframe(pd.DataFrame(m["table"]), use_container_width=True, hide_index=True)
 
-    prompt = st.chat_input("Analyze NVDA… Top gainers… Price of AAPL…")
+    prompt = st.chat_input("NVDA… top gainers… price AAPL…")
     if not prompt:
         return
 
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user", avatar="👤"):
+    with st.chat_message("user"):
         st.markdown(prompt)
 
-    with st.chat_message("assistant", avatar="📈"):
+    with st.chat_message("assistant"):
         with st.spinner(""):
             intent = route(prompt)
             result = execute(intent)
