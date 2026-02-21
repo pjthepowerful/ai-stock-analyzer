@@ -129,6 +129,30 @@ _NOISE_WORDS = frozenset([
     "WHEN","WHERE","SOME","INTO","TIME","VERY","JUST","KNOW","TAKE","COME",
     "MAKE","LIKE","BACK","ONLY","OVER","SUCH","MOST","NEED","HELP","THANK",
     "HOW","MUCH","DOES","THINK","LOOK","WANT","PLEASE","COULD","REALLY",
+    # Common words that look like tickers
+    "NAME","LIST","PICK","THEM","ALSO","BEEN","EACH","EVEN","NEXT","THEN",
+    "THAN","YEAR","LONG","DOWN","MANY","WELL","WORK","CALL","KEEP","LAST",
+    "SAME","SELF","SEEM","TURN","PART","PLAN","FREE","FULL","LIVE","OPEN",
+    "PLAY","SAFE","STAY","WEEK","RISK","GAIN","LOSS","HOLD","RATE","GROW",
+    "MOVE","DROP","JUMP","RISE","FAST","HARD","EASY","SURE","TALK","TEXT",
+    "SEND","SAVE","IDEA","HOPE","FEEL","REAL","ZERO","HALF","HUGE","TINY",
+    "WIDE","DEEP","PURE","BOLD","WARM","COOL","DARK","FAIR","RARE","WILD",
+    "MAIN","NICE","ABLE","AWAY","HERE","ONCE","EVER","ELSE","DONE","GONE",
+    "WORD","SAID","SORT","TYPE","MODE","HOME","BOTH","NEAR","LOTS","MUST",
+    "STOP","TECH","EDIT","CHAT","YOUR","THEY","WERE","YEAH","OKAY","YALL",
+    "MINE","HERS","OURS","WHOM","WENT","GAVE","TOLD","LEFT","CAME","FELT",
+    "KEPT","PAID","SENT","LOST","GREW","DREW","FELL","HELD","READ","LEAD",
+    "MEAN","CASE","FACT","VIEW","NOTE","SIGN","FORM","LINE","SIDE","HAND",
+    "HEAD","FACE","BODY","FOOD","LAND","CITY","LIFE","MIND","LOVE","HATE",
+    "FEAR","CARE","PICK","TOPS","ONES","PUTS","GETS","HITS","RUNS","OWNS",
+    "SAYS","GOES","PAYS","WINS","ADDS","ASKS","LETS","USES","SEES","PUTS",
+    "SEEM","TEND","TEND","VARY","GIVE","GAVE","THESE","THOSE","EVERY",
+    "OTHER","AFTER","FIRST","STILL","MIGHT","RIGHT","GREAT","NEVER",
+    "THREE","WORLD","WHILE","BEING","GOING","USING","DOING","UNDER",
+    "MAJOR","SMALL","LARGE","YOUNG","EARLY","ABOVE","BELOW","LOWER",
+    "UPPER","INNER","OUTER","WHOLE","TOTAL","CLEAR","BRIEF","QUICK",
+    "SEVEN","EIGHT","MAYBE","SINCE","AMONG","ALONG","OFTEN","LATER",
+    "UNTIL","SHALL","GONNA","ABOUT","AGAIN",
 ])
 
 
@@ -156,18 +180,19 @@ def _find_ticker(text: str) -> tuple[str | None, str]:
                 return clean, "India"
             if clean in us_set:
                 return clean, "US"
-    # 3) Try any 2-5 letter word as a raw ticker (covers stocks not in our lists)
-    for word in text.upper().split():
-        clean = re.sub(r"[^A-Z]", "", word)
-        if clean and 2 <= len(clean) <= 5 and clean not in _NOISE_WORDS:
-            return clean, _detect_market(text)
-    # 4) Polygon search — find ANY stock by name (e.g. "analyze Palomar Holdings")
-    words = [w for w in text.split() if len(w) > 3 and w.upper() not in _NOISE_WORDS]
-    if words:
-        query = " ".join(words[:3])
-        found = polygon_search_ticker(query)
-        if found:
-            return found, "US"
+    # 3) Polygon search — only if the message looks like a specific stock query
+    stock_intent = any(w in low for w in [
+        "analyze", "analysis", "price", "buy", "sell", "chart", "quote",
+        "stock", "ticker", "how is", "how's", "what about", "look at",
+        "check out", "thoughts on", "opinion on", "review",
+    ])
+    if stock_intent:
+        words = [w for w in text.split() if len(w) > 3 and w.upper() not in _NOISE_WORDS]
+        if words:
+            query = " ".join(words[:3])
+            found = polygon_search_ticker(query)
+            if found:
+                return found, "US"
     return None, _detect_market(text)
 
 
