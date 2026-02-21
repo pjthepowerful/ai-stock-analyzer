@@ -1150,16 +1150,11 @@ def main():
         gap: 0.8rem !important;
     }
     /* Hide the avatar icons entirely */
-    .stChatMessage .stMarkdown:first-child img,
     .stChatMessage [data-testid="chatAvatarIcon-user"],
-    .stChatMessage [data-testid="chatAvatarIcon-assistant"],
-    .stChatMessage .eyeqlp52,
-    .stChatMessage > div:first-child > div:first-child {
-        display: none !important;
-        width: 0 !important;
-        height: 0 !important;
-        margin: 0 !important;
-        padding: 0 !important;
+    .stChatMessage [data-testid="chatAvatarIcon-assistant"] {
+        background: var(--surface2) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 4px !important;
     }
     /* Tighten up message container */
     [data-testid="stChatMessageContent"] {
@@ -1184,11 +1179,6 @@ def main():
         color: var(--muted) !important;
         font-family: 'IBM Plex Mono', monospace !important;
         font-size: 0.85rem !important;
-    }
-    [data-testid="stChatMessage-user"] p::before {
-        content: "→ ";
-        color: var(--green);
-        font-weight: 600;
     }
 
     /* ── Input bar — command prompt style ── */
@@ -1284,7 +1274,8 @@ def main():
     st.markdown("---")
 
     for m in st.session_state.messages:
-        with st.chat_message(m["role"]):
+        av = "◈" if m["role"] == "assistant" else "›"
+        with st.chat_message(m["role"], avatar=av):
             st.markdown(m["content"])
             if m["role"] == "assistant" and m.get("chart"):
                 fig = build_chart(m["chart"], trade_signal=m.get("trade_signal"))
@@ -1298,10 +1289,10 @@ def main():
         return
 
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
+    with st.chat_message("user", avatar="›"):
         st.markdown(prompt)
 
-    with st.chat_message("assistant"):
+    with st.chat_message("assistant", avatar="◈"):
         with st.spinner(""):
             intent = route(prompt)
             result = execute(intent)
