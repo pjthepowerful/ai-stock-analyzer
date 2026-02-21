@@ -1274,7 +1274,7 @@ def main():
     st.markdown("---")
 
     for m in st.session_state.messages:
-        av = "◈" if m["role"] == "assistant" else "›"
+        av = "🟢" if m["role"] == "assistant" else "›"
         with st.chat_message(m["role"], avatar=av):
             st.markdown(m["content"])
             if m["role"] == "assistant" and m.get("chart"):
@@ -1289,10 +1289,10 @@ def main():
         return
 
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user", avatar="›"):
+    with st.chat_message("user", avatar="⬛"):
         st.markdown(prompt)
 
-    with st.chat_message("assistant", avatar="◈"):
+    with st.chat_message("assistant", avatar="🟢"):
         with st.spinner(""):
             intent = route(prompt)
             result = execute(intent)
