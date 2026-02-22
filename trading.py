@@ -1187,6 +1187,10 @@ def route(msg: str) -> dict:
     ticker, market = _find_ticker(msg)
 
     # ── Trading commands ──
+    if any(w in m for w in ["activate autopilot", "activate alpaca", "autopilot", "auto trade",
+                            "start trading", "go autopilot", "run autopilot", "auto pilot",
+                            "scan and trade", "find and buy", "find trades"]):
+        return {"type": "autopilot"}
     if any(w in m for w in ["portfolio", "my account", "buying power", "my equity", "account info", "how much do i have"]):
         return {"type": "portfolio"}
     if any(w in m for w in ["my positions", "what do i own", "what am i holding", "open positions", "show positions"]):
@@ -1239,9 +1243,196 @@ def route(msg: str) -> dict:
     return {"type": "chat", "market": market}
 
 
+def run_autopilot() -> dict:
+    """
+    Full autopilot cycle:
+    1. Check account & existing positions
+    2. Sell any positions where signal has turned bad
+    3. Scan universe for high-conviction setups
+    4. Execute bracket orders on the best ones
+    Returns a report of everything it did.
+    """
+    log = []
+
+    # ── 1. Account check ──
+    account = alpaca_account()
+    if not account:
+        return {"ok": False, "error": "Can't connect to Alpaca."}
+    log.append(f"Portfolio: ${account['equity']:,.2f} · Cash: ${account['cash']:,.2f} · Buying power: ${account['buying_power']:,.2f}")
+
+    positions = alpaca_positions()
+    held_tickers = {p["ticker"] for p in positions}
+    log.append(f"Open positions: {len(positions)}")
+
+    MAX_POSITIONS = 10
+    RISK_PER_TRADE = 0.02
+    MAX_POS_PCT = 0.15
+    MIN_SCORE = 68
+    MIN_CONFLUENCE = 3
+    MIN_RR = 1.8
+    SELL_BELOW = 35
+
+    # ── 2. Check existing positions — sell if signal turned bad ──
+    sells = []
+    for pos in positions:
+        try:
+            data = fetch_full(pos["ticker"])
+            if not data:
+                continue
+            sig = generate_trade_signal(data)
+            if sig["score"] <= SELL_BELOW or sig["action"] in ("SELL", "STRONG_SELL"):
+                result = alpaca_sell(ticker=pos["ticker"], sell_all=True)
+                if result.get("ok"):
+                    sells.append(f"🔴 Sold {pos['ticker']} — score dropped to {sig['score']}, signal: {sig['action']}")
+                else:
+                    sells.append(f"⚠️ Tried to sell {pos['ticker']} but failed: {result.get('error','')}")
+        except Exception:
+            continue
+
+    for s in sells:
+        log.append(s)
+    if not sells:
+        log.append("All positions still healthy — no sells needed")
+
+    # ── 3. Scan for new opportunities ──
+    open_slots = MAX_POSITIONS - (len(positions) - len(sells))
+    if open_slots <= 0:
+        log.append(f"Max positions ({MAX_POSITIONS}) reached — skipping scan")
+        return {"ok": True, "log": log, "buys": 0, "sells": len(sells)}
+
+    if account["buying_power"] < 100:
+        log.append("Not enough buying power — skipping scan")
+        return {"ok": True, "log": log, "buys": 0, "sells": len(sells)}
+
+    # Universe to scan — mix of everything
+    SCAN_LIST = [
+        "AAPL","MSFT","AMZN","NVDA","GOOGL","META","TSLA","AVGO","NFLX","AMD",
+        "ADBE","CRM","INTU","QCOM","TXN","AMAT","ISRG","LRCX","MU","PANW",
+        "CRWD","ASML","MRVL","KLAC","SNPS",
+        "AXON","DUOL","CELH","HIMS","CAVA","ONON","ELF","FTNT","ZS",
+        "MNDY","TOST","BROS","DT","DDOG","SMAR",
+        "UPST","AFRM","RKLB","SOUN","ASTS","LUNR",
+        "IREN","CLSK","MARA","TGTX","RXRX","CRSP",
+        "FSLR","ENPH","CEG","VST","SMR",
+        "LMT","RTX","KTOS",
+        "SQ","NU","COIN","HOOD","SOFI",
+        "PLTR","SMCI","ARM","IONQ","DKNG","NET",
+        "JPM","V","MA","HD","COST","WMT","ABBV",
+    ]
+
+    # Remove stocks we already hold
+    scan_list = [t for t in SCAN_LIST if t not in held_tickers]
+    random.shuffle(scan_list)
+
+    log.append(f"Scanning {len(scan_list)} stocks for opportunities...")
+
+    opportunities = []
+    for ticker in scan_list:
+        try:
+            data = fetch_full(ticker)
+            if not data:
+                continue
+            price = data.get("price", 0)
+            if not price or price < 2:
+                continue
+            sig = generate_trade_signal(data)
+            if (sig["score"] >= MIN_SCORE
+                    and sig["action"] in ("BUY", "STRONG_BUY")
+                    and sig["confluence"]["bullish"] >= MIN_CONFLUENCE
+                    and sig["trade"]["risk_reward"] >= MIN_RR):
+                opportunities.append({
+                    "ticker": ticker,
+                    "score": sig["score"],
+                    "action": sig["action"],
+                    "confluence": sig["confluence"]["bullish"],
+                    "rr": sig["trade"]["risk_reward"],
+                    "signal": sig,
+                    "data": data,
+                })
+        except Exception:
+            continue
+
+    # Sort by score (highest first)
+    opportunities.sort(key=lambda x: x["score"], reverse=True)
+
+    if not opportunities:
+        log.append("No stocks passed the criteria (score≥68, confluence≥3, R:R≥1.8)")
+        return {"ok": True, "log": log, "buys": 0, "sells": len(sells), "scanned": len(scan_list)}
+
+    log.append(f"Found {len(opportunities)} opportunities — executing top {min(open_slots, len(opportunities))}")
+
+    # ── 4. Execute trades on best opportunities ──
+    buys = []
+    for opp in opportunities[:open_slots]:
+        ticker = opp["ticker"]
+        sig = opp["signal"]
+        trade = sig["trade"]
+
+        entry = trade["entry"]
+        stop = trade["stop_loss"]
+        target = trade["target_1"]
+
+        if entry <= stop:
+            continue
+
+        # Position sizing: risk X% of equity
+        risk_per_share = entry - stop
+        max_risk_dollars = account["equity"] * RISK_PER_TRADE
+        qty = max(1, int(max_risk_dollars / risk_per_share))
+
+        # Cap at MAX_POS_PCT of equity
+        max_qty = int(account["equity"] * MAX_POS_PCT / entry)
+        qty = min(qty, max_qty)
+
+        # Cap at buying power
+        max_qty_bp = int(account["buying_power"] * 0.90 / entry)
+        qty = min(qty, max_qty_bp)
+
+        if qty < 1:
+            continue
+
+        cost = qty * entry
+        result = alpaca_buy(ticker=ticker, qty=qty, stop_loss=stop, take_profit=target)
+
+        if result.get("ok"):
+            buys.append(f"🟢 Bought {qty} {ticker} @ ~${entry:.2f} · Stop ${stop:.2f} · Target ${target:.2f} · Score {opp['score']} · R:R {opp['rr']:.1f}:1")
+            # Reduce buying power for next trade
+            account["buying_power"] -= cost
+        else:
+            buys.append(f"⚠️ Failed to buy {ticker}: {result.get('error','')}")
+
+    for b in buys:
+        log.append(b)
+
+    return {
+        "ok": True,
+        "log": log,
+        "buys": sum(1 for b in buys if b.startswith("🟢")),
+        "sells": len(sells),
+        "scanned": len(scan_list),
+        "opportunities": len(opportunities),
+    }
+
+
 def execute(intent: dict) -> dict:
     t = intent["type"]
     market = intent.get("market", "US")
+
+    # ── Autopilot ──
+    if t == "autopilot":
+        result = run_autopilot()
+        if not result.get("ok"):
+            return {"ok": False, "error": result.get("error", "Autopilot failed")}
+        report_lines = result["log"]
+        summary = (
+            f"**Autopilot Complete**\n\n"
+            f"Scanned: {result.get('scanned', '?')} stocks · "
+            f"Found: {result.get('opportunities', 0)} opportunities · "
+            f"Bought: {result.get('buys', 0)} · Sold: {result.get('sells', 0)}\n\n"
+            f"---\n\n" +
+            "\n\n".join(report_lines)
+        )
+        return {"ok": True, "type": "trade", "msg": summary}
 
     # ── Trading commands ──
     if t == "portfolio":
