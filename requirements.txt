@@ -6,4 +6,3 @@ plotly
 groq
 python-dotenv
 requests
-pytz

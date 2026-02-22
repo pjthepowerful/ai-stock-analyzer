@@ -11,6 +11,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from groq import Groq
 from dotenv import load_dotenv
 import os
@@ -18,7 +19,6 @@ import json
 import re
 import random
 import time
-import pytz
 import requests
 import warnings
 
@@ -1275,7 +1275,7 @@ def route(msg: str) -> dict:
 
 def _market_is_open() -> tuple[bool, str]:
     """Check if US stock market is currently open."""
-    et = pytz.timezone("US/Eastern")
+    et = ZoneInfo("US/Eastern")
     now = datetime.now(et)
     weekday = now.weekday()  # 0=Mon, 6=Sun
 
@@ -1316,7 +1316,7 @@ def run_autopilot() -> dict:
     if "autopilot_bought" not in st.session_state:
         st.session_state["autopilot_bought"] = set()
     # Reset bought tracker each new day
-    et = pytz.timezone("US/Eastern")
+    et = ZoneInfo("US/Eastern")
     today = datetime.now(et).strftime("%Y-%m-%d")
     if st.session_state.get("autopilot_date") != today:
         st.session_state["autopilot_bought"] = set()
