@@ -17,6 +17,7 @@ import os
 import json
 import re
 import random
+import time
 import requests
 import warnings
 
@@ -1094,6 +1095,31 @@ def fetch_price(ticker: str) -> dict | None:
         return None
 
 
+def fetch_scan(ticker: str) -> dict | None:
+    """Lightweight fetch for scanning — skips slow .info calls, just gets history + technicals."""
+    try:
+        stk = yf.Ticker(ticker)
+        hist = stk.history(period="6mo")
+        if hist is None or hist.empty or len(hist) < 20:
+            return None
+        price = float(hist["Close"].iloc[-1])
+        prev = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else price
+        if not price or price < 1:
+            return None
+        tech = compute_technicals(hist)
+        return {
+            "price": round(price, 2),
+            "prev_close": round(prev, 2),
+            "change_pct": round((price - prev) / prev * 100, 2) if prev else 0,
+            "name": ticker,
+            "ticker": ticker,
+            "full_ticker": ticker,
+            "technicals": tech,
+        }
+    except Exception:
+        return None
+
+
 @st.cache_data(ttl=120)
 def fetch_full(ticker: str) -> dict | None:
     basic = fetch_price(ticker)
@@ -1191,6 +1217,9 @@ def route(msg: str) -> dict:
                             "start trading", "go autopilot", "run autopilot", "auto pilot",
                             "scan and trade", "find and buy", "find trades"]):
         return {"type": "autopilot"}
+    if any(w in m for w in ["stop autopilot", "deactivate", "stop trading", "pause", "stop auto",
+                            "turn off autopilot", "kill autopilot", "stop"]):
+        return {"type": "stop_autopilot"}
     if any(w in m for w in ["portfolio", "my account", "buying power", "my equity", "account info", "how much do i have"]):
         return {"type": "portfolio"}
     if any(w in m for w in ["my positions", "what do i own", "what am i holding", "open positions", "show positions"]):
@@ -1375,11 +1404,13 @@ def run_autopilot() -> dict:
     opportunities = []
     all_scores = []
     analyzed = 0
-    MAX_ANALYZE = 120  # Cap to keep scan under ~4 minutes
+    errors = 0
+    MAX_ANALYZE = 120
     for ticker in scan_list[:MAX_ANALYZE]:
         try:
-            data = fetch_full(ticker)
+            data = fetch_scan(ticker)
             if not data:
+                errors += 1
                 continue
             price = data.get("price", 0)
             if not price or price < 2:
@@ -1401,14 +1432,14 @@ def run_autopilot() -> dict:
                     "signal": sig,
                     "data": data,
                 })
-                # Early exit: if we found enough good ones, stop scanning
                 if len(opportunities) >= open_slots + 5:
                     log.append(f"Found {len(opportunities)} opportunities — stopping early")
                     break
         except Exception:
+            errors += 1
             continue
 
-    log.append(f"Analyzed {analyzed} stocks")
+    log.append(f"Analyzed {analyzed} stocks ({errors} failed to fetch)")
 
     # Show top 10 scores regardless of whether they qualified
     all_scores.sort(key=lambda x: x[1], reverse=True)
@@ -1487,19 +1518,25 @@ def execute(intent: dict) -> dict:
 
     # ── Autopilot ──
     if t == "autopilot":
+        st.session_state["autopilot_active"] = True
         result = run_autopilot()
         if not result.get("ok"):
             return {"ok": False, "error": result.get("error", "Autopilot failed")}
         report_lines = result["log"]
         summary = (
-            f"**Autopilot Complete**\n\n"
+            f"**🟢 Autopilot Active — Running Continuously**\n\n"
             f"Scanned: {result.get('scanned', '?')} stocks · "
             f"Found: {result.get('opportunities', 0)} opportunities · "
             f"Bought: {result.get('buys', 0)} · Sold: {result.get('sells', 0)}\n\n"
+            f"*Next scan in 30 minutes. Say \"stop\" to deactivate.*\n\n"
             f"---\n\n" +
             "\n\n".join(report_lines)
         )
         return {"ok": True, "type": "trade", "msg": summary}
+
+    if t == "stop_autopilot":
+        st.session_state["autopilot_active"] = False
+        return {"ok": True, "type": "trade", "msg": "🔴 **Autopilot deactivated.** No more automatic scans. Your positions remain open."}
 
     # ── Trading commands ──
     if t == "portfolio":
@@ -1944,6 +1981,7 @@ def main():
 
     prompt = st.chat_input("NVDA… buy 10 AAPL… portfolio… top gainers…")
     if not prompt:
+        _run_autopilot_loop()
         return
 
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -2002,6 +2040,53 @@ def main():
                 st.dataframe(df, use_container_width=True, hide_index=True)
 
     st.session_state.messages.append({"role": "assistant", "content": resp, "chart": chart_ticker, "table": table_data, "trade_signal": trade_signal})
+
+    # ── Autopilot continuous loop ──
+    _run_autopilot_loop()
+
+
+def _run_autopilot_loop():
+    """If autopilot is active, wait then scan again automatically."""
+    if not st.session_state.get("autopilot_active", False):
+        return
+
+    INTERVAL = 30 * 60  # 30 minutes
+
+    # Track last scan time
+    last_scan = st.session_state.get("autopilot_last_scan", 0)
+    now = time.time()
+    elapsed = now - last_scan
+
+    if elapsed < INTERVAL and last_scan > 0:
+        # Show countdown
+        remaining = int(INTERVAL - elapsed)
+        mins, secs = divmod(remaining, 60)
+        st.markdown(f"---\n\n🟢 **Autopilot active** · Next scan in {mins}m {secs}s · Say \"stop\" to deactivate")
+        time.sleep(min(60, remaining))  # Sleep in 60s chunks to stay responsive
+        st.rerun()
+    else:
+        # Time to scan
+        st.session_state["autopilot_last_scan"] = now
+        with st.chat_message("assistant", avatar="🟢"):
+            with st.spinner("Autopilot scanning..."):
+                result = run_autopilot()
+                if result.get("ok"):
+                    report = result["log"]
+                    summary = (
+                        f"**🟢 Autopilot Scan Complete**\n\n"
+                        f"Scanned: {result.get('scanned', '?')} · "
+                        f"Found: {result.get('opportunities', 0)} · "
+                        f"Bought: {result.get('buys', 0)} · Sold: {result.get('sells', 0)}\n\n"
+                        f"*Next scan in 30 minutes.*\n\n---\n\n" +
+                        "\n\n".join(report)
+                    )
+                else:
+                    summary = f"⚠️ Autopilot error: {result.get('error', 'Unknown')}"
+                st.markdown(summary)
+                st.session_state.messages.append({"role": "assistant", "content": summary})
+        # Wait then scan again
+        time.sleep(60)
+        st.rerun()
 
 
 if __name__ == "__main__":
