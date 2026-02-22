@@ -18,6 +18,7 @@ import json
 import re
 import random
 import time
+import pytz
 import requests
 import warnings
 
@@ -1272,6 +1273,27 @@ def route(msg: str) -> dict:
     return {"type": "chat", "market": market}
 
 
+def _market_is_open() -> tuple[bool, str]:
+    """Check if US stock market is currently open."""
+    et = pytz.timezone("US/Eastern")
+    now = datetime.now(et)
+    weekday = now.weekday()  # 0=Mon, 6=Sun
+
+    if weekday >= 5:
+        next_open = "Monday 9:30 AM ET"
+        return False, f"Weekend — market reopens {next_open}"
+
+    market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
+
+    if now < market_open:
+        return False, f"Pre-market — opens at 9:30 AM ET ({market_open - now} from now)"
+    if now >= market_close:
+        return False, "Market closed for today — reopens tomorrow 9:30 AM ET"
+
+    return True, "Market is open"
+
+
 def run_autopilot() -> dict:
     """
     Full autopilot cycle:
@@ -1283,6 +1305,23 @@ def run_autopilot() -> dict:
     """
     log = []
 
+    # ── Market hours check ──
+    is_open, status_msg = _market_is_open()
+    if not is_open:
+        log.append(f"⏸️ {status_msg}")
+        log.append("Autopilot is paused — will resume when market opens.")
+        return {"ok": True, "log": log, "buys": 0, "sells": 0, "scanned": 0, "opportunities": 0, "market_closed": True}
+
+    # Track what we've already bought this session to prevent duplicates
+    if "autopilot_bought" not in st.session_state:
+        st.session_state["autopilot_bought"] = set()
+    # Reset bought tracker each new day
+    et = pytz.timezone("US/Eastern")
+    today = datetime.now(et).strftime("%Y-%m-%d")
+    if st.session_state.get("autopilot_date") != today:
+        st.session_state["autopilot_bought"] = set()
+        st.session_state["autopilot_date"] = today
+
     # ── 1. Account check ──
     account = alpaca_account()
     if not account:
@@ -1290,7 +1329,7 @@ def run_autopilot() -> dict:
     log.append(f"Portfolio: ${account['equity']:,.2f} · Cash: ${account['cash']:,.2f} · Buying power: ${account['buying_power']:,.2f}")
 
     positions = alpaca_positions()
-    held_tickers = {p["ticker"] for p in positions}
+    held_tickers = {p["ticker"] for p in positions} | st.session_state.get("autopilot_bought", set())
     log.append(f"Open positions: {len(positions)}")
 
     MAX_POSITIONS = 10
@@ -1494,7 +1533,7 @@ def run_autopilot() -> dict:
 
         if result.get("ok"):
             buys.append(f"🟢 Bought {qty} {ticker} @ ~${entry:.2f} · Stop ${stop:.2f} · Target ${target:.2f} · Score {opp['score']} · R:R {opp['rr']:.1f}:1")
-            # Reduce buying power for next trade
+            st.session_state.setdefault("autopilot_bought", set()).add(ticker)
             account["buying_power"] -= cost
         else:
             buys.append(f"⚠️ Failed to buy {ticker}: {result.get('error','')}")
@@ -2050,27 +2089,35 @@ def _run_autopilot_loop():
     if not st.session_state.get("autopilot_active", False):
         return
 
+    # Check market hours first
+    is_open, status_msg = _market_is_open()
+
+    if not is_open:
+        st.markdown(f"---\n\n⏸️ **Autopilot paused** · {status_msg}\n\nWill auto-resume when market opens. You can close this tab — positions are safe on Alpaca.")
+        time.sleep(300)  # Check every 5 min if market has opened
+        st.rerun()
+        return
+
     INTERVAL = 30 * 60  # 30 minutes
 
-    # Track last scan time
     last_scan = st.session_state.get("autopilot_last_scan", 0)
     now = time.time()
     elapsed = now - last_scan
 
     if elapsed < INTERVAL and last_scan > 0:
-        # Show countdown
         remaining = int(INTERVAL - elapsed)
         mins, secs = divmod(remaining, 60)
         st.markdown(f"---\n\n🟢 **Autopilot active** · Next scan in {mins}m {secs}s · Say \"stop\" to deactivate")
-        time.sleep(min(60, remaining))  # Sleep in 60s chunks to stay responsive
+        time.sleep(min(60, remaining))
         st.rerun()
     else:
-        # Time to scan
         st.session_state["autopilot_last_scan"] = now
         with st.chat_message("assistant", avatar="🟢"):
             with st.spinner("Autopilot scanning..."):
                 result = run_autopilot()
-                if result.get("ok"):
+                if result.get("market_closed"):
+                    summary = "\n\n".join(result["log"])
+                elif result.get("ok"):
                     report = result["log"]
                     summary = (
                         f"**🟢 Autopilot Scan Complete**\n\n"
@@ -2084,7 +2131,6 @@ def _run_autopilot_loop():
                     summary = f"⚠️ Autopilot error: {result.get('error', 'Unknown')}"
                 st.markdown(summary)
                 st.session_state.messages.append({"role": "assistant", "content": summary})
-        # Wait then scan again
         time.sleep(60)
         st.rerun()
 
