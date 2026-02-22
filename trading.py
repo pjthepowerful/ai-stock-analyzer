@@ -363,6 +363,259 @@ def polygon_search_ticker(query: str) -> str | None:
         return None
 
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  ALPACA PAPER TRADING ENGINE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+ALPACA_BASE = "https://paper-api.alpaca.markets"
+
+def _alpaca_headers() -> dict:
+    key_id = st.secrets.get("ALPACA_KEY_ID") or os.environ.get("ALPACA_KEY_ID") or "PK2TH45QESGT2V6AHGLXPEZU42"
+    secret = st.secrets.get("ALPACA_SECRET") or os.environ.get("ALPACA_SECRET") or "EwCn4GUJxaVMBbwSp3WKujNJDfbH4pXX2kiqKUFNfL9v"
+    return {
+        "APCA-API-KEY-ID": key_id,
+        "APCA-API-SECRET-KEY": secret,
+        "Content-Type": "application/json",
+    }
+
+
+def alpaca_account() -> dict | None:
+    """Get account info: buying power, equity, P&L."""
+    try:
+        r = requests.get(f"{ALPACA_BASE}/v2/account", headers=_alpaca_headers(), timeout=10)
+        if r.status_code != 200:
+            return None
+        a = r.json()
+        equity = float(a.get("equity", 0))
+        cash = float(a.get("cash", 0))
+        buying_power = float(a.get("buying_power", 0))
+        last_equity = float(a.get("last_equity", equity))
+        pnl = equity - last_equity
+        pnl_pct = (pnl / last_equity * 100) if last_equity > 0 else 0
+        return {
+            "equity": round(equity, 2),
+            "cash": round(cash, 2),
+            "buying_power": round(buying_power, 2),
+            "daily_pnl": round(pnl, 2),
+            "daily_pnl_pct": round(pnl_pct, 2),
+            "portfolio_value": round(float(a.get("portfolio_value", equity)), 2),
+            "long_market_value": round(float(a.get("long_market_value", 0)), 2),
+            "short_market_value": round(float(a.get("short_market_value", 0)), 2),
+            "status": a.get("status", "UNKNOWN"),
+        }
+    except Exception:
+        return None
+
+
+def alpaca_positions() -> list[dict]:
+    """Get all open positions."""
+    try:
+        r = requests.get(f"{ALPACA_BASE}/v2/positions", headers=_alpaca_headers(), timeout=10)
+        if r.status_code != 200:
+            return []
+        positions = []
+        for p in r.json():
+            positions.append({
+                "ticker": p.get("symbol", ""),
+                "qty": float(p.get("qty", 0)),
+                "side": p.get("side", "long"),
+                "avg_entry": round(float(p.get("avg_entry_price", 0)), 2),
+                "current_price": round(float(p.get("current_price", 0)), 2),
+                "market_value": round(float(p.get("market_value", 0)), 2),
+                "unrealized_pnl": round(float(p.get("unrealized_pl", 0)), 2),
+                "unrealized_pnl_pct": round(float(p.get("unrealized_plpc", 0)) * 100, 2),
+                "today_pnl": round(float(p.get("unrealized_intraday_pl", 0)), 2),
+            })
+        return positions
+    except Exception:
+        return []
+
+
+def alpaca_buy(ticker: str, qty: int = None, notional: float = None,
+               stop_loss: float = None, take_profit: float = None,
+               limit_price: float = None) -> dict:
+    """
+    Place a buy order. Supports:
+    - Market order (qty or notional)
+    - Limit order (limit_price)
+    - Bracket order (stop_loss and/or take_profit)
+    """
+    order = {
+        "symbol": ticker.upper(),
+        "side": "buy",
+        "time_in_force": "day",
+    }
+
+    if notional and not qty:
+        order["notional"] = round(notional, 2)
+    else:
+        order["qty"] = str(qty or 1)
+
+    # Bracket order: entry + stop-loss + take-profit
+    if stop_loss and take_profit:
+        order["type"] = "limit" if limit_price else "market"
+        order["order_class"] = "bracket"
+        order["stop_loss"] = {"stop_price": str(round(stop_loss, 2))}
+        order["take_profit"] = {"limit_price": str(round(take_profit, 2))}
+        if limit_price:
+            order["limit_price"] = str(round(limit_price, 2))
+    elif stop_loss:
+        order["type"] = "limit" if limit_price else "market"
+        order["order_class"] = "oto"
+        order["stop_loss"] = {"stop_price": str(round(stop_loss, 2))}
+        if limit_price:
+            order["limit_price"] = str(round(limit_price, 2))
+    elif limit_price:
+        order["type"] = "limit"
+        order["limit_price"] = str(round(limit_price, 2))
+    else:
+        order["type"] = "market"
+
+    try:
+        r = requests.post(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(),
+                          json=order, timeout=10)
+        data = r.json()
+        if r.status_code in (200, 201):
+            return {
+                "ok": True,
+                "order_id": data.get("id"),
+                "symbol": data.get("symbol"),
+                "qty": data.get("qty") or data.get("notional"),
+                "side": "buy",
+                "type": data.get("type"),
+                "status": data.get("status"),
+                "order_class": data.get("order_class", "simple"),
+            }
+        else:
+            return {"ok": False, "error": data.get("message", "Order rejected")}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:100]}
+
+
+def alpaca_sell(ticker: str, qty: int = None, sell_all: bool = False) -> dict:
+    """Sell shares or close entire position."""
+    if sell_all:
+        try:
+            r = requests.delete(f"{ALPACA_BASE}/v2/positions/{ticker.upper()}",
+                                headers=_alpaca_headers(), timeout=10)
+            data = r.json()
+            if r.status_code in (200, 201, 207):
+                return {"ok": True, "symbol": ticker.upper(), "action": "closed_position",
+                        "qty": data.get("qty", "all"), "status": data.get("status")}
+            else:
+                return {"ok": False, "error": data.get("message", "Failed to close")}
+        except Exception as e:
+            return {"ok": False, "error": str(e)[:100]}
+
+    order = {
+        "symbol": ticker.upper(),
+        "qty": str(qty or 1),
+        "side": "sell",
+        "type": "market",
+        "time_in_force": "day",
+    }
+    try:
+        r = requests.post(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(),
+                          json=order, timeout=10)
+        data = r.json()
+        if r.status_code in (200, 201):
+            return {"ok": True, "order_id": data.get("id"), "symbol": data.get("symbol"),
+                    "qty": data.get("qty"), "side": "sell", "status": data.get("status")}
+        else:
+            return {"ok": False, "error": data.get("message", "Order rejected")}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:100]}
+
+
+def alpaca_close_all() -> dict:
+    """Close ALL positions — panic button."""
+    try:
+        r = requests.delete(f"{ALPACA_BASE}/v2/positions",
+                            headers=_alpaca_headers(), timeout=10)
+        if r.status_code in (200, 207):
+            return {"ok": True, "message": "All positions closed"}
+        return {"ok": False, "error": "Failed to close all positions"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:100]}
+
+
+def alpaca_orders(status: str = "open", limit: int = 10) -> list[dict]:
+    """Get recent orders."""
+    try:
+        r = requests.get(f"{ALPACA_BASE}/v2/orders",
+                         headers=_alpaca_headers(),
+                         params={"status": status, "limit": limit, "direction": "desc"},
+                         timeout=10)
+        if r.status_code != 200:
+            return []
+        orders = []
+        for o in r.json():
+            orders.append({
+                "id": o.get("id", "")[:8],
+                "symbol": o.get("symbol", ""),
+                "side": o.get("side", ""),
+                "qty": o.get("qty") or o.get("notional", ""),
+                "type": o.get("type", ""),
+                "status": o.get("status", ""),
+                "filled_avg": o.get("filled_avg_price", "—"),
+                "submitted": o.get("submitted_at", "")[:16],
+            })
+        return orders
+    except Exception:
+        return []
+
+
+def alpaca_smart_buy(ticker: str, trade_signal: dict, risk_pct: float = 0.02) -> dict:
+    """
+    Smart buy using Paula's trade signal. Automatically calculates:
+    - Position size based on risk % of portfolio
+    - Sets bracket order with stop-loss and take-profit from signal
+    """
+    account = alpaca_account()
+    if not account:
+        return {"ok": False, "error": "Could not fetch account info"}
+
+    trade = trade_signal.get("trade", {})
+    entry = trade.get("entry", 0)
+    stop = trade.get("stop_loss", 0)
+    target = trade.get("target_1", 0)
+
+    if not entry or not stop or entry <= stop:
+        return {"ok": False, "error": "Invalid trade signal — no entry/stop calculated"}
+
+    # Position sizing: risk X% of equity per trade
+    equity = account["equity"]
+    risk_per_share = entry - stop
+    max_risk_dollars = equity * risk_pct
+    qty = max(1, int(max_risk_dollars / risk_per_share))
+
+    # Don't exceed 20% of buying power on one trade
+    max_qty_by_bp = int(account["buying_power"] * 0.20 / entry)
+    qty = min(qty, max_qty_by_bp)
+
+    if qty < 1:
+        return {"ok": False, "error": f"Position too small — need at least ${ entry:.2f} buying power"}
+
+    cost = qty * entry
+    result = alpaca_buy(
+        ticker=ticker,
+        qty=qty,
+        stop_loss=stop,
+        take_profit=target,
+    )
+
+    if result["ok"]:
+        result["qty_calculated"] = qty
+        result["cost_estimate"] = round(cost, 2)
+        result["risk_per_share"] = round(risk_per_share, 2)
+        result["total_risk"] = round(qty * risk_per_share, 2)
+        result["stop_loss"] = stop
+        result["take_profit"] = target
+
+    return result
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  TECHNICAL ANALYSIS ENGINE
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -932,6 +1185,46 @@ def route(msg: str) -> dict:
     if m in ("hi", "hello", "hey", "thanks", "thank you", "help", "bye"):
         return {"type": "chat"}
     ticker, market = _find_ticker(msg)
+
+    # ── Trading commands ──
+    if any(w in m for w in ["portfolio", "my account", "buying power", "my equity", "account info", "how much do i have"]):
+        return {"type": "portfolio"}
+    if any(w in m for w in ["my positions", "what do i own", "what am i holding", "open positions", "show positions"]):
+        return {"type": "positions"}
+    if any(w in m for w in ["my orders", "open orders", "order history", "recent orders", "pending orders"]):
+        return {"type": "orders"}
+    if any(w in m for w in ["close all", "sell everything", "liquidate", "panic sell", "close everything"]):
+        return {"type": "close_all"}
+
+    # "buy NVDA", "buy 10 AAPL", "buy $500 of TSLA"
+    buy_match = re.search(r'\bbuy\b', m)
+    if buy_match and ticker:
+        qty = None
+        notional = None
+        qty_match = re.search(r'buy\s+(\d+)\s+', m)
+        dollar_match = re.search(r'buy\s+\$?([\d,]+(?:\.\d+)?)\s+(?:of|worth)', m)
+        if qty_match:
+            qty = int(qty_match.group(1))
+        elif dollar_match:
+            notional = float(dollar_match.group(1).replace(",", ""))
+        return {"type": "buy", "ticker": ticker, "market": market, "qty": qty, "notional": notional}
+
+    # "sell NVDA", "sell 5 AAPL", "close TSLA", "sell all NVDA"
+    sell_match = re.search(r'\b(sell|close)\b', m)
+    if sell_match and ticker:
+        sell_all = "all" in m or "close" in m
+        qty = None
+        qty_match = re.search(r'sell\s+(\d+)\s+', m)
+        if qty_match:
+            qty = int(qty_match.group(1))
+        return {"type": "sell", "ticker": ticker, "market": market, "qty": qty, "sell_all": sell_all}
+
+    # "execute trade on NVDA", "trade AAPL", "smart buy TSLA"
+    if any(w in m for w in ["execute trade", "smart buy", "auto buy", "trade signal buy"]):
+        if ticker:
+            return {"type": "smart_buy", "ticker": ticker, "market": market}
+
+    # ── Market scanning ──
     if any(w in m for w in ["gainer", "gaining", "top performer", "winners", "best stock"]):
         return {"type": "gainers", "market": market}
     if any(w in m for w in ["loser", "losing", "worst", "dropping", "falling"]):
@@ -950,6 +1243,113 @@ def execute(intent: dict) -> dict:
     t = intent["type"]
     market = intent.get("market", "US")
 
+    # ── Trading commands ──
+    if t == "portfolio":
+        acc = alpaca_account()
+        if not acc:
+            return {"ok": False, "error": "Could not connect to Alpaca. Check API keys."}
+        arrow = "▲" if acc["daily_pnl"] >= 0 else "▼"
+        msg = (
+            f"**Portfolio**\n\n"
+            f"Equity: `${acc['equity']:,.2f}`\n\n"
+            f"Cash: `${acc['cash']:,.2f}` · Buying Power: `${acc['buying_power']:,.2f}`\n\n"
+            f"Today: `{arrow} ${acc['daily_pnl']:+,.2f}` ({acc['daily_pnl_pct']:+.2f}%)\n\n"
+            f"Long: `${acc['long_market_value']:,.2f}` · Status: {acc['status']}"
+        )
+        return {"ok": True, "type": "portfolio", "msg": msg, "data": acc}
+
+    if t == "positions":
+        positions = alpaca_positions()
+        if not positions:
+            return {"ok": True, "type": "positions", "msg": "No open positions.", "data": []}
+        table = []
+        total_pnl = 0
+        for p in positions:
+            arrow = "▲" if p["unrealized_pnl"] >= 0 else "▼"
+            table.append({
+                "Ticker": p["ticker"],
+                "Qty": int(p["qty"]),
+                "Entry": f"${p['avg_entry']:.2f}",
+                "Now": f"${p['current_price']:.2f}",
+                "P&L": f"{arrow} ${p['unrealized_pnl']:+,.2f}",
+                "P&L%": f"{p['unrealized_pnl_pct']:+.1f}%",
+            })
+            total_pnl += p["unrealized_pnl"]
+        arrow = "▲" if total_pnl >= 0 else "▼"
+        msg = f"**Open Positions** ({len(positions)}) · Total P&L: `{arrow} ${total_pnl:+,.2f}`"
+        return {"ok": True, "type": "list", "title": "Positions", "msg": msg, "data": table}
+
+    if t == "orders":
+        orders = alpaca_orders(status="all", limit=15)
+        if not orders:
+            return {"ok": True, "type": "orders", "msg": "No recent orders."}
+        table = []
+        for o in orders:
+            table.append({
+                "Symbol": o["symbol"],
+                "Side": o["side"].upper(),
+                "Qty": o["qty"],
+                "Type": o["type"],
+                "Status": o["status"],
+                "Filled@": o["filled_avg"],
+                "Time": o["submitted"],
+            })
+        return {"ok": True, "type": "list", "title": "Recent Orders", "msg": "**Recent Orders**", "data": table}
+
+    if t == "close_all":
+        result = alpaca_close_all()
+        if result["ok"]:
+            return {"ok": True, "type": "trade", "msg": "🔴 **All positions closed.** Portfolio is flat."}
+        return {"ok": False, "error": result.get("error", "Failed to close all")}
+
+    if t == "buy":
+        ticker = intent["ticker"]
+        qty = intent.get("qty")
+        notional = intent.get("notional")
+        result = alpaca_buy(ticker=ticker, qty=qty, notional=notional)
+        if result["ok"]:
+            qty_str = f"{result['qty']} shares" if result.get("qty") else f"${notional}"
+            return {"ok": True, "type": "trade",
+                    "msg": f"🟢 **Bought {qty_str} of {ticker.upper()}** · Status: {result['status']}"}
+        return {"ok": False, "error": f"Buy failed: {result.get('error', 'Unknown')}"}
+
+    if t == "sell":
+        ticker = intent["ticker"]
+        sell_all = intent.get("sell_all", False)
+        qty = intent.get("qty")
+        result = alpaca_sell(ticker=ticker, qty=qty, sell_all=sell_all)
+        if result["ok"]:
+            action = "Closed position in" if sell_all else f"Sold {qty or result.get('qty', '')} shares of"
+            return {"ok": True, "type": "trade",
+                    "msg": f"🔴 **{action} {ticker.upper()}** · Status: {result.get('status', 'submitted')}"}
+        return {"ok": False, "error": f"Sell failed: {result.get('error', 'Unknown')}"}
+
+    if t == "smart_buy":
+        ticker = intent["ticker"]
+        # First analyze the stock
+        data = fetch_full(ticker)
+        if not data:
+            return {"ok": False, "error": f"No data for {ticker}."}
+        signal = generate_trade_signal(data)
+        if signal["action"] not in ("BUY", "STRONG_BUY"):
+            return {"ok": True, "type": "analysis", "ticker": ticker, "market": market,
+                    "data": {**data, **signal}, "trade_signal": signal,
+                    "msg": f"⚠️ Signal is **{signal['action']}** (score: {signal['score']}). Not executing — doesn't meet buy criteria."}
+        # Execute the smart buy
+        result = alpaca_smart_buy(ticker=ticker, trade_signal=signal)
+        if result["ok"]:
+            msg = (
+                f"🟢 **Smart buy executed: {result.get('qty_calculated', '?')} shares of {ticker.upper()}**\n\n"
+                f"Cost: ~`${result.get('cost_estimate', 0):,.2f}` · "
+                f"Stop: `${result.get('stop_loss', 0):.2f}` · "
+                f"Target: `${result.get('take_profit', 0):.2f}`\n\n"
+                f"Risk: `${result.get('total_risk', 0):,.2f}` ({signal['trade']['risk_pct']:.1f}% per share) · "
+                f"R:R `{signal['trade']['risk_reward']:.1f}:1`"
+            )
+            return {"ok": True, "type": "trade", "ticker": ticker, "msg": msg, "trade_signal": signal}
+        return {"ok": False, "error": f"Smart buy failed: {result.get('error', 'Unknown')}"}
+
+    # ── Standard commands ──
     if t == "price":
         tick = _ensure_suffix(intent["ticker"], market)
         data = fetch_price(tick)
@@ -1270,7 +1670,7 @@ def main():
 
     # Header — minimal, not chatbot-y
     st.markdown("## Paula")
-    st.caption(f"market terminal · {datetime.now().strftime('%b %d, %Y')}")
+    st.caption(f"analysis + paper trading · {datetime.now().strftime('%b %d, %Y')}")
     st.markdown("---")
 
     for m in st.session_state.messages:
@@ -1284,7 +1684,7 @@ def main():
             if m["role"] == "assistant" and m.get("table"):
                 st.dataframe(pd.DataFrame(m["table"]), use_container_width=True, hide_index=True)
 
-    prompt = st.chat_input("NVDA… top gainers… price AAPL…")
+    prompt = st.chat_input("NVDA… buy 10 AAPL… portfolio… top gainers…")
     if not prompt:
         return
 
@@ -1304,12 +1704,19 @@ def main():
                     chart_ticker = result["ticker"]
                     resp = result["msg"]
                 elif result["type"] == "analysis":
-                    chart_ticker = result["ticker"]
+                    chart_ticker = result.get("ticker")
                     trade_signal = result.get("trade_signal")
-                    resp = ai_response(prompt, result["data"], st.session_state.messages, market)
+                    if result.get("msg"):
+                        resp = result["msg"]
+                    else:
+                        resp = ai_response(prompt, result["data"], st.session_state.messages, market)
                 elif result["type"] == "list":
                     table_data = result["data"]
-                    resp = f"**{result['title']}** — {market} market"
+                    resp = result.get("msg", f"**{result.get('title', '')}** — {market} market")
+                elif result["type"] in ("portfolio", "trade", "positions", "orders"):
+                    resp = result.get("msg", "Done.")
+                    chart_ticker = result.get("ticker")
+                    trade_signal = result.get("trade_signal")
                 else:
                     resp = ai_response(prompt, None, st.session_state.messages, market)
             elif result.get("error"):
@@ -1326,11 +1733,14 @@ def main():
 
             if table_data:
                 df = pd.DataFrame(table_data)
+                # Format market data columns if they exist
                 sym = "₹" if market == "India" else "$"
-                df["Price"] = df["Price"].apply(lambda x: f"{sym}{x:,.2f}")
-                df["Chg%"] = df["Chg%"].apply(lambda x: f"{'▲' if x>=0 else '▼'} {x:+.2f}%")
+                if "Price" in df.columns:
+                    df["Price"] = df["Price"].apply(lambda x: f"{sym}{x:,.2f}" if isinstance(x, (int, float)) else x)
+                if "Chg%" in df.columns:
+                    df["Chg%"] = df["Chg%"].apply(lambda x: f"{'▲' if x>=0 else '▼'} {x:+.2f}%" if isinstance(x, (int, float)) else x)
                 if "Volume" in df.columns:
-                    df["Volume"] = df["Volume"].apply(lambda x: f"{x/1e6:.1f}M" if x >= 1e6 else (f"{x/1e3:.0f}K" if x >= 1e3 else str(x)))
+                    df["Volume"] = df["Volume"].apply(lambda x: f"{x/1e6:.1f}M" if isinstance(x, (int, float)) and x >= 1e6 else (f"{x/1e3:.0f}K" if isinstance(x, (int, float)) and x >= 1e3 else str(x)))
                 st.dataframe(df, use_container_width=True, hide_index=True)
 
     st.session_state.messages.append({"role": "assistant", "content": resp, "chart": chart_ticker, "table": table_data, "trade_signal": trade_signal})
