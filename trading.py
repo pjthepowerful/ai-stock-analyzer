@@ -1304,31 +1304,79 @@ def run_autopilot() -> dict:
         log.append("Not enough buying power — skipping scan")
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells)}
 
-    # Universe to scan — mix of everything
-    SCAN_LIST = [
-        "AAPL","MSFT","AMZN","NVDA","GOOGL","META","TSLA","AVGO","NFLX","AMD",
-        "ADBE","CRM","INTU","QCOM","TXN","AMAT","ISRG","LRCX","MU","PANW",
-        "CRWD","ASML","MRVL","KLAC","SNPS",
-        "AXON","DUOL","CELH","HIMS","CAVA","ONON","ELF","FTNT","ZS",
-        "MNDY","TOST","BROS","DT","DDOG","SMAR",
-        "UPST","AFRM","RKLB","SOUN","ASTS","LUNR",
-        "IREN","CLSK","MARA","TGTX","RXRX","CRSP",
-        "FSLR","ENPH","CEG","VST","SMR",
-        "LMT","RTX","KTOS",
-        "SQ","NU","COIN","HOOD","SOFI",
-        "PLTR","SMCI","ARM","IONQ","DKNG","NET",
-        "JPM","V","MA","HD","COST","WMT","ABBV",
-    ]
+    # ── 3. Scan for new opportunities ──
+    # Step A: Use Polygon to pre-screen the ENTIRE market in one API call
+    # Then only deep-analyze the top candidates (saves 30+ min vs scanning all 500)
+    log.append("Pre-screening entire US market via Polygon...")
 
-    # Remove stocks we already hold
-    scan_list = [t for t in SCAN_LIST if t not in held_tickers]
-    random.shuffle(scan_list)
+    candidates = []
 
-    log.append(f"Scanning {len(scan_list)} stocks for opportunities...")
+    # Get top gainers — stocks with momentum today
+    gainers = polygon_gainers(limit=20) or []
+    # Get all snapshots for broader view
+    all_snaps = polygon_all_snapshots() or []
+
+    if all_snaps:
+        # Filter to real stocks: price > $5, volume > 200k
+        viable = [s for s in all_snaps if s.get("Price", 0) > 5 and s.get("Volume", 0) > 200_000]
+        # Sort by absolute daily change — we want movers
+        movers = sorted(viable, key=lambda x: abs(x.get("Chg%", 0)), reverse=True)[:80]
+        # Also get positive movers separately
+        positive = sorted([s for s in viable if s.get("Chg%", 0) > 0.5], key=lambda x: x["Chg%"], reverse=True)[:40]
+
+        seen = set()
+        for s in positive + movers:
+            t = s["Ticker"]
+            if t not in seen and t not in held_tickers:
+                seen.add(t)
+                candidates.append(t)
+
+        log.append(f"Polygon found {len(viable)} viable stocks → narrowed to {len(candidates)} candidates")
+
+    # Fallback: full S&P 500 + extras if Polygon fails
+    if len(candidates) < 30:
+        SP500_FULL = [
+            "AAPL","MSFT","AMZN","NVDA","GOOGL","GOOG","META","BRK-B","LLY","AVGO",
+            "TSLA","JPM","UNH","V","XOM","MA","JNJ","PG","HD","COST",
+            "ABBV","MRK","CVX","CRM","NFLX","AMD","PEP","KO","ADBE","WMT",
+            "TMO","BAC","LIN","CSCO","MCD","ACN","ABT","DHR","WFC","ORCL",
+            "PM","TXN","GE","CMCSA","INTU","DIS","ISRG","VZ","AMGN","IBM",
+            "NOW","PFE","QCOM","UBER","CAT","AMAT","GS","BKNG","BLK","AXP",
+            "T","MS","LOW","SPGI","RTX","MDLZ","ELV","BA","HON","SYK",
+            "LRCX","PLD","NEE","TJX","VRTX","DE","C","BSX","SCHW","ADI",
+            "BX","REGN","ADP","PANW","MMC","KLAC","SBUX","FI","GILD","MU",
+            "SNPS","CDNS","INTC","CME","SO","CB","ICE","CL","SHW","DUK",
+            "ABNB","PYPL","MO","PNC","EQIX","CTAS","TT","HUM","MCK","AON",
+            "MAR","USB","APD","ECL","WM","ORLY","PSX","CMG","ITW","GD",
+            "COF","MELI","EMR","CCI","MSI","SLB","NXPI","PH","VLO","CRWD",
+            "GM","RCL","AIG","EW","CARR","AEP","MPC","NUE","PCAR","FTNT",
+            "FDX","MNST","WELL","AZO","D","AFL","KMB","HLT","F","TFC",
+            "O","ROST","PRU","SRE","DLR","BK","STZ","PAYX","CNC","IQV",
+            "ALL","FAST","CPRT","TEL","KHC","OXY","SPG","MSCI","MCHP","AME",
+            "OTIS","A","GWW","PCG","DHI","KR","LHX","CTVA","HSY","YUM",
+            "EA","FANG","EXC","DD","ED","AVB","VRSK","XEL","PPG","WBD",
+            "AMP","MLM","MTB","WEC","CBRE","IDXX","RMD","EFX","DOW","GEHC",
+            "DXCM","ANSS","GPN","ON","PWR","HPQ","VMC","NEM","URI","ZBH",
+            "ACGL","TSCO","IR","HIG","CDW","WAB","KEYS","BRO","RJF","IFF",
+            "TDG","WST","TRGP","STE","ROK","DECK","CAH","EQR","VLTO","EBAY",
+            "AXON","HIMS","CAVA","DUOL","CELH","ELF","ONON","TOST","BROS","DDOG",
+            "UPST","AFRM","RKLB","SOUN","ASTS","LUNR","PLTR","SMCI","ARM","IONQ",
+            "COIN","HOOD","SOFI","MSTR","FSLR","ENPH","CEG","VST","SMR","KTOS",
+            "SQ","NU","MARA","RIOT","CLSK","RXRX","CRSP","NET","DKNG","ZS",
+        ]
+        fallback = [t for t in SP500_FULL if t not in held_tickers and t not in set(candidates)]
+        random.shuffle(fallback)
+        candidates.extend(fallback[:100])
+        log.append(f"Added S&P 500 fallback → total {len(candidates)} candidates")
+
+    scan_list = candidates
+    log.append(f"Deep-analyzing {len(scan_list)} stocks...")
 
     opportunities = []
     all_scores = []
-    for ticker in scan_list:
+    analyzed = 0
+    MAX_ANALYZE = 120  # Cap to keep scan under ~4 minutes
+    for ticker in scan_list[:MAX_ANALYZE]:
         try:
             data = fetch_full(ticker)
             if not data:
@@ -1336,6 +1384,7 @@ def run_autopilot() -> dict:
             price = data.get("price", 0)
             if not price or price < 2:
                 continue
+            analyzed += 1
             sig = generate_trade_signal(data)
             all_scores.append((ticker, sig["score"], sig["action"], sig["confluence"]["bullish"], sig["trade"]["risk_reward"]))
 
@@ -1352,8 +1401,14 @@ def run_autopilot() -> dict:
                     "signal": sig,
                     "data": data,
                 })
+                # Early exit: if we found enough good ones, stop scanning
+                if len(opportunities) >= open_slots + 5:
+                    log.append(f"Found {len(opportunities)} opportunities — stopping early")
+                    break
         except Exception:
             continue
+
+    log.append(f"Analyzed {analyzed} stocks")
 
     # Show top 10 scores regardless of whether they qualified
     all_scores.sort(key=lambda x: x[1], reverse=True)
@@ -1369,7 +1424,7 @@ def run_autopilot() -> dict:
 
     if not opportunities:
         log.append("No stocks passed the criteria (score≥58, confluence≥2, R:R≥1.5)")
-        return {"ok": True, "log": log, "buys": 0, "sells": len(sells), "scanned": len(scan_list)}
+        return {"ok": True, "log": log, "buys": 0, "sells": len(sells), "scanned": analyzed}
 
     log.append(f"Found {len(opportunities)} opportunities — executing top {min(open_slots, len(opportunities))}")
 
@@ -1421,7 +1476,7 @@ def run_autopilot() -> dict:
         "log": log,
         "buys": sum(1 for b in buys if b.startswith("🟢")),
         "sells": len(sells),
-        "scanned": len(scan_list),
+        "scanned": analyzed,
         "opportunities": len(opportunities),
     }
 
