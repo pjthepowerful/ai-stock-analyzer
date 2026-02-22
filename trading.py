@@ -1267,9 +1267,9 @@ def run_autopilot() -> dict:
     MAX_POSITIONS = 10
     RISK_PER_TRADE = 0.02
     MAX_POS_PCT = 0.15
-    MIN_SCORE = 68
-    MIN_CONFLUENCE = 3
-    MIN_RR = 1.8
+    MIN_SCORE = 58
+    MIN_CONFLUENCE = 2
+    MIN_RR = 1.5
     SELL_BELOW = 35
 
     # ── 2. Check existing positions — sell if signal turned bad ──
@@ -1327,6 +1327,7 @@ def run_autopilot() -> dict:
     log.append(f"Scanning {len(scan_list)} stocks for opportunities...")
 
     opportunities = []
+    all_scores = []
     for ticker in scan_list:
         try:
             data = fetch_full(ticker)
@@ -1336,10 +1337,12 @@ def run_autopilot() -> dict:
             if not price or price < 2:
                 continue
             sig = generate_trade_signal(data)
+            all_scores.append((ticker, sig["score"], sig["action"], sig["confluence"]["bullish"], sig["trade"]["risk_reward"]))
+
             if (sig["score"] >= MIN_SCORE
-                    and sig["action"] in ("BUY", "STRONG_BUY")
                     and sig["confluence"]["bullish"] >= MIN_CONFLUENCE
-                    and sig["trade"]["risk_reward"] >= MIN_RR):
+                    and sig["trade"]["risk_reward"] >= MIN_RR
+                    and sig["action"] in ("BUY", "STRONG_BUY", "HOLD")):
                 opportunities.append({
                     "ticker": ticker,
                     "score": sig["score"],
@@ -1352,11 +1355,20 @@ def run_autopilot() -> dict:
         except Exception:
             continue
 
-    # Sort by score (highest first)
-    opportunities.sort(key=lambda x: x["score"], reverse=True)
+    # Show top 10 scores regardless of whether they qualified
+    all_scores.sort(key=lambda x: x[1], reverse=True)
+    top_10 = all_scores[:10]
+    log.append("**Top 10 scores found:**")
+    for t, s, a, c, rr in top_10:
+        passed = "✓" if s >= MIN_SCORE and c >= MIN_CONFLUENCE and rr >= MIN_RR else "✗"
+        log.append(f"{passed} {t}: score {s}, {a}, {c} bullish, R:R {rr:.1f}")
+
+    # Sort: STRONG_BUY first, then BUY, then HOLD — within each group by score
+    action_priority = {"STRONG_BUY": 0, "BUY": 1, "HOLD": 2}
+    opportunities.sort(key=lambda x: (action_priority.get(x["action"], 3), -x["score"]))
 
     if not opportunities:
-        log.append("No stocks passed the criteria (score≥68, confluence≥3, R:R≥1.8)")
+        log.append("No stocks passed the criteria (score≥58, confluence≥2, R:R≥1.5)")
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells), "scanned": len(scan_list)}
 
     log.append(f"Found {len(opportunities)} opportunities — executing top {min(open_slots, len(opportunities))}")
