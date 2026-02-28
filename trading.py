@@ -1897,9 +1897,10 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
 
         log.append(f"Polygon found {len(viable)} viable stocks → narrowed to {len(candidates)} candidates")
 
-    # Fallback: full S&P 500 + extras if Polygon fails
+    # Fallback: full S&P 500 + Russell growth + popular mid/small caps
     if len(candidates) < 30:
-        SP500_FULL = [
+        FULL_UNIVERSE = [
+            # ── S&P 500 (all sectors) ──
             "AAPL","MSFT","AMZN","NVDA","GOOGL","GOOG","META","BRK-B","LLY","AVGO",
             "TSLA","JPM","UNH","V","XOM","MA","JNJ","PG","HD","COST",
             "ABBV","MRK","CVX","CRM","NFLX","AMD","PEP","KO","ADBE","WMT",
@@ -1923,15 +1924,53 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             "DXCM","ANSS","GPN","ON","PWR","HPQ","VMC","NEM","URI","ZBH",
             "ACGL","TSCO","IR","HIG","CDW","WAB","KEYS","BRO","RJF","IFF",
             "TDG","WST","TRGP","STE","ROK","DECK","CAH","EQR","VLTO","EBAY",
+            "NDAQ","ZBRA","POOL","HOLX","MPWR","ENTG","TER","SWKS","ALGN","GNRC",
+            "WRB","TYL","MOH","TTWO","PODD","FICO","LPLA","HUBB","FTV","PTC",
+            "NTAP","SMCI","TRMB","DPZ","BALL","CFG","HBAN","RF","KEY","CINF",
+            "LUV","DAL","UAL","AAL","ALK","JBLU",
+            "DVN","FANG","COP","EOG","PXD","MRO","APA","HAL","BKR","OVV",
+            "EQT","RRC","AR","SWN","CTRA",
+            "LEN","PHM","TOL","KBH","MDC","MTH","TMHC","CCS","GRBK",
+            "RIVN","LCID","NIO","XPEV","LI","FSR",
+            # ── Mid-cap growth ──
             "AXON","HIMS","CAVA","DUOL","CELH","ELF","ONON","TOST","BROS","DDOG",
-            "UPST","AFRM","RKLB","SOUN","ASTS","LUNR","PLTR","SMCI","ARM","IONQ",
-            "COIN","HOOD","SOFI","MSTR","FSLR","ENPH","CEG","VST","SMR","KTOS",
-            "SQ","NU","MARA","RIOT","CLSK","RXRX","CRSP","NET","DKNG","ZS",
+            "MNDY","CFLT","PCOR","IOT","DOCS","SMAR","BILL","DT","GTLB","BRZE",
+            "PAYC","TMDX","ZI","PATH","CRDO","APP","RAMP","DOCN","WDAY","VEEV",
+            "DAVA","HUBS","ESTC","FROG","MANH","ROKU","TTD","SNAP","PINS","MTCH",
+            "CHWY","ETSY","W","OPEN","RDFN","ZG","CVNA","DASH","GRAB","SE",
+            "SHOP","SPOT","SQ","BILL","FOUR","TOST","TOAST",
+            # ── Small-cap / speculative ──
+            "UPST","AFRM","RKLB","SOUN","ASTS","LUNR","JOBY","BBAI","AEHR",
+            "MARA","RIOT","CLSK","IREN","BTBT","CIFR","HUT","CORZ",
+            "TGTX","RXRX","CRSP","BEAM","NTLA","EDIT","VERV","VERA",
+            "QS","MVST","BLDP","PLUG","FCEL","BE","CHPT","EVGO","BLNK",
+            "IONQ","RGTI","QUBT","ARQQ",
+            "SOFI","HOOD","LMND","ROOT","OSCR","RELY",
+            "DNA","BNGO","PACB","TWIST","CDNA",
+            "PLTR","SMCI","ARM",
+            # ── Sector plays ──
+            "FSLR","ENPH","CEG","VST","SMR","OKLO","NNE","LEU",
+            "LMT","RTX","KTOS","RCAT","AVAV","BWXT","HII","NOC","GD","LHX",
+            "COIN","MSTR","MARA","RIOT","CLSK",
+            "SQ","NU","FOUR","AFRM","SOFI",
+            "NET","ZS","CRWD","PANW","FTNT","CYBR","QLYS","TENB","RPD","S",
+            "ARGX","MRNA","BNTX","REGN","VRTX","ALNY","BMRN","RARE","NBIX","PCVX",
+            # ── Dividend / value ──
+            "O","STAG","NNN","AGNC","NLY","ARCC","MAIN","TPVG",
+            "EPD","ET","WES","MPLX","PAA","OKE","KMI","WMB",
+            "VALE","FCX","NUE","CLF","X","STLD","RS","ATI",
+            "MOS","NTR","CF","FMC","IPI",
+            "VZ","T","LUMN","TMUS","CHTR","CMCSA",
+            # ── International ADRs ──
+            "BABA","JD","PDD","BIDU","NIO","XPEV","LI","TME","BILI","IQ",
+            "TSM","ASML","SAP","TM","SONY","NVO","AZN","SNY","GSK","DEO",
+            "MELI","NU","GLOB","DLO","STNE",
+            "SE","GRAB","CPNG","BEKE",
         ]
-        fallback = [t for t in SP500_FULL if t not in held_tickers and t not in set(candidates)]
+        fallback = [t for t in FULL_UNIVERSE if t not in held_tickers and t not in set(candidates)]
         random.shuffle(fallback)
-        candidates.extend(fallback[:100])
-        log.append(f"Added S&P 500 fallback → total {len(candidates)} candidates")
+        candidates.extend(fallback[:200])
+        log.append(f"Added full universe fallback → total {len(candidates)} candidates")
 
     scan_list = candidates
     log.append(f"Deep-analyzing {len(scan_list)} stocks...")
@@ -1940,7 +1979,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     all_scores = []
     analyzed = 0
     errors = 0
-    MAX_ANALYZE = 120
+    MAX_ANALYZE = 200
     for ticker in scan_list[:MAX_ANALYZE]:
         try:
             data = fetch_scan(ticker)
