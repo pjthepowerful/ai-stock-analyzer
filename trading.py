@@ -1855,11 +1855,14 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
 
     # ── 4. Scan for new opportunities ──
     open_slots = MAX_POSITIONS - (len(positions) - len(sells))
-    if open_slots <= 0:
+    if open_slots <= 0 and not dry_run:
         log.append(f"Max positions ({MAX_POSITIONS}) reached — skipping scan")
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells)}
+    if open_slots <= 0 and dry_run:
+        open_slots = MAX_POSITIONS  # show what we'd buy if we had room
+        log.append(f"Max positions reached — but scanning anyway (dry run)")
 
-    if account["buying_power"] < 100:
+    if account["buying_power"] < 100 and not dry_run:
         log.append("Not enough buying power — skipping scan")
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells)}
 
