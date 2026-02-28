@@ -1149,8 +1149,8 @@ def fetch_scan(ticker: str) -> dict | None:
     """Lightweight fetch for scanning — skips slow .info calls, just gets history + technicals."""
     try:
         stk = yf.Ticker(ticker)
-        hist = stk.history(period="6mo")
-        if hist is None or hist.empty or len(hist) < 20:
+        hist = stk.history(period="1y")
+        if hist is None or hist.empty or len(hist) < 50:
             return None
         price = float(hist["Close"].iloc[-1])
         prev = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else price
