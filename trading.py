@@ -1085,8 +1085,8 @@ def generate_trade_signal(data: dict) -> dict:
         target_2 = round(price + 5.0 * atr, 2)
         risk_pct = round(risk / price * 100, 2)
     
-    rr = round((target_1 - entry) / risk, 2) if action in ("BUY", "STRONG_BUY") and risk > 0 else (
-         round((entry - target_1) / risk, 2) if action in ("SELL", "STRONG_SELL") and risk > 0 else 0)
+    rr = round((target_1 - entry) / risk, 2) if risk > 0 and target_1 > entry else (
+         round((entry - target_1) / risk, 2) if risk > 0 and entry > target_1 else 0)
     
     return {
         "action": action,
@@ -1921,21 +1921,16 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             "OTIS","A","GWW","PCG","DHI","KR","LHX","CTVA","HSY","YUM",
             "EA","FANG","EXC","DD","ED","AVB","VRSK","XEL","PPG","WBD",
             "AMP","MLM","MTB","WEC","CBRE","IDXX","RMD","EFX","DOW","GEHC",
-            "DXCM","ANSS","GPN","ON","PWR","HPQ","VMC","NEM","URI","ZBH",
             "ACGL","TSCO","IR","HIG","CDW","WAB","KEYS","BRO","RJF","IFF",
             "TDG","WST","TRGP","STE","ROK","DECK","CAH","EQR","VLTO","EBAY",
             "NDAQ","ZBRA","POOL","HOLX","MPWR","ENTG","TER","SWKS","ALGN","GNRC",
             "WRB","TYL","MOH","TTWO","PODD","FICO","LPLA","HUBB","FTV","PTC",
             "NTAP","SMCI","TRMB","DPZ","BALL","CFG","HBAN","RF","KEY","CINF",
             "LUV","DAL","UAL","AAL","ALK","JBLU",
-            "DVN","FANG","COP","EOG","PXD","MRO","APA","HAL","BKR","OVV",
             "EQT","RRC","AR","SWN","CTRA",
-            "LEN","PHM","TOL","KBH","MDC","MTH","TMHC","CCS","GRBK",
-            "RIVN","LCID","NIO","XPEV","LI","FSR",
             # ── Mid-cap growth ──
             "AXON","HIMS","CAVA","DUOL","CELH","ELF","ONON","TOST","BROS","DDOG",
             "MNDY","CFLT","PCOR","IOT","DOCS","SMAR","BILL","DT","GTLB","BRZE",
-            "PAYC","TMDX","ZI","PATH","CRDO","APP","RAMP","DOCN","WDAY","VEEV",
             "DAVA","HUBS","ESTC","FROG","MANH","ROKU","TTD","SNAP","PINS","MTCH",
             "CHWY","ETSY","W","OPEN","RDFN","ZG","CVNA","DASH","GRAB","SE",
             "SHOP","SPOT","SQ","BILL","FOUR","TOST","TOAST",
@@ -1960,7 +1955,6 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             "EPD","ET","WES","MPLX","PAA","OKE","KMI","WMB",
             "VALE","FCX","NUE","CLF","X","STLD","RS","ATI",
             "MOS","NTR","CF","FMC","IPI",
-            "VZ","T","LUMN","TMUS","CHTR","CMCSA",
             # ── International ADRs ──
             "BABA","JD","PDD","BIDU","NIO","XPEV","LI","TME","BILI","IQ",
             "TSM","ASML","SAP","TM","SONY","NVO","AZN","SNY","GSK","DEO",
@@ -2591,9 +2585,9 @@ def main():
             if m["role"] == "assistant" and m.get("chart"):
                 fig = build_chart(m["chart"], trade_signal=m.get("trade_signal"))
                 if fig:
-                    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
             if m["role"] == "assistant" and m.get("table"):
-                st.dataframe(pd.DataFrame(m["table"]), use_container_width=True, hide_index=True)
+                st.dataframe(pd.DataFrame(m["table"]), width="stretch", hide_index=True)
 
     prompt = st.chat_input("NVDA… buy 10 AAPL… portfolio… top gainers…")
     if not prompt:
@@ -2641,7 +2635,7 @@ def main():
             if chart_ticker:
                 fig = build_chart(chart_ticker, trade_signal=trade_signal)
                 if fig:
-                    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
             if table_data:
                 df = pd.DataFrame(table_data)
@@ -2653,7 +2647,7 @@ def main():
                     df["Chg%"] = df["Chg%"].apply(lambda x: f"{'▲' if x>=0 else '▼'} {x:+.2f}%" if isinstance(x, (int, float)) else x)
                 if "Volume" in df.columns:
                     df["Volume"] = df["Volume"].apply(lambda x: f"{x/1e6:.1f}M" if isinstance(x, (int, float)) and x >= 1e6 else (f"{x/1e3:.0f}K" if isinstance(x, (int, float)) and x >= 1e3 else str(x)))
-                st.dataframe(df, use_container_width=True, hide_index=True)
+                st.dataframe(df, width="stretch", hide_index=True)
 
     st.session_state.messages.append({"role": "assistant", "content": resp, "chart": chart_ticker, "table": table_data, "trade_signal": trade_signal})
 
