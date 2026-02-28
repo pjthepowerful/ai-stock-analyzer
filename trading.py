@@ -1564,7 +1564,7 @@ def run_backtest(years: int = 2) -> dict:
     """
     STARTING_CAPITAL = 25_000
     RISK_PER_TRADE = 0.015
-    MIN_SCORE = 62
+    MIN_SCORE = 68
     MIN_RR = 2.0
 
     # 100 stocks
@@ -1805,11 +1805,11 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     held_tickers = {p["ticker"] for p in positions} | st.session_state.get("autopilot_bought", set())
     log.append(f"Open positions: {len(positions)}")
 
-    MAX_POSITIONS = 10
+    MAX_POSITIONS = 6
     RISK_PER_TRADE = 0.015
     MAX_POS_PCT = 0.12
-    MIN_SCORE = 62
-    MIN_CONFLUENCE = 2
+    MIN_SCORE = 68
+    MIN_CONFLUENCE = 3
     MIN_RR = 2.0
     SELL_BELOW = 35
 
@@ -2025,7 +2025,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     opportunities.sort(key=lambda x: (action_priority.get(x["action"], 3), -x["score"]))
 
     if not opportunities:
-        log.append("No stocks passed the criteria (score≥62, BUY/STRONG_BUY, R:R≥2.0)")
+        log.append("No stocks passed the criteria (score≥68, BUY/STRONG_BUY, confluence≥3, R:R≥2.0)")
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells), "scanned": analyzed}
 
     log.append(f"Found {len(opportunities)} opportunities — executing top {min(open_slots, len(opportunities))}")
