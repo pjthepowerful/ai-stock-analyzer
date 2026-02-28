@@ -995,10 +995,27 @@ def generate_trade_signal(data: dict) -> dict:
     bullish_cats = sum(1 for v in votes.values() if v > 2)
     bearish_cats = sum(1 for v in votes.values() if v < -2)
 
+    # ── Trend alignment gate: don't buy against the trend ──
+    trend_aligned = votes.get("trend", 0) > 0
+    price_above_50 = sma50 is not None and price > sma50
+    price_above_200 = sma200 is not None and price > sma200
+
+    # Bonus for strong trend alignment
+    if trend_aligned and price_above_50 and price_above_200:
+        score = min(100, score + 5)
+        signals.append("Trend aligned — price above 50 & 200 SMA")
+    # Penalty for buying into downtrend
+    elif not trend_aligned and not price_above_50:
+        score = max(0, score - 8)
+        warnings.append("Counter-trend — price below 50 SMA")
+
     if score >= 72 and bullish_cats >= 3:
         action, confidence = "STRONG_BUY", min(95, score)
-    elif score >= 60 and bullish_cats >= 2:
+    elif score >= 60 and bullish_cats >= 2 and trend_aligned:
         action, confidence = "BUY", min(85, score)
+    elif score >= 60 and bullish_cats >= 2:
+        # Score is ok but trend isn't aligned — downgrade to HOLD
+        action, confidence = "HOLD", min(70, score)
     elif score <= 28 and bearish_cats >= 3:
         action, confidence = "STRONG_SELL", min(95, 100 - score)
     elif score <= 40 and bearish_cats >= 2:
@@ -1011,30 +1028,36 @@ def generate_trade_signal(data: dict) -> dict:
 
     if action in ("BUY", "STRONG_BUY"):
         entry = supports[0] if (supports and (price - supports[0]) / price < 0.03) else price
-        stop_atr = round(entry - 2 * atr, 2)
+        # Wider stops — 2.5x ATR avoids getting stopped on noise
+        stop_atr = round(entry - 2.5 * atr, 2)
         stop_sr = round(supports[0] - 0.5 * atr, 2) if supports else stop_atr
         stop_loss = max(stop_atr, stop_sr)
+        # Don't let stop be closer than 1.5% from entry (minimum breathing room)
+        min_stop = round(entry * 0.985, 2)
+        stop_loss = min(stop_loss, min_stop)
         risk = max(entry - stop_loss, 0.01)
-        target_1 = round(entry + 2 * risk, 2)
-        target_2 = round(entry + 3 * risk, 2)
-        if resistances:
-            target_1 = min(target_1, resistances[0])
+        # Targets at 2.5:1 and 4:1 — let winners run further
+        target_1 = round(entry + 2.5 * risk, 2)
+        target_2 = round(entry + 4 * risk, 2)
+        # Only cap target if resistance is VERY close (within 1x risk) — otherwise ignore it
+        if resistances and (resistances[0] - entry) < risk:
+            target_1 = round(resistances[0], 2)
         risk_pct = round(risk / entry * 100, 2)
     elif action in ("SELL", "STRONG_SELL"):
         entry = price
-        stop_loss = round(price + 2 * atr, 2)
+        stop_loss = round(price + 2.5 * atr, 2)
         if resistances:
             stop_loss = min(stop_loss, round(resistances[0] + 0.5 * atr, 2))
         risk = max(stop_loss - entry, 0.01)
-        target_1 = round(entry - 2 * risk, 2)
-        target_2 = round(entry - 3 * risk, 2)
+        target_1 = round(entry - 2.5 * risk, 2)
+        target_2 = round(entry - 4 * risk, 2)
         risk_pct = round(risk / entry * 100, 2)
     else:
         entry = price
-        stop_loss = round(price - 2 * atr, 2)
-        risk = 2 * atr
-        target_1 = round(price + 2 * atr, 2)
-        target_2 = round(price + 3 * atr, 2)
+        stop_loss = round(price - 2.5 * atr, 2)
+        risk = 2.5 * atr
+        target_1 = round(price + 2.5 * atr, 2)
+        target_2 = round(price + 4 * atr, 2)
         risk_pct = round(risk / price * 100, 2)
 
     if action in ("BUY", "STRONG_BUY"):
@@ -1509,52 +1532,64 @@ def update_trailing_stops(positions: list[dict], log: list) -> list[str]:
 def run_backtest(years: int = 2) -> dict:
     """
     Backtest the signal engine against historical data.
-    Simulates what autopilot would have done over the last N years.
+    Simulates autopilot with trailing stops over the last N years.
     """
     STARTING_CAPITAL = 25_000
     RISK_PER_TRADE = 0.02
-    MAX_POSITIONS = 10
-    MIN_SCORE = 58
-    MIN_RR = 1.5
+    MIN_SCORE = 62
+    MIN_RR = 2.0
 
-    # Stocks to test against
+    # 100 stocks
     TEST_UNIVERSE = [
+        # Large-cap
         "AAPL","MSFT","AMZN","NVDA","GOOGL","META","TSLA","AMD","NFLX","ADBE",
         "CRM","INTU","QCOM","AMAT","ISRG","MU","PANW","CRWD","AVGO","TXN",
+        "ASML","KLAC","SNPS","CDNS","MRVL","LRCX","ADI","NXPI",
+        # Mid-cap growth
         "AXON","DDOG","FTNT","ZS","HIMS","CAVA","ONON","ELF","DUOL","CELH",
-        "PLTR","COIN","SQ","FSLR","ENPH","CEG","LMT","RTX",
+        "MNDY","TOST","BROS","DT","SMAR","BILL","PCOR","IOT","DOCS",
+        # Small / speculative
+        "PLTR","COIN","HOOD","SOFI","UPST","AFRM","RKLB","SOUN","ASTS","LUNR",
+        "MARA","RIOT","CLSK","TGTX","RXRX","CRSP",
+        # Sector
+        "FSLR","ENPH","CEG","VST","SMR","LMT","RTX","KTOS",
+        "SQ","NU","FOUR","MSTR",
+        # Value / blue chip
         "JPM","V","MA","HD","COST","WMT","ABBV","PG","JNJ","MRK",
+        "UNH","LLY","XOM","CVX","BAC","GS","WFC","MS",
+        "CAT","DE","HON","GE","BA","UPS",
+        "PEP","KO","MCD","SBUX","NKE",
+        "ORCL","IBM","NOW","UBER","BKNG",
     ]
 
     capital = STARTING_CAPITAL
     trades = []
     wins = 0
     losses = 0
-    total_pnl = 0
-    max_capital = capital
-    min_capital = capital
     peak = capital
+    min_capital = capital
 
     log = [f"**Backtesting {len(TEST_UNIVERSE)} stocks over {years} years...**",
-           f"Starting capital: ${STARTING_CAPITAL:,}"]
+           f"Starting capital: ${STARTING_CAPITAL:,}",
+           f"Rules: score≥{MIN_SCORE}, BUY/STRONG_BUY only, R:R≥{MIN_RR}, trailing stops, trend aligned"]
+
+    step = 15
 
     for ticker in TEST_UNIVERSE:
         try:
             stk = yf.Ticker(ticker)
             hist = stk.history(period=f"{years}y")
-            if hist is None or hist.empty or len(hist) < 252:  # need at least 1 year
+            if hist is None or hist.empty or len(hist) < 252:
                 continue
 
-            # Slide a window through history, check signal every 20 trading days
-            window_size = 200  # need 200 bars for indicators
-            step = 20  # check every ~month
+            window_size = 200
 
-            for i in range(window_size, len(hist) - 30, step):
+            for i in range(window_size, len(hist) - 40, step):
                 if capital < 500:
                     break
 
                 window = hist.iloc[i - window_size:i]
-                future = hist.iloc[i:i + 30]  # 30 days forward to check outcome
+                future = hist.iloc[i:i + 40]
 
                 if len(window) < window_size or len(future) < 10:
                     continue
@@ -1564,91 +1599,88 @@ def run_backtest(years: int = 2) -> dict:
                     continue
 
                 entry_price = float(window["Close"].iloc[-1])
-                if entry_price < 2:
+                if entry_price < 5:
                     continue
 
-                # Build minimal data dict for signal generator
-                data = {
-                    "price": entry_price,
-                    "technicals": tech,
-                    "ticker": ticker,
-                }
+                # Trend alignment: price must be above 50 SMA
+                sma50 = tech.get("sma_50")
+                if sma50 and entry_price < sma50:
+                    continue
 
+                data = {"price": entry_price, "technicals": tech, "ticker": ticker}
                 sig = generate_trade_signal(data)
-                if sig["score"] < MIN_SCORE or sig["action"] not in ("BUY", "STRONG_BUY", "HOLD"):
+
+                # Strict: only BUY/STRONG_BUY, no HOLD
+                if sig["action"] not in ("BUY", "STRONG_BUY"):
+                    continue
+                if sig["score"] < MIN_SCORE:
                     continue
                 if sig["trade"]["risk_reward"] < MIN_RR:
                     continue
 
-                # Simulate the trade
                 stop = sig["trade"]["stop_loss"]
                 target = sig["trade"]["target_1"]
-
-                if entry_price <= stop:
+                if entry_price <= stop or stop <= 0:
                     continue
 
+                # Position sizing
                 risk_per_share = entry_price - stop
                 max_risk = capital * RISK_PER_TRADE
                 qty = max(1, int(max_risk / risk_per_share))
                 cost = qty * entry_price
-                if cost > capital * 0.30:
-                    qty = max(1, int(capital * 0.30 / entry_price))
+                if cost > capital * 0.25:
+                    qty = max(1, int(capital * 0.25 / entry_price))
                     cost = qty * entry_price
-
                 if cost > capital:
                     continue
 
-                # Check what happened in the next 30 days
-                future_high = float(future["High"].max())
-                future_low = float(future["Low"].min())
-
-                # Did stop or target hit first? Walk through day by day
-                hit_stop = False
-                hit_target = False
-                exit_price = float(future["Close"].iloc[-1])  # default: exit at end
+                # Simulate with trailing stop
+                highest = entry_price
+                current_stop = stop
+                exit_price = float(future["Close"].iloc[-1])
+                exit_reason = "TIMEOUT"
+                atr = _safe(tech.get("atr"), entry_price * 0.02)
 
                 for _, day in future.iterrows():
                     day_low = float(day["Low"])
                     day_high = float(day["High"])
+                    day_close = float(day["Close"])
 
-                    if day_low <= stop:
-                        exit_price = stop
-                        hit_stop = True
+                    if day_low <= current_stop:
+                        exit_price = current_stop
+                        exit_reason = "STOPPED"
                         break
                     if day_high >= target:
                         exit_price = target
-                        hit_target = True
+                        exit_reason = "TARGET"
                         break
+                    if day_close > highest:
+                        highest = day_close
+                        new_stop = round(highest - 2.5 * atr, 2)
+                        if new_stop > current_stop:
+                            current_stop = new_stop
 
                 pnl = (exit_price - entry_price) * qty
                 pnl_pct = (exit_price - entry_price) / entry_price * 100
                 capital += pnl
-                total_pnl += pnl
 
                 if pnl > 0:
                     wins += 1
                 else:
                     losses += 1
 
-                max_capital = max(max_capital, capital)
-                min_capital = min(min_capital, capital)
                 peak = max(peak, capital)
+                min_capital = min(min_capital, capital)
 
                 trades.append({
-                    "ticker": ticker,
-                    "entry": round(entry_price, 2),
-                    "exit": round(exit_price, 2),
-                    "qty": qty,
-                    "pnl": round(pnl, 2),
-                    "pnl_pct": round(pnl_pct, 2),
-                    "result": "TARGET" if hit_target else ("STOPPED" if hit_stop else "TIMEOUT"),
-                    "score": sig["score"],
+                    "ticker": ticker, "entry": round(entry_price, 2),
+                    "exit": round(exit_price, 2), "qty": qty,
+                    "pnl": round(pnl, 2), "pnl_pct": round(pnl_pct, 2),
+                    "result": exit_reason, "score": sig["score"],
                 })
-
         except Exception:
             continue
 
-    # Calculate stats
     total_trades = wins + losses
     win_rate = (wins / total_trades * 100) if total_trades > 0 else 0
     avg_win = np.mean([t["pnl"] for t in trades if t["pnl"] > 0]) if wins > 0 else 0
@@ -1657,7 +1689,6 @@ def run_backtest(years: int = 2) -> dict:
     max_drawdown = ((peak - min_capital) / peak * 100) if peak > 0 else 0
     total_return = ((capital - STARTING_CAPITAL) / STARTING_CAPITAL * 100)
 
-    # Sharpe-like ratio (simplified)
     if trades:
         returns = [t["pnl_pct"] for t in trades]
         avg_ret = np.mean(returns)
@@ -1666,51 +1697,45 @@ def run_backtest(years: int = 2) -> dict:
     else:
         sharpe = 0
 
-    log.append(f"")
-    log.append(f"**Results:**")
+    log.append("")
+    log.append("**Results:**")
     log.append(f"Total trades: {total_trades} ({wins}W / {losses}L)")
     log.append(f"Win rate: {win_rate:.1f}%")
     log.append(f"Avg win: ${avg_win:+,.2f} · Avg loss: ${avg_loss:+,.2f}")
     log.append(f"Profit factor: {profit_factor:.2f}")
     log.append(f"Sharpe ratio: {sharpe:.2f}")
-    log.append(f"")
-    log.append(f"**Capital:**")
+    log.append("")
+    log.append("**Capital:**")
     log.append(f"Starting: ${STARTING_CAPITAL:,} → Final: ${capital:,.2f}")
     log.append(f"Total return: {total_return:+.1f}%")
     log.append(f"Max drawdown: {max_drawdown:.1f}%")
-    log.append(f"Peak: ${max_capital:,.2f} · Trough: ${min_capital:,.2f}")
+    log.append(f"Peak: ${peak:,.2f} · Trough: ${min_capital:,.2f}")
 
-    # Top trades
     if trades:
-        log.append(f"")
-        log.append(f"**Top 5 winners:**")
+        log.append("")
+        log.append("**Top 5 winners:**")
         best = sorted(trades, key=lambda x: x["pnl"], reverse=True)[:5]
         for t in best:
             log.append(f"🟢 {t['ticker']}: ${t['entry']} → ${t['exit']} ({t['pnl_pct']:+.1f}%) = ${t['pnl']:+,.2f} [{t['result']}]")
-
-        log.append(f"")
-        log.append(f"**Top 5 losers:**")
+        log.append("")
+        log.append("**Top 5 losers:**")
         worst = sorted(trades, key=lambda x: x["pnl"])[:5]
         for t in worst:
             log.append(f"🔴 {t['ticker']}: ${t['entry']} → ${t['exit']} ({t['pnl_pct']:+.1f}%) = ${t['pnl']:+,.2f} [{t['result']}]")
 
-        # Breakdown by result type
         targets_hit = sum(1 for t in trades if t["result"] == "TARGET")
         stops_hit = sum(1 for t in trades if t["result"] == "STOPPED")
         timeouts = sum(1 for t in trades if t["result"] == "TIMEOUT")
-        log.append(f"")
-        log.append(f"**Exit breakdown:** {targets_hit} targets hit · {stops_hit} stopped out · {timeouts} timed out")
+        timeout_wins = sum(1 for t in trades if t["result"] == "TIMEOUT" and t["pnl"] > 0)
+        log.append("")
+        log.append(f"**Exit breakdown:** {targets_hit} targets hit · {stops_hit} stopped out · {timeouts} timed out ({timeout_wins} profitable)")
 
     return {
-        "ok": True,
-        "log": log,
-        "total_trades": total_trades,
-        "win_rate": round(win_rate, 1),
-        "total_return": round(total_return, 1),
-        "sharpe": round(sharpe, 2),
+        "ok": True, "log": log,
+        "total_trades": total_trades, "win_rate": round(win_rate, 1),
+        "total_return": round(total_return, 1), "sharpe": round(sharpe, 2),
         "final_capital": round(capital, 2),
     }
-
 
 def run_autopilot() -> dict:
     """
@@ -1753,9 +1778,9 @@ def run_autopilot() -> dict:
     MAX_POSITIONS = 10
     RISK_PER_TRADE = 0.02
     MAX_POS_PCT = 0.15
-    MIN_SCORE = 58
+    MIN_SCORE = 62
     MIN_CONFLUENCE = 2
-    MIN_RR = 1.5
+    MIN_RR = 2.0
     SELL_BELOW = 35
 
     # ── 1b. Market regime check ──
@@ -1899,7 +1924,7 @@ def run_autopilot() -> dict:
             if (sig["score"] >= MIN_SCORE
                     and sig["confluence"]["bullish"] >= MIN_CONFLUENCE
                     and sig["trade"]["risk_reward"] >= MIN_RR
-                    and sig["action"] in ("BUY", "STRONG_BUY", "HOLD")):
+                    and sig["action"] in ("BUY", "STRONG_BUY")):
                 opportunities.append({
                     "ticker": ticker,
                     "score": sig["score"],
@@ -1931,7 +1956,7 @@ def run_autopilot() -> dict:
     opportunities.sort(key=lambda x: (action_priority.get(x["action"], 3), -x["score"]))
 
     if not opportunities:
-        log.append("No stocks passed the criteria (score≥58, confluence≥2, R:R≥1.5)")
+        log.append("No stocks passed the criteria (score≥62, BUY/STRONG_BUY, confluence≥2, R:R≥2.0)")
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells), "scanned": analyzed}
 
     log.append(f"Found {len(opportunities)} opportunities — executing top {min(open_slots, len(opportunities))}")
