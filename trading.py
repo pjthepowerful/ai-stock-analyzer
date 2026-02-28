@@ -1267,6 +1267,8 @@ def route(msg: str) -> dict:
                             "start trading", "go autopilot", "run autopilot", "auto pilot",
                             "scan and trade", "find and buy", "find trades"]):
         return {"type": "autopilot"}
+    if any(w in m for w in ["force scan", "scan now", "scan anyway", "scan market", "run scan"]):
+        return {"type": "force_scan"}
     if any(w in m for w in ["stop autopilot", "deactivate", "stop trading", "pause", "stop auto",
                             "turn off autopilot", "kill autopilot", "stop"]):
         return {"type": "stop_autopilot"}
@@ -1763,7 +1765,7 @@ def run_backtest(years: int = 2) -> dict:
         "final_capital": round(capital, 2),
     }
 
-def run_autopilot() -> dict:
+def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dict:
     """
     Full autopilot cycle:
     1. Check account & existing positions
@@ -1776,10 +1778,12 @@ def run_autopilot() -> dict:
 
     # ── Market hours check ──
     is_open, status_msg = _market_is_open()
-    if not is_open:
+    if not is_open and not skip_market_check:
         log.append(f"⏸️ {status_msg}")
         log.append("Autopilot is paused — will resume when market opens.")
         return {"ok": True, "log": log, "buys": 0, "sells": 0, "scanned": 0, "opportunities": 0, "market_closed": True}
+    if not is_open and skip_market_check:
+        log.append(f"⚠️ {status_msg} — scanning anyway (forced)")
 
     # Track what we've already bought this session to prevent duplicates
     if "autopilot_bought" not in st.session_state:
@@ -1833,11 +1837,14 @@ def run_autopilot() -> dict:
                 continue
             sig = generate_trade_signal(data)
             if sig["score"] <= SELL_BELOW or sig["action"] in ("SELL", "STRONG_SELL"):
-                result = alpaca_sell(ticker=pos["ticker"], sell_all=True)
-                if result.get("ok"):
-                    sells.append(f"🔴 Sold {pos['ticker']} — score dropped to {sig['score']}, signal: {sig['action']}")
+                if dry_run:
+                    sells.append(f"🔴 Would sell {pos['ticker']} — score {sig['score']}, signal: {sig['action']}")
                 else:
-                    sells.append(f"⚠️ Tried to sell {pos['ticker']} but failed: {result.get('error','')}")
+                    result = alpaca_sell(ticker=pos["ticker"], sell_all=True)
+                    if result.get("ok"):
+                        sells.append(f"🔴 Sold {pos['ticker']} — score dropped to {sig['score']}, signal: {sig['action']}")
+                    else:
+                        sells.append(f"⚠️ Tried to sell {pos['ticker']} but failed: {result.get('error','')}")
         except Exception:
             continue
 
@@ -2024,14 +2031,18 @@ def run_autopilot() -> dict:
             continue
 
         cost = qty * entry
-        result = alpaca_buy(ticker=ticker, qty=qty, stop_loss=stop, take_profit=target)
-
-        if result.get("ok"):
-            buys.append(f"🟢 Bought {qty} {ticker} @ ~${entry:.2f} · Stop ${stop:.2f} · Target ${target:.2f} · Score {opp['score']} · R:R {opp['rr']:.1f}:1")
-            st.session_state.setdefault("autopilot_bought", set()).add(ticker)
+        if dry_run:
+            buys.append(f"🟢 Would buy {qty} {ticker} @ ~${entry:.2f} · Stop ${stop:.2f} · Target ${target:.2f} · Score {opp['score']} · R:R {opp['rr']:.1f}:1")
             account["buying_power"] -= cost
         else:
-            buys.append(f"⚠️ Failed to buy {ticker}: {result.get('error','')}")
+            result = alpaca_buy(ticker=ticker, qty=qty, stop_loss=stop, take_profit=target)
+
+            if result.get("ok"):
+                buys.append(f"🟢 Bought {qty} {ticker} @ ~${entry:.2f} · Stop ${stop:.2f} · Target ${target:.2f} · Score {opp['score']} · R:R {opp['rr']:.1f}:1")
+                st.session_state.setdefault("autopilot_bought", set()).add(ticker)
+                account["buying_power"] -= cost
+            else:
+                buys.append(f"⚠️ Failed to buy {ticker}: {result.get('error','')}")
 
     for b in buys:
         log.append(b)
@@ -2049,6 +2060,20 @@ def run_autopilot() -> dict:
 def execute(intent: dict) -> dict:
     t = intent["type"]
     market = intent.get("market", "US")
+
+    if t == "force_scan":
+        result = run_autopilot(skip_market_check=True, dry_run=True)
+        if not result.get("ok"):
+            return {"ok": False, "error": result.get("error", "Scan failed")}
+        report_lines = result["log"]
+        summary = (
+            f"**🔍 Market Scan (dry run — no trades placed)**\n\n"
+            f"Scanned: {result.get('scanned', '?')} stocks · "
+            f"Found: {result.get('opportunities', 0)} opportunities\n\n"
+            f"---\n\n" +
+            "\n\n".join(report_lines)
+        )
+        return {"ok": True, "type": "trade", "msg": summary}
 
     # ── Autopilot ──
     if t == "autopilot":
