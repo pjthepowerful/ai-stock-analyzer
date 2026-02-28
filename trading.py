@@ -1221,6 +1221,11 @@ def route(msg: str) -> dict:
     if any(w in m for w in ["stop autopilot", "deactivate", "stop trading", "pause", "stop auto",
                             "turn off autopilot", "kill autopilot", "stop"]):
         return {"type": "stop_autopilot"}
+    if any(w in m for w in ["backtest", "back test", "test strategy", "prove it", "historical test",
+                            "how would it have done", "test the strategy"]):
+        return {"type": "backtest"}
+    if any(w in m for w in ["market health", "market regime", "is market safe", "spy check", "market status"]):
+        return {"type": "market_regime"}
     if any(w in m for w in ["portfolio", "my account", "buying power", "my equity", "account info", "how much do i have"]):
         return {"type": "portfolio"}
     if any(w in m for w in ["my positions", "what do i own", "what am i holding", "open positions", "show positions"]):
@@ -1294,6 +1299,419 @@ def _market_is_open() -> tuple[bool, str]:
     return True, "Market is open"
 
 
+# ── Market regime filter ─────────────────────────────────────────────────────
+
+def check_market_regime() -> dict:
+    """
+    Check overall market health using SPY.
+    Returns regime + whether it's safe to buy.
+    """
+    try:
+        spy = yf.Ticker("SPY")
+        hist = spy.history(period="1y")
+        if hist is None or hist.empty or len(hist) < 200:
+            return {"regime": "unknown", "safe_to_buy": True, "reason": "Not enough SPY data"}
+
+        close = hist["Close"]
+        price = float(close.iloc[-1])
+
+        # Key moving averages
+        sma_50 = float(close.rolling(50).mean().iloc[-1])
+        sma_200 = float(close.rolling(200).mean().iloc[-1])
+        sma_20 = float(close.rolling(20).mean().iloc[-1])
+
+        # RSI
+        delta = close.diff()
+        gain = delta.where(delta > 0, 0.0).ewm(alpha=1/14, min_periods=14).mean()
+        loss = (-delta.where(delta < 0, 0.0)).ewm(alpha=1/14, min_periods=14).mean()
+        rs = gain / loss.replace(0, 1e-10)
+        rsi = float(100 - (100 / (1 + rs)).iloc[-1])
+
+        # Percentage from 200 SMA
+        dist_from_200 = (price - sma_200) / sma_200 * 100
+
+        # Determine regime
+        if price > sma_200 and sma_50 > sma_200:
+            if dist_from_200 > 10:
+                regime = "strong_bull"
+            else:
+                regime = "bull"
+        elif price > sma_200 and sma_50 < sma_200:
+            regime = "recovery"
+        elif price < sma_200 and sma_50 > sma_200:
+            regime = "weakening"
+        elif price < sma_200 and sma_50 < sma_200:
+            if dist_from_200 < -10:
+                regime = "strong_bear"
+            else:
+                regime = "bear"
+        else:
+            regime = "neutral"
+
+        # Safe to buy?
+        safe = True
+        reason = ""
+
+        if regime in ("strong_bear", "bear"):
+            safe = False
+            reason = f"SPY below 200 SMA — bear market (SPY ${price:.2f}, 200 SMA ${sma_200:.2f})"
+        elif regime == "weakening":
+            safe = True  # can still buy but with caution
+            reason = f"Market weakening — SPY slipping below 50 SMA (RSI {rsi:.0f})"
+        elif rsi > 80:
+            safe = False
+            reason = f"SPY overbought (RSI {rsi:.0f}) — wait for pullback"
+        elif rsi < 25:
+            safe = False
+            reason = f"SPY extremely oversold (RSI {rsi:.0f}) — possible crash, stay out"
+        else:
+            reason = f"SPY ${price:.2f} — {regime} regime, RSI {rsi:.0f}"
+
+        return {
+            "regime": regime,
+            "safe_to_buy": safe,
+            "reason": reason,
+            "spy_price": round(price, 2),
+            "sma_50": round(sma_50, 2),
+            "sma_200": round(sma_200, 2),
+            "rsi": round(rsi, 1),
+        }
+    except Exception as e:
+        return {"regime": "unknown", "safe_to_buy": True, "reason": f"Could not check: {str(e)[:60]}"}
+
+
+# ── Earnings avoidance ───────────────────────────────────────────────────────
+
+def _has_upcoming_earnings(ticker: str, days: int = 7) -> tuple[bool, str | None]:
+    """Check if a stock has earnings within the next N days."""
+    try:
+        stk = yf.Ticker(ticker)
+        cal = stk.calendar
+        if cal is None or (isinstance(cal, pd.DataFrame) and cal.empty):
+            return False, None
+        # yfinance returns earnings date in different formats
+        if isinstance(cal, dict):
+            earn_date = cal.get("Earnings Date")
+            if isinstance(earn_date, list) and earn_date:
+                earn_date = earn_date[0]
+        elif isinstance(cal, pd.DataFrame):
+            if "Earnings Date" in cal.columns:
+                earn_date = cal["Earnings Date"].iloc[0]
+            elif "Earnings Date" in cal.index:
+                earn_date = cal.loc["Earnings Date"].iloc[0]
+            else:
+                return False, None
+        else:
+            return False, None
+
+        if earn_date is None:
+            return False, None
+
+        if isinstance(earn_date, str):
+            earn_date = pd.to_datetime(earn_date)
+        elif hasattr(earn_date, 'to_pydatetime'):
+            earn_date = earn_date.to_pydatetime()
+
+        if hasattr(earn_date, 'tzinfo') and earn_date.tzinfo:
+            now = datetime.now(earn_date.tzinfo)
+        else:
+            now = datetime.now()
+
+        delta = (earn_date - now).days
+        if 0 <= delta <= days:
+            return True, earn_date.strftime("%Y-%m-%d")
+        return False, None
+    except Exception:
+        return False, None
+
+
+# ── Trailing stops ───────────────────────────────────────────────────────────
+
+def update_trailing_stops(positions: list[dict], log: list) -> list[str]:
+    """
+    For each open position, check if price has moved up enough to trail the stop.
+    Uses 2x ATR trailing stop from the highest price since entry.
+    """
+    actions = []
+    for pos in positions:
+        try:
+            ticker = pos["ticker"]
+            entry = pos["avg_entry"]
+            current = pos["current_price"]
+            pnl_pct = pos["unrealized_pnl_pct"]
+
+            # Only trail stops on positions that are profitable
+            if pnl_pct <= 0:
+                continue
+
+            # Get ATR for trailing distance
+            hist = yf.Ticker(ticker).history(period="3mo")
+            if hist is None or hist.empty or len(hist) < 20:
+                continue
+
+            # Calculate ATR
+            high = hist["High"]
+            low = hist["Low"]
+            close = hist["Close"]
+            tr = pd.concat([
+                high - low,
+                (high - close.shift(1)).abs(),
+                (low - close.shift(1)).abs(),
+            ], axis=1).max(axis=1)
+            atr = float(tr.rolling(14).mean().iloc[-1])
+
+            # Highest close since we'd have entered
+            recent_high = float(close.tail(20).max())
+
+            # New trailing stop: highest recent price minus 2x ATR
+            new_stop = round(recent_high - (2.0 * atr), 2)
+
+            # Only move stop UP, never down. And only if it's above entry (lock in profit)
+            if new_stop > entry and new_stop > entry * 1.01:
+                # Cancel existing orders and place new stop
+                # First check for existing stop orders
+                orders = alpaca_orders(status="open", limit=20)
+                for o in orders:
+                    if o["symbol"] == ticker and o["type"] in ("stop", "stop_limit"):
+                        # Cancel old stop
+                        try:
+                            requests.delete(f"{ALPACA_BASE}/v2/orders/{o['id']}",
+                                            headers=_alpaca_headers(), timeout=5)
+                        except Exception:
+                            pass
+
+                # Place new trailing stop as a stop market order
+                stop_order = {
+                    "symbol": ticker,
+                    "qty": str(int(pos["qty"])),
+                    "side": "sell",
+                    "type": "stop",
+                    "stop_price": str(new_stop),
+                    "time_in_force": "gtc",
+                }
+                try:
+                    r = requests.post(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(),
+                                      json=stop_order, timeout=10)
+                    if r.status_code in (200, 201):
+                        actions.append(f"📈 Trailed stop on {ticker}: ${entry:.2f} → ${new_stop:.2f} (locking in ${new_stop - entry:.2f}/share profit)")
+                    else:
+                        actions.append(f"⚠️ Failed to trail {ticker}: {r.json().get('message', '')[:60]}")
+                except Exception:
+                    pass
+        except Exception:
+            continue
+
+    return actions
+
+
+# ── Backtester ───────────────────────────────────────────────────────────────
+
+def run_backtest(years: int = 2) -> dict:
+    """
+    Backtest the signal engine against historical data.
+    Simulates what autopilot would have done over the last N years.
+    """
+    STARTING_CAPITAL = 25_000
+    RISK_PER_TRADE = 0.02
+    MAX_POSITIONS = 10
+    MIN_SCORE = 58
+    MIN_RR = 1.5
+
+    # Stocks to test against
+    TEST_UNIVERSE = [
+        "AAPL","MSFT","AMZN","NVDA","GOOGL","META","TSLA","AMD","NFLX","ADBE",
+        "CRM","INTU","QCOM","AMAT","ISRG","MU","PANW","CRWD","AVGO","TXN",
+        "AXON","DDOG","FTNT","ZS","HIMS","CAVA","ONON","ELF","DUOL","CELH",
+        "PLTR","COIN","SQ","FSLR","ENPH","CEG","LMT","RTX",
+        "JPM","V","MA","HD","COST","WMT","ABBV","PG","JNJ","MRK",
+    ]
+
+    capital = STARTING_CAPITAL
+    trades = []
+    wins = 0
+    losses = 0
+    total_pnl = 0
+    max_capital = capital
+    min_capital = capital
+    peak = capital
+
+    log = [f"**Backtesting {len(TEST_UNIVERSE)} stocks over {years} years...**",
+           f"Starting capital: ${STARTING_CAPITAL:,}"]
+
+    for ticker in TEST_UNIVERSE:
+        try:
+            stk = yf.Ticker(ticker)
+            hist = stk.history(period=f"{years}y")
+            if hist is None or hist.empty or len(hist) < 252:  # need at least 1 year
+                continue
+
+            # Slide a window through history, check signal every 20 trading days
+            window_size = 200  # need 200 bars for indicators
+            step = 20  # check every ~month
+
+            for i in range(window_size, len(hist) - 30, step):
+                if capital < 500:
+                    break
+
+                window = hist.iloc[i - window_size:i]
+                future = hist.iloc[i:i + 30]  # 30 days forward to check outcome
+
+                if len(window) < window_size or len(future) < 10:
+                    continue
+
+                tech = compute_technicals(window)
+                if not tech:
+                    continue
+
+                entry_price = float(window["Close"].iloc[-1])
+                if entry_price < 2:
+                    continue
+
+                # Build minimal data dict for signal generator
+                data = {
+                    "price": entry_price,
+                    "technicals": tech,
+                    "ticker": ticker,
+                }
+
+                sig = generate_trade_signal(data)
+                if sig["score"] < MIN_SCORE or sig["action"] not in ("BUY", "STRONG_BUY", "HOLD"):
+                    continue
+                if sig["trade"]["risk_reward"] < MIN_RR:
+                    continue
+
+                # Simulate the trade
+                stop = sig["trade"]["stop_loss"]
+                target = sig["trade"]["target_1"]
+
+                if entry_price <= stop:
+                    continue
+
+                risk_per_share = entry_price - stop
+                max_risk = capital * RISK_PER_TRADE
+                qty = max(1, int(max_risk / risk_per_share))
+                cost = qty * entry_price
+                if cost > capital * 0.30:
+                    qty = max(1, int(capital * 0.30 / entry_price))
+                    cost = qty * entry_price
+
+                if cost > capital:
+                    continue
+
+                # Check what happened in the next 30 days
+                future_high = float(future["High"].max())
+                future_low = float(future["Low"].min())
+
+                # Did stop or target hit first? Walk through day by day
+                hit_stop = False
+                hit_target = False
+                exit_price = float(future["Close"].iloc[-1])  # default: exit at end
+
+                for _, day in future.iterrows():
+                    day_low = float(day["Low"])
+                    day_high = float(day["High"])
+
+                    if day_low <= stop:
+                        exit_price = stop
+                        hit_stop = True
+                        break
+                    if day_high >= target:
+                        exit_price = target
+                        hit_target = True
+                        break
+
+                pnl = (exit_price - entry_price) * qty
+                pnl_pct = (exit_price - entry_price) / entry_price * 100
+                capital += pnl
+                total_pnl += pnl
+
+                if pnl > 0:
+                    wins += 1
+                else:
+                    losses += 1
+
+                max_capital = max(max_capital, capital)
+                min_capital = min(min_capital, capital)
+                peak = max(peak, capital)
+
+                trades.append({
+                    "ticker": ticker,
+                    "entry": round(entry_price, 2),
+                    "exit": round(exit_price, 2),
+                    "qty": qty,
+                    "pnl": round(pnl, 2),
+                    "pnl_pct": round(pnl_pct, 2),
+                    "result": "TARGET" if hit_target else ("STOPPED" if hit_stop else "TIMEOUT"),
+                    "score": sig["score"],
+                })
+
+        except Exception:
+            continue
+
+    # Calculate stats
+    total_trades = wins + losses
+    win_rate = (wins / total_trades * 100) if total_trades > 0 else 0
+    avg_win = np.mean([t["pnl"] for t in trades if t["pnl"] > 0]) if wins > 0 else 0
+    avg_loss = np.mean([t["pnl"] for t in trades if t["pnl"] < 0]) if losses > 0 else 0
+    profit_factor = abs(avg_win * wins / (avg_loss * losses)) if losses > 0 and avg_loss != 0 else float("inf")
+    max_drawdown = ((peak - min_capital) / peak * 100) if peak > 0 else 0
+    total_return = ((capital - STARTING_CAPITAL) / STARTING_CAPITAL * 100)
+
+    # Sharpe-like ratio (simplified)
+    if trades:
+        returns = [t["pnl_pct"] for t in trades]
+        avg_ret = np.mean(returns)
+        std_ret = np.std(returns) if len(returns) > 1 else 1
+        sharpe = (avg_ret / std_ret * np.sqrt(252 / step)) if std_ret > 0 else 0
+    else:
+        sharpe = 0
+
+    log.append(f"")
+    log.append(f"**Results:**")
+    log.append(f"Total trades: {total_trades} ({wins}W / {losses}L)")
+    log.append(f"Win rate: {win_rate:.1f}%")
+    log.append(f"Avg win: ${avg_win:+,.2f} · Avg loss: ${avg_loss:+,.2f}")
+    log.append(f"Profit factor: {profit_factor:.2f}")
+    log.append(f"Sharpe ratio: {sharpe:.2f}")
+    log.append(f"")
+    log.append(f"**Capital:**")
+    log.append(f"Starting: ${STARTING_CAPITAL:,} → Final: ${capital:,.2f}")
+    log.append(f"Total return: {total_return:+.1f}%")
+    log.append(f"Max drawdown: {max_drawdown:.1f}%")
+    log.append(f"Peak: ${max_capital:,.2f} · Trough: ${min_capital:,.2f}")
+
+    # Top trades
+    if trades:
+        log.append(f"")
+        log.append(f"**Top 5 winners:**")
+        best = sorted(trades, key=lambda x: x["pnl"], reverse=True)[:5]
+        for t in best:
+            log.append(f"🟢 {t['ticker']}: ${t['entry']} → ${t['exit']} ({t['pnl_pct']:+.1f}%) = ${t['pnl']:+,.2f} [{t['result']}]")
+
+        log.append(f"")
+        log.append(f"**Top 5 losers:**")
+        worst = sorted(trades, key=lambda x: x["pnl"])[:5]
+        for t in worst:
+            log.append(f"🔴 {t['ticker']}: ${t['entry']} → ${t['exit']} ({t['pnl_pct']:+.1f}%) = ${t['pnl']:+,.2f} [{t['result']}]")
+
+        # Breakdown by result type
+        targets_hit = sum(1 for t in trades if t["result"] == "TARGET")
+        stops_hit = sum(1 for t in trades if t["result"] == "STOPPED")
+        timeouts = sum(1 for t in trades if t["result"] == "TIMEOUT")
+        log.append(f"")
+        log.append(f"**Exit breakdown:** {targets_hit} targets hit · {stops_hit} stopped out · {timeouts} timed out")
+
+    return {
+        "ok": True,
+        "log": log,
+        "total_trades": total_trades,
+        "win_rate": round(win_rate, 1),
+        "total_return": round(total_return, 1),
+        "sharpe": round(sharpe, 2),
+        "final_capital": round(capital, 2),
+    }
+
+
 def run_autopilot() -> dict:
     """
     Full autopilot cycle:
@@ -1340,11 +1758,26 @@ def run_autopilot() -> dict:
     MIN_RR = 1.5
     SELL_BELOW = 35
 
-    # ── 2. Check existing positions — sell if signal turned bad ──
+    # ── 1b. Market regime check ──
+    regime = check_market_regime()
+    log.append(f"Market: {regime['reason']}")
+
+    if not regime["safe_to_buy"]:
+        log.append("⛔ Market regime unsafe — skipping new buys, only managing existing positions")
+
+    # ── 2. Trail stops on profitable positions ──
+    if positions:
+        trail_actions = update_trailing_stops(positions, log)
+        for a in trail_actions:
+            log.append(a)
+        if not trail_actions:
+            log.append("No stops to trail — positions not yet profitable enough")
+
+    # ── 3. Check existing positions — sell if signal turned bad ──
     sells = []
     for pos in positions:
         try:
-            data = fetch_full(pos["ticker"])
+            data = fetch_scan(pos["ticker"])
             if not data:
                 continue
             sig = generate_trade_signal(data)
@@ -1362,7 +1795,7 @@ def run_autopilot() -> dict:
     if not sells:
         log.append("All positions still healthy — no sells needed")
 
-    # ── 3. Scan for new opportunities ──
+    # ── 4. Scan for new opportunities ──
     open_slots = MAX_POSITIONS - (len(positions) - len(sells))
     if open_slots <= 0:
         log.append(f"Max positions ({MAX_POSITIONS}) reached — skipping scan")
@@ -1372,7 +1805,12 @@ def run_autopilot() -> dict:
         log.append("Not enough buying power — skipping scan")
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells)}
 
-    # ── 3. Scan for new opportunities ──
+    # Gate: don't buy in bear markets
+    if not regime["safe_to_buy"]:
+        log.append("Skipped scan — waiting for better market conditions")
+        return {"ok": True, "log": log, "buys": 0, "sells": len(sells), "scanned": 0, "opportunities": 0}
+
+    # ── 4. Scan for new opportunities ──
     # Step A: Use Polygon to pre-screen the ENTIRE market in one API call
     # Then only deep-analyze the top candidates (saves 30+ min vs scanning all 500)
     log.append("Pre-screening entire US market via Polygon...")
@@ -1498,12 +1936,18 @@ def run_autopilot() -> dict:
 
     log.append(f"Found {len(opportunities)} opportunities — executing top {min(open_slots, len(opportunities))}")
 
-    # ── 4. Execute trades on best opportunities ──
+    # ── 5. Execute trades on best opportunities ──
     buys = []
     for opp in opportunities[:open_slots]:
         ticker = opp["ticker"]
         sig = opp["signal"]
         trade = sig["trade"]
+
+        # Earnings check — skip stocks reporting within 7 days
+        has_earnings, earn_date = _has_upcoming_earnings(ticker, days=7)
+        if has_earnings:
+            log.append(f"⏭️ Skipped {ticker} — earnings on {earn_date}")
+            continue
 
         entry = trade["entry"]
         stop = trade["stop_loss"]
@@ -1576,6 +2020,24 @@ def execute(intent: dict) -> dict:
     if t == "stop_autopilot":
         st.session_state["autopilot_active"] = False
         return {"ok": True, "type": "trade", "msg": "🔴 **Autopilot deactivated.** No more automatic scans. Your positions remain open."}
+
+    if t == "backtest":
+        result = run_backtest(years=2)
+        if not result.get("ok"):
+            return {"ok": False, "error": "Backtest failed"}
+        summary = "\n\n".join(result["log"])
+        return {"ok": True, "type": "trade", "msg": summary}
+
+    if t == "market_regime":
+        regime = check_market_regime()
+        safe = "✅ Safe to buy" if regime["safe_to_buy"] else "⛔ Not safe to buy"
+        msg = (
+            f"**Market Regime Check**\n\n"
+            f"Regime: **{regime['regime']}** · {safe}\n\n"
+            f"{regime['reason']}\n\n"
+            f"SPY: ${regime.get('spy_price', '?')} · 50 SMA: ${regime.get('sma_50', '?')} · 200 SMA: ${regime.get('sma_200', '?')} · RSI: {regime.get('rsi', '?')}"
+        )
+        return {"ok": True, "type": "trade", "msg": msg}
 
     # ── Trading commands ──
     if t == "portfolio":
