@@ -1662,21 +1662,34 @@ def run_backtest(years: int = 2) -> dict:
                 if cost > capital:
                     continue
 
-                # Simulate with trailing stop
+                # Simulate with trailing stop + partial profits
                 highest = entry_price
                 current_stop = stop
                 exit_price = float(future["Close"].iloc[-1])
                 exit_reason = "TIMEOUT"
                 atr = _safe(tech.get("atr"), entry_price * 0.02)
+                partial_taken = False
+                partial_pnl = 0
+                remaining_qty = qty
+                partial_threshold = entry_price * 1.04  # +4%
 
                 for _, day in future.iterrows():
                     day_low = float(day["Low"])
                     day_high = float(day["High"])
                     day_close = float(day["Close"])
 
+                    # Partial profit: sell half at +4%
+                    if not partial_taken and day_high >= partial_threshold and remaining_qty > 1:
+                        half = remaining_qty // 2
+                        partial_pnl = (partial_threshold - entry_price) * half
+                        remaining_qty -= half
+                        partial_taken = True
+                        # Move stop to breakeven after taking partials
+                        current_stop = max(current_stop, entry_price)
+
                     if day_low <= current_stop:
                         exit_price = current_stop
-                        exit_reason = "STOPPED"
+                        exit_reason = "STOPPED" if not partial_taken else "TRAILED"
                         break
                     if day_high >= target:
                         exit_price = target
@@ -1688,8 +1701,10 @@ def run_backtest(years: int = 2) -> dict:
                         if new_stop > current_stop:
                             current_stop = new_stop
 
-                pnl = (exit_price - entry_price) * qty
-                pnl_pct = (exit_price - entry_price) / entry_price * 100
+                # Total P&L = partial profit + remaining shares profit
+                remaining_pnl = (exit_price - entry_price) * remaining_qty
+                pnl = partial_pnl + remaining_pnl
+                pnl_pct = pnl / (entry_price * qty) * 100
                 capital += pnl
 
                 if pnl > 0:
@@ -1812,6 +1827,28 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     MIN_CONFLUENCE = 3
     MIN_RR = 2.0
     SELL_BELOW = 35
+    DAILY_LOSS_LIMIT = 0.03       # 3% max daily loss — shut down if hit
+    PARTIAL_PROFIT_PCT = 0.04     # take half off at 4% profit
+    PARTIAL_PROFIT_SOLD_KEY = "autopilot_partial_sold"
+
+    # ── 1b. Daily loss limit ──
+    daily_pnl_pct = account.get("daily_pnl_pct", 0)
+    if daily_pnl_pct <= -DAILY_LOSS_LIMIT * 100 and not dry_run:
+        log.append(f"🛑 **DAILY LOSS LIMIT HIT** — down {daily_pnl_pct:.2f}% today")
+        log.append("Closing all positions and shutting down autopilot.")
+        result = alpaca_close_all()
+        if result.get("ok"):
+            log.append("All positions closed.")
+        else:
+            log.append(f"⚠️ Failed to close: {result.get('error', '')}")
+        st.session_state["autopilot_active"] = False
+        return {"ok": True, "log": log, "buys": 0, "sells": len(positions), "scanned": 0, "opportunities": 0}
+    elif daily_pnl_pct <= -DAILY_LOSS_LIMIT * 100 and dry_run:
+        log.append(f"🛑 Daily loss limit would trigger — down {daily_pnl_pct:.2f}% today")
+    elif daily_pnl_pct < 0:
+        log.append(f"Daily P&L: {daily_pnl_pct:+.2f}% (limit: -{DAILY_LOSS_LIMIT*100:.0f}%)")
+    else:
+        log.append(f"Daily P&L: {daily_pnl_pct:+.2f}%")
 
     # ── 1b. Market regime check ──
     regime = check_market_regime()
@@ -1827,6 +1864,39 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             log.append(a)
         if not trail_actions:
             log.append("No stops to trail — positions not yet profitable enough")
+
+    # ── 2b. Partial profit-taking — sell half at +4% to lock in gains ──
+    if PARTIAL_PROFIT_SOLD_KEY not in st.session_state:
+        st.session_state[PARTIAL_PROFIT_SOLD_KEY] = set()
+    # Reset daily
+    if st.session_state.get("autopilot_date") != today:
+        st.session_state[PARTIAL_PROFIT_SOLD_KEY] = set()
+
+    partials = []
+    for pos in positions:
+        ticker = pos["ticker"]
+        pnl_pct = pos.get("unrealized_pnl_pct", 0)
+        qty = int(pos.get("qty", 0))
+
+        # Only take partials if: profitable enough, haven't already taken partials, and have >1 share
+        if (pnl_pct >= PARTIAL_PROFIT_PCT * 100
+                and ticker not in st.session_state[PARTIAL_PROFIT_SOLD_KEY]
+                and qty > 1):
+            half = max(1, qty // 2)
+            if dry_run:
+                partials.append(f"💰 Would sell {half}/{qty} shares of {ticker} at +{pnl_pct:.1f}% (locking in partial profit)")
+            else:
+                result = alpaca_sell(ticker=ticker, qty=half)
+                if result.get("ok"):
+                    partials.append(f"💰 Sold {half}/{qty} {ticker} at +{pnl_pct:.1f}% — half off, letting rest ride")
+                    st.session_state[PARTIAL_PROFIT_SOLD_KEY].add(ticker)
+                else:
+                    partials.append(f"⚠️ Partial sell failed for {ticker}: {result.get('error', '')}")
+
+    for p in partials:
+        log.append(p)
+    if not partials:
+        log.append("No positions hit +4% for partial profit yet")
 
     # ── 3. Check existing positions — sell if signal turned bad ──
     sells = []
