@@ -811,268 +811,295 @@ def compute_technicals(hist: pd.DataFrame) -> dict:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def generate_trade_signal(data: dict) -> dict:
+    """
+    Strategy: Buy pullbacks in confirmed uptrends.
+    
+    This is ONE proven strategy instead of mixing 5 conflicting ones.
+    
+    Entry rules (ALL must be true for BUY):
+    1. Price above 200 SMA (long-term uptrend)
+    2. Price above 50 SMA (medium-term uptrend)
+    3. Price pulled back toward 20 SMA (the dip to buy)
+    4. RSI 30-60 (pulled back but not collapsing)
+    5. ADX > 18 (market is trending, not choppy)
+    
+    Score = quality of the setup (how many bonus factors align)
+    """
     tech = data.get("technicals", {})
     price = data.get("price", 0)
     if not price or not tech:
-        return {"action": "NO_DATA", "confidence": 0}
+        return {"action": "NO_DATA", "confidence": 0, "score": 0,
+                "confluence": {"bullish": 0, "bearish": 0},
+                "category_scores": {}, "signals": [], "warnings": [],
+                "trade": {"entry": 0, "stop_loss": 0, "target_1": 0,
+                          "target_2": 0, "risk_reward": 0, "risk_pct": 0, "atr": 0}}
 
-    votes: dict[str, float] = {}
-    signals: list[str] = []
-    warnings: list[str] = []
+    signals = []
+    warnings = []
+    score = 50  # Start neutral
 
-    # ── 1. TREND (±30) ──
+    # ── Core indicators ──
+    sma20 = _safe(tech.get("sma_20"))
+    sma50 = _safe(tech.get("sma_50"))
+    sma200 = _safe(tech.get("sma_200"))
+    rsi = _safe(tech.get("rsi"), 50)
+    adx = _safe(tech.get("adx"), 15)
+    atr = _safe(tech.get("atr"), price * 0.02)
+    macd_h = _safe(tech.get("macd_hist"), 0)
+    macd_accel = tech.get("macd_accel", "")
+    vol_ratio = _safe(tech.get("vol_ratio"), 1.0)
+    obv_trend = tech.get("obv_trend", "flat")
+    bb_pct_b = _safe(tech.get("bb_pct_b"), 0.5)
     regime = tech.get("trend_regime", "ranging")
-    adx = _safe(tech.get("adx"), 0)
     slope = _safe(tech.get("trend_slope"), 0)
-    trend_score = 0
-
-    if regime == "strong_uptrend":
-        trend_score += 20
-        signals.append(f"Strong uptrend (ADX {adx}, slope +{slope:.1f}%)")
-    elif regime == "strong_downtrend":
-        trend_score -= 20
-        warnings.append(f"Strong downtrend (ADX {adx}, slope {slope:.1f}%)")
-    elif regime == "weak_trend":
-        trend_score += 5 if slope > 0 else -5
-
-    sma20, sma50, sma200 = _safe(tech.get("sma_20")), _safe(tech.get("sma_50")), _safe(tech.get("sma_200"))
-    ma_above = sum(1 for ma in [sma20, sma50, sma200] if ma and price > ma)
-    ma_total = sum(1 for ma in [sma20, sma50, sma200] if ma)
-    ma_below = ma_total - ma_above
-
-    if ma_above == 3:
-        trend_score += 10
-        signals.append("Price above all key MAs (20/50/200)")
-    elif ma_above == 0 and ma_total >= 2:
-        trend_score -= 10
-        warnings.append("Price below all key MAs")
-    else:
-        trend_score += (ma_above - ma_below) * 3
-
-    if tech.get("ma_cross") == "golden_cross":
-        trend_score += 5
-        signals.append("Golden cross (50 > 200 SMA)")
-    elif tech.get("ma_cross") == "death_cross":
-        trend_score -= 5
-        warnings.append("Death cross (50 < 200 SMA)")
-
-    votes["trend"] = max(-30, min(30, trend_score))
-
-    # ── 2. MOMENTUM (±30) ──
-    mom_score = 0
-    rsi = _safe(tech.get("rsi"))
-    if rsi is not None:
-        if rsi < 25:
-            mom_score += 12; signals.append(f"RSI deeply oversold ({rsi:.0f})")
-        elif rsi < 35:
-            mom_score += 6; signals.append(f"RSI in buy zone ({rsi:.0f})")
-        elif rsi > 80:
-            mom_score -= 12; warnings.append(f"RSI extremely overbought ({rsi:.0f})")
-        elif rsi > 68:
-            mom_score -= 5; warnings.append(f"RSI elevated ({rsi:.0f})")
-
-    stoch_k, stoch_d = _safe(tech.get("stoch_rsi_k")), _safe(tech.get("stoch_rsi_d"))
-    if stoch_k is not None and stoch_d is not None:
-        if stoch_k < 20 and stoch_k > stoch_d:
-            mom_score += 6; signals.append(f"StochRSI bullish cross in oversold ({stoch_k:.0f})")
-        elif stoch_k > 80 and stoch_k < stoch_d:
-            mom_score -= 6; warnings.append(f"StochRSI bearish cross in overbought ({stoch_k:.0f})")
-
-    macd_h = _safe(tech.get("macd_hist"))
-    if macd_h is not None:
-        accel = tech.get("macd_accel", "")
-        if macd_h > 0 and accel == "expanding":
-            mom_score += 8; signals.append("MACD bullish & accelerating")
-        elif macd_h > 0:
-            mom_score += 4; signals.append("MACD bullish")
-        elif macd_h < 0 and accel == "expanding":
-            mom_score -= 8; warnings.append("MACD bearish & accelerating")
-        elif macd_h < 0:
-            mom_score -= 4; warnings.append("MACD bearish")
-
-    mom5 = _safe(tech.get("mom_5d"))
-    if mom5 is not None:
-        if mom5 > 5: mom_score += 4
-        elif mom5 < -5: mom_score -= 4
-
-    votes["momentum"] = max(-30, min(30, mom_score))
-
-    # ── 3. MEAN REVERSION (±15) ──
-    mr_score = 0
-    bb_pct_b = _safe(tech.get("bb_pct_b"))
-    if bb_pct_b is not None:
-        if bb_pct_b <= 0.05:
-            mr_score += 10; signals.append(f"At lower Bollinger Band (%B: {bb_pct_b:.2f})")
-        elif bb_pct_b <= 0.2:
-            mr_score += 5; signals.append(f"Near lower Bollinger (%B: {bb_pct_b:.2f})")
-        elif bb_pct_b >= 0.95:
-            mr_score -= 8; warnings.append(f"At upper Bollinger Band (%B: {bb_pct_b:.2f})")
-        elif bb_pct_b >= 0.8:
-            mr_score -= 3
-
-    bb_width = _safe(tech.get("bb_width"))
-    if bb_width is not None and bb_width < 0.04:
-        signals.append(f"Bollinger squeeze (width: {bb_width:.3f}) — breakout imminent")
-
     supports = tech.get("support_levels", [])
     resistances = tech.get("resistance_levels", [])
+    stoch_k = _safe(tech.get("stoch_rsi_k"), 50)
+    stoch_d = _safe(tech.get("stoch_rsi_d"), 50)
+
+    # ═══ STEP 1: TREND FILTER (pass/fail gates) ═══
+    above_200 = sma200 is not None and price > sma200
+    above_50 = sma50 is not None and price > sma50
+    above_20 = sma20 is not None and price > sma20
+    
+    # MA stacking: 20 > 50 > 200 is ideal
+    mas_stacked = (sma20 is not None and sma50 is not None and sma200 is not None 
+                   and sma20 > sma50 > sma200)
+    
+    trending = adx > 18
+    
+    # ═══ STEP 2: PULLBACK DETECTION ═══
+    # How far has price pulled back from 20 SMA? 
+    pullback_to_20 = False
+    pullback_quality = 0
+    if sma20:
+        dist_from_20 = (price - sma20) / sma20 * 100
+        # Ideal: price is within -3% to +1% of 20 SMA (just touching it or slightly below)
+        if -4 <= dist_from_20 <= 1.5:
+            pullback_to_20 = True
+            pullback_quality = 10 - abs(dist_from_20) * 2  # closer to 20 SMA = better
+    
+    # Also check if near 50 SMA (deeper pullback in strong trend)
+    pullback_to_50 = False
+    if sma50 and sma200 and price > sma200:
+        dist_from_50 = (price - sma50) / sma50 * 100
+        if -3 <= dist_from_50 <= 1:
+            pullback_to_50 = True
+    
+    # ═══ STEP 3: SCORING ═══
+    
+    # -- Trend health (0-25 points) --
+    if above_200:
+        score += 8
+        signals.append("Above 200 SMA — long-term uptrend ✓")
+    else:
+        score -= 15
+        warnings.append("Below 200 SMA — no uptrend")
+    
+    if above_50:
+        score += 6
+        signals.append("Above 50 SMA — medium-term uptrend ✓")
+    else:
+        score -= 10
+        warnings.append("Below 50 SMA")
+    
+    if mas_stacked:
+        score += 6
+        signals.append("MAs stacked bullish (20 > 50 > 200)")
+    
+    if regime == "strong_uptrend":
+        score += 5
+        signals.append(f"Strong uptrend (ADX {adx:.0f})")
+    elif regime == "strong_downtrend":
+        score -= 12
+        warnings.append(f"Strong downtrend (ADX {adx:.0f})")
+    
+    if tech.get("ma_cross") == "golden_cross":
+        score += 3
+        signals.append("Golden cross")
+    elif tech.get("ma_cross") == "death_cross":
+        score -= 5
+        warnings.append("Death cross")
+    
+    # -- Pullback quality (0-15 points) --
+    if pullback_to_20 and above_50:
+        score += int(max(0, pullback_quality))
+        signals.append(f"Pulled back to 20 SMA — buy-the-dip setup")
+    if pullback_to_50 and above_200:
+        score += 6
+        signals.append(f"Deeper pullback to 50 SMA in uptrend — high value entry")
+    
+    # -- RSI sweet spot (0-10 points) --
+    if 35 <= rsi <= 50:
+        score += 8
+        signals.append(f"RSI in ideal pullback zone ({rsi:.0f})")
+    elif 30 <= rsi <= 35:
+        score += 5
+        signals.append(f"RSI oversold bounce zone ({rsi:.0f})")
+    elif 50 < rsi <= 60:
+        score += 3  # okay, not ideal
+    elif rsi > 75:
+        score -= 8
+        warnings.append(f"RSI overbought ({rsi:.0f}) — don't chase")
+    elif rsi < 25:
+        score -= 5
+        warnings.append(f"RSI crashing ({rsi:.0f}) — could keep falling")
+    
+    # -- Momentum confirmation (0-10 points) --
+    if macd_h > 0 and macd_accel == "expanding":
+        score += 7
+        signals.append("MACD bullish & accelerating")
+    elif macd_h > 0:
+        score += 4
+        signals.append("MACD bullish")
+    elif macd_h < 0 and macd_accel == "expanding":
+        score -= 5
+        warnings.append("MACD bearish & accelerating")
+    elif macd_h < 0:
+        # If MACD is negative but about to cross (histogram getting less negative), that's ok for a pullback
+        score -= 1
+    
+    if stoch_k < 25 and stoch_k > stoch_d:
+        score += 5
+        signals.append(f"StochRSI bullish cross from oversold")
+    elif stoch_k > 80 and stoch_k < stoch_d:
+        score -= 4
+        warnings.append(f"StochRSI bearish")
+    
+    # -- Volume (0-6 points) --
+    # On a pullback, LOWER volume is good (no panic selling)
+    if pullback_to_20 or pullback_to_50:
+        if vol_ratio < 0.8:
+            score += 4
+            signals.append(f"Low volume on pullback ({vol_ratio:.1f}x) — healthy dip")
+        elif vol_ratio > 2.0:
+            score -= 3
+            warnings.append(f"High volume on pullback ({vol_ratio:.1f}x) — possible distribution")
+    else:
+        if vol_ratio > 1.5:
+            score += 3
+            signals.append(f"Above-average volume ({vol_ratio:.1f}x)")
+        elif vol_ratio < 0.4:
+            score -= 2
+            warnings.append(f"Very thin volume")
+    
+    if obv_trend == "rising":
+        score += 3
+        signals.append("OBV rising — accumulation")
+    elif obv_trend == "falling":
+        score -= 3
+        warnings.append("OBV falling — distribution")
+    
+    # -- Bollinger Band context (0-5 points) --
+    if bb_pct_b is not None:
+        if bb_pct_b <= 0.15 and above_50:
+            score += 5
+            signals.append(f"At lower Bollinger in uptrend — bounce likely")
+        elif bb_pct_b >= 0.95:
+            score -= 4
+            warnings.append(f"At upper Bollinger — extended")
+    
+    # -- Support proximity (0-4 points) --
     if supports:
         dist = (price - supports[0]) / price * 100
-        if dist < 2:
-            mr_score += 5; signals.append(f"Near support {supports[0]:.2f} ({dist:.1f}% away)")
-    if resistances:
-        dist = (resistances[0] - price) / price * 100
-        if dist < 1.5:
-            mr_score -= 3; warnings.append(f"Resistance at {resistances[0]:.2f} ({dist:.1f}% away)")
-
-    votes["mean_reversion"] = max(-15, min(15, mr_score))
-
-    # ── 4. VOLUME (±10) ──
-    vol_score = 0
-    vol_ratio = _safe(tech.get("vol_ratio"))
-    if vol_ratio is not None:
-        if vol_ratio > 2.0:
-            vol_score += 5; signals.append(f"Volume surge ({vol_ratio:.1f}× avg)")
-        elif vol_ratio > 1.3:
-            vol_score += 2
-        elif vol_ratio < 0.4:
-            vol_score -= 3; warnings.append(f"Thin volume ({vol_ratio:.1f}× avg)")
-
-    obv_trend = tech.get("obv_trend")
-    if obv_trend == "rising":
-        vol_score += 3; signals.append("Accumulation (OBV rising)")
-    elif obv_trend == "falling":
-        vol_score -= 3; warnings.append("Distribution (OBV falling)")
-
-    votes["volume"] = max(-10, min(10, vol_score))
-
-    # ── 5. FUNDAMENTALS (±15) ──
-    fund_score = 0
-    pe, fwd_pe = _safe(data.get("pe_ratio")), _safe(data.get("forward_pe"))
-    if pe and fwd_pe:
-        if fwd_pe < pe * 0.82:
-            fund_score += 5; signals.append(f"Earnings growth (Fwd P/E {fwd_pe:.1f} vs {pe:.1f})")
-        elif fwd_pe > pe * 1.1:
-            fund_score -= 3; warnings.append(f"Earnings decel (Fwd P/E {fwd_pe:.1f} > {pe:.1f})")
-
-    roe = _safe(data.get("roe"))
-    if roe is not None:
-        if roe > 0.25: fund_score += 3; signals.append(f"Strong ROE ({roe*100:.0f}%)")
-        elif roe < 0.05: fund_score -= 2
-
-    rev_g = _safe(data.get("revenue_growth"))
-    if rev_g is not None and rev_g > 0.15:
-        fund_score += 2; signals.append(f"Revenue +{rev_g*100:.0f}% YoY")
-    earn_g = _safe(data.get("earnings_growth"))
-    if earn_g is not None and earn_g > 0.20:
-        fund_score += 2
-
-    de = _safe(data.get("debt_to_equity"))
-    if de is not None and de > 200:
-        fund_score -= 4; warnings.append(f"High leverage (D/E: {de:.0f})")
-
+        if dist < 2 and above_50:
+            score += 4
+            signals.append(f"Near support ${supports[0]:.2f}")
+    
+    # -- Fundamentals (light touch, only if available) --
+    pe = _safe(data.get("pe_ratio"))
+    fwd_pe = _safe(data.get("forward_pe"))
+    if pe and fwd_pe and fwd_pe < pe * 0.82:
+        score += 3
+        signals.append(f"Earnings growth (Fwd P/E {fwd_pe:.1f} vs {pe:.1f})")
+    
     rec = data.get("recommendation")
     if rec in ("strongBuy", "strong_buy"):
-        fund_score += 4; signals.append("Analysts: Strong Buy")
-    elif rec == "buy":
-        fund_score += 2
+        score += 3
     elif rec in ("sell", "strongSell", "strong_sell"):
-        fund_score -= 4; warnings.append(f"Analysts: {rec.replace('_',' ').title()}")
-
-    target = _safe(data.get("target_price"))
-    if target and price:
-        upside = (target - price) / price * 100
+        score -= 3
+    
+    target_price = _safe(data.get("target_price"))
+    if target_price and price:
+        upside = (target_price - price) / price * 100
         if upside > 20:
-            fund_score += 3; signals.append(f"Target {target:.2f} → {upside:.0f}% upside")
+            score += 2
         elif upside < -10:
-            fund_score -= 3; warnings.append(f"Trading {abs(upside):.0f}% above target")
-
-    votes["fundamentals"] = max(-15, min(15, fund_score))
-
-    # ═══ AGGREGATE ═══
-    raw_score = sum(votes.values())
-    score = max(0, min(100, int(50 + raw_score / 2)))
-    bullish_cats = sum(1 for v in votes.values() if v > 2)
-    bearish_cats = sum(1 for v in votes.values() if v < -2)
-
-    # ── Trend alignment gate: don't buy against the trend ──
-    trend_aligned = votes.get("trend", 0) > 0
-    price_above_50 = sma50 is not None and price > sma50
-    price_above_200 = sma200 is not None and price > sma200
-
-    # Bonus for strong trend alignment
-    if trend_aligned and price_above_50 and price_above_200:
-        score = min(100, score + 5)
-        signals.append("Trend aligned — price above 50 & 200 SMA")
-    # Penalty for buying into downtrend
-    elif not trend_aligned and not price_above_50:
-        score = max(0, score - 8)
-        warnings.append("Counter-trend — price below 50 SMA")
-
-    if score >= 72 and bullish_cats >= 3:
-        action, confidence = "STRONG_BUY", min(95, score)
-    elif score >= 60 and bullish_cats >= 2 and trend_aligned:
-        action, confidence = "BUY", min(85, score)
-    elif score >= 60 and bullish_cats >= 2:
-        # Score is ok but trend isn't aligned — downgrade to HOLD
-        action, confidence = "HOLD", min(70, score)
-    elif score <= 28 and bearish_cats >= 3:
-        action, confidence = "STRONG_SELL", min(95, 100 - score)
-    elif score <= 40 and bearish_cats >= 2:
-        action, confidence = "SELL", min(85, 100 - score)
+            score -= 2
+    
+    # ═══ STEP 4: DETERMINE ACTION ═══
+    score = max(0, min(100, score))
+    
+    bullish_count = sum(1 for s in signals if "✓" in s or "bullish" in s.lower() or "uptrend" in s.lower() or "rising" in s.lower() or "buy" in s.lower())
+    bearish_count = sum(1 for w in warnings)
+    
+    # BUY requires: uptrend confirmed + pullback + quality score
+    is_uptrend = above_200 and above_50
+    has_pullback = pullback_to_20 or pullback_to_50
+    
+    if score >= 75 and is_uptrend and trending:
+        action = "STRONG_BUY"
+        confidence = min(95, score)
+    elif score >= 62 and is_uptrend:
+        action = "BUY"
+        confidence = min(85, score)
+    elif score <= 30:
+        action = "STRONG_SELL"
+        confidence = min(90, 100 - score)
+    elif score <= 40:
+        action = "SELL"
+        confidence = min(80, 100 - score)
     else:
-        action, confidence = "HOLD", max(40, 100 - abs(score - 50) * 2)
-
-    # ═══ ATR-BASED RISK MANAGEMENT ═══
-    atr = _safe(tech.get("atr"), price * 0.02)
-
+        action = "HOLD"
+        confidence = max(40, 100 - abs(score - 50) * 2)
+    
+    # ═══ STEP 5: RISK MANAGEMENT ═══
     if action in ("BUY", "STRONG_BUY"):
-        entry = supports[0] if (supports and (price - supports[0]) / price < 0.03) else price
-        # Wider stops — 2.5x ATR avoids getting stopped on noise
-        stop_atr = round(entry - 2.5 * atr, 2)
-        stop_sr = round(supports[0] - 0.5 * atr, 2) if supports else stop_atr
-        stop_loss = max(stop_atr, stop_sr)
-        # Don't let stop be closer than 1.5% from entry (minimum breathing room)
-        min_stop = round(entry * 0.985, 2)
-        stop_loss = min(stop_loss, min_stop)
+        entry = price
+        # Stop loss: 3x ATR below entry, or below nearest support — whichever is tighter
+        stop_atr = round(entry - 3.0 * atr, 2)
+        stop_support = round(supports[0] - 0.3 * atr, 2) if supports and (price - supports[0]) / price < 0.05 else stop_atr
+        stop_loss = max(stop_atr, stop_support)
+        # Minimum 2% stop distance
+        min_stop = round(entry * 0.98, 2)
+        if stop_loss > min_stop:
+            stop_loss = min_stop
+        
         risk = max(entry - stop_loss, 0.01)
-        # Targets at 2.5:1 and 4:1 — let winners run further
-        target_1 = round(entry + 2.5 * risk, 2)
-        target_2 = round(entry + 4 * risk, 2)
-        # Only cap target if resistance is VERY close (within 1x risk) — otherwise ignore it
-        if resistances and (resistances[0] - entry) < risk:
-            target_1 = round(resistances[0], 2)
+        # Target at 3:1 R:R
+        target_1 = round(entry + 3.0 * risk, 2)
+        target_2 = round(entry + 5.0 * risk, 2)
         risk_pct = round(risk / entry * 100, 2)
     elif action in ("SELL", "STRONG_SELL"):
         entry = price
-        stop_loss = round(price + 2.5 * atr, 2)
-        if resistances:
-            stop_loss = min(stop_loss, round(resistances[0] + 0.5 * atr, 2))
+        stop_loss = round(price + 3.0 * atr, 2)
         risk = max(stop_loss - entry, 0.01)
-        target_1 = round(entry - 2.5 * risk, 2)
-        target_2 = round(entry - 4 * risk, 2)
+        target_1 = round(entry - 3.0 * risk, 2)
+        target_2 = round(entry - 5.0 * risk, 2)
         risk_pct = round(risk / entry * 100, 2)
     else:
         entry = price
-        stop_loss = round(price - 2.5 * atr, 2)
-        risk = 2.5 * atr
-        target_1 = round(price + 2.5 * atr, 2)
-        target_2 = round(price + 4 * atr, 2)
+        stop_loss = round(price - 3.0 * atr, 2)
+        risk = 3.0 * atr
+        target_1 = round(price + 3.0 * atr, 2)
+        target_2 = round(price + 5.0 * atr, 2)
         risk_pct = round(risk / price * 100, 2)
-
-    if action in ("BUY", "STRONG_BUY"):
-        rr = round((target_1 - entry) / risk, 2) if risk > 0 else 0
-    elif action in ("SELL", "STRONG_SELL"):
-        rr = round((entry - target_1) / risk, 2) if risk > 0 else 0
-    else:
-        rr = 0
-
+    
+    rr = round((target_1 - entry) / risk, 2) if action in ("BUY", "STRONG_BUY") and risk > 0 else (
+         round((entry - target_1) / risk, 2) if action in ("SELL", "STRONG_SELL") and risk > 0 else 0)
+    
     return {
         "action": action,
         "score": score,
         "confidence": confidence,
-        "confluence": {"bullish": bullish_cats, "bearish": bearish_cats},
-        "category_scores": {k: round(v, 1) for k, v in votes.items()},
+        "confluence": {"bullish": bullish_count, "bearish": bearish_count},
+        "category_scores": {
+            "trend": 1 if is_uptrend else -1,
+            "pullback": 1 if has_pullback else 0,
+            "momentum": 1 if macd_h > 0 else -1,
+            "volume": 1 if obv_trend == "rising" else (-1 if obv_trend == "falling" else 0),
+            "rsi": 1 if 30 <= rsi <= 55 else (-1 if rsi > 75 else 0),
+        },
         "signals": signals,
         "warnings": warnings,
         "trade": {
@@ -1085,7 +1112,6 @@ def generate_trade_signal(data: dict) -> dict:
             "atr": round(atr, 2),
         },
     }
-
 
 # ── Data fetching ────────────────────────────────────────────────────────────
 
@@ -1453,7 +1479,7 @@ def _has_upcoming_earnings(ticker: str, days: int = 7) -> tuple[bool, str | None
 def update_trailing_stops(positions: list[dict], log: list) -> list[str]:
     """
     For each open position, check if price has moved up enough to trail the stop.
-    Uses 2x ATR trailing stop from the highest price since entry.
+    Uses 3x ATR trailing stop from the highest price since entry.
     """
     actions = []
     for pos in positions:
@@ -1486,8 +1512,8 @@ def update_trailing_stops(positions: list[dict], log: list) -> list[str]:
             # Highest close since we'd have entered
             recent_high = float(close.tail(20).max())
 
-            # New trailing stop: highest recent price minus 2x ATR
-            new_stop = round(recent_high - (2.0 * atr), 2)
+            # New trailing stop: highest recent price minus 3x ATR
+            new_stop = round(recent_high - (3.0 * atr), 2)
 
             # Only move stop UP, never down. And only if it's above entry (lock in profit)
             if new_stop > entry and new_stop > entry * 1.01:
@@ -1535,9 +1561,9 @@ def run_backtest(years: int = 2) -> dict:
     Simulates autopilot with trailing stops over the last N years.
     """
     STARTING_CAPITAL = 25_000
-    RISK_PER_TRADE = 0.02
-    MIN_SCORE = 62
-    MIN_RR = 2.0
+    RISK_PER_TRADE = 0.015
+    MIN_SCORE = 65
+    MIN_RR = 2.5
 
     # 100 stocks
     TEST_UNIVERSE = [
@@ -1571,9 +1597,9 @@ def run_backtest(years: int = 2) -> dict:
 
     log = [f"**Backtesting {len(TEST_UNIVERSE)} stocks over {years} years...**",
            f"Starting capital: ${STARTING_CAPITAL:,}",
-           f"Rules: score≥{MIN_SCORE}, BUY/STRONG_BUY only, R:R≥{MIN_RR}, trailing stops, trend aligned"]
+           f"Rules: score≥{MIN_SCORE}, BUY/STRONG_BUY only, R:R≥{MIN_RR}, 3x ATR trailing stops, pullback-in-uptrend"]
 
-    step = 15
+    step = 20
 
     for ticker in TEST_UNIVERSE:
         try:
@@ -1589,7 +1615,7 @@ def run_backtest(years: int = 2) -> dict:
                     break
 
                 window = hist.iloc[i - window_size:i]
-                future = hist.iloc[i:i + 40]
+                future = hist.iloc[i:i + 60]
 
                 if len(window) < window_size or len(future) < 10:
                     continue
@@ -1628,8 +1654,8 @@ def run_backtest(years: int = 2) -> dict:
                 max_risk = capital * RISK_PER_TRADE
                 qty = max(1, int(max_risk / risk_per_share))
                 cost = qty * entry_price
-                if cost > capital * 0.25:
-                    qty = max(1, int(capital * 0.25 / entry_price))
+                if cost > capital * 0.15:
+                    qty = max(1, int(capital * 0.15 / entry_price))
                     cost = qty * entry_price
                 if cost > capital:
                     continue
@@ -1656,7 +1682,7 @@ def run_backtest(years: int = 2) -> dict:
                         break
                     if day_close > highest:
                         highest = day_close
-                        new_stop = round(highest - 2.5 * atr, 2)
+                        new_stop = round(highest - 3.0 * atr, 2)
                         if new_stop > current_stop:
                             current_stop = new_stop
 
@@ -1776,11 +1802,11 @@ def run_autopilot() -> dict:
     log.append(f"Open positions: {len(positions)}")
 
     MAX_POSITIONS = 10
-    RISK_PER_TRADE = 0.02
-    MAX_POS_PCT = 0.15
-    MIN_SCORE = 62
+    RISK_PER_TRADE = 0.015
+    MAX_POS_PCT = 0.12
+    MIN_SCORE = 65
     MIN_CONFLUENCE = 2
-    MIN_RR = 2.0
+    MIN_RR = 2.5
     SELL_BELOW = 35
 
     # ── 1b. Market regime check ──
@@ -1956,7 +1982,7 @@ def run_autopilot() -> dict:
     opportunities.sort(key=lambda x: (action_priority.get(x["action"], 3), -x["score"]))
 
     if not opportunities:
-        log.append("No stocks passed the criteria (score≥62, BUY/STRONG_BUY, confluence≥2, R:R≥2.0)")
+        log.append("No stocks passed the criteria (score≥65, BUY/STRONG_BUY, R:R≥2.5)")
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells), "scanned": analyzed}
 
     log.append(f"Found {len(opportunities)} opportunities — executing top {min(open_slots, len(opportunities))}")
