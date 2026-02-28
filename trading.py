@@ -1564,8 +1564,8 @@ def run_backtest(years: int = 2) -> dict:
     """
     STARTING_CAPITAL = 25_000
     RISK_PER_TRADE = 0.015
-    MIN_SCORE = 65
-    MIN_RR = 2.5
+    MIN_SCORE = 62
+    MIN_RR = 2.0
 
     # 100 stocks
     TEST_UNIVERSE = [
@@ -1808,9 +1808,9 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     MAX_POSITIONS = 10
     RISK_PER_TRADE = 0.015
     MAX_POS_PCT = 0.12
-    MIN_SCORE = 65
+    MIN_SCORE = 62
     MIN_CONFLUENCE = 2
-    MIN_RR = 2.5
+    MIN_RR = 2.0
     SELL_BELOW = 35
 
     # ── 1b. Market regime check ──
@@ -1989,7 +1989,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     opportunities.sort(key=lambda x: (action_priority.get(x["action"], 3), -x["score"]))
 
     if not opportunities:
-        log.append("No stocks passed the criteria (score≥65, BUY/STRONG_BUY, R:R≥2.5)")
+        log.append("No stocks passed the criteria (score≥62, BUY/STRONG_BUY, R:R≥2.0)")
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells), "scanned": analyzed}
 
     log.append(f"Found {len(opportunities)} opportunities — executing top {min(open_slots, len(opportunities))}")
