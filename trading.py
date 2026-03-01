@@ -1027,17 +1027,58 @@ def generate_trade_signal(data: dict) -> dict:
         elif upside < -10:
             score -= 2
     
+    # -- Relative strength vs SPY (0-10 points) --
+    rs = data.get("relative_strength", {})
+    rs_score_val = rs.get("rs_score", 0)
+    if rs_score_val > 5:
+        score += 8
+        signals.append(f"Strong relative strength vs SPY (+{rs_score_val:.1f}%)")
+    elif rs_score_val > 2:
+        score += 5
+        signals.append(f"Outperforming SPY (+{rs_score_val:.1f}%)")
+    elif rs_score_val > 0:
+        score += 2
+    elif rs_score_val < -5:
+        score -= 6
+        warnings.append(f"Lagging SPY badly ({rs_score_val:.1f}%)")
+    elif rs_score_val < -2:
+        score -= 3
+        warnings.append(f"Underperforming SPY ({rs_score_val:.1f}%)")
+    
+    # -- Sector strength (0-8 points) --
+    sector_etf = data.get("sector_etf")
+    in_strong_sector = False
+    if sector_etf:
+        sectors = _get_sector_strength()
+        sec_data = sectors.get(sector_etf)
+        if sec_data:
+            if sec_data.get("rank", 99) <= 3:
+                score += 8
+                in_strong_sector = True
+                signals.append(f"Top 3 sector: {sec_data['name']} (#{sec_data['rank']})")
+            elif sec_data.get("top_half"):
+                score += 4
+                in_strong_sector = True
+                signals.append(f"Strong sector: {sec_data['name']} (#{sec_data['rank']})")
+            elif sec_data.get("rank", 99) >= 9:
+                score -= 5
+                warnings.append(f"Weak sector: {sec_data['name']} (#{sec_data['rank']})")
+            elif not sec_data.get("top_half"):
+                score -= 2
+    
     # ═══ STEP 4: DETERMINE ACTION ═══
     score = max(0, min(100, score))
     
-    bullish_count = sum(1 for s in signals if "✓" in s or "bullish" in s.lower() or "uptrend" in s.lower() or "rising" in s.lower() or "buy" in s.lower())
+    bullish_count = sum(1 for s in signals if "✓" in s or "bullish" in s.lower() or "uptrend" in s.lower() or "rising" in s.lower() or "buy" in s.lower() or "outperform" in s.lower() or "sector" in s.lower())
     bearish_count = sum(1 for w in warnings)
     
-    # BUY requires: uptrend confirmed + pullback + quality score
+    # BUY requires: uptrend confirmed + quality score
+    # STRONG_BUY requires: pullback + strong sector + relative strength
     is_uptrend = above_200 and above_50
     has_pullback = pullback_to_20 or pullback_to_50
+    outperforming = rs.get("outperforming", False)
     
-    if score >= 75 and is_uptrend and trending:
+    if score >= 75 and is_uptrend and trending and (in_strong_sector or outperforming):
         action = "STRONG_BUY"
         confidence = min(95, score)
     elif score >= 62 and is_uptrend:
@@ -1145,6 +1186,128 @@ def fetch_price(ticker: str) -> dict | None:
         return None
 
 
+
+# ── Sector rotation + relative strength ──────────────────────────────────────
+
+SECTOR_ETFS = {
+    "XLK": "Technology", "XLV": "Healthcare", "XLF": "Financials",
+    "XLY": "Consumer Discretionary", "XLP": "Consumer Staples",
+    "XLE": "Energy", "XLI": "Industrials", "XLB": "Materials",
+    "XLU": "Utilities", "XLRE": "Real Estate", "XLC": "Communication",
+}
+
+TICKER_SECTOR = {
+    **{t: "XLK" for t in ["AAPL","MSFT","NVDA","AMD","AVGO","TXN","QCOM","AMAT","LRCX","KLAC",
+        "SNPS","CDNS","MRVL","ADI","NXPI","MCHP","SWKS","MPWR","ENTG","TER","ON","ARM","SMCI",
+        "MU","INTC","ASML","TSM","CRM","INTU","ADBE","NOW","ORCL","WDAY","VEEV","HUBS",
+        "DDOG","MNDY","CFLT","ESTC","GTLB","PCOR","SMAR","BILL","DT","NET","ZS","FTNT",
+        "CYBR","PANW","CRWD","PATH","DOCN","FROG","MANH","PTC","PAYC","SHOP","TTD",
+        "PLTR","IBM","CSCO","HPQ","FICO","APP","S","QLYS"]},
+    **{t: "XLV" for t in ["UNH","LLY","ABBV","MRK","JNJ","PFE","TMO","ABT","SYK","BSX",
+        "ISRG","DHR","VRTX","REGN","AMGN","GILD","ALNY","ARGX","BMRN","TGTX","RXRX",
+        "CRSP","NBIX","MOH","HUM","CNC","ELV","MCK","DXCM","PODD","ALGN","TMDX",
+        "MRNA","BNTX","HIMS","DOCS","RMD","ZBH","HOLX","EW"]},
+    **{t: "XLF" for t in ["JPM","V","MA","GS","MS","BAC","WFC","BX","SCHW","COF","AXP",
+        "FI","BLK","SPGI","CME","ICE","MSCI","NDAQ","SQ","NU","FOUR","AFRM","SOFI",
+        "HOOD","COIN","MSTR","PYPL","C","PNC","USB","TFC","MTB","CFG","HBAN","RF","KEY",
+        "ALL","PRU","AIG","HIG","ACGL","WRB","BRO","RJF","LPLA","BK","MMC","AON","CINF",
+        "UPST","LMND","ROOT"]},
+    **{t: "XLY" for t in ["AMZN","TSLA","HD","COST","TJX","ROST","ORLY","AZO","CMG","DPZ",
+        "MCD","SBUX","NKE","LULU","BKNG","MAR","HLT","RCL","UBER","ABNB","CVNA","DASH",
+        "CHWY","ETSY","W","EBAY","DECK","GM","F","RIVN","NIO","LEN","PHM","TOL","DHI",
+        "ONON","ELF","CAVA","BROS","TOST","DUOL","CELH"]},
+    **{t: "XLP" for t in ["PG","KO","PEP","WMT","PM","MO","CL","KMB","STZ","KHC",
+        "HSY","MNST","MDLZ"]},
+    **{t: "XLE" for t in ["XOM","CVX","COP","EOG","DVN","OXY","SLB","HAL","BKR","MPC",
+        "VLO","PSX","FANG","TRGP","OKE","WMB","ET","EPD","MRO","APA","EQT","CTRA",
+        "MARA","RIOT","CLSK"]},
+    **{t: "XLI" for t in ["CAT","DE","HON","GE","BA","UPS","FDX","RTX","LMT","NOC",
+        "GD","LHX","KTOS","AXON","TDG","CARR","IR","EMR","ROK","PH","URI","WAB",
+        "PWR","PCAR","GWW","FAST","CPRT","WM","ITW","RKLB","SOUN","ASTS","LUNR","JOBY",
+        "OTIS","STE","HUBB","FTV"]},
+    **{t: "XLB" for t in ["NUE","CLF","STLD","FCX","NEM","VMC","MLM","APD","ECL","SHW",
+        "PPG","DD","DOW","LIN","RS","X","VALE","CF","MOS","NTR"]},
+    **{t: "XLU" for t in ["NEE","DUK","SO","D","AEP","EXC","SRE","WEC","XEL","ED","PCG",
+        "FSLR","ENPH","CEG","VST","SMR","OKLO"]},
+    **{t: "XLRE" for t in ["PLD","EQIX","SPG","O","DLR","CCI","EQR","AVB","WELL","STAG","NNN"]},
+    **{t: "XLC" for t in ["GOOGL","GOOG","META","DIS","CMCSA","NFLX","T","VZ","TMUS",
+        "WBD","SPOT","ROKU","SNAP","PINS","MTCH","DKNG","EA","TTWO"]},
+}
+
+
+@st.cache_data(ttl=600)
+def _get_spy_performance() -> dict:
+    """Get SPY performance over multiple timeframes for relative strength."""
+    try:
+        spy = yf.Ticker("SPY")
+        hist = spy.history(period="6mo")
+        if hist is None or hist.empty or len(hist) < 60:
+            return {}
+        close = hist["Close"]
+        current = float(close.iloc[-1])
+        perf = {}
+        for days, label in [(5, "1w"), (21, "1m"), (63, "3m")]:
+            if len(close) > days:
+                past = float(close.iloc[-days - 1])
+                perf[label] = (current - past) / past * 100
+        return perf
+    except Exception:
+        return {}
+
+
+@st.cache_data(ttl=600)
+def _get_sector_strength() -> dict:
+    """Rank sector ETFs by recent performance."""
+    results = {}
+    for etf, name in SECTOR_ETFS.items():
+        try:
+            hist = yf.Ticker(etf).history(period="3mo")
+            if hist is None or hist.empty or len(hist) < 20:
+                continue
+            close = hist["Close"]
+            current = float(close.iloc[-1])
+            past_1m = float(close.iloc[-22]) if len(close) > 22 else current
+            past_1w = float(close.iloc[-6]) if len(close) > 6 else current
+            perf_1m = (current - past_1m) / past_1m * 100
+            perf_1w = (current - past_1w) / past_1w * 100
+            composite = perf_1w * 0.6 + perf_1m * 0.4
+            results[etf] = {"name": name, "1w": round(perf_1w, 2), "1m": round(perf_1m, 2),
+                            "composite": round(composite, 2)}
+        except Exception:
+            continue
+    ranked = sorted(results.items(), key=lambda x: x[1]["composite"], reverse=True)
+    for rank, (etf, data) in enumerate(ranked):
+        results[etf]["rank"] = rank + 1
+        results[etf]["top_half"] = rank < len(ranked) / 2
+    return results
+
+
+def _calc_relative_strength(hist: pd.DataFrame) -> dict:
+    """Calculate stock's performance vs SPY over multiple timeframes."""
+    try:
+        close = hist["Close"]
+        current = float(close.iloc[-1])
+        spy_perf = _get_spy_performance()
+        if not spy_perf:
+            return {"rs_score": 0, "outperforming": False}
+        stock_perf = {}
+        for days, label in [(5, "1w"), (21, "1m"), (63, "3m")]:
+            if len(close) > days:
+                past = float(close.iloc[-days - 1])
+                stock_perf[label] = (current - past) / past * 100
+        rs_values = []
+        for label in ["1w", "1m", "3m"]:
+            if label in stock_perf and label in spy_perf:
+                rs_values.append(stock_perf[label] - spy_perf[label])
+        if not rs_values:
+            return {"rs_score": 0, "outperforming": False}
+        weights = [0.5, 0.3, 0.2][:len(rs_values)]
+        rs_score = sum(r * w for r, w in zip(rs_values, weights)) / sum(weights)
+        return {"rs_score": round(rs_score, 2), "outperforming": rs_score > 0, "stock_perf": stock_perf}
+    except Exception:
+        return {"rs_score": 0, "outperforming": False}
+
+
 def fetch_scan(ticker: str) -> dict | None:
     """Lightweight fetch for scanning — skips slow .info calls, just gets history + technicals."""
     try:
@@ -1157,6 +1320,8 @@ def fetch_scan(ticker: str) -> dict | None:
         if not price or price < 1:
             return None
         tech = compute_technicals(hist)
+        rs = _calc_relative_strength(hist)
+        sector_etf = TICKER_SECTOR.get(ticker)
         return {
             "price": round(price, 2),
             "prev_close": round(prev, 2),
@@ -1165,6 +1330,8 @@ def fetch_scan(ticker: str) -> dict | None:
             "ticker": ticker,
             "full_ticker": ticker,
             "technicals": tech,
+            "relative_strength": rs,
+            "sector_etf": sector_etf,
         }
     except Exception:
         return None
@@ -1277,6 +1444,8 @@ def route(msg: str) -> dict:
         return {"type": "backtest"}
     if any(w in m for w in ["market health", "market regime", "is market safe", "spy check", "market status"]):
         return {"type": "market_regime"}
+    if any(w in m for w in ["sector strength", "sector rotation", "sectors", "hot sectors", "strong sectors"]):
+        return {"type": "sector_strength"}
     if any(w in m for w in ["portfolio", "my account", "buying power", "my equity", "account info", "how much do i have"]):
         return {"type": "portfolio"}
     if any(w in m for w in ["my positions", "what do i own", "what am i holding", "open positions", "show positions"]):
@@ -1569,25 +1738,60 @@ def run_backtest(years: int = 2) -> dict:
 
     # 100 stocks
     TEST_UNIVERSE = [
-        # Large-cap
+        # ── Tech / Semis ──
         "AAPL","MSFT","AMZN","NVDA","GOOGL","META","TSLA","AMD","NFLX","ADBE",
         "CRM","INTU","QCOM","AMAT","ISRG","MU","PANW","CRWD","AVGO","TXN",
-        "ASML","KLAC","SNPS","CDNS","MRVL","LRCX","ADI","NXPI",
-        # Mid-cap growth
-        "AXON","DDOG","FTNT","ZS","HIMS","CAVA","ONON","ELF","DUOL","CELH",
-        "MNDY","TOST","BROS","DT","SMAR","BILL","PCOR","IOT","DOCS",
-        # Small / speculative
-        "PLTR","COIN","HOOD","SOFI","UPST","AFRM","RKLB","SOUN","ASTS","LUNR",
-        "MARA","RIOT","CLSK","TGTX","RXRX","CRSP",
-        # Sector
-        "FSLR","ENPH","CEG","VST","SMR","LMT","RTX","KTOS",
-        "SQ","NU","FOUR","MSTR",
-        # Value / blue chip
-        "JPM","V","MA","HD","COST","WMT","ABBV","PG","JNJ","MRK",
-        "UNH","LLY","XOM","CVX","BAC","GS","WFC","MS",
-        "CAT","DE","HON","GE","BA","UPS",
-        "PEP","KO","MCD","SBUX","NKE",
-        "ORCL","IBM","NOW","UBER","BKNG",
+        "ASML","KLAC","SNPS","CDNS","MRVL","LRCX","ADI","NXPI","MCHP","SWKS",
+        "MPWR","ENTG","TER","ON","ARM","SMCI",
+        # ── Software / Cloud ──
+        "NOW","ORCL","WDAY","VEEV","HUBS","DDOG","MNDY","CFLT","ESTC","GTLB",
+        "PCOR","SMAR","BILL","DT","NET","ZS","FTNT","CYBR","QLYS","S",
+        "PATH","DOCN","FROG","MANH","PTC","PAYC","SHOP","TTD",
+        # ── Mid-cap growth ──
+        "AXON","HIMS","CAVA","DUOL","CELH","ELF","ONON","TOST","BROS",
+        "IOT","DOCS","APP","RAMP","DECK","TMDX","PODD","ALGN","DXCM",
+        "FICO","LPLA","MPWR","HUBB","FTV",
+        # ── Fintech / Finance ──
+        "JPM","V","MA","GS","MS","BAC","WFC","BX","SCHW","COF",
+        "SQ","NU","FOUR","AFRM","SOFI","HOOD","COIN","MSTR","PYPL",
+        "AXP","FI","BLK","SPGI","CME","ICE","MSCI","NDAQ",
+        # ── Healthcare / Biotech ──
+        "UNH","LLY","ABBV","MRK","JNJ","PFE","TMO","ABT","SYK","BSX",
+        "ISRG","DHR","VRTX","REGN","AMGN","GILD","ALNY","ARGX","BMRN",
+        "TGTX","RXRX","CRSP","NBIX","MOH","HUM","CNC","ELV","MCK",
+        # ── Consumer ──
+        "HD","COST","WMT","PG","KO","PEP","MCD","SBUX","NKE","LULU",
+        "TJX","ROST","ORLY","AZO","CMG","DPZ","CHWY","ETSY","DASH","BKNG",
+        "MAR","HLT","RCL","UBER","ABNB","CVNA",
+        # ── Industrial / Defense ──
+        "CAT","DE","HON","GE","BA","UPS","FDX","RTX","LMT","NOC",
+        "GD","LHX","KTOS","AXON","TDG","CARR","IR","EMR","ROK","PH",
+        "URI","WAB","PWR","PCAR","GWW","FAST",
+        # ── Energy ──
+        "XOM","CVX","COP","EOG","DVN","OXY","SLB","HAL","BKR","MPC",
+        "VLO","PSX","FANG","TRGP","OKE","WMB","ET","EPD",
+        # ── Clean Energy / Nuclear ──
+        "FSLR","ENPH","CEG","VST","SMR","OKLO","NEE",
+        # ── Materials / Mining ──
+        "NUE","CLF","STLD","FCX","NEM","VMC","MLM","APD","ECL","SHW","PPG",
+        # ── Real Estate / REITs ──
+        "PLD","EQIX","SPG","O","DLR","CCI","EQR","AVB","WELL","STAG","NNN","MAA",
+        # ── Telecom / Media ──
+        "TMUS","VZ","T","DIS","CMCSA","WBD","SPOT","ROKU","DKNG","EA","TTWO",
+        # ── Utilities ──
+        "DUK","SO","D","AEP","EXC","SRE","WEC","XEL","ED","PCG",
+        # ── Consumer Staples ──
+        "PM","MO","CL","KMB","STZ","KHC","HSY","MNST","MDLZ",
+        # ── Small-cap / Speculative ──
+        "PLTR","UPST","RKLB","SOUN","ASTS","LUNR","JOBY","BBAI",
+        "MARA","RIOT","CLSK","IONQ","RGTI","RIVN","NIO",
+        # ── More mid-cap ──
+        "LULU","CPRT","WM","SNAP","PINS","MTCH","RBLX","ABNB","DASH",
+        "ANET","ZBRA","POOL","HOLX","GNRC","TYL","TTWO","NTRA","PCVX",
+        "ALNY","MOH","TMDX","WST","ROKU","CHWY","ETSY","CVNA",
+        # ── International ADRs ──
+        "TSM","BABA","MELI","NU","SE","GRAB","CPNG","NVO","AZN","SAP",
+        "SONY","TM","JD","PDD","BIDU","ASML","DEO","GSK","SNY",
     ]
 
     capital = STARTING_CAPITAL
@@ -1856,6 +2060,14 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
 
     if not regime["safe_to_buy"]:
         log.append("⛔ Market regime unsafe — skipping new buys, only managing existing positions")
+
+    # ── 1c. Sector strength report ──
+    sectors = _get_sector_strength()
+    if sectors:
+        ranked = sorted(sectors.items(), key=lambda x: x[1].get("rank", 99))
+        top3 = [f"{d['name']}" for _, d in ranked[:3]]
+        bot3 = [f"{d['name']}" for _, d in ranked[-3:]]
+        log.append(f"Hot sectors: {', '.join(top3)} · Cold: {', '.join(bot3)}")
 
     # ── 2. Trail stops on profitable positions ──
     if positions:
@@ -2220,6 +2432,19 @@ def execute(intent: dict) -> dict:
             f"SPY: ${regime.get('spy_price', '?')} · 50 SMA: ${regime.get('sma_50', '?')} · 200 SMA: ${regime.get('sma_200', '?')} · RSI: {regime.get('rsi', '?')}"
         )
         return {"ok": True, "type": "trade", "msg": msg}
+
+    if t == "sector_strength":
+        sectors = _get_sector_strength()
+        if not sectors:
+            return {"ok": False, "error": "Could not fetch sector data"}
+        ranked = sorted(sectors.items(), key=lambda x: x[1].get("rank", 99))
+        lines = ["**Sector Rotation Rankings**\n"]
+        for etf, data in ranked:
+            rank = data["rank"]
+            emoji = "🟢" if rank <= 3 else ("🟡" if rank <= 6 else "🔴")
+            lines.append(f"{emoji} #{rank} **{data['name']}** ({etf}) — 1w: {data['1w']:+.1f}% · 1m: {data['1m']:+.1f}%")
+        lines.append(f"\nAutopilot prioritizes stocks in top 3 sectors and avoids bottom 3.")
+        return {"ok": True, "type": "trade", "msg": "\n\n".join(lines)}
 
     # ── Trading commands ──
     if t == "portfolio":
