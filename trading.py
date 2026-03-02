@@ -2885,7 +2885,7 @@ def main():
                 if fig:
                     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=f"chart_hist_{mi}")
             if m["role"] == "assistant" and m.get("table"):
-                st.dataframe(pd.DataFrame(m["table"]), width="stretch", hide_index=True)
+                st.dataframe(pd.DataFrame(m["table"]), width="stretch", hide_index=True, key=f"table_hist_{mi}")
 
     prompt = st.chat_input("NVDA… buy 10 AAPL… portfolio… top gainers…")
     if not prompt:
@@ -2945,7 +2945,7 @@ def main():
                     df["Chg%"] = df["Chg%"].apply(lambda x: f"{'▲' if x>=0 else '▼'} {x:+.2f}%" if isinstance(x, (int, float)) else x)
                 if "Volume" in df.columns:
                     df["Volume"] = df["Volume"].apply(lambda x: f"{x/1e6:.1f}M" if isinstance(x, (int, float)) and x >= 1e6 else (f"{x/1e3:.0f}K" if isinstance(x, (int, float)) and x >= 1e3 else str(x)))
-                st.dataframe(df, width="stretch", hide_index=True)
+                st.dataframe(df, width="stretch", hide_index=True, key="table_new")
 
     st.session_state.messages.append({"role": "assistant", "content": resp, "chart": chart_ticker, "table": table_data, "trade_signal": trade_signal})
 
