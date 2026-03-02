@@ -576,6 +576,83 @@ def alpaca_orders(status: str = "open", limit: int = 10) -> list[dict]:
         return []
 
 
+def alpaca_portfolio_history(period: str = "1M") -> dict | None:
+    """Fetch portfolio equity history from Alpaca."""
+    try:
+        params = {"period": period, "timeframe": "1D"}
+        r = requests.get(f"{ALPACA_BASE}/v2/account/portfolio/history",
+                         headers=_alpaca_headers(), params=params, timeout=10)
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        timestamps = data.get("timestamp", [])
+        equity = data.get("equity", [])
+        profit_loss = data.get("profit_loss", [])
+        profit_loss_pct = data.get("profit_loss_pct", [])
+        if not timestamps or not equity:
+            return None
+        return {
+            "timestamps": timestamps,
+            "equity": equity,
+            "profit_loss": profit_loss or [0] * len(timestamps),
+            "profit_loss_pct": profit_loss_pct or [0] * len(timestamps),
+        }
+    except Exception:
+        return None
+
+
+def build_portfolio_chart(history: dict) -> go.Figure | None:
+    """Build a portfolio equity chart."""
+    if not history or not history.get("timestamps"):
+        return None
+    try:
+        dates = pd.to_datetime(history["timestamps"], unit="s")
+        equity = history["equity"]
+        pnl = history["profit_loss"]
+
+        fig = go.Figure()
+
+        # Equity line
+        fig.add_trace(go.Scatter(
+            x=dates, y=equity, mode="lines",
+            name="Equity",
+            line=dict(color="#00d4aa", width=2.5),
+            fill="tozeroy",
+            fillcolor="rgba(0, 212, 170, 0.1)",
+        ))
+
+        # Color the P&L bars green/red
+        colors = ["#00d4aa" if p >= 0 else "#ff4444" for p in pnl]
+        fig.add_trace(go.Bar(
+            x=dates, y=pnl, name="Daily P&L",
+            marker_color=colors, opacity=0.4,
+            yaxis="y2",
+        ))
+
+        # Starting equity reference line
+        if equity:
+            start_eq = equity[0]
+            fig.add_hline(y=start_eq, line_dash="dash", line_color="gray",
+                          opacity=0.5, annotation_text=f"Start ${start_eq:,.0f}")
+
+        fig.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="#0e1117",
+            plot_bgcolor="#0e1117",
+            title=dict(text="Portfolio Performance", font=dict(size=16, color="#fafafa")),
+            xaxis=dict(showgrid=False),
+            yaxis=dict(title="Equity ($)", showgrid=True, gridcolor="#1e2530", side="left"),
+            yaxis2=dict(title="Daily P&L ($)", overlaying="y", side="right", showgrid=False),
+            legend=dict(orientation="h", y=1.12, x=0.5, xanchor="center"),
+            height=400,
+            margin=dict(l=10, r=10, t=50, b=10),
+            showlegend=True,
+        )
+        return fig
+    except Exception:
+        return None
+
+
 def alpaca_smart_buy(ticker: str, trade_signal: dict, risk_pct: float = 0.02) -> dict:
     """
     Smart buy using Paula's trade signal. Automatically calculates:
@@ -2468,7 +2545,7 @@ def execute(intent: dict) -> dict:
             f"Today: `{arrow} ${acc['daily_pnl']:+,.2f}` ({acc['daily_pnl_pct']:+.2f}%)\n\n"
             f"Long: `${acc['long_market_value']:,.2f}` · Status: {acc['status']}"
         )
-        return {"ok": True, "type": "portfolio", "msg": msg, "data": acc}
+        return {"ok": True, "type": "portfolio", "msg": msg, "data": acc, "show_portfolio_chart": True}
 
     if t == "positions":
         positions = alpaca_positions()
@@ -2895,6 +2972,11 @@ def main():
                     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=f"chart_hist_{mi}")
             if m["role"] == "assistant" and m.get("table"):
                 st.dataframe(pd.DataFrame(m["table"]), width="stretch", hide_index=True, key=f"table_hist_{mi}")
+            if m["role"] == "assistant" and m.get("portfolio_chart"):
+                hist = alpaca_portfolio_history(period="1M")
+                pfig = build_portfolio_chart(hist)
+                if pfig:
+                    st.plotly_chart(pfig, width="stretch", config={"displayModeBar": False}, key=f"pchart_hist_{mi}")
 
     prompt = st.chat_input("NVDA… buy 10 AAPL… portfolio… top gainers…")
     if not prompt:
@@ -2910,6 +2992,7 @@ def main():
             intent = route(prompt)
             result = execute(intent)
             chart_ticker, table_data, trade_signal = None, None, None
+            portfolio_chart = False
             market = result.get("market", intent.get("market", "US"))
 
             if result.get("ok"):
@@ -2930,6 +3013,7 @@ def main():
                     resp = result.get("msg", "Done.")
                     chart_ticker = result.get("ticker")
                     trade_signal = result.get("trade_signal")
+                    portfolio_chart = result.get("show_portfolio_chart", False)
                 else:
                     resp = ai_response(prompt, None, st.session_state.messages, market)
             elif result.get("error"):
@@ -2944,6 +3028,12 @@ def main():
                 if fig:
                     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key="chart_new")
 
+            if portfolio_chart:
+                hist = alpaca_portfolio_history(period="1M")
+                pfig = build_portfolio_chart(hist)
+                if pfig:
+                    st.plotly_chart(pfig, width="stretch", config={"displayModeBar": False}, key="portfolio_chart_new")
+
             if table_data:
                 df = pd.DataFrame(table_data)
                 # Format market data columns if they exist
@@ -2956,7 +3046,7 @@ def main():
                     df["Volume"] = df["Volume"].apply(lambda x: f"{x/1e6:.1f}M" if isinstance(x, (int, float)) and x >= 1e6 else (f"{x/1e3:.0f}K" if isinstance(x, (int, float)) and x >= 1e3 else str(x)))
                 st.dataframe(df, width="stretch", hide_index=True, key="table_new")
 
-    st.session_state.messages.append({"role": "assistant", "content": resp, "chart": chart_ticker, "table": table_data, "trade_signal": trade_signal})
+    st.session_state.messages.append({"role": "assistant", "content": resp, "chart": chart_ticker, "table": table_data, "trade_signal": trade_signal, "portfolio_chart": portfolio_chart})
 
     # ── Autopilot continuous loop ──
     _run_autopilot_loop()
