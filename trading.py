@@ -2107,7 +2107,6 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
 
     positions = alpaca_positions()
     held_tickers = {p["ticker"] for p in positions} | st.session_state.get("autopilot_bought", set())
-    log.append(f"Open positions: {len(positions)} · Max: {MAX_POSITIONS}")
 
     # Scale positions with equity: 1 per $5k, min 4, max 20
     MAX_POSITIONS = max(4, min(20, int(account["equity"] / 5000)))
@@ -2117,6 +2116,8 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     MIN_CONFLUENCE = 3
     MIN_RR = 2.0
     SELL_BELOW = 35
+
+    log.append(f"Open positions: {len(positions)} · Max: {MAX_POSITIONS}")
     DAILY_LOSS_LIMIT = 0.03       # 3% max daily loss — shut down if hit
     PARTIAL_PROFIT_PCT = 0.04     # take half off at 4% profit
     PARTIAL_PROFIT_SOLD_KEY = "autopilot_partial_sold"
