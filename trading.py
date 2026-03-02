@@ -2030,9 +2030,10 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
 
     positions = alpaca_positions()
     held_tickers = {p["ticker"] for p in positions} | st.session_state.get("autopilot_bought", set())
-    log.append(f"Open positions: {len(positions)}")
+    log.append(f"Open positions: {len(positions)} · Max: {MAX_POSITIONS}")
 
-    MAX_POSITIONS = 6
+    # Scale positions with equity: 1 per $5k, min 4, max 20
+    MAX_POSITIONS = max(4, min(20, int(account["equity"] / 5000)))
     RISK_PER_TRADE = 0.015
     MAX_POS_PCT = 0.12
     MIN_SCORE = 68
