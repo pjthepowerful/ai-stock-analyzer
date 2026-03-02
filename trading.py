@@ -443,6 +443,12 @@ def alpaca_buy(ticker: str, qty: int = None, notional: float = None,
     - Limit order (limit_price)
     - Bracket order (stop_loss and/or take_profit)
     """
+    # Validate inputs
+    if qty is not None and qty <= 0:
+        return {"ok": False, "error": f"Can't buy {qty} shares — need at least 1"}
+    if notional is not None and notional <= 0:
+        return {"ok": False, "error": f"Can't buy ${notional} — need a positive amount"}
+
     order = {
         "symbol": ticker.upper(),
         "side": "buy",
@@ -497,6 +503,8 @@ def alpaca_buy(ticker: str, qty: int = None, notional: float = None,
 
 def alpaca_sell(ticker: str, qty: int = None, sell_all: bool = False) -> dict:
     """Sell shares or close entire position."""
+    if qty is not None and qty <= 0 and not sell_all:
+        return {"ok": False, "error": f"Can't sell {qty} shares — need at least 1"}
     if sell_all:
         try:
             r = requests.delete(f"{ALPACA_BASE}/v2/positions/{ticker.upper()}",
