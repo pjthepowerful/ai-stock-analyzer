@@ -2883,7 +2883,7 @@ def main():
             if m["role"] == "assistant" and m.get("chart"):
                 fig = build_chart(m["chart"], trade_signal=m.get("trade_signal"))
                 if fig:
-                    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+                    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
             if m["role"] == "assistant" and m.get("table"):
                 st.dataframe(pd.DataFrame(m["table"]), width="stretch", hide_index=True)
 
@@ -2933,7 +2933,7 @@ def main():
             if chart_ticker:
                 fig = build_chart(chart_ticker, trade_signal=trade_signal)
                 if fig:
-                    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+                    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
             if table_data:
                 df = pd.DataFrame(table_data)
