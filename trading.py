@@ -2876,14 +2876,14 @@ def main():
     st.caption(f"analysis + paper trading · {datetime.now().strftime('%b %d, %Y')}")
     st.markdown("---")
 
-    for m in st.session_state.messages:
+    for mi, m in enumerate(st.session_state.messages):
         av = "🟢" if m["role"] == "assistant" else "⬛"
         with st.chat_message(m["role"], avatar=av):
             st.markdown(m["content"])
             if m["role"] == "assistant" and m.get("chart"):
                 fig = build_chart(m["chart"], trade_signal=m.get("trade_signal"))
                 if fig:
-                    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key="chart_1")
+                    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=f"chart_hist_{mi}")
             if m["role"] == "assistant" and m.get("table"):
                 st.dataframe(pd.DataFrame(m["table"]), width="stretch", hide_index=True)
 
@@ -2933,7 +2933,7 @@ def main():
             if chart_ticker:
                 fig = build_chart(chart_ticker, trade_signal=trade_signal)
                 if fig:
-                    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key="chart_2")
+                    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key="chart_new")
 
             if table_data:
                 df = pd.DataFrame(table_data)
