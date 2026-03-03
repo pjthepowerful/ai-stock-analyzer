@@ -2965,11 +2965,13 @@ def main():
                 if pfig:
                     st.plotly_chart(pfig, width="stretch", config={"displayModeBar": False}, key=f"pchart_hist_{mi}")
 
-    prompt = st.chat_input("NVDA… buy 10 AAPL… portfolio… top gainers…")
+    prompt = st.chat_input("NVDA… buy 10 AAPL… portfolio… top gainers…",
+                           disabled=st.session_state.get("processing", False))
     if not prompt:
         _run_autopilot_loop()
         return
 
+    st.session_state["processing"] = True
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user", avatar="⬛"):
         st.markdown(prompt)
@@ -3034,6 +3036,7 @@ def main():
                 st.dataframe(df, width="stretch", hide_index=True, key="table_new")
 
     st.session_state.messages.append({"role": "assistant", "content": resp, "chart": chart_ticker, "table": table_data, "trade_signal": trade_signal, "portfolio_chart": portfolio_chart})
+    st.session_state["processing"] = False
 
     # ── Autopilot continuous loop ──
     _run_autopilot_loop()
