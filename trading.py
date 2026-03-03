@@ -887,6 +887,7 @@ def compute_technicals(hist: pd.DataFrame) -> dict:
 #    3. Mean-revert (Bollinger, S/R proximity)  max ±15
 #    4. Volume      (ratio, OBV)                max ±10
 #    5. Fundamentals (valuation, analysts)      max ±15
+#    6. News        (headline sentiment)        max ±10
 #
 #  Action fires only when enough categories agree (confluence).
 #  Risk management: ATR-based entry / stop / targets with R:R.
@@ -1148,6 +1149,27 @@ def generate_trade_signal(data: dict) -> dict:
             elif not sec_data.get("top_half"):
                 score -= 2
     
+    # -- News sentiment (±10 points) --
+    news_sent = data.get("news_sentiment", {})
+    news_score = news_sent.get("score", 0)
+    news_label = news_sent.get("sentiment", "neutral")
+    if news_score >= 4:
+        score += 8
+        signals.append(f"Very bullish news sentiment ({news_sent.get('bullish_count', 0)} positive headlines)")
+    elif news_score >= 2:
+        score += 5
+        signals.append(f"Bullish news sentiment")
+    elif news_score >= 1:
+        score += 2
+    elif news_score <= -4:
+        score -= 8
+        warnings.append(f"Very bearish news sentiment ({news_sent.get('bearish_count', 0)} negative headlines)")
+    elif news_score <= -2:
+        score -= 5
+        warnings.append(f"Bearish news sentiment")
+    elif news_score <= -1:
+        score -= 2
+    
     # ═══ STEP 4: DETERMINE ACTION ═══
     score = max(0, min(100, score))
     
@@ -1222,6 +1244,7 @@ def generate_trade_signal(data: dict) -> dict:
             "momentum": 1 if macd_h > 0 else -1,
             "volume": 1 if obv_trend == "rising" else (-1 if obv_trend == "falling" else 0),
             "rsi": 1 if 30 <= rsi <= 55 else (-1 if rsi > 75 else 0),
+            "news": 1 if news_score >= 2 else (-1 if news_score <= -2 else 0),
         },
         "signals": signals,
         "warnings": warnings,
@@ -1388,6 +1411,93 @@ def _calc_relative_strength(hist: pd.DataFrame) -> dict:
         return {"rs_score": 0, "outperforming": False}
 
 
+# ── News Sentiment ───────────────────────────────────────────────────────────
+
+_BULLISH_KW = [
+    "upgrade", "upgrades", "upgraded", "beat", "beats", "beating", "surpass",
+    "record", "soars", "soar", "surge", "surges", "rally", "rallies", "jumps",
+    "breakout", "outperform", "buy", "bullish", "raises", "raise", "boost",
+    "boosts", "growth", "grows", "profit", "profits", "strong", "positive",
+    "optimistic", "launch", "launches", "deal", "partnership", "expand",
+    "expansion", "approval", "approved", "fda approved", "dividend", "buyback",
+    "repurchase", "innovation", "ai", "breakthrough", "wins", "contract",
+    "higher", "accelerat", "momentum", "upbeat", "top", "tops", "exceeded",
+    "exceeds", "impressive", "robust", "blowout", "crushes", "crush",
+]
+_BEARISH_KW = [
+    "downgrade", "downgrades", "downgraded", "miss", "misses", "missed",
+    "cut", "cuts", "slash", "slashes", "plunge", "plunges", "crash",
+    "crashes", "tumble", "tumbles", "drops", "drop", "falls", "fall",
+    "sell", "bearish", "weak", "warns", "warning", "layoff", "layoffs",
+    "lawsuit", "sued", "fraud", "investigation", "probe", "recall",
+    "recalls", "bankruptcy", "debt", "loss", "losses", "negative",
+    "decline", "declining", "risk", "fear", "concerns", "worried",
+    "disappointing", "disappoints", "underperform", "lower", "lowers",
+    "worst", "slump", "trouble", "struggles", "struggling", "delay",
+    "delayed", "reject", "rejected", "overvalued", "bubble", "short",
+]
+
+
+@st.cache_data(ttl=600)
+def _news_sentiment(ticker: str) -> dict:
+    """Fast keyword-based news sentiment from yfinance headlines. Returns score and headlines."""
+    try:
+        stk = yf.Ticker(ticker)
+        raw = stk.news or []
+        headlines = []
+        for n in raw[:8]:
+            title = n.get("title", "")
+            if not title:
+                continue
+            headlines.append({"title": title, "publisher": n.get("publisher", "")})
+
+        if not headlines:
+            return {"score": 0, "sentiment": "neutral", "headlines": [], "count": 0}
+
+        bull = 0
+        bear = 0
+        for h in headlines:
+            t = h["title"].lower()
+            for kw in _BULLISH_KW:
+                if kw in t:
+                    bull += 1
+                    break
+            for kw in _BEARISH_KW:
+                if kw in t:
+                    bear += 1
+                    break
+
+        total = len(headlines)
+        # Net sentiment: -10 to +10
+        if total > 0:
+            net = (bull - bear) / total
+            score = round(net * 10)
+        else:
+            score = 0
+
+        if score >= 4:
+            sentiment = "very_bullish"
+        elif score >= 2:
+            sentiment = "bullish"
+        elif score <= -4:
+            sentiment = "very_bearish"
+        elif score <= -2:
+            sentiment = "bearish"
+        else:
+            sentiment = "neutral"
+
+        return {
+            "score": max(-10, min(10, score)),
+            "sentiment": sentiment,
+            "headlines": headlines,
+            "count": total,
+            "bullish_count": bull,
+            "bearish_count": bear,
+        }
+    except Exception:
+        return {"score": 0, "sentiment": "neutral", "headlines": [], "count": 0}
+
+
 def fetch_scan(ticker: str) -> dict | None:
     """Lightweight fetch for scanning — skips slow .info calls, just gets history + technicals."""
     try:
@@ -1402,6 +1512,7 @@ def fetch_scan(ticker: str) -> dict | None:
         tech = compute_technicals(hist)
         rs = _calc_relative_strength(hist)
         sector_etf = TICKER_SECTOR.get(ticker)
+        news = _news_sentiment(ticker)
         return {
             "price": round(price, 2),
             "prev_close": round(prev, 2),
@@ -1412,6 +1523,7 @@ def fetch_scan(ticker: str) -> dict | None:
             "technicals": tech,
             "relative_strength": rs,
             "sector_etf": sector_etf,
+            "news_sentiment": news,
         }
     except Exception:
         return None
@@ -1446,6 +1558,7 @@ def fetch_full(ticker: str) -> dict | None:
             "num_analysts": info.get("numberOfAnalystOpinions"),
             "industry": info.get("industry", "N/A"),
             "technicals": tech, "news": news,
+            "news_sentiment": _news_sentiment(ticker),
         }
     except Exception:
         return basic
@@ -2398,6 +2511,12 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             log.append(f"⏭️ Skipped {ticker} — earnings on {earn_date}")
             continue
 
+        # News check — skip if headlines are very bearish
+        opp_news = opp["data"].get("news_sentiment", {})
+        if opp_news.get("sentiment") == "very_bearish":
+            log.append(f"⏭️ Skipped {ticker} — very bearish news ({opp_news.get('bearish_count', 0)} negative headlines)")
+            continue
+
         entry = trade["entry"]
         stop = trade["stop_loss"]
         target = trade["target_1"]
@@ -2734,7 +2853,8 @@ How you talk:
 - It's okay to be excited about a good setup or blunt about a bad one
 - ALWAYS include the concrete trade plan — entry, stop-loss, targets, risk-reward — but frame it naturally: "If I were getting in, I'd look around $X with a stop at $Y, first target $Z — that's a 2:1 risk-reward which I like"
 - Mention the trend regime and what it means: "we're in a strong uptrend with ADX at 32, so buying dips makes sense here"
-- Call out confluence: "4 out of 5 categories are bullish which is rare — this has conviction"
+- Call out confluence: "4 out of 6 categories are bullish which is rare — this has conviction"
+- Mention news sentiment when it's strong: "headlines are running hot right now — 5 bullish articles in the last few days" or "news flow is ugly, lot of negative press"
 - Mention key S/R levels traders need: "watching support at $X and resistance at $Y"
 - If signals conflict, be honest: "momentum looks great but volume isn't confirming, which bugs me"
 
