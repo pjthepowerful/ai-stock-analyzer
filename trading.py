@@ -2407,7 +2407,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             # ── Mid-cap growth ──
             "AXON","HIMS","CAVA","DUOL","CELH","ELF","ONON","TOST","BROS","DDOG",
             "DAVA","HUBS","ESTC","FROG","MANH","ROKU","TTD","SNAP","PINS","MTCH",
-            "CHWY","ETSY","W","OPEN","RDFN","ZG","CVNA","DASH","GRAB","SE",
+            "CHWY","ETSY","W","OPEN","ZG","CVNA","DASH","GRAB","SE",
             # ── Small-cap / speculative ──
             "UPST","AFRM","RKLB","SOUN","ASTS","LUNR","JOBY","BBAI","AEHR",
             "MARA","RIOT","CLSK","IREN","BTBT","CIFR","HUT","CORZ",
