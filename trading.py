@@ -57,7 +57,7 @@ SMALLCAP = [
 VALUE_DIVIDEND = [
     "O","SCHD","VZ","T","MO","PM","BTI","AGNC","NLY","STAG",
     "EPD","ET","MPLX","OKE","WMB","KMI","EMR","ITW","GPC","SWK",
-    "DOW","LYB","NUE","CLF","X","AA","FCX","VALE","RIO","BHP",
+    "DOW","LYB","NUE","CLF","AA","FCX","VALE","RIO","BHP",
 ]
 # ── Sector-specific (energy, biotech, fintech, defense, space) ──
 SECTOR_PICKS = [
@@ -1306,7 +1306,7 @@ TICKER_SECTOR = {
         "PWR","PCAR","GWW","FAST","CPRT","WM","ITW","RKLB","SOUN","ASTS","LUNR","JOBY",
         "OTIS","STE","HUBB","FTV"]},
     **{t: "XLB" for t in ["NUE","CLF","STLD","FCX","NEM","VMC","MLM","APD","ECL","SHW",
-        "PPG","DD","DOW","LIN","RS","X","VALE","CF","MOS","NTR"]},
+        "PPG","DD","DOW","LIN","RS","VALE","CF","MOS","NTR"]},
     **{t: "XLU" for t in ["NEE","DUK","SO","D","AEP","EXC","SRE","WEC","XEL","ED","PCG",
         "FSLR","ENPH","CEG","VST","SMR","OKLO"]},
     **{t: "XLRE" for t in ["PLD","EQIX","SPG","O","DLR","CCI","EQR","AVB","WELL","STAG","NNN"]},
@@ -2311,7 +2311,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             # ── Dividend / value ──
             "O","STAG","NNN","AGNC","NLY","ARCC","MAIN","TPVG",
             "EPD","ET","WES","MPLX","PAA","OKE","KMI","WMB",
-            "VALE","FCX","NUE","CLF","X","STLD","RS","ATI",
+            "VALE","FCX","NUE","CLF","STLD","RS","ATI",
             "MOS","NTR","CF","FMC","IPI",
             # ── International ADRs ──
             "BABA","JD","PDD","BIDU","NIO","XPEV","LI","TME","BILI","IQ",
