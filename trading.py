@@ -44,7 +44,6 @@ SP500_TOP = [
 MIDCAP_GROWTH = [
     "AXON","DUOL","CELH","TMDX","RELY","HIMS","CAVA","ONON","BIRK","ELF",
     "WFRD","FTNT","ZS","MNDY","CFLT","GLBE","TOST","BROS","DT","ESTC",
-    "IOT","DOCS","PCOR","BRZE","SMAR","GTLB","DDOG","BILL","DOCN","ASAN",
     "FRSH","PYCR","INTA","VERX","ALKT","PAYC","LMND","ROOT","OSCR","GDRX",
 ]
 # ── Small-cap high-potential ──
@@ -64,7 +63,6 @@ VALUE_DIVIDEND = [
 SECTOR_PICKS = [
     "FSLR","ENPH","SEDG","NEE","CEG","VST","SMR","NNE","OKLO","LEU",
     "LMT","RTX","NOC","GD","HII","KTOS","LDOS","BWXT","RCAT","PLTR",
-    "SQ","AFRM","NU","STNE","PAGS","FOUR","RPAY","PSFE","NUVEI","ADYEY",
     "MRNA","BNTX","REGN","VRTX","ARGX","ALNY","BMRN","IONS","SGEN","RARE",
 ]
 
@@ -104,7 +102,6 @@ COMPANIES: dict[str, str] = {
     "ast spacemobile":"ASTS","soundhound":"SOUN","marathon digital":"MARA",
     "riot":"RIOT","crispr":"CRSP","beam":"BEAM","fuelcell":"FCEL",
     "chargepoint":"CHPT","quantumscape":"QS","lucid":"LCID","rivian":"RIVN",
-    "block":"SQ","square":"SQ","nu bank":"NU","realty income":"O",
     # Indian
     "reliance":"RELIANCE","tcs":"TCS","infosys":"INFY",
     "hdfc":"HDFCBANK","wipro":"WIPRO","tata motors":"TATAMOTORS",
@@ -1285,7 +1282,6 @@ TICKER_SECTOR = {
     **{t: "XLK" for t in ["AAPL","MSFT","NVDA","AMD","AVGO","TXN","QCOM","AMAT","LRCX","KLAC",
         "SNPS","CDNS","MRVL","ADI","NXPI","MCHP","SWKS","MPWR","ENTG","TER","ON","ARM","SMCI",
         "MU","INTC","ASML","TSM","CRM","INTU","ADBE","NOW","ORCL","WDAY","VEEV","HUBS",
-        "DDOG","MNDY","CFLT","ESTC","GTLB","PCOR","SMAR","BILL","DT","NET","ZS","FTNT",
         "CYBR","PANW","CRWD","PATH","DOCN","FROG","MANH","PTC","PAYC","SHOP","TTD",
         "PLTR","IBM","CSCO","HPQ","FICO","APP","S","QLYS"]},
     **{t: "XLV" for t in ["UNH","LLY","ABBV","MRK","JNJ","PFE","TMO","ABT","SYK","BSX",
@@ -1293,7 +1289,6 @@ TICKER_SECTOR = {
         "CRSP","NBIX","MOH","HUM","CNC","ELV","MCK","DXCM","PODD","ALGN","TMDX",
         "MRNA","BNTX","HIMS","DOCS","RMD","ZBH","HOLX","EW"]},
     **{t: "XLF" for t in ["JPM","V","MA","GS","MS","BAC","WFC","BX","SCHW","COF","AXP",
-        "FI","BLK","SPGI","CME","ICE","MSCI","NDAQ","SQ","NU","FOUR","AFRM","SOFI",
         "HOOD","COIN","MSTR","PYPL","C","PNC","USB","TFC","MTB","CFG","HBAN","RF","KEY",
         "ALL","PRU","AIG","HIG","ACGL","WRB","BRO","RJF","LPLA","BK","MMC","AON","CINF",
         "UPST","LMND","ROOT"]},
@@ -1830,7 +1825,6 @@ def run_backtest(years: int = 2) -> dict:
         "MPWR","ENTG","TER","ON","ARM","SMCI",
         # ── Software / Cloud ──
         "NOW","ORCL","WDAY","VEEV","HUBS","DDOG","MNDY","CFLT","ESTC","GTLB",
-        "PCOR","SMAR","BILL","DT","NET","ZS","FTNT","CYBR","QLYS","S",
         "PATH","DOCN","FROG","MANH","PTC","PAYC","SHOP","TTD",
         # ── Mid-cap growth ──
         "AXON","HIMS","CAVA","DUOL","CELH","ELF","ONON","TOST","BROS",
@@ -1838,8 +1832,6 @@ def run_backtest(years: int = 2) -> dict:
         "FICO","LPLA","MPWR","HUBB","FTV",
         # ── Fintech / Finance ──
         "JPM","V","MA","GS","MS","BAC","WFC","BX","SCHW","COF",
-        "SQ","NU","FOUR","AFRM","SOFI","HOOD","COIN","MSTR","PYPL",
-        "AXP","FI","BLK","SPGI","CME","ICE","MSCI","NDAQ",
         # ── Healthcare / Biotech ──
         "UNH","LLY","ABBV","MRK","JNJ","PFE","TMO","ABT","SYK","BSX",
         "ISRG","DHR","VRTX","REGN","AMGN","GILD","ALNY","ARGX","BMRN",
@@ -2281,7 +2273,6 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             "NOW","PFE","QCOM","UBER","CAT","AMAT","GS","BKNG","BLK","AXP",
             "T","MS","LOW","SPGI","RTX","MDLZ","ELV","BA","HON","SYK",
             "LRCX","PLD","NEE","TJX","VRTX","DE","C","BSX","SCHW","ADI",
-            "BX","REGN","ADP","PANW","MMC","KLAC","SBUX","FI","GILD","MU",
             "SNPS","CDNS","INTC","CME","SO","CB","ICE","CL","SHW","DUK",
             "ABNB","PYPL","MO","PNC","EQIX","CTAS","TT","HUM","MCK","AON",
             "MAR","USB","APD","ECL","WM","ORLY","PSX","CMG","ITW","GD",
@@ -2302,24 +2293,19 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             "EQT","RRC","AR","SWN","CTRA",
             # ── Mid-cap growth ──
             "AXON","HIMS","CAVA","DUOL","CELH","ELF","ONON","TOST","BROS","DDOG",
-            "MNDY","CFLT","PCOR","IOT","DOCS","SMAR","BILL","DT","GTLB","BRZE",
             "DAVA","HUBS","ESTC","FROG","MANH","ROKU","TTD","SNAP","PINS","MTCH",
             "CHWY","ETSY","W","OPEN","RDFN","ZG","CVNA","DASH","GRAB","SE",
-            "SHOP","SPOT","SQ","BILL","FOUR","TOST","TOAST",
             # ── Small-cap / speculative ──
             "UPST","AFRM","RKLB","SOUN","ASTS","LUNR","JOBY","BBAI","AEHR",
             "MARA","RIOT","CLSK","IREN","BTBT","CIFR","HUT","CORZ",
-            "TGTX","RXRX","CRSP","BEAM","NTLA","EDIT","VERV","VERA",
             "QS","MVST","BLDP","PLUG","FCEL","BE","CHPT","EVGO","BLNK",
             "IONQ","RGTI","QUBT","ARQQ",
             "SOFI","HOOD","LMND","ROOT","OSCR","RELY",
-            "DNA","BNGO","PACB","TWIST","CDNA",
             "PLTR","SMCI","ARM",
             # ── Sector plays ──
             "FSLR","ENPH","CEG","VST","SMR","OKLO","NNE","LEU",
             "LMT","RTX","KTOS","RCAT","AVAV","BWXT","HII","NOC","GD","LHX",
             "COIN","MSTR","MARA","RIOT","CLSK",
-            "SQ","NU","FOUR","AFRM","SOFI",
             "NET","ZS","CRWD","PANW","FTNT","CYBR","QLYS","TENB","RPD","S",
             "ARGX","MRNA","BNTX","REGN","VRTX","ALNY","BMRN","RARE","NBIX","PCVX",
             # ── Dividend / value ──
