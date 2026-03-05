@@ -2284,8 +2284,8 @@ def run_backtest(years: int = 2) -> dict:
     """
     STARTING_CAPITAL = 25_000
     RISK_PER_TRADE = 0.015
-    MIN_SCORE = 68
-    MIN_RR = 2.0
+    MIN_SCORE = 58              # lower bar — backtester lacks RS/sector/news data (~20-30 pts missing)
+    MIN_RR = 1.5
 
     # 100 stocks
     TEST_UNIVERSE = [
@@ -2351,10 +2351,11 @@ def run_backtest(years: int = 2) -> dict:
 
     log = [f"**Backtesting {len(TEST_UNIVERSE)} stocks over {years} years...**",
            f"Starting capital: ${STARTING_CAPITAL:,}",
-           f"Rules: score≥{MIN_SCORE}, BUY/STRONG_BUY only, R:R≥{MIN_RR}, 3x ATR trailing stops, pullback-in-uptrend",
-           f"⚠️ Note: Backtest uses daily signals (intraday 5min data not available for historical periods)"]
+           f"Rules: score≥{MIN_SCORE}, BUY/STRONG_BUY, R:R≥{MIN_RR}, 2x ATR trailing, partial @ +3%",
+           f"⚠️ Score threshold lowered to {MIN_SCORE} (live has RS/sector/news data worth ~20+ extra pts)"]
 
-    step = 20
+    step = 10       # check every 10 bars instead of 20 — catch more setups
+    max_hold = 40   # max hold period (bars)
 
     for ticker in TEST_UNIVERSE:
         try:
@@ -2364,15 +2365,18 @@ def run_backtest(years: int = 2) -> dict:
                 continue
 
             window_size = 200
+            skip_until = 0  # prevent overlapping trades on same stock
 
-            for i in range(window_size, len(hist) - 40, step):
+            for i in range(window_size, len(hist) - max_hold, step):
                 if capital < 500:
                     break
+                if i < skip_until:
+                    continue
 
                 window = hist.iloc[i - window_size:i]
-                future = hist.iloc[i:i + 60]
+                future = hist.iloc[i:i + max_hold]
 
-                if len(window) < window_size or len(future) < 10:
+                if len(window) < window_size or len(future) < 5:
                     continue
 
                 tech = compute_technicals(window)
@@ -2383,15 +2387,9 @@ def run_backtest(years: int = 2) -> dict:
                 if entry_price < 5:
                     continue
 
-                # Trend alignment: price must be above 50 SMA
-                sma50 = tech.get("sma_50")
-                if sma50 and entry_price < sma50:
-                    continue
-
                 data = {"price": entry_price, "technicals": tech, "ticker": ticker}
                 sig = generate_trade_signal(data)
 
-                # Strict: only BUY/STRONG_BUY, no HOLD
                 if sig["action"] not in ("BUY", "STRONG_BUY"):
                     continue
                 if sig["score"] < MIN_SCORE:
@@ -2406,16 +2404,18 @@ def run_backtest(years: int = 2) -> dict:
 
                 # Position sizing
                 risk_per_share = entry_price - stop
+                if risk_per_share <= 0:
+                    continue
                 max_risk = capital * RISK_PER_TRADE
                 qty = max(1, int(max_risk / risk_per_share))
                 cost = qty * entry_price
-                if cost > capital * 0.15:
-                    qty = max(1, int(capital * 0.15 / entry_price))
+                if cost > capital * 0.20:
+                    qty = max(1, int(capital * 0.20 / entry_price))
                     cost = qty * entry_price
                 if cost > capital:
                     continue
 
-                # Simulate with trailing stop + partial profits
+                # ── Simulate trade ──
                 highest = entry_price
                 current_stop = stop
                 exit_price = float(future["Close"].iloc[-1])
@@ -2424,37 +2424,47 @@ def run_backtest(years: int = 2) -> dict:
                 partial_taken = False
                 partial_pnl = 0
                 remaining_qty = qty
-                partial_threshold = entry_price * 1.04  # +4%
+                partial_threshold = entry_price * 1.03  # +3% partial
+                bars_held = 0
 
                 for _, day in future.iterrows():
                     day_low = float(day["Low"])
                     day_high = float(day["High"])
                     day_close = float(day["Close"])
+                    bars_held += 1
 
-                    # Partial profit: sell half at +4%
+                    # Check stop FIRST (stops always fill before targets)
+                    if day_low <= current_stop:
+                        exit_price = current_stop
+                        exit_reason = "STOPPED" if not partial_taken else "TRAILED"
+                        break
+
+                    # Partial profit: sell half at +3%
                     if not partial_taken and day_high >= partial_threshold and remaining_qty > 1:
                         half = remaining_qty // 2
                         partial_pnl = (partial_threshold - entry_price) * half
                         remaining_qty -= half
                         partial_taken = True
-                        # Move stop to breakeven after taking partials
-                        current_stop = max(current_stop, entry_price)
+                        # Move stop to breakeven + 0.5%
+                        current_stop = max(current_stop, round(entry_price * 1.005, 2))
 
-                    if day_low <= current_stop:
-                        exit_price = current_stop
-                        exit_reason = "STOPPED" if not partial_taken else "TRAILED"
-                        break
+                    # Check target
                     if day_high >= target:
                         exit_price = target
                         exit_reason = "TARGET"
                         break
-                    if day_close > highest:
-                        highest = day_close
-                        new_stop = round(highest - 3.0 * atr, 2)
+
+                    # Trail stop using day_high (not just close)
+                    if day_high > highest:
+                        highest = day_high
+                        new_stop = round(highest - 2.0 * atr, 2)
                         if new_stop > current_stop:
                             current_stop = new_stop
 
-                # Total P&L = partial profit + remaining shares profit
+                # Skip ahead so we don't double-trade same stock
+                skip_until = i + bars_held + 5
+
+                # Total P&L
                 remaining_pnl = (exit_price - entry_price) * remaining_qty
                 pnl = partial_pnl + remaining_pnl
                 pnl_pct = pnl / (entry_price * qty) * 100
@@ -2473,6 +2483,7 @@ def run_backtest(years: int = 2) -> dict:
                     "exit": round(exit_price, 2), "qty": qty,
                     "pnl": round(pnl, 2), "pnl_pct": round(pnl_pct, 2),
                     "result": exit_reason, "score": sig["score"],
+                    "bars_held": bars_held,
                 })
         except Exception:
             continue
@@ -2521,10 +2532,13 @@ def run_backtest(years: int = 2) -> dict:
 
         targets_hit = sum(1 for t in trades if t["result"] == "TARGET")
         stops_hit = sum(1 for t in trades if t["result"] == "STOPPED")
+        trailed = sum(1 for t in trades if t["result"] == "TRAILED")
         timeouts = sum(1 for t in trades if t["result"] == "TIMEOUT")
         timeout_wins = sum(1 for t in trades if t["result"] == "TIMEOUT" and t["pnl"] > 0)
+        avg_bars = np.mean([t.get("bars_held", 0) for t in trades]) if trades else 0
         log.append("")
-        log.append(f"**Exit breakdown:** {targets_hit} targets hit · {stops_hit} stopped out · {timeouts} timed out ({timeout_wins} profitable)")
+        log.append(f"**Exit breakdown:** {targets_hit} targets · {stops_hit} stopped · {trailed} trailed · {timeouts} timed out ({timeout_wins} profitable)")
+        log.append(f"**Avg hold:** {avg_bars:.0f} bars")
 
     return {
         "ok": True, "log": log,
