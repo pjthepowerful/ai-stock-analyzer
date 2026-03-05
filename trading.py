@@ -3120,67 +3120,76 @@ def main():
     with st.chat_message("user", avatar="⬛"):
         st.markdown(prompt)
 
-    with st.chat_message("assistant", avatar="🟢"):
-        with st.spinner(""):
-            intent = route(prompt)
-            result = execute(intent)
-            chart_ticker, table_data, trade_signal = None, None, None
-            portfolio_chart = False
-            market = result.get("market", intent.get("market", "US"))
+    resp = "Something went wrong — try again."
+    chart_ticker, table_data, trade_signal = None, None, None
+    portfolio_chart = False
+    market = "US"
 
-            if result.get("ok"):
-                if result["type"] == "price":
-                    chart_ticker = result["ticker"]
-                    resp = result["msg"]
-                elif result["type"] == "analysis":
-                    chart_ticker = result.get("ticker")
-                    trade_signal = result.get("trade_signal")
-                    if result.get("msg"):
+    try:
+        with st.chat_message("assistant", avatar="🟢"):
+            with st.spinner(""):
+                intent = route(prompt)
+                result = execute(intent)
+                market = result.get("market", intent.get("market", "US")) if result else "US"
+
+                if result and result.get("ok"):
+                    if result["type"] == "price":
+                        chart_ticker = result["ticker"]
                         resp = result["msg"]
+                    elif result["type"] == "analysis":
+                        chart_ticker = result.get("ticker")
+                        trade_signal = result.get("trade_signal")
+                        if result.get("msg"):
+                            resp = result["msg"]
+                        else:
+                            resp = ai_response(prompt, result["data"], st.session_state.messages, market)
+                    elif result["type"] == "list":
+                        table_data = result["data"]
+                        resp = result.get("msg", f"**{result.get('title', '')}** — {market} market")
+                    elif result["type"] in ("portfolio", "trade", "positions", "orders"):
+                        resp = result.get("msg", "Done.")
+                        chart_ticker = result.get("ticker")
+                        trade_signal = result.get("trade_signal")
+                        portfolio_chart = result.get("show_portfolio_chart", False)
                     else:
-                        resp = ai_response(prompt, result["data"], st.session_state.messages, market)
-                elif result["type"] == "list":
-                    table_data = result["data"]
-                    resp = result.get("msg", f"**{result.get('title', '')}** — {market} market")
-                elif result["type"] in ("portfolio", "trade", "positions", "orders"):
-                    resp = result.get("msg", "Done.")
-                    chart_ticker = result.get("ticker")
-                    trade_signal = result.get("trade_signal")
-                    portfolio_chart = result.get("show_portfolio_chart", False)
+                        resp = ai_response(prompt, None, st.session_state.messages, market)
+                elif result and result.get("error"):
+                    resp = f"⚠️ {result['error']}"
                 else:
                     resp = ai_response(prompt, None, st.session_state.messages, market)
-            elif result.get("error"):
-                resp = f"⚠️ {result['error']}"
-            else:
-                resp = ai_response(prompt, None, st.session_state.messages, market)
 
+                st.markdown(resp)
+
+                if chart_ticker:
+                    fig = build_chart(chart_ticker, trade_signal=trade_signal)
+                    if fig:
+                        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key="chart_new")
+
+                if portfolio_chart:
+                    hist = alpaca_portfolio_history(period="1M")
+                    pfig = build_portfolio_chart(hist)
+                    if pfig:
+                        st.plotly_chart(pfig, width="stretch", config={"displayModeBar": False}, key="portfolio_chart_new")
+
+                if table_data:
+                    df = pd.DataFrame(table_data)
+                    # Format market data columns if they exist
+                    sym = "₹" if market == "India" else "$"
+                    if "Price" in df.columns:
+                        df["Price"] = df["Price"].apply(lambda x: f"{sym}{x:,.2f}" if isinstance(x, (int, float)) else x)
+                    if "Chg%" in df.columns:
+                        df["Chg%"] = df["Chg%"].apply(lambda x: f"{'▲' if x>=0 else '▼'} {x:+.2f}%" if isinstance(x, (int, float)) else x)
+                    if "Volume" in df.columns:
+                        df["Volume"] = df["Volume"].apply(lambda x: f"{x/1e6:.1f}M" if isinstance(x, (int, float)) and x >= 1e6 else (f"{x/1e3:.0f}K" if isinstance(x, (int, float)) and x >= 1e3 else str(x)))
+                    st.dataframe(df, width="stretch", hide_index=True, key="table_new")
+    except Exception as e:
+        with st.chat_message("assistant", avatar="🟢"):
+            resp = f"⚠️ Error: {str(e)[:200]}"
             st.markdown(resp)
-
-            if chart_ticker:
-                fig = build_chart(chart_ticker, trade_signal=trade_signal)
-                if fig:
-                    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key="chart_new")
-
-            if portfolio_chart:
-                hist = alpaca_portfolio_history(period="1M")
-                pfig = build_portfolio_chart(hist)
-                if pfig:
-                    st.plotly_chart(pfig, width="stretch", config={"displayModeBar": False}, key="portfolio_chart_new")
-
-            if table_data:
-                df = pd.DataFrame(table_data)
-                # Format market data columns if they exist
-                sym = "₹" if market == "India" else "$"
-                if "Price" in df.columns:
-                    df["Price"] = df["Price"].apply(lambda x: f"{sym}{x:,.2f}" if isinstance(x, (int, float)) else x)
-                if "Chg%" in df.columns:
-                    df["Chg%"] = df["Chg%"].apply(lambda x: f"{'▲' if x>=0 else '▼'} {x:+.2f}%" if isinstance(x, (int, float)) else x)
-                if "Volume" in df.columns:
-                    df["Volume"] = df["Volume"].apply(lambda x: f"{x/1e6:.1f}M" if isinstance(x, (int, float)) and x >= 1e6 else (f"{x/1e3:.0f}K" if isinstance(x, (int, float)) and x >= 1e3 else str(x)))
-                st.dataframe(df, width="stretch", hide_index=True, key="table_new")
+    finally:
+        st.session_state["processing"] = False
 
     st.session_state.messages.append({"role": "assistant", "content": resp, "chart": chart_ticker, "table": table_data, "trade_signal": trade_signal, "portfolio_chart": portfolio_chart})
-    st.session_state["processing"] = False
 
     # ── Autopilot continuous loop ──
     _run_autopilot_loop()
