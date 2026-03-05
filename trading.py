@@ -1198,36 +1198,36 @@ def generate_trade_signal(data: dict) -> dict:
         action = "HOLD"
         confidence = max(40, 100 - abs(score - 50) * 2)
     
-    # ═══ STEP 5: RISK MANAGEMENT ═══
+    # ═══ STEP 5: RISK MANAGEMENT (Day Trading) ═══
     if action in ("BUY", "STRONG_BUY"):
         entry = price
-        # Stop loss: 3x ATR below entry, or below nearest support — whichever is tighter
-        stop_atr = round(entry - 3.0 * atr, 2)
-        stop_support = round(supports[0] - 0.3 * atr, 2) if supports and (price - supports[0]) / price < 0.05 else stop_atr
+        # Stop loss: 1.5x ATR below entry, or below nearest support — whichever is tighter
+        stop_atr = round(entry - 1.5 * atr, 2)
+        stop_support = round(supports[0] - 0.2 * atr, 2) if supports and (price - supports[0]) / price < 0.03 else stop_atr
         stop_loss = max(stop_atr, stop_support)
-        # Minimum 2% stop distance
-        min_stop = round(entry * 0.98, 2)
+        # Minimum 1% stop distance
+        min_stop = round(entry * 0.99, 2)
         if stop_loss > min_stop:
             stop_loss = min_stop
         
         risk = max(entry - stop_loss, 0.01)
-        # Target at 3:1 R:R
-        target_1 = round(entry + 3.0 * risk, 2)
-        target_2 = round(entry + 5.0 * risk, 2)
+        # Target at 2:1 and 3:1 R:R (day trading targets)
+        target_1 = round(entry + 2.0 * risk, 2)
+        target_2 = round(entry + 3.0 * risk, 2)
         risk_pct = round(risk / entry * 100, 2)
     elif action in ("SELL", "STRONG_SELL"):
         entry = price
-        stop_loss = round(price + 3.0 * atr, 2)
+        stop_loss = round(price + 1.5 * atr, 2)
         risk = max(stop_loss - entry, 0.01)
-        target_1 = round(entry - 3.0 * risk, 2)
-        target_2 = round(entry - 5.0 * risk, 2)
+        target_1 = round(entry - 2.0 * risk, 2)
+        target_2 = round(entry - 3.0 * risk, 2)
         risk_pct = round(risk / entry * 100, 2)
     else:
         entry = price
-        stop_loss = round(price - 3.0 * atr, 2)
-        risk = 3.0 * atr
-        target_1 = round(price + 3.0 * atr, 2)
-        target_2 = round(price + 5.0 * atr, 2)
+        stop_loss = round(price - 1.5 * atr, 2)
+        risk = 1.5 * atr
+        target_1 = round(price + 1.5 * atr, 2)
+        target_2 = round(price + 3.0 * atr, 2)
         risk_pct = round(risk / price * 100, 2)
     
     rr = round((target_1 - entry) / risk, 2) if risk > 0 and target_1 > entry else (
@@ -1843,7 +1843,7 @@ def _has_upcoming_earnings(ticker: str, days: int = 7) -> tuple[bool, str | None
 def update_trailing_stops(positions: list[dict], log: list) -> list[str]:
     """
     For each open position, check if price has moved up enough to trail the stop.
-    Uses 3x ATR trailing stop from the highest price since entry.
+    Uses 1.5x ATR trailing stop from the highest price since entry (day trading).
     """
     actions = []
     for pos in positions:
@@ -1858,8 +1858,8 @@ def update_trailing_stops(positions: list[dict], log: list) -> list[str]:
                 continue
 
             # Get ATR for trailing distance
-            hist = yf.Ticker(ticker).history(period="3mo")
-            if hist is None or hist.empty or len(hist) < 20:
+            hist = yf.Ticker(ticker).history(period="1mo")
+            if hist is None or hist.empty or len(hist) < 14:
                 continue
 
             # Calculate ATR
@@ -1873,11 +1873,11 @@ def update_trailing_stops(positions: list[dict], log: list) -> list[str]:
             ], axis=1).max(axis=1)
             atr = float(tr.rolling(14).mean().iloc[-1])
 
-            # Highest close since we'd have entered
-            recent_high = float(close.tail(20).max())
+            # Highest close in recent days
+            recent_high = float(close.tail(5).max())
 
-            # New trailing stop: highest recent price minus 3x ATR
-            new_stop = round(recent_high - (3.0 * atr), 2)
+            # New trailing stop: highest recent price minus 1.5x ATR (day trading)
+            new_stop = round(recent_high - (1.5 * atr), 2)
 
             # Only move stop UP, never down. And only if it's above entry (lock in profit)
             if new_stop > entry and new_stop > entry * 1.01:
@@ -1900,7 +1900,7 @@ def update_trailing_stops(positions: list[dict], log: list) -> list[str]:
                     "side": "sell",
                     "type": "stop",
                     "stop_price": str(new_stop),
-                    "time_in_force": "gtc",
+                    "time_in_force": "day",  # day trading — expires at close
                 }
                 try:
                     r = requests.post(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(),
@@ -1925,9 +1925,9 @@ def run_backtest(years: int = 2) -> dict:
     Simulates autopilot with trailing stops over the last N years.
     """
     STARTING_CAPITAL = 25_000
-    RISK_PER_TRADE = 0.015
-    MIN_SCORE = 68
-    MIN_RR = 2.0
+    RISK_PER_TRADE = 0.01
+    MIN_SCORE = 65
+    MIN_RR = 1.5
 
     # 100 stocks
     TEST_UNIVERSE = [
@@ -1993,7 +1993,7 @@ def run_backtest(years: int = 2) -> dict:
 
     log = [f"**Backtesting {len(TEST_UNIVERSE)} stocks over {years} years...**",
            f"Starting capital: ${STARTING_CAPITAL:,}",
-           f"Rules: score≥{MIN_SCORE}, BUY/STRONG_BUY only, R:R≥{MIN_RR}, 3x ATR trailing stops, pullback-in-uptrend"]
+           f"Rules: score≥{MIN_SCORE}, BUY/STRONG_BUY only, R:R≥{MIN_RR}, 1.5x ATR trailing stops, pullback-in-uptrend"]
 
     step = 20
 
@@ -2091,7 +2091,7 @@ def run_backtest(years: int = 2) -> dict:
                         break
                     if day_close > highest:
                         highest = day_close
-                        new_stop = round(highest - 3.0 * atr, 2)
+                        new_stop = round(highest - 1.5 * atr, 2)
                         if new_stop > current_stop:
                             current_stop = new_stop
 
@@ -2215,16 +2215,16 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
 
     # Scale positions with equity: 1 per $5k, min 4, max 20
     MAX_POSITIONS = max(4, min(20, int(account["equity"] / 5000)))
-    RISK_PER_TRADE = 0.015
-    MAX_POS_PCT = 0.12
-    MIN_SCORE = 68
+    RISK_PER_TRADE = 0.01         # 1% risk per trade (tighter for day trading)
+    MAX_POS_PCT = 0.10
+    MIN_SCORE = 65                # slightly lower bar — more opportunities intraday
     MIN_CONFLUENCE = 3
-    MIN_RR = 2.0
-    SELL_BELOW = 35
+    MIN_RR = 1.5                  # 1.5:1 R:R (day trades have tighter targets)
+    SELL_BELOW = 40               # quicker exits
 
     log.append(f"Open positions: {len(positions)} · Max: {MAX_POSITIONS}")
-    DAILY_LOSS_LIMIT = 0.03       # 3% max daily loss — shut down if hit
-    PARTIAL_PROFIT_PCT = 0.04     # take half off at 4% profit
+    DAILY_LOSS_LIMIT = 0.02       # 2% max daily loss — tighter for day trading
+    PARTIAL_PROFIT_PCT = 0.02     # take half off at 2% profit (faster partials)
     PARTIAL_PROFIT_SOLD_KEY = "autopilot_partial_sold"
 
     # ── 1b. Daily loss limit ──
@@ -2246,7 +2246,25 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     else:
         log.append(f"Daily P&L: {daily_pnl_pct:+.2f}%")
 
-    # ── 1b. Market regime check ──
+    # ── 1b. EOD Liquidation — close all positions 15min before close ──
+    now_et = datetime.now(et)
+    market_close = now_et.replace(hour=15, minute=45, second=0, microsecond=0)
+    if now_et >= market_close and positions and not dry_run:
+        log.append("🔔 **EOD LIQUIDATION** — closing all positions before market close")
+        result = alpaca_close_all()
+        if result.get("ok"):
+            log.append(f"Closed {len(positions)} positions — flat for the day")
+        else:
+            log.append(f"⚠️ EOD close failed: {result.get('error', '')}")
+        return {"ok": True, "log": log, "buys": 0, "sells": len(positions), "scanned": 0, "opportunities": 0}
+    elif now_et >= market_close and positions and dry_run:
+        log.append(f"🔔 EOD: Would close {len(positions)} positions (dry run)")
+
+    # No new buys in last 30min of trading
+    last_buy_cutoff = now_et.replace(hour=15, minute=30, second=0, microsecond=0)
+    no_new_buys_eod = now_et >= last_buy_cutoff
+
+    # ── 1c. Market regime check ──
     regime = check_market_regime()
     log.append(f"Market: {regime['reason']}")
 
@@ -2339,6 +2357,10 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     if account["buying_power"] < 100 and not dry_run:
         log.append("Not enough buying power — skipping scan")
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells)}
+
+    if no_new_buys_eod and not dry_run:
+        log.append("⏰ Last 30min of trading — no new buys, managing existing only")
+        return {"ok": True, "log": log, "buys": 0, "sells": len(sells), "scanned": 0, "opportunities": 0}
 
     # Gate: don't buy in bear markets
     if not regime["safe_to_buy"]:
@@ -2597,7 +2619,7 @@ def execute(intent: dict) -> dict:
             f"Scanned: {result.get('scanned', '?')} stocks · "
             f"Found: {result.get('opportunities', 0)} opportunities · "
             f"Bought: {result.get('buys', 0)} · Sold: {result.get('sells', 0)}\n\n"
-            f"*Next scan in 30 minutes. Say \"stop\" to deactivate.*\n\n"
+            f"*Next scan in 10 minutes. Say \"stop\" to deactivate.*\n\n"
             f"---\n\n" +
             "\n\n".join(report_lines)
         )
@@ -2831,7 +2853,9 @@ def ai_response(user_msg: str, stock_data: dict | None, history: list, market: s
 
     system = f"""You're Paula — think of yourself as that one friend who's weirdly obsessed with the stock market and actually knows what she's talking about. You talk like a real person, not a Bloomberg terminal. Today is {datetime.now().strftime("%Y-%m-%d")}. Market: {market}.
 
-You get live stock data attached to each message. This includes a full trade signal with confluence scoring across 5 categories (trend, momentum, mean-reversion, volume, fundamentals), trend regime detection, support/resistance levels, and ATR-based entry/stop/target with risk-reward ratios. USE all of it — that's what makes you useful — but weave the numbers into natural conversation.
+You get live stock data attached to each message. This includes a full trade signal with confluence scoring across 6 categories (trend, momentum, mean-reversion, volume, fundamentals, news sentiment), trend regime detection, support/resistance levels, and ATR-based entry/stop/target with risk-reward ratios. USE all of it — that's what makes you useful — but weave the numbers into natural conversation.
+
+IMPORTANT: This is a DAY TRADING setup. Positions are opened and closed within the same trading day. Stops are tight (1.5x ATR), targets are close (2:1 R:R), and everything gets liquidated 15 minutes before market close. Keep this context when discussing trades — don't talk about "holding for weeks" or "long-term potential".
 
 CRITICAL — Stock recommendations:
 When asked to suggest, name, or recommend stocks, NEVER just list the same boring mega-caps everyone already knows (AAPL, MSFT, GOOGL, AMZN, TSLA, etc.). Anyone can name those. Instead:
@@ -3176,7 +3200,7 @@ def _run_autopilot_loop():
         st.rerun()
         return
 
-    INTERVAL = 30 * 60  # 30 minutes
+    INTERVAL = 10 * 60  # 10 minutes — day trading pace
 
     last_scan = st.session_state.get("autopilot_last_scan", 0)
     now = time.time()
@@ -3202,7 +3226,7 @@ def _run_autopilot_loop():
                         f"Scanned: {result.get('scanned', '?')} · "
                         f"Found: {result.get('opportunities', 0)} · "
                         f"Bought: {result.get('buys', 0)} · Sold: {result.get('sells', 0)}\n\n"
-                        f"*Next scan in 30 minutes.*\n\n---\n\n" +
+                        f"*Next scan in 10 minutes.*\n\n---\n\n" +
                         "\n\n".join(report)
                     )
                 else:
