@@ -879,7 +879,363 @@ def compute_technicals(hist: pd.DataFrame) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  TRADE SIGNAL GENERATOR — the core profit engine
+#  INTRADAY SIGNAL ENGINE — 5-minute bar analysis for day trading
+#
+#  Uses VWAP, intraday EMAs, 5min RSI/MACD, and volume spikes.
+#  Completely separate from the daily signal engine.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def compute_intraday_technicals(hist: pd.DataFrame) -> dict:
+    """Compute technicals on 5-minute bars for day trading."""
+    if hist is None or hist.empty or len(hist) < 20:
+        return {}
+
+    close = hist["Close"]
+    high = hist["High"]
+    low = hist["Low"]
+    volume = hist["Volume"]
+    price = float(close.iloc[-1])
+
+    # VWAP — Volume Weighted Average Price (the intraday anchor)
+    typical_price = (high + low + close) / 3
+    cum_tp_vol = (typical_price * volume).cumsum()
+    cum_vol = volume.cumsum()
+    vwap = cum_tp_vol / cum_vol.replace(0, 1)
+    vwap_val = float(vwap.iloc[-1]) if not vwap.empty else price
+
+    # EMAs on 5min bars: 9 (fast) and 20 (medium)
+    ema_9 = float(close.ewm(span=9).mean().iloc[-1])
+    ema_20 = float(close.ewm(span=20).mean().iloc[-1])
+    ema_50 = float(close.ewm(span=50).mean().iloc[-1]) if len(close) >= 50 else ema_20
+
+    # RSI on 5min bars
+    delta = close.diff()
+    gain = delta.where(delta > 0, 0).rolling(14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+    rs = gain / loss.replace(0, 0.001)
+    rsi_series = 100 - (100 / (1 + rs))
+    rsi = float(rsi_series.iloc[-1]) if not rsi_series.empty else 50
+
+    # MACD on 5min bars (shorter periods)
+    ema12 = close.ewm(span=12).mean()
+    ema26 = close.ewm(span=26).mean()
+    macd_line = ema12 - ema26
+    macd_signal = macd_line.ewm(span=9).mean()
+    macd_hist = float((macd_line - macd_signal).iloc[-1])
+
+    # Volume ratio: current bar vs 20-bar average
+    vol_avg = float(volume.rolling(20).mean().iloc[-1]) if len(volume) >= 20 else float(volume.mean())
+    vol_current = float(volume.iloc[-1])
+    vol_ratio = round(vol_current / max(vol_avg, 1), 2)
+
+    # ATR on 5min bars (this will be much smaller than daily ATR)
+    tr = pd.concat([
+        high - low,
+        (high - close.shift(1)).abs(),
+        (low - close.shift(1)).abs(),
+    ], axis=1).max(axis=1)
+    atr = float(tr.rolling(14).mean().iloc[-1]) if len(tr) >= 14 else float(tr.mean())
+
+    # Intraday high/low as S/R
+    day_high = float(high.max())
+    day_low = float(low.min())
+
+    # Higher lows check (last 6 bars)
+    recent_lows = low.tail(6).values
+    higher_lows = all(recent_lows[i] >= recent_lows[i-1] for i in range(1, len(recent_lows))) if len(recent_lows) >= 3 else False
+
+    # Lower highs check
+    recent_highs = high.tail(6).values
+    lower_highs = all(recent_highs[i] <= recent_highs[i-1] for i in range(1, len(recent_highs))) if len(recent_highs) >= 3 else False
+
+    return {
+        "price": price,
+        "vwap": round(vwap_val, 2),
+        "ema_9": round(ema_9, 2),
+        "ema_20": round(ema_20, 2),
+        "ema_50": round(ema_50, 2),
+        "rsi": round(rsi, 1),
+        "macd_hist": round(macd_hist, 4),
+        "vol_ratio": vol_ratio,
+        "atr": round(atr, 4),
+        "day_high": round(day_high, 2),
+        "day_low": round(day_low, 2),
+        "higher_lows": higher_lows,
+        "lower_highs": lower_highs,
+        "above_vwap": price > vwap_val,
+        "ema_bullish": ema_9 > ema_20,
+    }
+
+
+def generate_intraday_signal(data: dict) -> dict:
+    """
+    Day Trading Signal Engine — Buy intraday momentum above VWAP.
+
+    Strategy: Buy when price is above VWAP with EMA confirmation,
+    on a pullback with volume. Tight stops, quick targets.
+
+    Entry rules (ALL must be true for BUY):
+    1. Price above VWAP (institutions are buying)
+    2. 9 EMA above 20 EMA (short-term momentum up)
+    3. Price pulled back toward VWAP or 20 EMA (the dip to buy)
+    4. RSI 35-65 on 5min (not overbought)
+    5. Volume above average (confirmation)
+    """
+    tech = data.get("intraday_technicals", {})
+    price = tech.get("price", 0)
+    if not price or not tech:
+        return {"action": "NO_DATA", "confidence": 0, "score": 0,
+                "confluence": {"bullish": 0, "bearish": 0},
+                "category_scores": {}, "signals": [], "warnings": [],
+                "trade": {"entry": 0, "stop_loss": 0, "target_1": 0,
+                          "target_2": 0, "risk_reward": 0, "risk_pct": 0, "atr": 0}}
+
+    signals = []
+    warnings = []
+    score = 50  # neutral starting point
+
+    vwap = tech.get("vwap", price)
+    ema_9 = tech.get("ema_9", price)
+    ema_20 = tech.get("ema_20", price)
+    ema_50 = tech.get("ema_50", price)
+    rsi = tech.get("rsi", 50)
+    macd_h = tech.get("macd_hist", 0)
+    vol_ratio = tech.get("vol_ratio", 1)
+    atr = tech.get("atr", 0.01)
+    above_vwap = tech.get("above_vwap", False)
+    ema_bullish = tech.get("ema_bullish", False)
+    higher_lows = tech.get("higher_lows", False)
+    lower_highs = tech.get("lower_highs", False)
+    day_high = tech.get("day_high", price)
+    day_low = tech.get("day_low", price)
+
+    # ── 1. VWAP Position (±15 points) ──
+    vwap_dist = (price - vwap) / vwap * 100 if vwap else 0
+    if above_vwap and vwap_dist > 0.5:
+        score += 12
+        signals.append(f"✓ Above VWAP (${vwap:.2f}) — buyers in control")
+    elif above_vwap:
+        score += 6
+        signals.append(f"Near VWAP (${vwap:.2f})")
+    elif vwap_dist < -0.5:
+        score -= 12
+        warnings.append(f"Below VWAP (${vwap:.2f}) — sellers in control")
+    else:
+        score -= 4
+
+    # ── 2. EMA Trend (±12 points) ──
+    if ema_bullish and ema_9 > ema_50:
+        score += 12
+        signals.append("✓ Strong EMA alignment (9 > 20 > 50)")
+    elif ema_bullish:
+        score += 8
+        signals.append("✓ 9 EMA above 20 EMA — momentum up")
+    elif not ema_bullish and ema_9 < ema_50:
+        score -= 12
+        warnings.append("EMAs bearish (9 < 20 < 50)")
+    else:
+        score -= 6
+        warnings.append("9 EMA below 20 EMA — momentum down")
+
+    # ── 3. Pullback Quality (±10 points) ──
+    # Best entry: price above VWAP but pulled back near it or near 20 EMA
+    dist_to_vwap = abs(price - vwap) / price * 100
+    dist_to_ema20 = abs(price - ema_20) / price * 100
+
+    if above_vwap and dist_to_vwap < 0.3:
+        score += 10
+        signals.append("✓ Pullback to VWAP — ideal entry")
+    elif above_vwap and dist_to_ema20 < 0.2:
+        score += 8
+        signals.append("✓ Pullback to 20 EMA")
+    elif above_vwap and dist_to_vwap > 1.5:
+        score -= 3
+        warnings.append("Extended above VWAP — risky chase")
+
+    # ── 4. RSI (±8 points) ──
+    if 35 <= rsi <= 55:
+        score += 8
+        signals.append(f"✓ RSI {rsi:.0f} — pulled back, room to run")
+    elif 55 < rsi <= 65:
+        score += 3
+    elif rsi > 75:
+        score -= 8
+        warnings.append(f"RSI {rsi:.0f} — overbought, avoid chasing")
+    elif rsi < 30:
+        score -= 6
+        warnings.append(f"RSI {rsi:.0f} — oversold, wait for reversal")
+    elif rsi > 65:
+        score -= 3
+        warnings.append(f"RSI {rsi:.0f} — getting hot")
+
+    # ── 5. Volume (±10 points) ──
+    if vol_ratio >= 2.0:
+        score += 10
+        signals.append(f"✓ Volume spike ({vol_ratio:.1f}x avg) — strong interest")
+    elif vol_ratio >= 1.3:
+        score += 6
+        signals.append(f"Above-average volume ({vol_ratio:.1f}x)")
+    elif vol_ratio < 0.5:
+        score -= 6
+        warnings.append(f"Dead volume ({vol_ratio:.1f}x) — no conviction")
+    elif vol_ratio < 0.8:
+        score -= 3
+
+    # ── 6. MACD Histogram (±6 points) ──
+    if macd_h > 0:
+        score += 6
+        signals.append("MACD histogram positive")
+    else:
+        score -= 4
+        warnings.append("MACD histogram negative")
+
+    # ── 7. Price Action (±6 points) ──
+    if higher_lows and above_vwap:
+        score += 6
+        signals.append("✓ Higher lows — buyers stepping up")
+    elif lower_highs and not above_vwap:
+        score -= 6
+        warnings.append("Lower highs — sellers pressing")
+
+    # ── 8. News Sentiment (±8 points) ──
+    news_sent = data.get("news_sentiment", {})
+    news_score = news_sent.get("score", 0)
+    if news_score >= 3:
+        score += 8
+        signals.append(f"Bullish news ({news_sent.get('bullish_count', 0)} positive headlines)")
+    elif news_score >= 1:
+        score += 3
+    elif news_score <= -3:
+        score -= 8
+        warnings.append(f"Bearish news ({news_sent.get('bearish_count', 0)} negative headlines)")
+    elif news_score <= -1:
+        score -= 3
+
+    # ── DETERMINE ACTION ──
+    score = max(0, min(100, score))
+
+    bullish_count = sum(1 for s in signals if "✓" in s)
+    bearish_count = len(warnings)
+
+    if score >= 72 and above_vwap and ema_bullish and vol_ratio >= 1.3:
+        action = "STRONG_BUY"
+        confidence = min(95, score)
+    elif score >= 62 and above_vwap:
+        action = "BUY"
+        confidence = min(85, score)
+    elif score <= 30:
+        action = "STRONG_SELL"
+        confidence = min(90, 100 - score)
+    elif score <= 38:
+        action = "SELL"
+        confidence = min(80, 100 - score)
+    else:
+        action = "HOLD"
+        confidence = max(40, 100 - abs(score - 50) * 2)
+
+    # ── RISK MANAGEMENT (Intraday — uses 5min ATR) ──
+    if action in ("BUY", "STRONG_BUY"):
+        entry = price
+        # Stop: 2x intraday ATR or below VWAP — whichever is tighter
+        stop_atr = round(entry - 2.0 * atr, 2)
+        stop_vwap = round(vwap - 0.5 * atr, 2) if above_vwap and dist_to_vwap < 0.5 else stop_atr
+        stop_loss = max(stop_atr, stop_vwap)
+        # Floor: at least 0.3% stop distance
+        min_stop = round(entry * 0.997, 2)
+        if stop_loss > min_stop:
+            stop_loss = min_stop
+
+        risk = max(entry - stop_loss, 0.01)
+        target_1 = round(entry + 2.0 * risk, 2)
+        target_2 = round(entry + 3.0 * risk, 2)
+        risk_pct = round(risk / entry * 100, 2)
+    elif action in ("SELL", "STRONG_SELL"):
+        entry = price
+        stop_loss = round(price + 2.0 * atr, 2)
+        risk = max(stop_loss - entry, 0.01)
+        target_1 = round(entry - 2.0 * risk, 2)
+        target_2 = round(entry - 3.0 * risk, 2)
+        risk_pct = round(risk / entry * 100, 2)
+    else:
+        entry = price
+        stop_loss = round(price - 2.0 * atr, 2)
+        risk = 2.0 * atr
+        target_1 = round(price + 2.0 * atr, 2)
+        target_2 = round(price + 3.0 * atr, 2)
+        risk_pct = round(risk / price * 100, 2)
+
+    rr = round((target_1 - entry) / risk, 2) if risk > 0 and target_1 > entry else (
+         round((entry - target_1) / risk, 2) if risk > 0 and entry > target_1 else 0)
+
+    return {
+        "action": action,
+        "score": score,
+        "confidence": confidence,
+        "confluence": {"bullish": bullish_count, "bearish": bearish_count},
+        "category_scores": {
+            "vwap": 1 if above_vwap else -1,
+            "ema_trend": 1 if ema_bullish else -1,
+            "momentum": 1 if macd_h > 0 else -1,
+            "volume": 1 if vol_ratio >= 1.3 else (-1 if vol_ratio < 0.8 else 0),
+            "rsi": 1 if 35 <= rsi <= 55 else (-1 if rsi > 70 else 0),
+            "news": 1 if news_score >= 2 else (-1 if news_score <= -2 else 0),
+        },
+        "signals": signals,
+        "warnings": warnings,
+        "trade": {
+            "entry": round(entry, 2),
+            "stop_loss": round(stop_loss, 2),
+            "target_1": target_1,
+            "target_2": target_2,
+            "risk_reward": rr,
+            "risk_pct": risk_pct,
+            "atr": round(atr, 4),
+        },
+    }
+
+
+@st.cache_data(ttl=120)
+def fetch_scan_intraday(ticker: str) -> dict | None:
+    """Fetch 5-minute bars for day trading analysis."""
+    try:
+        stk = yf.Ticker(ticker)
+        # Get 5-day 5min history (yfinance max for 5m interval)
+        hist = stk.history(period="5d", interval="5m")
+        if hist is None or hist.empty or len(hist) < 30:
+            return None
+
+        price = float(hist["Close"].iloc[-1])
+        if not price or price < 1:
+            return None
+
+        # Also get daily history for relative strength and sector
+        daily = stk.history(period="6mo")
+        rs = _calc_relative_strength(daily) if daily is not None and len(daily) >= 50 else {}
+        sector_etf = TICKER_SECTOR.get(ticker)
+        news = _news_sentiment(ticker)
+
+        intraday_tech = compute_intraday_technicals(hist)
+
+        prev = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else price
+
+        return {
+            "price": round(price, 2),
+            "prev_close": round(prev, 2),
+            "change_pct": round((price - prev) / prev * 100, 2) if prev else 0,
+            "name": ticker,
+            "ticker": ticker,
+            "full_ticker": ticker,
+            "intraday_technicals": intraday_tech,
+            "relative_strength": rs,
+            "sector_etf": sector_etf,
+            "news_sentiment": news,
+        }
+    except Exception:
+        return None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  TRADE SIGNAL GENERATOR — daily chart engine (used for manual analysis)
 #
 #  Confluence categories (each votes bullish/bearish with a cap):
 #    1. Trend       (regime + MAs)              max ±30
@@ -1198,36 +1554,35 @@ def generate_trade_signal(data: dict) -> dict:
         action = "HOLD"
         confidence = max(40, 100 - abs(score - 50) * 2)
     
-    # ═══ STEP 5: RISK MANAGEMENT ═══
+    # ═══ STEP 5: RISK MANAGEMENT (Daily — for manual analysis) ═══
     if action in ("BUY", "STRONG_BUY"):
         entry = price
-        # Stop loss: 2x ATR below entry, or below nearest support
-        stop_atr = round(entry - 2.0 * atr, 2)
-        stop_support = round(supports[0] - 0.3 * atr, 2) if supports and (price - supports[0]) / price < 0.04 else stop_atr
+        # Stop loss: 3x ATR below entry, or below nearest support
+        stop_atr = round(entry - 3.0 * atr, 2)
+        stop_support = round(supports[0] - 0.3 * atr, 2) if supports and (price - supports[0]) / price < 0.05 else stop_atr
         stop_loss = max(stop_atr, stop_support)
-        # Minimum 1.5% stop distance
-        min_stop = round(entry * 0.985, 2)
+        # Minimum 2% stop distance
+        min_stop = round(entry * 0.98, 2)
         if stop_loss > min_stop:
             stop_loss = min_stop
         
         risk = max(entry - stop_loss, 0.01)
-        # Target at 3:1 and 4:1 R:R
         target_1 = round(entry + 3.0 * risk, 2)
-        target_2 = round(entry + 4.0 * risk, 2)
+        target_2 = round(entry + 5.0 * risk, 2)
         risk_pct = round(risk / entry * 100, 2)
     elif action in ("SELL", "STRONG_SELL"):
         entry = price
-        stop_loss = round(price + 2.0 * atr, 2)
+        stop_loss = round(price + 3.0 * atr, 2)
         risk = max(stop_loss - entry, 0.01)
         target_1 = round(entry - 3.0 * risk, 2)
-        target_2 = round(entry - 4.0 * risk, 2)
+        target_2 = round(entry - 5.0 * risk, 2)
         risk_pct = round(risk / entry * 100, 2)
     else:
         entry = price
-        stop_loss = round(price - 2.0 * atr, 2)
-        risk = 2.0 * atr
-        target_1 = round(price + 2.0 * atr, 2)
-        target_2 = round(price + 3.0 * atr, 2)
+        stop_loss = round(price - 3.0 * atr, 2)
+        risk = 3.0 * atr
+        target_1 = round(price + 3.0 * atr, 2)
+        target_2 = round(price + 5.0 * atr, 2)
         risk_pct = round(risk / price * 100, 2)
     
     rr = round((target_1 - entry) / risk, 2) if risk > 0 and target_1 > entry else (
@@ -1843,7 +2198,7 @@ def _has_upcoming_earnings(ticker: str, days: int = 7) -> tuple[bool, str | None
 def update_trailing_stops(positions: list[dict], log: list) -> list[str]:
     """
     For each open position, check if price has moved up enough to trail the stop.
-    Uses 2x ATR trailing stop from the highest price since entry.
+    Uses 2x intraday ATR (5min bars) trailing stop — tighter for day trading.
     """
     actions = []
     for pos in positions:
@@ -1857,10 +2212,13 @@ def update_trailing_stops(positions: list[dict], log: list) -> list[str]:
             if pnl_pct <= 0:
                 continue
 
-            # Get ATR for trailing distance
-            hist = yf.Ticker(ticker).history(period="1mo")
+            # Get intraday 5min bars for tighter trailing
+            hist = yf.Ticker(ticker).history(period="1d", interval="5m")
             if hist is None or hist.empty or len(hist) < 14:
-                continue
+                # Fallback to daily
+                hist = yf.Ticker(ticker).history(period="1mo")
+                if hist is None or hist.empty or len(hist) < 14:
+                    continue
 
             # Calculate ATR
             high = hist["High"]
@@ -1873,14 +2231,14 @@ def update_trailing_stops(positions: list[dict], log: list) -> list[str]:
             ], axis=1).max(axis=1)
             atr = float(tr.rolling(14).mean().iloc[-1])
 
-            # Highest close in recent days
-            recent_high = float(close.tail(5).max())
+            # Highest price in recent bars
+            recent_high = float(close.tail(12).max())
 
-            # New trailing stop: highest recent price minus 2x ATR
+            # New trailing stop: highest recent price minus 2x intraday ATR
             new_stop = round(recent_high - (2.0 * atr), 2)
 
             # Only move stop UP, never down. And only if it's above entry (lock in profit)
-            if new_stop > entry and new_stop > entry * 1.01:
+            if new_stop > entry and new_stop > entry * 1.003:  # lock in at 0.3% profit
                 # Cancel existing orders and place new stop
                 # First check for existing stop orders
                 orders = alpaca_orders(status="open", limit=20)
@@ -1925,7 +2283,7 @@ def run_backtest(years: int = 2) -> dict:
     Simulates autopilot with trailing stops over the last N years.
     """
     STARTING_CAPITAL = 25_000
-    RISK_PER_TRADE = 0.012
+    RISK_PER_TRADE = 0.015
     MIN_SCORE = 68
     MIN_RR = 2.0
 
@@ -1993,7 +2351,8 @@ def run_backtest(years: int = 2) -> dict:
 
     log = [f"**Backtesting {len(TEST_UNIVERSE)} stocks over {years} years...**",
            f"Starting capital: ${STARTING_CAPITAL:,}",
-           f"Rules: score≥{MIN_SCORE}, BUY/STRONG_BUY only, R:R≥{MIN_RR}, 2x ATR trailing stops, pullback-in-uptrend"]
+           f"Rules: score≥{MIN_SCORE}, BUY/STRONG_BUY only, R:R≥{MIN_RR}, 3x ATR trailing stops, pullback-in-uptrend",
+           f"⚠️ Note: Backtest uses daily signals (intraday 5min data not available for historical periods)"]
 
     step = 20
 
@@ -2091,7 +2450,7 @@ def run_backtest(years: int = 2) -> dict:
                         break
                     if day_close > highest:
                         highest = day_close
-                        new_stop = round(highest - 2.0 * atr, 2)
+                        new_stop = round(highest - 3.0 * atr, 2)
                         if new_stop > current_stop:
                             current_stop = new_stop
 
@@ -2215,16 +2574,17 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
 
     # Scale positions with equity: 1 per $5k, min 4, max 20
     MAX_POSITIONS = max(4, min(20, int(account["equity"] / 5000)))
-    RISK_PER_TRADE = 0.012        # 1.2% risk per trade
+    RISK_PER_TRADE = 0.01         # 1% risk per trade
     MAX_POS_PCT = 0.10
-    MIN_SCORE = 68                # back to proven threshold
+    MIN_SCORE = 62                # intraday — more opportunities
     MIN_CONFLUENCE = 3
-    MIN_RR = 2.0                  # 2:1 minimum
-    SELL_BELOW = 38               # slightly quicker exits than swing
+    MIN_RR = 1.5                  # 1.5:1 minimum (intraday targets are tighter)
+    SELL_BELOW = 40               # quick exits
 
     log.append(f"Open positions: {len(positions)} · Max: {MAX_POSITIONS}")
-    DAILY_LOSS_LIMIT = 0.025      # 2.5% max daily loss
-    PARTIAL_PROFIT_PCT = 0.03     # take half off at 3% profit
+    log.append("📊 Mode: **Intraday** (5min bars, VWAP, EOD liquidation at 3:45 PM ET)")
+    DAILY_LOSS_LIMIT = 0.02       # 2% max daily loss
+    PARTIAL_PROFIT_PCT = 0.015    # take half off at 1.5% (fast intraday partials)
     PARTIAL_PROFIT_SOLD_KEY = "autopilot_partial_sold"
 
     # ── 1b. Daily loss limit ──
@@ -2320,14 +2680,19 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     if not partials:
         log.append("No positions hit +4% for partial profit yet")
 
-    # ── 3. Check existing positions — sell if signal turned bad ──
+    # ── 3. Check existing positions — sell if intraday signal turned bad ──
     sells = []
     for pos in positions:
         try:
-            data = fetch_scan(pos["ticker"])
+            data = fetch_scan_intraday(pos["ticker"])
             if not data:
-                continue
-            sig = generate_trade_signal(data)
+                # Fallback to daily if intraday unavailable
+                data = fetch_scan(pos["ticker"])
+                if not data:
+                    continue
+                sig = generate_trade_signal(data)
+            else:
+                sig = generate_intraday_signal(data)
             if sig["score"] <= SELL_BELOW or sig["action"] in ("SELL", "STRONG_SELL"):
                 if dry_run:
                     sells.append(f"🔴 Would sell {pos['ticker']} — score {sig['score']}, signal: {sig['action']}")
@@ -2469,7 +2834,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     MAX_ANALYZE = 200
     for ticker in scan_list[:MAX_ANALYZE]:
         try:
-            data = fetch_scan(ticker)
+            data = fetch_scan_intraday(ticker)
             if not data:
                 errors += 1
                 continue
@@ -2477,7 +2842,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             if not price or price < 2:
                 continue
             analyzed += 1
-            sig = generate_trade_signal(data)
+            sig = generate_intraday_signal(data)
             all_scores.append((ticker, sig["score"], sig["action"], sig["confluence"]["bullish"], sig["trade"]["risk_reward"]))
 
             if (sig["score"] >= MIN_SCORE
@@ -2515,7 +2880,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     opportunities.sort(key=lambda x: (action_priority.get(x["action"], 3), -x["score"]))
 
     if not opportunities:
-        log.append("No stocks passed the criteria (score≥68, BUY/STRONG_BUY, confluence≥3, R:R≥2.0)")
+        log.append("No stocks passed the criteria (score≥62, BUY/STRONG_BUY, confluence≥3, R:R≥1.5)")
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells), "scanned": analyzed}
 
     log.append(f"Found {len(opportunities)} opportunities — executing top {min(open_slots, len(opportunities))}")
@@ -2853,9 +3218,9 @@ def ai_response(user_msg: str, stock_data: dict | None, history: list, market: s
 
     system = f"""You're Paula — think of yourself as that one friend who's weirdly obsessed with the stock market and actually knows what she's talking about. You talk like a real person, not a Bloomberg terminal. Today is {datetime.now().strftime("%Y-%m-%d")}. Market: {market}.
 
-You get live stock data attached to each message. This includes a full trade signal with confluence scoring across 6 categories (trend, momentum, mean-reversion, volume, fundamentals, news sentiment), trend regime detection, support/resistance levels, and ATR-based entry/stop/target with risk-reward ratios. USE all of it — that's what makes you useful — but weave the numbers into natural conversation.
+You get live stock data attached to each message. For manual analysis, this includes daily chart signals with confluence scoring across 6 categories (trend, momentum, mean-reversion, volume, fundamentals, news sentiment). USE all of it — weave the numbers into natural conversation.
 
-IMPORTANT: This is a DAY TRADING setup. Positions are opened and closed within the same trading day. Stops are at 2x ATR, targets at 3:1 R:R, and everything gets liquidated 15 minutes before market close. Keep this context when discussing trades — don't talk about "holding for weeks" or "long-term potential".
+IMPORTANT: Autopilot runs a dedicated INTRADAY engine using 5-minute bars, VWAP, 9/20 EMA, and intraday momentum. Positions are opened and closed within the same trading day. Everything gets liquidated 15 minutes before market close. When discussing autopilot trades, reference intraday levels (VWAP, intraday EMAs, volume spikes). When a user asks you to analyze a stock directly, use the daily chart data you're given. Don't talk about "holding for weeks" — this is day trading.
 
 CRITICAL — Stock recommendations:
 When asked to suggest, name, or recommend stocks, NEVER just list the same boring mega-caps everyone already knows (AAPL, MSFT, GOOGL, AMZN, TSLA, etc.). Anyone can name those. Instead:
