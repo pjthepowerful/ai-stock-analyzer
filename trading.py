@@ -1198,35 +1198,35 @@ def generate_trade_signal(data: dict) -> dict:
         action = "HOLD"
         confidence = max(40, 100 - abs(score - 50) * 2)
     
-    # ═══ STEP 5: RISK MANAGEMENT (Day Trading) ═══
+    # ═══ STEP 5: RISK MANAGEMENT ═══
     if action in ("BUY", "STRONG_BUY"):
         entry = price
-        # Stop loss: 1.5x ATR below entry, or below nearest support — whichever is tighter
-        stop_atr = round(entry - 1.5 * atr, 2)
-        stop_support = round(supports[0] - 0.2 * atr, 2) if supports and (price - supports[0]) / price < 0.03 else stop_atr
+        # Stop loss: 2x ATR below entry, or below nearest support
+        stop_atr = round(entry - 2.0 * atr, 2)
+        stop_support = round(supports[0] - 0.3 * atr, 2) if supports and (price - supports[0]) / price < 0.04 else stop_atr
         stop_loss = max(stop_atr, stop_support)
-        # Minimum 1% stop distance
-        min_stop = round(entry * 0.99, 2)
+        # Minimum 1.5% stop distance
+        min_stop = round(entry * 0.985, 2)
         if stop_loss > min_stop:
             stop_loss = min_stop
         
         risk = max(entry - stop_loss, 0.01)
-        # Target at 2:1 and 3:1 R:R (day trading targets)
-        target_1 = round(entry + 2.0 * risk, 2)
-        target_2 = round(entry + 3.0 * risk, 2)
+        # Target at 3:1 and 4:1 R:R
+        target_1 = round(entry + 3.0 * risk, 2)
+        target_2 = round(entry + 4.0 * risk, 2)
         risk_pct = round(risk / entry * 100, 2)
     elif action in ("SELL", "STRONG_SELL"):
         entry = price
-        stop_loss = round(price + 1.5 * atr, 2)
+        stop_loss = round(price + 2.0 * atr, 2)
         risk = max(stop_loss - entry, 0.01)
-        target_1 = round(entry - 2.0 * risk, 2)
-        target_2 = round(entry - 3.0 * risk, 2)
+        target_1 = round(entry - 3.0 * risk, 2)
+        target_2 = round(entry - 4.0 * risk, 2)
         risk_pct = round(risk / entry * 100, 2)
     else:
         entry = price
-        stop_loss = round(price - 1.5 * atr, 2)
-        risk = 1.5 * atr
-        target_1 = round(price + 1.5 * atr, 2)
+        stop_loss = round(price - 2.0 * atr, 2)
+        risk = 2.0 * atr
+        target_1 = round(price + 2.0 * atr, 2)
         target_2 = round(price + 3.0 * atr, 2)
         risk_pct = round(risk / price * 100, 2)
     
@@ -1843,7 +1843,7 @@ def _has_upcoming_earnings(ticker: str, days: int = 7) -> tuple[bool, str | None
 def update_trailing_stops(positions: list[dict], log: list) -> list[str]:
     """
     For each open position, check if price has moved up enough to trail the stop.
-    Uses 1.5x ATR trailing stop from the highest price since entry (day trading).
+    Uses 2x ATR trailing stop from the highest price since entry.
     """
     actions = []
     for pos in positions:
@@ -1876,8 +1876,8 @@ def update_trailing_stops(positions: list[dict], log: list) -> list[str]:
             # Highest close in recent days
             recent_high = float(close.tail(5).max())
 
-            # New trailing stop: highest recent price minus 1.5x ATR (day trading)
-            new_stop = round(recent_high - (1.5 * atr), 2)
+            # New trailing stop: highest recent price minus 2x ATR
+            new_stop = round(recent_high - (2.0 * atr), 2)
 
             # Only move stop UP, never down. And only if it's above entry (lock in profit)
             if new_stop > entry and new_stop > entry * 1.01:
@@ -1925,9 +1925,9 @@ def run_backtest(years: int = 2) -> dict:
     Simulates autopilot with trailing stops over the last N years.
     """
     STARTING_CAPITAL = 25_000
-    RISK_PER_TRADE = 0.01
-    MIN_SCORE = 65
-    MIN_RR = 1.5
+    RISK_PER_TRADE = 0.012
+    MIN_SCORE = 68
+    MIN_RR = 2.0
 
     # 100 stocks
     TEST_UNIVERSE = [
@@ -1993,7 +1993,7 @@ def run_backtest(years: int = 2) -> dict:
 
     log = [f"**Backtesting {len(TEST_UNIVERSE)} stocks over {years} years...**",
            f"Starting capital: ${STARTING_CAPITAL:,}",
-           f"Rules: score≥{MIN_SCORE}, BUY/STRONG_BUY only, R:R≥{MIN_RR}, 1.5x ATR trailing stops, pullback-in-uptrend"]
+           f"Rules: score≥{MIN_SCORE}, BUY/STRONG_BUY only, R:R≥{MIN_RR}, 2x ATR trailing stops, pullback-in-uptrend"]
 
     step = 20
 
@@ -2091,7 +2091,7 @@ def run_backtest(years: int = 2) -> dict:
                         break
                     if day_close > highest:
                         highest = day_close
-                        new_stop = round(highest - 1.5 * atr, 2)
+                        new_stop = round(highest - 2.0 * atr, 2)
                         if new_stop > current_stop:
                             current_stop = new_stop
 
@@ -2215,16 +2215,16 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
 
     # Scale positions with equity: 1 per $5k, min 4, max 20
     MAX_POSITIONS = max(4, min(20, int(account["equity"] / 5000)))
-    RISK_PER_TRADE = 0.01         # 1% risk per trade (tighter for day trading)
+    RISK_PER_TRADE = 0.012        # 1.2% risk per trade
     MAX_POS_PCT = 0.10
-    MIN_SCORE = 65                # slightly lower bar — more opportunities intraday
+    MIN_SCORE = 68                # back to proven threshold
     MIN_CONFLUENCE = 3
-    MIN_RR = 1.5                  # 1.5:1 R:R (day trades have tighter targets)
-    SELL_BELOW = 40               # quicker exits
+    MIN_RR = 2.0                  # 2:1 minimum
+    SELL_BELOW = 38               # slightly quicker exits than swing
 
     log.append(f"Open positions: {len(positions)} · Max: {MAX_POSITIONS}")
-    DAILY_LOSS_LIMIT = 0.02       # 2% max daily loss — tighter for day trading
-    PARTIAL_PROFIT_PCT = 0.02     # take half off at 2% profit (faster partials)
+    DAILY_LOSS_LIMIT = 0.025      # 2.5% max daily loss
+    PARTIAL_PROFIT_PCT = 0.03     # take half off at 3% profit
     PARTIAL_PROFIT_SOLD_KEY = "autopilot_partial_sold"
 
     # ── 1b. Daily loss limit ──
@@ -2855,7 +2855,7 @@ def ai_response(user_msg: str, stock_data: dict | None, history: list, market: s
 
 You get live stock data attached to each message. This includes a full trade signal with confluence scoring across 6 categories (trend, momentum, mean-reversion, volume, fundamentals, news sentiment), trend regime detection, support/resistance levels, and ATR-based entry/stop/target with risk-reward ratios. USE all of it — that's what makes you useful — but weave the numbers into natural conversation.
 
-IMPORTANT: This is a DAY TRADING setup. Positions are opened and closed within the same trading day. Stops are tight (1.5x ATR), targets are close (2:1 R:R), and everything gets liquidated 15 minutes before market close. Keep this context when discussing trades — don't talk about "holding for weeks" or "long-term potential".
+IMPORTANT: This is a DAY TRADING setup. Positions are opened and closed within the same trading day. Stops are at 2x ATR, targets at 3:1 R:R, and everything gets liquidated 15 minutes before market close. Keep this context when discussing trades — don't talk about "holding for weeks" or "long-term potential".
 
 CRITICAL — Stock recommendations:
 When asked to suggest, name, or recommend stocks, NEVER just list the same boring mega-caps everyone already knows (AAPL, MSFT, GOOGL, AMZN, TSLA, etc.). Anyone can name those. Instead:
