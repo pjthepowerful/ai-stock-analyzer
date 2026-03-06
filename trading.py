@@ -3426,7 +3426,7 @@ def ai_response(user_msg: str, stock_data: dict | None, history: list, market: s
     if not key:
         return "⚠️ Set `GROQ_API_KEY` in Streamlit secrets or environment."
 
-    system = f"""You're Paula — think of yourself as that one friend who's weirdly obsessed with the stock market and actually knows what she's talking about. You talk like a real person, not a Bloomberg terminal. Today is {datetime.now().strftime("%Y-%m-%d")}. Market: {market}.
+    system = f"""You're Paula — think of yourself as that one friend who's weirdly obsessed with the stock market and actually knows what she's talking about. You talk like a real person, not a Bloomberg terminal. Today is {datetime.now(ZoneInfo("US/Eastern")).strftime("%Y-%m-%d")}. Market: {market}.
 
 You get live stock data attached to each message. For manual analysis, this includes daily chart signals with confluence scoring across 6 categories (trend, momentum, mean-reversion, volume, fundamentals, news sentiment). USE all of it — weave the numbers into natural conversation.
 
@@ -3694,73 +3694,6 @@ def main():
     }
     .stChatMessage li::marker { color: var(--muted) !important; }
 
-    /* ── Header custom ── */
-    .paula-header {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 4px;
-    }
-    .paula-logo {
-        width: 36px;
-        height: 36px;
-        background: linear-gradient(135deg, var(--green), var(--cyan));
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 18px;
-        font-weight: 800;
-        color: var(--bg);
-        font-family: 'Outfit', sans-serif;
-        box-shadow: 0 2px 12px rgba(0,229,160,0.2);
-    }
-    .paula-title {
-        font-family: 'Outfit', sans-serif !important;
-        font-size: 1.6rem !important;
-        font-weight: 800 !important;
-        color: var(--white) !important;
-        letter-spacing: -0.05em !important;
-        line-height: 1 !important;
-        margin: 0 !important;
-    }
-    .paula-sub {
-        font-family: 'JetBrains Mono', monospace !important;
-        font-size: 0.68rem !important;
-        color: var(--muted) !important;
-        letter-spacing: 0.06em !important;
-        font-weight: 300 !important;
-        text-transform: uppercase !important;
-        margin-top: 2px !important;
-    }
-    .paula-pills {
-        display: flex;
-        gap: 6px;
-        margin-top: 8px;
-        flex-wrap: wrap;
-    }
-    .paula-pill {
-        background: var(--surface2);
-        border: 1px solid var(--border);
-        border-radius: 100px;
-        padding: 3px 10px;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.62rem;
-        color: var(--muted);
-        letter-spacing: 0.03em;
-        font-weight: 400;
-    }
-    .paula-pill-active {
-        border-color: var(--green2);
-        color: var(--green);
-        background: rgba(0,229,160,0.05);
-    }
-    .paula-divider {
-        height: 1px;
-        background: linear-gradient(90deg, var(--border), transparent);
-        margin: 12px 0 8px 0;
-        border: none;
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -3768,23 +3701,12 @@ def main():
         st.session_state.messages = []
 
     # ── Header ──
+    et = ZoneInfo("US/Eastern")
+    now_et = datetime.now(et)
     autopilot_on = st.session_state.get("autopilot_active", False)
-    st.markdown(f"""
-    <div class="paula-header">
-        <div class="paula-logo">P</div>
-        <div>
-            <div class="paula-title">Paula</div>
-            <div class="paula-sub">intraday long/short · {datetime.now().strftime('%b %d, %Y')}</div>
-        </div>
-    </div>
-    <div class="paula-pills">
-        <span class="paula-pill">5min bars</span>
-        <span class="paula-pill">vwap</span>
-        <span class="paula-pill">long + short</span>
-        <span class="paula-pill {'paula-pill-active' if autopilot_on else ''}">{'◉ autopilot on' if autopilot_on else '○ autopilot off'}</span>
-    </div>
-    <div class="paula-divider"></div>
-    """, unsafe_allow_html=True)
+    ap_status = "◉ live" if autopilot_on else "○ off"
+    st.markdown(f"## Paula")
+    st.caption(f"intraday long/short · {now_et.strftime('%b %d, %Y · %I:%M %p')} ET · autopilot {ap_status}")
 
     for mi, m in enumerate(st.session_state.messages):
         av = "🟢" if m["role"] == "assistant" else "⬛"
