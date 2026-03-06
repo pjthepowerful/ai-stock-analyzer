@@ -2692,7 +2692,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     for p in partials:
         log.append(p)
     if not partials:
-        log.append("No positions hit +4% for partial profit yet")
+        log.append(f"No positions hit +{PARTIAL_PROFIT_PCT*100:.1f}% for partial profit yet")
 
     # ── 3. Check existing positions — sell if intraday signal turned bad ──
     sells = []
@@ -3571,6 +3571,9 @@ def main():
     st.session_state.messages.append({"role": "assistant", "content": resp, "chart": chart_ticker, "table": table_data, "trade_signal": trade_signal, "portfolio_chart": portfolio_chart})
 
     # ── Autopilot continuous loop ──
+    # Force a rerun so the message renders first, THEN the loop takes over on next cycle
+    if st.session_state.get("autopilot_active", False):
+        st.rerun()
     _run_autopilot_loop()
 
 
@@ -3583,8 +3586,8 @@ def _run_autopilot_loop():
     is_open, status_msg = _market_is_open()
 
     if not is_open:
-        st.markdown(f"---\n\n⏸️ **Autopilot paused** · {status_msg}\n\nWill auto-resume when market opens. You can close this tab — positions are safe on Alpaca.")
-        time.sleep(300)  # Check every 5 min if market has opened
+        st.markdown(f"---\n\n⏸️ **Autopilot paused** · {status_msg}\n\nWill auto-resume when market opens. Say \"stop\" to deactivate.")
+        time.sleep(60)  # Check every 1 min
         st.rerun()
         return
 
