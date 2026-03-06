@@ -181,7 +181,7 @@ def _find_ticker(text: str) -> tuple[str | None, str]:
                 return clean, "US"
     # 3) Polygon search — only if the message looks like a specific stock query
     stock_intent = any(w in low for w in [
-        "analyze", "analysis", "price", "buy", "sell", "chart", "quote",
+        "analyze", "analysis", "price", "buy", "sell", "short", "cover", "chart", "quote",
         "stock", "ticker", "how is", "how's", "what about", "look at",
         "check out", "thoughts on", "opinion on", "review",
     ])
@@ -538,6 +538,97 @@ def alpaca_sell(ticker: str, qty: int = None, sell_all: bool = False) -> dict:
 def alpaca_close_all() -> dict:
     """Close ALL positions — panic button."""
     try:
+        r = requests.delete(f"{ALPACA_BASE}/v2/positions",
+                            headers=_alpaca_headers(), timeout=10)
+        if r.status_code in (200, 207):
+            return {"ok": True, "message": "All positions closed"}
+        return {"ok": False, "error": "Failed to close all positions"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:100]}
+
+
+def alpaca_short(ticker: str, qty: int = 1,
+                 stop_loss: float = None, take_profit: float = None) -> dict:
+    """
+    Short sell — sell shares you don't own, profit when price drops.
+    Alpaca paper trading supports shorting via regular sell orders.
+    """
+    if qty <= 0:
+        return {"ok": False, "error": f"Can't short {qty} shares — need at least 1"}
+
+    order = {
+        "symbol": ticker.upper(),
+        "qty": str(qty),
+        "side": "sell",
+        "type": "market",
+        "time_in_force": "day",
+    }
+
+    # Bracket order for short: stop above, target below
+    if stop_loss and take_profit:
+        order["order_class"] = "bracket"
+        order["stop_loss"] = {"stop_price": str(round(stop_loss, 2))}
+        order["take_profit"] = {"limit_price": str(round(take_profit, 2))}
+    elif stop_loss:
+        order["order_class"] = "oto"
+        order["stop_loss"] = {"stop_price": str(round(stop_loss, 2))}
+
+    try:
+        r = requests.post(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(),
+                          json=order, timeout=10)
+        data = r.json()
+        if r.status_code in (200, 201):
+            return {
+                "ok": True,
+                "order_id": data.get("id"),
+                "symbol": data.get("symbol"),
+                "qty": data.get("qty"),
+                "side": "short",
+                "type": data.get("type"),
+                "status": data.get("status"),
+                "order_class": data.get("order_class", "simple"),
+            }
+        else:
+            return {"ok": False, "error": data.get("message", "Short order rejected")}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:100]}
+
+
+def alpaca_cover(ticker: str, qty: int = None, cover_all: bool = False) -> dict:
+    """Cover a short position — buy back shares to close."""
+    if cover_all:
+        try:
+            r = requests.delete(f"{ALPACA_BASE}/v2/positions/{ticker.upper()}",
+                                headers=_alpaca_headers(), timeout=10)
+            data = r.json()
+            if r.status_code in (200, 201, 207):
+                return {"ok": True, "symbol": ticker.upper(), "action": "covered_short",
+                        "qty": data.get("qty", "all"), "status": data.get("status")}
+            else:
+                return {"ok": False, "error": data.get("message", "Failed to cover")}
+        except Exception as e:
+            return {"ok": False, "error": str(e)[:100]}
+
+    order = {
+        "symbol": ticker.upper(),
+        "qty": str(qty or 1),
+        "side": "buy",
+        "type": "market",
+        "time_in_force": "day",
+    }
+    try:
+        r = requests.post(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(),
+                          json=order, timeout=10)
+        data = r.json()
+        if r.status_code in (200, 201):
+            return {"ok": True, "order_id": data.get("id"), "symbol": data.get("symbol"),
+                    "qty": data.get("qty"), "side": "cover", "status": data.get("status")}
+        else:
+            return {"ok": False, "error": data.get("message", "Cover order rejected")}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:100]}
+
+
         r = requests.delete(f"{ALPACA_BASE}/v2/positions",
                             headers=_alpaca_headers(), timeout=10)
         if r.status_code in (200, 207):
@@ -2026,6 +2117,24 @@ def route(msg: str) -> dict:
             qty = int(qty_match.group(1))
         return {"type": "sell", "ticker": ticker, "market": market, "qty": qty, "sell_all": sell_all}
 
+    # "short NVDA", "short 10 AAPL", "cover TSLA", "cover all NVDA"
+    short_match = re.search(r'\bshort\b', m)
+    if short_match and ticker:
+        qty = None
+        qty_match = re.search(r'short\s+(\d+)\s+', m)
+        if qty_match:
+            qty = int(qty_match.group(1))
+        return {"type": "short", "ticker": ticker, "market": market, "qty": qty}
+
+    cover_match = re.search(r'\bcover\b', m)
+    if cover_match and ticker:
+        cover_all = "all" in m
+        qty = None
+        qty_match = re.search(r'cover\s+(\d+)\s+', m)
+        if qty_match:
+            qty = int(qty_match.group(1))
+        return {"type": "cover", "ticker": ticker, "market": market, "qty": qty, "cover_all": cover_all}
+
     # "execute trade on NVDA", "trade AAPL", "smart buy TSLA"
     if any(w in m for w in ["execute trade", "smart buy", "auto buy", "trade signal buy"]):
         if ticker:
@@ -2596,7 +2705,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     SELL_BELOW = 40               # quick exits
 
     log.append(f"Open positions: {len(positions)} · Max: {MAX_POSITIONS}")
-    log.append("📊 Mode: **Intraday** (5min bars, VWAP, EOD liquidation at 3:45 PM ET)")
+    log.append("📊 Mode: **Intraday Long/Short** (5min bars, VWAP, EOD liquidation at 3:45 PM ET)")
     DAILY_LOSS_LIMIT = 0.02       # 2% max daily loss
     PARTIAL_PROFIT_PCT = 0.015    # take half off at 1.5% (fast intraday partials)
     PARTIAL_PROFIT_SOLD_KEY = "autopilot_partial_sold"
@@ -2672,7 +2781,8 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     for pos in positions:
         ticker = pos["ticker"]
         pnl_pct = pos.get("unrealized_pnl_pct", 0)
-        qty = int(pos.get("qty", 0))
+        qty = int(abs(pos.get("qty", 0)))
+        is_short = pos.get("side") == "short"
 
         # Only take partials if: profitable enough, haven't already taken partials, and have >1 share
         if (pnl_pct >= PARTIAL_PROFIT_PCT * 100
@@ -2680,24 +2790,28 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                 and qty > 1):
             half = max(1, qty // 2)
             if dry_run:
-                partials.append(f"💰 Would sell {half}/{qty} shares of {ticker} at +{pnl_pct:.1f}% (locking in partial profit)")
+                partials.append(f"💰 Would close {half}/{qty} shares of {ticker} {'(short)' if is_short else ''} at +{pnl_pct:.1f}%")
             else:
-                result = alpaca_sell(ticker=ticker, qty=half)
+                if is_short:
+                    result = alpaca_cover(ticker=ticker, qty=half)
+                else:
+                    result = alpaca_sell(ticker=ticker, qty=half)
                 if result.get("ok"):
-                    partials.append(f"💰 Sold {half}/{qty} {ticker} at +{pnl_pct:.1f}% — half off, letting rest ride")
+                    partials.append(f"💰 {'Covered' if is_short else 'Sold'} {half}/{qty} {ticker} {'(short)' if is_short else ''} at +{pnl_pct:.1f}% — half off, letting rest ride")
                     st.session_state[PARTIAL_PROFIT_SOLD_KEY].add(ticker)
                 else:
-                    partials.append(f"⚠️ Partial sell failed for {ticker}: {result.get('error', '')}")
+                    partials.append(f"⚠️ Partial close failed for {ticker}: {result.get('error', '')}")
 
     for p in partials:
         log.append(p)
     if not partials:
         log.append(f"No positions hit +{PARTIAL_PROFIT_PCT*100:.1f}% for partial profit yet")
 
-    # ── 3. Check existing positions — sell if intraday signal turned bad ──
+    # ── 3. Check existing positions — close if signal flipped ──
     sells = []
     for pos in positions:
         try:
+            is_short = pos.get("side") == "short"
             data = fetch_scan_intraday(pos["ticker"])
             if not data:
                 # Fallback to daily if intraday unavailable
@@ -2707,15 +2821,28 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                 sig = generate_trade_signal(data)
             else:
                 sig = generate_intraday_signal(data)
-            if sig["score"] <= SELL_BELOW or sig["action"] in ("SELL", "STRONG_SELL"):
+
+            # For longs: close if signal turned bearish
+            # For shorts: close if signal turned bullish
+            should_close = False
+            if not is_short and (sig["score"] <= SELL_BELOW or sig["action"] in ("SELL", "STRONG_SELL")):
+                should_close = True
+            elif is_short and (sig["score"] >= (100 - SELL_BELOW) or sig["action"] in ("BUY", "STRONG_BUY")):
+                should_close = True
+
+            if should_close:
+                action_word = "Covered" if is_short else "Sold"
                 if dry_run:
-                    sells.append(f"🔴 Would sell {pos['ticker']} — score {sig['score']}, signal: {sig['action']}")
+                    sells.append(f"🔴 Would close {pos['ticker']} {'(short)' if is_short else ''} — score {sig['score']}, signal: {sig['action']}")
                 else:
-                    result = alpaca_sell(ticker=pos["ticker"], sell_all=True)
-                    if result.get("ok"):
-                        sells.append(f"🔴 Sold {pos['ticker']} — score dropped to {sig['score']}, signal: {sig['action']}")
+                    if is_short:
+                        result = alpaca_cover(ticker=pos["ticker"], cover_all=True)
                     else:
-                        sells.append(f"⚠️ Tried to sell {pos['ticker']} but failed: {result.get('error','')}")
+                        result = alpaca_sell(ticker=pos["ticker"], sell_all=True)
+                    if result.get("ok"):
+                        sells.append(f"🔴 {action_word} {pos['ticker']} {'(short)' if is_short else ''} — score {sig['score']}, signal: {sig['action']}")
+                    else:
+                        sells.append(f"⚠️ Tried to close {pos['ticker']} but failed: {result.get('error','')}")
         except Exception:
             continue
 
@@ -2738,7 +2865,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells)}
 
     if no_new_buys_eod and not dry_run:
-        log.append("⏰ Last 30min of trading — no new buys, managing existing only")
+        log.append("⏰ Last 30min of trading — no new positions, managing existing only")
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells), "scanned": 0, "opportunities": 0}
 
     # Gate: don't buy in bear markets
@@ -2763,11 +2890,13 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         viable = [s for s in all_snaps if s.get("Price", 0) > 5 and s.get("Volume", 0) > 200_000]
         # Sort by absolute daily change — we want movers
         movers = sorted(viable, key=lambda x: abs(x.get("Chg%", 0)), reverse=True)[:80]
-        # Also get positive movers separately
+        # Also get positive movers separately (long candidates)
         positive = sorted([s for s in viable if s.get("Chg%", 0) > 0.5], key=lambda x: x["Chg%"], reverse=True)[:40]
+        # Also get negative movers (short candidates)
+        negative = sorted([s for s in viable if s.get("Chg%", 0) < -0.5], key=lambda x: x["Chg%"])[:40]
 
         seen = set()
-        for s in positive + movers:
+        for s in positive + negative + movers:
             t = s["Ticker"]
             if t not in seen and t not in held_tickers:
                 seen.add(t)
@@ -2859,6 +2988,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             sig = generate_intraday_signal(data)
             all_scores.append((ticker, sig["score"], sig["action"], sig["confluence"]["bullish"], sig["trade"]["risk_reward"]))
 
+            # LONG opportunities
             if (sig["score"] >= MIN_SCORE
                     and sig["confluence"]["bullish"] >= MIN_CONFLUENCE
                     and sig["trade"]["risk_reward"] >= MIN_RR
@@ -2867,14 +2997,32 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                     "ticker": ticker,
                     "score": sig["score"],
                     "action": sig["action"],
+                    "side": "long",
                     "confluence": sig["confluence"]["bullish"],
                     "rr": sig["trade"]["risk_reward"],
                     "signal": sig,
                     "data": data,
                 })
-                if len(opportunities) >= open_slots + 5:
-                    log.append(f"Found {len(opportunities)} opportunities — stopping early")
-                    break
+
+            # SHORT opportunities — bearish signals with conviction
+            elif (sig["score"] <= (100 - MIN_SCORE)
+                    and sig["confluence"]["bearish"] >= MIN_CONFLUENCE
+                    and sig["trade"]["risk_reward"] >= MIN_RR
+                    and sig["action"] in ("SELL", "STRONG_SELL")):
+                opportunities.append({
+                    "ticker": ticker,
+                    "score": 100 - sig["score"],  # invert so higher = more bearish conviction
+                    "action": sig["action"],
+                    "side": "short",
+                    "confluence": sig["confluence"]["bearish"],
+                    "rr": sig["trade"]["risk_reward"],
+                    "signal": sig,
+                    "data": data,
+                })
+
+            if len(opportunities) >= open_slots + 5:
+                log.append(f"Found {len(opportunities)} opportunities — stopping early")
+                break
         except Exception:
             errors += 1
             continue
@@ -2889,22 +3037,25 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         passed = "✓" if s >= MIN_SCORE and c >= MIN_CONFLUENCE and rr >= MIN_RR else "✗"
         log.append(f"{passed} {t}: score {s}, {a}, {c} bullish, R:R {rr:.1f}")
 
-    # Sort: STRONG_BUY first, then BUY, then HOLD — within each group by score
-    action_priority = {"STRONG_BUY": 0, "BUY": 1, "HOLD": 2}
+    # Sort: STRONG signals first, then by score (higher = more conviction for both sides)
+    action_priority = {"STRONG_BUY": 0, "STRONG_SELL": 0, "BUY": 1, "SELL": 1, "HOLD": 2}
     opportunities.sort(key=lambda x: (action_priority.get(x["action"], 3), -x["score"]))
 
     if not opportunities:
-        log.append("No stocks passed the criteria (score≥62, BUY/STRONG_BUY, confluence≥3, R:R≥1.5)")
+        log.append("No stocks passed the criteria (longs: score≥62, shorts: score≤38, confluence≥3, R:R≥1.5)")
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells), "scanned": analyzed}
 
-    log.append(f"Found {len(opportunities)} opportunities — executing top {min(open_slots, len(opportunities))}")
+    longs = [o for o in opportunities if o["side"] == "long"]
+    shorts = [o for o in opportunities if o["side"] == "short"]
+    log.append(f"Found {len(opportunities)} opportunities ({len(longs)} long, {len(shorts)} short) — executing top {min(open_slots, len(opportunities))}")
 
     # ── 5. Execute trades on best opportunities ──
-    buys = []
+    executions = []
     for opp in opportunities[:open_slots]:
         ticker = opp["ticker"]
         sig = opp["signal"]
         trade = sig["trade"]
+        is_short = opp["side"] == "short"
 
         # Earnings check — skip stocks reporting within 7 days
         has_earnings, earn_date = _has_upcoming_earnings(ticker, days=7)
@@ -2912,21 +3063,28 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             log.append(f"⏭️ Skipped {ticker} — earnings on {earn_date}")
             continue
 
-        # News check — skip if headlines are very bearish
+        # News check — skip longs on very bearish news, skip shorts on very bullish news
         opp_news = opp["data"].get("news_sentiment", {})
-        if opp_news.get("sentiment") == "very_bearish":
-            log.append(f"⏭️ Skipped {ticker} — very bearish news ({opp_news.get('bearish_count', 0)} negative headlines)")
+        if not is_short and opp_news.get("sentiment") == "very_bearish":
+            log.append(f"⏭️ Skipped {ticker} long — very bearish news")
+            continue
+        if is_short and opp_news.get("sentiment") == "very_bullish":
+            log.append(f"⏭️ Skipped {ticker} short — very bullish news")
             continue
 
         entry = trade["entry"]
         stop = trade["stop_loss"]
         target = trade["target_1"]
 
-        if entry <= stop:
+        # Position sizing: risk X% of equity
+        if is_short:
+            risk_per_share = abs(stop - entry)
+        else:
+            risk_per_share = abs(entry - stop)
+
+        if risk_per_share <= 0:
             continue
 
-        # Position sizing: risk X% of equity
-        risk_per_share = entry - stop
         max_risk_dollars = account["equity"] * RISK_PER_TRADE
         qty = max(1, int(max_risk_dollars / risk_per_share))
 
@@ -2942,26 +3100,33 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             continue
 
         cost = qty * entry
+        side_emoji = "🔴" if is_short else "🟢"
+        side_word = "Short" if is_short else "Bought"
+
         if dry_run:
-            buys.append(f"🟢 Would buy {qty} {ticker} @ ~${entry:.2f} · Stop ${stop:.2f} · Target ${target:.2f} · Score {opp['score']} · R:R {opp['rr']:.1f}:1")
+            executions.append(f"{side_emoji} Would {'short' if is_short else 'buy'} {qty} {ticker} @ ~${entry:.2f} · Stop ${stop:.2f} · Target ${target:.2f} · Score {opp['score']} · R:R {opp['rr']:.1f}:1")
             account["buying_power"] -= cost
         else:
-            result = alpaca_buy(ticker=ticker, qty=qty, stop_loss=stop, take_profit=target)
+            if is_short:
+                result = alpaca_short(ticker=ticker, qty=qty, stop_loss=stop, take_profit=target)
+            else:
+                result = alpaca_buy(ticker=ticker, qty=qty, stop_loss=stop, take_profit=target)
 
             if result.get("ok"):
-                buys.append(f"🟢 Bought {qty} {ticker} @ ~${entry:.2f} · Stop ${stop:.2f} · Target ${target:.2f} · Score {opp['score']} · R:R {opp['rr']:.1f}:1")
+                executions.append(f"{side_emoji} {side_word} {qty} {ticker} @ ~${entry:.2f} · Stop ${stop:.2f} · Target ${target:.2f} · Score {opp['score']} · R:R {opp['rr']:.1f}:1")
                 st.session_state.setdefault("autopilot_bought", set()).add(ticker)
                 account["buying_power"] -= cost
             else:
-                buys.append(f"⚠️ Failed to buy {ticker}: {result.get('error','')}")
+                executions.append(f"⚠️ Failed to {'short' if is_short else 'buy'} {ticker}: {result.get('error','')}")
 
-    for b in buys:
+    for b in executions:
         log.append(b)
 
     return {
         "ok": True,
         "log": log,
-        "buys": sum(1 for b in buys if b.startswith("🟢")),
+        "buys": sum(1 for b in executions if "🟢" in b),
+        "shorts": sum(1 for b in executions if "🔴" in b),
         "sells": len(sells),
         "scanned": analyzed,
         "opportunities": len(opportunities),
@@ -2997,7 +3162,7 @@ def execute(intent: dict) -> dict:
             f"**🟢 Autopilot Active — Running Continuously**\n\n"
             f"Scanned: {result.get('scanned', '?')} stocks · "
             f"Found: {result.get('opportunities', 0)} opportunities · "
-            f"Bought: {result.get('buys', 0)} · Sold: {result.get('sells', 0)}\n\n"
+            f"Bought: {result.get('buys', 0)} · Shorted: {result.get('shorts', 0)} · Closed: {result.get('sells', 0)}\n\n"
             f"*Next scan in 10 minutes. Say \"stop\" to deactivate.*\n\n"
             f"---\n\n" +
             "\n\n".join(report_lines)
@@ -3120,6 +3285,36 @@ def execute(intent: dict) -> dict:
                     "msg": f"🔴 **{action} {ticker.upper()}** · Status: {result.get('status', 'submitted')}"}
         return {"ok": False, "error": f"Sell failed: {result.get('error', 'Unknown')}"}
 
+    if t == "short":
+        ticker = intent["ticker"]
+        qty = intent.get("qty", 1)
+        # Analyze first
+        data = fetch_full(ticker)
+        if data:
+            signal = generate_trade_signal(data)
+            stop = signal["trade"]["stop_loss"] if signal["action"] in ("SELL", "STRONG_SELL") else None
+            target = signal["trade"]["target_1"] if signal["action"] in ("SELL", "STRONG_SELL") else None
+            result = alpaca_short(ticker=ticker, qty=qty, stop_loss=stop, take_profit=target)
+        else:
+            result = alpaca_short(ticker=ticker, qty=qty)
+        if result.get("ok"):
+            msg = f"🔴 **Shorted {qty} shares of {ticker.upper()}** · Status: {result.get('status', 'submitted')}"
+            if data:
+                msg += f"\n\nSignal: {signal['action']} (score: {signal['score']})"
+            return {"ok": True, "type": "trade", "ticker": ticker, "msg": msg}
+        return {"ok": False, "error": f"Short failed: {result.get('error', 'Unknown')}"}
+
+    if t == "cover":
+        ticker = intent["ticker"]
+        cover_all = intent.get("cover_all", False)
+        qty = intent.get("qty")
+        result = alpaca_cover(ticker=ticker, qty=qty, cover_all=cover_all)
+        if result.get("ok"):
+            action = "Covered all of" if cover_all else f"Covered {qty or result.get('qty', '')} shares of"
+            return {"ok": True, "type": "trade",
+                    "msg": f"🟢 **{action} {ticker.upper()}** (short closed) · Status: {result.get('status', 'submitted')}"}
+        return {"ok": False, "error": f"Cover failed: {result.get('error', 'Unknown')}"}
+
     if t == "smart_buy":
         ticker = intent["ticker"]
         # First analyze the stock
@@ -3234,7 +3429,7 @@ def ai_response(user_msg: str, stock_data: dict | None, history: list, market: s
 
 You get live stock data attached to each message. For manual analysis, this includes daily chart signals with confluence scoring across 6 categories (trend, momentum, mean-reversion, volume, fundamentals, news sentiment). USE all of it — weave the numbers into natural conversation.
 
-IMPORTANT: Autopilot runs a dedicated INTRADAY engine using 5-minute bars, VWAP, 9/20 EMA, and intraday momentum. Positions are opened and closed within the same trading day. Everything gets liquidated 15 minutes before market close. When discussing autopilot trades, reference intraday levels (VWAP, intraday EMAs, volume spikes). When a user asks you to analyze a stock directly, use the daily chart data you're given. Don't talk about "holding for weeks" — this is day trading.
+IMPORTANT: Autopilot runs a dedicated INTRADAY LONG/SHORT engine using 5-minute bars, VWAP, 9/20 EMA, and intraday momentum. It goes LONG on stocks above VWAP with bullish momentum, and SHORTS stocks below VWAP with bearish momentum. Positions are opened and closed within the same trading day. Everything gets liquidated 15 minutes before market close. When discussing autopilot trades, reference intraday levels (VWAP, intraday EMAs, volume spikes). Users can also manually short via "short TSLA" and cover via "cover TSLA". Don't talk about "holding for weeks" — this is day trading.
 
 CRITICAL — Stock recommendations:
 When asked to suggest, name, or recommend stocks, NEVER just list the same boring mega-caps everyone already knows (AAPL, MSFT, GOOGL, AMZN, TSLA, etc.). Anyone can name those. Instead:
@@ -3488,7 +3683,7 @@ def main():
                 if pfig:
                     st.plotly_chart(pfig, width="stretch", config={"displayModeBar": False}, key=f"pchart_hist_{mi}")
 
-    prompt = st.chat_input("NVDA… buy 10 AAPL… portfolio… top gainers…",
+    prompt = st.chat_input("NVDA… buy 10 AAPL… short TSLA… portfolio… autopilot…",
                            disabled=st.session_state.get("processing", False))
     if not prompt:
         _run_autopilot_loop()
@@ -3616,7 +3811,7 @@ def _run_autopilot_loop():
                         f"**🟢 Autopilot Scan Complete**\n\n"
                         f"Scanned: {result.get('scanned', '?')} · "
                         f"Found: {result.get('opportunities', 0)} · "
-                        f"Bought: {result.get('buys', 0)} · Sold: {result.get('sells', 0)}\n\n"
+                        f"Bought: {result.get('buys', 0)} · Shorted: {result.get('shorts', 0)} · Closed: {result.get('sells', 0)}\n\n"
                         f"*Next scan in 10 minutes.*\n\n---\n\n" +
                         "\n\n".join(report)
                     )
