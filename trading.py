@@ -704,37 +704,38 @@ def build_portfolio_chart(history: dict) -> go.Figure | None:
         fig.add_trace(go.Scatter(
             x=dates, y=equity, mode="lines",
             name="Equity",
-            line=dict(color="#00d4aa", width=2.5),
+            line=dict(color="#00e5a0", width=2.5),
             fill="tozeroy",
-            fillcolor="rgba(0, 212, 170, 0.1)",
+            fillcolor="rgba(0, 229, 160, 0.06)",
         ))
 
         # Color the P&L bars green/red
-        colors = ["#00d4aa" if p >= 0 else "#ff4444" for p in pnl]
+        colors = ["#00e5a0" if p >= 0 else "#ff3b5c" for p in pnl]
         fig.add_trace(go.Bar(
             x=dates, y=pnl, name="Daily P&L",
-            marker_color=colors, opacity=0.4,
+            marker_color=colors, opacity=0.35,
             yaxis="y2",
         ))
 
         # Starting equity reference line
         if equity:
             start_eq = equity[0]
-            fig.add_hline(y=start_eq, line_dash="dash", line_color="gray",
+            fig.add_hline(y=start_eq, line_dash="dash", line_color="#4a4a60",
                           opacity=0.5, annotation_text=f"Start ${start_eq:,.0f}")
 
         fig.update_layout(
             template="plotly_dark",
-            paper_bgcolor="#0e1117",
-            plot_bgcolor="#0e1117",
-            title=dict(text="Portfolio Performance", font=dict(size=16, color="#fafafa")),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            title=dict(text="Portfolio Performance", font=dict(size=14, color="#e4e4f0", family="Outfit, sans-serif")),
             xaxis=dict(showgrid=False),
-            yaxis=dict(title="Equity ($)", showgrid=True, gridcolor="#1e2530", side="left"),
+            yaxis=dict(title="Equity ($)", showgrid=True, gridcolor="rgba(30,30,42,0.8)", side="left"),
             yaxis2=dict(title="Daily P&L ($)", overlaying="y", side="right", showgrid=False),
-            legend=dict(orientation="h", y=1.12, x=0.5, xanchor="center"),
-            height=400,
+            legend=dict(orientation="h", y=1.12, x=0.5, xanchor="center", font=dict(size=10, color="#4a4a60")),
+            height=380,
             margin=dict(l=10, r=10, t=50, b=10),
             showlegend=True,
+            font=dict(color="#4a4a60", size=10, family="JetBrains Mono, monospace"),
         )
         return fig
     except Exception:
@@ -2025,36 +2026,36 @@ def build_chart(ticker: str, period: str = "6mo", trade_signal: dict | None = No
         fig.add_trace(go.Candlestick(
             x=hist.index, open=hist["Open"], high=hist["High"],
             low=hist["Low"], close=hist["Close"], name="Price",
-            increasing_line_color="#34d399", decreasing_line_color="#f87171",
-            increasing_fillcolor="#34d399", decreasing_fillcolor="#f87171",
+            increasing_line_color="#00e5a0", decreasing_line_color="#ff3b5c",
+            increasing_fillcolor="#00e5a0", decreasing_fillcolor="#ff3b5c",
         ), row=1, col=1)
 
         if len(hist) >= 20:
-            fig.add_trace(go.Scatter(x=hist.index, y=hist["Close"].rolling(20).mean(), name="20d", line=dict(color="#60a5fa", width=1)), row=1, col=1)
+            fig.add_trace(go.Scatter(x=hist.index, y=hist["Close"].rolling(20).mean(), name="20d", line=dict(color="#3388ff", width=1.2)), row=1, col=1)
         if len(hist) >= 50:
-            fig.add_trace(go.Scatter(x=hist.index, y=hist["Close"].rolling(50).mean(), name="50d", line=dict(color="#fbbf24", width=1)), row=1, col=1)
+            fig.add_trace(go.Scatter(x=hist.index, y=hist["Close"].rolling(50).mean(), name="50d", line=dict(color="#ffb020", width=1.2)), row=1, col=1)
 
         # Trade signal lines on chart
         if trade_signal and trade_signal.get("trade"):
             tr = trade_signal["trade"]
             act = trade_signal.get("action", "")
             if act in ("BUY", "STRONG_BUY", "SELL", "STRONG_SELL"):
-                fig.add_hline(y=tr["entry"], line_dash="dash", line_color="#60a5fa", annotation_text=f"Entry {tr['entry']:.2f}", row=1, col=1)
-                fig.add_hline(y=tr["stop_loss"], line_dash="dash", line_color="#f87171", annotation_text=f"Stop {tr['stop_loss']:.2f}", row=1, col=1)
-                fig.add_hline(y=tr["target_1"], line_dash="dash", line_color="#34d399", annotation_text=f"T1 {tr['target_1']:.2f}", row=1, col=1)
-                fig.add_hline(y=tr["target_2"], line_dash="dot", line_color="#34d399", annotation_text=f"T2 {tr['target_2']:.2f}", row=1, col=1)
+                fig.add_hline(y=tr["entry"], line_dash="dash", line_color="#3388ff", annotation_text=f"Entry {tr['entry']:.2f}", row=1, col=1)
+                fig.add_hline(y=tr["stop_loss"], line_dash="dash", line_color="#ff3b5c", annotation_text=f"Stop {tr['stop_loss']:.2f}", row=1, col=1)
+                fig.add_hline(y=tr["target_1"], line_dash="dash", line_color="#00e5a0", annotation_text=f"T1 {tr['target_1']:.2f}", row=1, col=1)
+                fig.add_hline(y=tr["target_2"], line_dash="dot", line_color="#00e5a0", annotation_text=f"T2 {tr['target_2']:.2f}", row=1, col=1)
 
-        colors = ["#34d399" if c >= o else "#f87171" for c, o in zip(hist["Close"], hist["Open"])]
+        colors = ["#00e5a0" if c >= o else "#ff3b5c" for c, o in zip(hist["Close"], hist["Open"])]
         fig.add_trace(go.Bar(x=hist.index, y=hist["Volume"], marker_color=colors, opacity=0.4, name="Vol"), row=2, col=1)
 
         fig.update_layout(
             template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#94a3b8", size=11, family="JetBrains Mono, monospace"),
-            showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=10)),
+            font=dict(color="#4a4a60", size=11, family="JetBrains Mono, monospace"),
+            showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=10, color="#4a4a60")),
             height=420, margin=dict(l=0, r=0, t=30, b=0), xaxis_rangeslider_visible=False,
         )
         fig.update_xaxes(showgrid=False, zeroline=False)
-        fig.update_yaxes(showgrid=True, gridcolor="rgba(148,163,184,0.08)", zeroline=False)
+        fig.update_yaxes(showgrid=True, gridcolor="rgba(30,30,42,0.8)", zeroline=False)
         return fig
     except Exception:
         return None
@@ -3491,145 +3492,183 @@ def main():
 
     st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap');
 
     :root {
-        --bg:       #0a0a0b;
-        --surface:  #111113;
-        --surface2: #19191d;
-        --border:   #222228;
-        --muted:    #555566;
-        --text:     #b0b0be;
-        --bright:   #e8e8f0;
-        --green:    #00d4aa;
-        --red:      #ff4d6a;
-        --amber:    #f0b232;
-        --blue:     #4d94ff;
+        --bg:       #050508;
+        --surface:  #0c0c10;
+        --surface2: #131318;
+        --surface3: #1a1a22;
+        --border:   #1e1e2a;
+        --border2:  #2a2a3a;
+        --muted:    #4a4a60;
+        --text:     #a0a0b8;
+        --bright:   #e4e4f0;
+        --white:    #f5f5ff;
+        --green:    #00e5a0;
+        --green2:   #00c488;
+        --red:      #ff3b5c;
+        --red2:     #cc2244;
+        --amber:    #ffb020;
+        --blue:     #3388ff;
+        --purple:   #8866ff;
+        --cyan:     #00ccee;
     }
 
-    .stApp { background: var(--bg) !important; }
+    .stApp {
+        background: var(--bg) !important;
+        background-image:
+            radial-gradient(ellipse 80% 60% at 50% -20%, rgba(0,229,160,0.03) 0%, transparent 60%),
+            radial-gradient(ellipse 60% 40% at 80% 100%, rgba(51,136,255,0.02) 0%, transparent 50%) !important;
+    }
     header, footer, #MainMenu, .stDeployButton { visibility: hidden !important; display: none !important; }
 
     .block-container {
-        max-width: 780px !important;
-        padding: 1.5rem 1.2rem 5rem 1.2rem !important;
+        max-width: 820px !important;
+        padding: 1rem 1.2rem 6rem 1.2rem !important;
     }
 
     /* ── Typography ── */
     h1,h2,h3 {
-        font-family: 'IBM Plex Sans', sans-serif !important;
-        color: var(--bright) !important;
-        font-weight: 600 !important;
-        letter-spacing: -0.03em !important;
+        font-family: 'Outfit', sans-serif !important;
+        color: var(--white) !important;
+        font-weight: 700 !important;
+        letter-spacing: -0.04em !important;
     }
     p, span, div, label, li {
-        font-family: 'IBM Plex Sans', sans-serif !important;
+        font-family: 'Outfit', sans-serif !important;
         color: var(--text) !important;
-        line-height: 1.6 !important;
+        line-height: 1.65 !important;
     }
-    code, pre {
-        font-family: 'IBM Plex Mono', monospace !important;
+    code, pre, .stCode {
+        font-family: 'JetBrains Mono', monospace !important;
         background: var(--surface2) !important;
         color: var(--green) !important;
-        border: none !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 6px !important;
+        font-size: 0.82rem !important;
     }
 
-    /* ── Kill the chatbot bubble look ── */
+    /* ── Chat messages ── */
     .stChatMessage {
         background: transparent !important;
         border: none !important;
         border-radius: 0 !important;
-        padding: 0.6rem 0 !important;
-        border-bottom: 1px solid var(--border) !important;
-        gap: 0.8rem !important;
+        padding: 0.8rem 0 !important;
+        border-bottom: 1px solid rgba(30,30,42,0.6) !important;
+        gap: 0.9rem !important;
     }
-    /* Hide the avatar icons entirely */
+
+    /* Avatar styling */
     .stChatMessage [data-testid="chatAvatarIcon-user"],
     .stChatMessage [data-testid="chatAvatarIcon-assistant"] {
         background: var(--surface2) !important;
         border: 1px solid var(--border) !important;
-        border-radius: 4px !important;
+        border-radius: 6px !important;
+        width: 28px !important;
+        height: 28px !important;
     }
-    /* Tighten up message container */
+
     [data-testid="stChatMessageContent"] {
         padding: 0 !important;
     }
 
     .stChatMessage p, .stChatMessage span, .stChatMessage li {
         color: var(--text) !important;
-        font-size: 0.92rem !important;
+        font-size: 0.9rem !important;
+        font-weight: 400 !important;
     }
     .stChatMessage strong, .stChatMessage b {
         color: var(--bright) !important;
         font-weight: 600 !important;
     }
 
-    /* User messages — styled like terminal input */
+    /* User messages */
     [data-testid="stChatMessage-user"] {
         border-bottom: none !important;
-        padding: 0.4rem 0 0.2rem 0 !important;
+        padding: 0.3rem 0 0.1rem 0 !important;
     }
     [data-testid="stChatMessage-user"] p {
         color: var(--muted) !important;
-        font-family: 'IBM Plex Mono', monospace !important;
-        font-size: 0.85rem !important;
+        font-family: 'JetBrains Mono', monospace !important;
+        font-size: 0.82rem !important;
+        font-weight: 400 !important;
     }
 
-    /* ── Input bar — command prompt style ── */
+    /* ── Input bar ── */
     .stChatInput > div > div > textarea,
     .stTextInput > div > div > input {
         background: var(--surface) !important;
         border: 1px solid var(--border) !important;
-        border-radius: 6px !important;
+        border-radius: 10px !important;
         color: var(--bright) !important;
-        font-family: 'IBM Plex Mono', monospace !important;
-        font-size: 0.88rem !important;
-        padding: 0.8rem 1rem !important;
+        font-family: 'JetBrains Mono', monospace !important;
+        font-size: 0.85rem !important;
+        padding: 0.85rem 1.1rem !important;
+        transition: all 0.2s ease !important;
     }
     .stChatInput > div > div > textarea:focus {
-        border-color: var(--green) !important;
-        box-shadow: 0 0 0 1px rgba(0,212,170,0.2) !important;
+        border-color: var(--green2) !important;
+        box-shadow: 0 0 0 1px rgba(0,229,160,0.15), 0 4px 20px rgba(0,229,160,0.05) !important;
+        background: var(--surface2) !important;
     }
     .stChatInput > div > div > textarea::placeholder {
         color: var(--muted) !important;
-        font-family: 'IBM Plex Mono', monospace !important;
+        font-family: 'JetBrains Mono', monospace !important;
+        font-weight: 300 !important;
     }
 
-    /* ── Send button ── */
+    /* Send button */
     .stChatInput button {
-        background: var(--green) !important;
+        background: linear-gradient(135deg, var(--green), var(--green2)) !important;
         border: none !important;
-        border-radius: 6px !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease !important;
+        box-shadow: 0 2px 8px rgba(0,229,160,0.15) !important;
+    }
+    .stChatInput button:hover {
+        box-shadow: 0 2px 16px rgba(0,229,160,0.25) !important;
+        transform: translateY(-1px) !important;
     }
     .stChatInput button svg { color: var(--bg) !important; }
 
-    /* ── Data tables — terminal grid look ── */
-    .stDataFrame { border-radius: 4px !important; overflow: hidden !important; }
+    /* ── Data tables ── */
+    .stDataFrame {
+        border-radius: 8px !important;
+        overflow: hidden !important;
+        border: 1px solid var(--border) !important;
+    }
     .stDataFrame td, .stDataFrame th {
         background: var(--surface) !important;
         color: var(--text) !important;
         border-color: var(--border) !important;
-        font-family: 'IBM Plex Mono', monospace !important;
-        font-size: 0.8rem !important;
-        padding: 0.4rem 0.8rem !important;
+        font-family: 'JetBrains Mono', monospace !important;
+        font-size: 0.78rem !important;
+        padding: 0.45rem 0.9rem !important;
     }
     .stDataFrame th {
         color: var(--muted) !important;
-        font-weight: 500 !important;
+        font-weight: 600 !important;
         text-transform: uppercase !important;
-        font-size: 0.7rem !important;
-        letter-spacing: 0.05em !important;
+        font-size: 0.68rem !important;
+        letter-spacing: 0.08em !important;
+        background: var(--surface2) !important;
     }
 
     /* ── Dividers ── */
-    hr { border-color: var(--border) !important; margin: 0.6rem 0 !important; }
+    hr {
+        border-color: var(--border) !important;
+        margin: 0.6rem 0 !important;
+        opacity: 0.5 !important;
+    }
 
     /* ── Caption ── */
     .stCaption p {
         color: var(--muted) !important;
         font-size: 0.72rem !important;
-        font-family: 'IBM Plex Mono', monospace !important;
-        letter-spacing: 0.02em !important;
+        font-family: 'JetBrains Mono', monospace !important;
+        letter-spacing: 0.04em !important;
+        font-weight: 300 !important;
     }
 
     /* ── Plotly ── */
@@ -3639,22 +3678,88 @@ def main():
     .stSpinner > div { border-top-color: var(--green) !important; }
 
     /* ── Scrollbar ── */
-    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 
-    /* ── Lists in messages — cleaner ── */
+    /* ── Lists ── */
     .stChatMessage ol, .stChatMessage ul {
         padding-left: 1.2rem !important;
-        margin: 0.4rem 0 !important;
+        margin: 0.5rem 0 !important;
     }
     .stChatMessage li {
-        margin-bottom: 0.3rem !important;
+        margin-bottom: 0.35rem !important;
         padding-left: 0.2rem !important;
     }
-    .stChatMessage li::marker {
+    .stChatMessage li::marker { color: var(--muted) !important; }
+
+    /* ── Header custom ── */
+    .paula-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 4px;
+    }
+    .paula-logo {
+        width: 36px;
+        height: 36px;
+        background: linear-gradient(135deg, var(--green), var(--cyan));
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        font-weight: 800;
+        color: var(--bg);
+        font-family: 'Outfit', sans-serif;
+        box-shadow: 0 2px 12px rgba(0,229,160,0.2);
+    }
+    .paula-title {
+        font-family: 'Outfit', sans-serif !important;
+        font-size: 1.6rem !important;
+        font-weight: 800 !important;
+        color: var(--white) !important;
+        letter-spacing: -0.05em !important;
+        line-height: 1 !important;
+        margin: 0 !important;
+    }
+    .paula-sub {
+        font-family: 'JetBrains Mono', monospace !important;
+        font-size: 0.68rem !important;
         color: var(--muted) !important;
+        letter-spacing: 0.06em !important;
+        font-weight: 300 !important;
+        text-transform: uppercase !important;
+        margin-top: 2px !important;
+    }
+    .paula-pills {
+        display: flex;
+        gap: 6px;
+        margin-top: 8px;
+        flex-wrap: wrap;
+    }
+    .paula-pill {
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 100px;
+        padding: 3px 10px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.62rem;
+        color: var(--muted);
+        letter-spacing: 0.03em;
+        font-weight: 400;
+    }
+    .paula-pill-active {
+        border-color: var(--green2);
+        color: var(--green);
+        background: rgba(0,229,160,0.05);
+    }
+    .paula-divider {
+        height: 1px;
+        background: linear-gradient(90deg, var(--border), transparent);
+        margin: 12px 0 8px 0;
+        border: none;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -3662,10 +3767,24 @@ def main():
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Header — minimal, not chatbot-y
-    st.markdown("## Paula")
-    st.caption(f"analysis + paper trading · {datetime.now().strftime('%b %d, %Y')}")
-    st.markdown("---")
+    # ── Header ──
+    autopilot_on = st.session_state.get("autopilot_active", False)
+    st.markdown(f"""
+    <div class="paula-header">
+        <div class="paula-logo">P</div>
+        <div>
+            <div class="paula-title">Paula</div>
+            <div class="paula-sub">intraday long/short · {datetime.now().strftime('%b %d, %Y')}</div>
+        </div>
+    </div>
+    <div class="paula-pills">
+        <span class="paula-pill">5min bars</span>
+        <span class="paula-pill">vwap</span>
+        <span class="paula-pill">long + short</span>
+        <span class="paula-pill {'paula-pill-active' if autopilot_on else ''}">{'◉ autopilot on' if autopilot_on else '○ autopilot off'}</span>
+    </div>
+    <div class="paula-divider"></div>
+    """, unsafe_allow_html=True)
 
     for mi, m in enumerate(st.session_state.messages):
         av = "🟢" if m["role"] == "assistant" else "⬛"
