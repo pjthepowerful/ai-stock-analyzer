@@ -6,10 +6,11 @@ Uses SQLite for storage, bcrypt for passwords, Fernet for key encryption.
 import os
 import sqlite3
 import time
+import hashlib
+import secrets
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from passlib.context import CryptContext
 from jose import jwt, JWTError
 from cryptography.fernet import Fernet
 
@@ -25,7 +26,8 @@ import base64
 FERNET_KEY = base64.urlsafe_b64encode(_key_seed)
 fernet = Fernet(FERNET_KEY)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# ── Password hashing (hashlib + salt) ──
 
 
 def _get_db():
@@ -79,10 +81,17 @@ def init_db():
 # ── Password hashing ──
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    salt = secrets.token_hex(16)
+    hashed = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000).hex()
+    return f"{salt}${hashed}"
 
-def verify_password(password: str, hashed: str) -> bool:
-    return pwd_context.verify(password, hashed)
+def verify_password(password: str, stored: str) -> bool:
+    try:
+        salt, hashed = stored.split('$')
+        check = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000).hex()
+        return check == hashed
+    except Exception:
+        return False
 
 
 # ── JWT tokens ──
