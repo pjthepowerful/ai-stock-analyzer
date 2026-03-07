@@ -2,11 +2,11 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import Chart from './Chart'
 import './App.css'
 
-// Auto-detect: use env var if set, otherwise try same host, fallback to localhost
-const BACKEND = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:3141' : '')
+// Auto-detect: use env var if set, otherwise try ngrok, fallback to localhost
+const BACKEND = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:3141' : 'https://scurrilously-inevasible-kailey.ngrok-free.dev')
 const API = BACKEND
-const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-const WS_URL = BACKEND ? `${WS_PROTOCOL}//${new URL(BACKEND).host}/ws` : `ws://127.0.0.1:3141/ws`
+const WS_PROTOCOL = BACKEND.startsWith('https') ? 'wss:' : 'ws:'
+const WS_URL = `${WS_PROTOCOL}//${new URL(BACKEND).host}/ws`
 
 function App() {
   const [messages, setMessages] = useState([])
