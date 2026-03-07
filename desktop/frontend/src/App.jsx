@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Chart from './Chart'
+import { playBuy, playSell, playNotify, playAlert, playProfit } from './sounds'
 import './App.css'
 
 // Auto-detect: use env var if set, otherwise try ngrok, fallback to localhost
@@ -37,6 +38,7 @@ function App() {
           if (data.status === 'started') setAutopilot(true)
           if (data.status === 'stopped') setAutopilot(false)
           if (data.log) {
+            playNotify()
             setMessages(prev => [...prev, {
               role: 'assistant',
               content: `**🟢 Autopilot Scan**\n\n${data.log.join('\n\n')}`,
@@ -44,7 +46,13 @@ function App() {
             }])
           }
         }
-        if (event === 'trade') refreshData()
+        if (event === 'trade') {
+          if (data.action === 'buy') playBuy()
+          else if (data.action === 'sell' || data.action === 'short') playSell()
+          else if (data.action === 'cover') playProfit()
+          else if (data.action === 'close_all') playAlert()
+          refreshData()
+        }
       }
     }
     connect()
@@ -97,7 +105,12 @@ function App() {
         if (data.ticker) {
           setActiveChart({ ticker: data.ticker, signal: data.trade_signal || null })
         }
+        // Sound based on action type
+        if (data.type === 'trade' && data.message?.includes('Bought')) playBuy()
+        else if (data.type === 'trade' && (data.message?.includes('Sold') || data.message?.includes('Shorted'))) playSell()
+        else if (data.type === 'trade' && data.message?.includes('Covered')) playProfit()
       } else {
+        playAlert()
         setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${data.error}` }])
       }
       refreshData()

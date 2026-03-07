@@ -111,10 +111,10 @@ async def websocket_endpoint(websocket: WebSocket):
 
 @app.get("/api/health")
 async def health():
-    et = ZoneInfo("US/Eastern")
+    ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "time_et": datetime.now(et).strftime("%I:%M %p ET"),
+        "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
     }
 
