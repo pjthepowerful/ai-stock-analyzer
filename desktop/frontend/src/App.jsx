@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import Chart from './Chart'
 import './App.css'
 
 const API = 'http://127.0.0.1:3141'
@@ -14,30 +15,21 @@ function App() {
   const [connected, setConnected] = useState(false)
   const [spyTrend, setSpyTrend] = useState(null)
   const [time, setTime] = useState('')
+  const [activeChart, setActiveChart] = useState(null)
 
   const messagesEnd = useRef(null)
   const wsRef = useRef(null)
   const inputRef = useRef(null)
 
-  // ── WebSocket ──
   useEffect(() => {
     const connect = () => {
       const ws = new WebSocket(WS_URL)
       wsRef.current = ws
-
       ws.onopen = () => setConnected(true)
-      ws.onclose = () => {
-        setConnected(false)
-        setTimeout(connect, 3000) // reconnect
-      }
+      ws.onclose = () => { setConnected(false); setTimeout(connect, 3000) }
       ws.onmessage = (e) => {
         const { event, data } = JSON.parse(e.data)
-        if (event === 'connected') {
-          setAutopilot(data.autopilot)
-        }
-        if (event === 'chat') {
-          setMessages(prev => [...prev, data])
-        }
+        if (event === 'connected') setAutopilot(data.autopilot)
         if (event === 'autopilot') {
           if (data.status === 'started') setAutopilot(true)
           if (data.status === 'stopped') setAutopilot(false)
@@ -49,16 +41,13 @@ function App() {
             }])
           }
         }
-        if (event === 'trade') {
-          refreshData()
-        }
+        if (event === 'trade') refreshData()
       }
     }
     connect()
     return () => wsRef.current?.close()
   }, [])
 
-  // ── Refresh data ──
   const refreshData = useCallback(async () => {
     try {
       const [accRes, posRes, spyRes, healthRes] = await Promise.all([
@@ -72,29 +61,25 @@ function App() {
       if (spyRes.ok) setSpyTrend(spyRes.data)
       if (healthRes.time_et) setTime(healthRes.time_et)
       setAutopilot(healthRes.autopilot)
-    } catch (e) { /* backend not ready */ }
+    } catch (e) {}
   }, [])
 
   useEffect(() => {
     refreshData()
-    const interval = setInterval(refreshData, 15000) // every 15s
+    const interval = setInterval(refreshData, 15000)
     return () => clearInterval(interval)
   }, [refreshData])
 
-  // ── Auto-scroll ──
   useEffect(() => {
     messagesEnd.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // ── Send message ──
   const send = async () => {
     const msg = input.trim()
     if (!msg || sending) return
-
     setMessages(prev => [...prev, { role: 'user', content: msg }])
     setInput('')
     setSending(true)
-
     try {
       const res = await fetch(`${API}/api/chat`, {
         method: 'POST',
@@ -103,7 +88,12 @@ function App() {
       })
       const data = await res.json()
       if (data.ok) {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.message, type: data.type }])
+        setMessages(prev => [...prev, {
+          role: 'assistant', content: data.message, type: data.type, ticker: data.ticker,
+        }])
+        if (data.ticker) {
+          setActiveChart({ ticker: data.ticker, signal: data.trade_signal || null })
+        }
       } else {
         setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${data.error}` }])
       }
@@ -126,7 +116,6 @@ function App() {
 
   return (
     <div className="app">
-      {/* ── Top Bar ── */}
       <header className="topbar">
         <div className="topbar-left">
           <div className="logo">P</div>
@@ -137,16 +126,12 @@ function App() {
         </div>
         <div className="topbar-right">
           <div className={`status-dot ${connected ? 'connected' : 'disconnected'}`} />
-          <button
-            className={`ap-btn ${autopilot ? 'ap-on' : 'ap-off'}`}
-            onClick={toggleAutopilot}
-          >
+          <button className={`ap-btn ${autopilot ? 'ap-on' : 'ap-off'}`} onClick={toggleAutopilot}>
             {autopilot ? '◉ Autopilot ON' : '○ Autopilot OFF'}
           </button>
         </div>
       </header>
 
-      {/* ── Dashboard Strip ── */}
       {account && (
         <div className="dashboard">
           <div className="dash-item">
@@ -172,18 +157,18 @@ function App() {
               <span className="dash-label">SPY</span>
               <span className={`dash-value ${spyTrend.change_pct >= 0 ? 'green' : 'red'}`}>
                 {spyTrend.change_pct >= 0 ? '+' : ''}{spyTrend.change_pct}%
-                {spyTrend.above_vwap ? ' ▲VWAP' : ' ▼VWAP'}
+                {spyTrend.above_vwap ? ' ▲V' : ' ▼V'}
               </span>
             </div>
           )}
         </div>
       )}
 
-      {/* ── Positions ── */}
       {positions.length > 0 && (
         <div className="positions-strip">
           {positions.map((p, i) => (
-            <div key={i} className={`pos-chip ${p.unrealized_pnl >= 0 ? 'pos-green' : 'pos-red'}`}>
+            <div key={i} className={`pos-chip ${p.unrealized_pnl >= 0 ? 'pos-green' : 'pos-red'}`}
+              onClick={() => setActiveChart({ ticker: p.ticker, signal: null })}>
               <span className="pos-ticker">{p.side === 'short' ? '🔴' : ''}{p.ticker}</span>
               <span className="pos-pnl">{p.unrealized_pnl_pct >= 0 ? '+' : ''}{p.unrealized_pnl_pct.toFixed(1)}%</span>
             </div>
@@ -191,7 +176,13 @@ function App() {
         </div>
       )}
 
-      {/* ── Chat ── */}
+      {activeChart && (
+        <div className="chart-wrapper">
+          <button className="chart-close" onClick={() => setActiveChart(null)}>✕</button>
+          <Chart ticker={activeChart.ticker} signal={activeChart.signal} height={280} />
+        </div>
+      )}
+
       <div className="chat">
         {messages.map((m, i) => (
           <div key={i} className={`msg msg-${m.role}`}>
@@ -201,23 +192,16 @@ function App() {
         <div ref={messagesEnd} />
       </div>
 
-      {/* ── Input ── */}
       <div className="input-bar">
-        <input
-          ref={inputRef}
-          value={input}
-          onChange={e => setInput(e.target.value)}
+        <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && send()}
-          placeholder="NVDA… buy 10 AAPL… short TSLA… autopilot…"
-          disabled={sending}
-        />
+          placeholder="NVDA… buy 10 AAPL… short TSLA… autopilot…" disabled={sending} />
         <button onClick={send} disabled={sending}>↑</button>
       </div>
     </div>
   )
 }
 
-// ── Simple markdown-ish formatting ──
 function formatMessage(text) {
   if (!text) return ''
   return text

@@ -170,12 +170,80 @@ body {
   white-space: nowrap;
   border: 1px solid var(--border);
   background: var(--surface);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.pos-chip:hover {
+  background: var(--surface2);
+  border-color: var(--muted);
 }
 .pos-chip.pos-green { border-color: rgba(0, 229, 160, 0.2); }
 .pos-chip.pos-red { border-color: rgba(255, 59, 92, 0.2); }
 .pos-ticker { color: var(--bright); font-weight: 500; }
 .pos-chip.pos-green .pos-pnl { color: var(--green); }
 .pos-chip.pos-red .pos-pnl { color: var(--red); }
+
+/* ── Chart ── */
+.chart-wrapper {
+  position: relative;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 16px 12px;
+  background: var(--surface);
+}
+
+.chart-close {
+  position: absolute;
+  top: 8px;
+  right: 16px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transition: all 0.2s;
+}
+.chart-close:hover {
+  color: var(--bright);
+  border-color: var(--muted);
+}
+
+.chart-container {
+  width: 100%;
+}
+
+.chart-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.chart-ticker {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--bright);
+}
+
+.chart-period {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+.chart-canvas {
+  width: 100%;
+  border-radius: 4px;
+  overflow: hidden;
+}
 
 /* ── Chat ── */
 .chat {
