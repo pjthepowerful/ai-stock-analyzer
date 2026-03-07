@@ -2156,6 +2156,62 @@ def route(msg: str) -> dict:
     return {"type": "chat", "market": market}
 
 
+@st.cache_data(ttl=120)
+def _get_spy_intraday_trend() -> dict | None:
+    """Check SPY's intraday trend to filter trades directionally."""
+    try:
+        spy = yf.Ticker("SPY")
+        hist = spy.history(period="1d", interval="5m")
+        if hist is None or hist.empty or len(hist) < 10:
+            # Fallback to daily
+            hist = spy.history(period="5d")
+            if hist is None or hist.empty:
+                return None
+            price = float(hist["Close"].iloc[-1])
+            prev = float(hist["Close"].iloc[-2])
+            return {
+                "price": price,
+                "change_pct": round((price - prev) / prev * 100, 2),
+                "direction": "bullish" if price > prev else "bearish",
+                "above_vwap": True,  # can't calc intraday VWAP from daily
+                "strong": abs((price - prev) / prev * 100) > 0.5,
+            }
+
+        close = hist["Close"]
+        high = hist["High"]
+        low = hist["Low"]
+        volume = hist["Volume"]
+        price = float(close.iloc[-1])
+        open_price = float(close.iloc[0])
+
+        # VWAP
+        typical = (high + low + close) / 3
+        cum_tp_vol = (typical * volume).cumsum()
+        cum_vol = volume.cumsum()
+        vwap = float((cum_tp_vol / cum_vol.replace(0, 1)).iloc[-1])
+
+        change_pct = round((price - open_price) / open_price * 100, 2)
+        above_vwap = price > vwap
+
+        if change_pct > 0.3 and above_vwap:
+            direction = "bullish"
+        elif change_pct < -0.3 and not above_vwap:
+            direction = "bearish"
+        else:
+            direction = "neutral"
+
+        return {
+            "price": round(price, 2),
+            "vwap": round(vwap, 2),
+            "change_pct": change_pct,
+            "direction": direction,
+            "above_vwap": above_vwap,
+            "strong": abs(change_pct) > 0.5,
+        }
+    except Exception:
+        return None
+
+
 def _market_is_open() -> tuple[bool, str]:
     """Check if US stock market is currently open."""
     et = ZoneInfo("US/Eastern")
@@ -2318,8 +2374,43 @@ def update_trailing_stops(positions: list[dict], log: list) -> list[str]:
             current = pos["current_price"]
             pnl_pct = pos["unrealized_pnl_pct"]
 
-            # Only trail stops on positions that are profitable
-            if pnl_pct <= 0:
+            # Fast breakeven: once +0.5%, move stop to breakeven immediately
+            if 0.5 <= pnl_pct < 1.5:
+                breakeven_stop = round(entry * 1.001, 2)  # just above entry
+                orders = alpaca_orders(status="open", limit=20)
+                has_stop = False
+                for o in orders:
+                    if o["symbol"] == ticker and o["type"] in ("stop", "stop_limit"):
+                        # Check if stop is already at or above breakeven
+                        if float(o.get("stop_price", 0)) >= entry:
+                            has_stop = True
+                            break
+                if not has_stop:
+                    # Place breakeven stop
+                    try:
+                        # Cancel existing stops first
+                        for o in orders:
+                            if o["symbol"] == ticker and o["type"] in ("stop", "stop_limit"):
+                                requests.delete(f"{ALPACA_BASE}/v2/orders/{o['id']}",
+                                                headers=_alpaca_headers(), timeout=5)
+                        stop_order = {
+                            "symbol": ticker,
+                            "qty": str(int(abs(pos["qty"]))),
+                            "side": "sell" if pos.get("side", "long") == "long" else "buy",
+                            "type": "stop",
+                            "stop_price": str(breakeven_stop),
+                            "time_in_force": "day",
+                        }
+                        r = requests.post(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(),
+                                          json=stop_order, timeout=10)
+                        if r.status_code in (200, 201):
+                            actions.append(f"🔒 Breakeven stop on {ticker} @ ${breakeven_stop:.2f} (+{pnl_pct:.1f}%)")
+                    except Exception:
+                        pass
+                continue
+
+            # Only trail stops on positions that are more profitable
+            if pnl_pct <= 1.5:
                 continue
 
             # Get intraday 5min bars for tighter trailing
@@ -2706,7 +2797,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     SELL_BELOW = 40               # quick exits
 
     log.append(f"Open positions: {len(positions)} · Max: {MAX_POSITIONS}")
-    log.append("📊 Mode: **Intraday Long/Short** (5min bars, VWAP, EOD liquidation at 3:45 PM ET)")
+    log.append("📊 Mode: **Intraday Long/Short** · 5min scans · VWAP · gap scanner · SPY filter · EOD close 3:45 PM")
     DAILY_LOSS_LIMIT = 0.02       # 2% max daily loss
     PARTIAL_PROFIT_PCT = 0.015    # take half off at 1.5% (fast intraday partials)
     PARTIAL_PROFIT_SOLD_KEY = "autopilot_partial_sold"
@@ -2744,9 +2835,23 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     elif now_et >= market_close and positions and dry_run:
         log.append(f"🔔 EOD: Would close {len(positions)} positions (dry run)")
 
-    # No new buys in last 30min of trading
+    # No new trades in last 30min of trading
     last_buy_cutoff = now_et.replace(hour=15, minute=30, second=0, microsecond=0)
     no_new_buys_eod = now_et >= last_buy_cutoff
+
+    # ── 1b2. Avoid the open — first 15min is pure chop ──
+    market_open_safe = now_et.replace(hour=9, minute=45, second=0, microsecond=0)
+    market_open_actual = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+    too_early = market_open_actual <= now_et < market_open_safe
+    if too_early:
+        log.append("⏳ Waiting until 9:45 AM — first 15min is chop, letting VWAP establish")
+        # Still manage existing positions but don't scan for new entries
+        no_new_buys_eod = True
+
+    # ── 1b3. SPY correlation filter — don't go long into a dump ──
+    spy_trend = _get_spy_intraday_trend()
+    if spy_trend:
+        log.append(f"SPY: {spy_trend['direction']} ({spy_trend['change_pct']:+.2f}%) · VWAP {'above' if spy_trend['above_vwap'] else 'below'}")
 
     # ── 1c. Market regime check ──
     regime = check_market_regime()
@@ -2770,6 +2875,46 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             log.append(a)
         if not trail_actions:
             log.append("No stops to trail — positions not yet profitable enough")
+
+    # ── 2a. Time-based stops — kill flat trades (dead money) ──
+    STALE_KEY = "autopilot_entry_times"
+    if STALE_KEY not in st.session_state:
+        st.session_state[STALE_KEY] = {}
+    # Track entry time for new positions
+    for pos in positions:
+        t = pos["ticker"]
+        if t not in st.session_state[STALE_KEY]:
+            st.session_state[STALE_KEY][t] = time.time()
+    # Clean up closed positions
+    held = {p["ticker"] for p in positions}
+    st.session_state[STALE_KEY] = {k: v for k, v in st.session_state[STALE_KEY].items() if k in held}
+
+    stale_kills = []
+    STALE_MINUTES = 90  # kill after 90 min of going nowhere
+    for pos in positions:
+        ticker = pos["ticker"]
+        pnl_pct = pos.get("unrealized_pnl_pct", 0)
+        entry_time = st.session_state[STALE_KEY].get(ticker, time.time())
+        minutes_held = (time.time() - entry_time) / 60
+
+        # If held 90+ min and PnL between -0.5% and +0.5% — it's dead money
+        if minutes_held >= STALE_MINUTES and -0.5 <= pnl_pct <= 0.5:
+            is_short = pos.get("side") == "short"
+            if dry_run:
+                stale_kills.append(f"⏰ Would close {ticker} {'(short)' if is_short else ''} — flat for {minutes_held:.0f}min ({pnl_pct:+.1f}%)")
+            else:
+                if is_short:
+                    result = alpaca_cover(ticker=ticker, cover_all=True)
+                else:
+                    result = alpaca_sell(ticker=ticker, sell_all=True)
+                if result.get("ok"):
+                    stale_kills.append(f"⏰ Closed {ticker} {'(short)' if is_short else ''} — dead money, flat for {minutes_held:.0f}min ({pnl_pct:+.1f}%)")
+                    st.session_state[STALE_KEY].pop(ticker, None)
+
+    for s in stale_kills:
+        log.append(s)
+    if stale_kills:
+        log.append(f"Killed {len(stale_kills)} stale positions")
 
     # ── 2b. Partial profit-taking — sell half at +4% to lock in gains ──
     if PARTIAL_PROFIT_SOLD_KEY not in st.session_state:
@@ -2875,28 +3020,52 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells), "scanned": 0, "opportunities": 0}
 
     # ── 4. Scan for new opportunities ──
-    # Step A: Use Polygon to pre-screen the ENTIRE market in one API call
-    # Then only deep-analyze the top candidates (saves 30+ min vs scanning all 500)
-    log.append("Pre-screening entire US market via Polygon...")
+    # Step A: Pre-market gap scan — find stocks gapping hard on volume
+    log.append("Pre-screening market for gaps and momentum...")
 
     candidates = []
+    gap_stocks = []
 
-    # Get top gainers — stocks with momentum today
+    # Get top gainers and losers — these are today's movers with gaps
     gainers = polygon_gainers(limit=20) or []
-    # Get all snapshots for broader view
     all_snaps = polygon_all_snapshots() or []
 
     if all_snaps:
-        # Filter to real stocks: price > $5, volume > 200k
+        # Filter: real stocks, decent volume, price > $5
         viable = [s for s in all_snaps if s.get("Price", 0) > 5 and s.get("Volume", 0) > 200_000]
-        # Sort by absolute daily change — we want movers
+
+        # Gap scan: stocks moving >1.5% with volume — these gapped
+        gappers_up = sorted([s for s in viable if s.get("Chg%", 0) > 1.5], key=lambda x: x["Chg%"], reverse=True)[:25]
+        gappers_down = sorted([s for s in viable if s.get("Chg%", 0) < -1.5], key=lambda x: x["Chg%"])[:25]
+
+        # Liquidity filter: skip thin stocks (avg volume < 500K where available)
+        gappers_up = [s for s in gappers_up if s.get("Volume", 0) > 500_000]
+        gappers_down = [s for s in gappers_down if s.get("Volume", 0) > 500_000]
+
+        for s in gappers_up:
+            gap_stocks.append(f"▲ {s['Ticker']} +{s.get('Chg%', 0):.1f}%")
+        for s in gappers_down:
+            gap_stocks.append(f"▼ {s['Ticker']} {s.get('Chg%', 0):.1f}%")
+
+        if gap_stocks:
+            log.append(f"**Gap scan:** {len(gappers_up)} gapping up, {len(gappers_down)} gapping down")
+            log.append("Top gaps: " + " · ".join(gap_stocks[:10]))
+
+        # Build candidate list: gappers first (highest priority), then movers
         movers = sorted(viable, key=lambda x: abs(x.get("Chg%", 0)), reverse=True)[:80]
-        # Also get positive movers separately (long candidates)
+        # Positive movers for longs
         positive = sorted([s for s in viable if s.get("Chg%", 0) > 0.5], key=lambda x: x["Chg%"], reverse=True)[:40]
-        # Also get negative movers (short candidates)
+        # Negative movers for shorts
         negative = sorted([s for s in viable if s.get("Chg%", 0) < -0.5], key=lambda x: x["Chg%"])[:40]
 
         seen = set()
+        # Gappers first — highest priority for day trading
+        for s in gappers_up + gappers_down:
+            t = s["Ticker"]
+            if t not in seen and t not in held_tickers:
+                seen.add(t)
+                candidates.append(t)
+        # Then other movers
         for s in positive + negative + movers:
             t = s["Ticker"]
             if t not in seen and t not in held_tickers:
@@ -2983,8 +3152,12 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                 errors += 1
                 continue
             price = data.get("price", 0)
-            if not price or price < 2:
+            if not price or price < 5:  # $5 minimum — skip penny stocks
                 continue
+            # Liquidity: skip if intraday volume too thin
+            itech = data.get("intraday_technicals", {})
+            if itech.get("vol_ratio", 1) < 0.3:
+                continue  # dead volume
             analyzed += 1
             sig = generate_intraday_signal(data)
             all_scores.append((ticker, sig["score"], sig["action"], sig["confluence"]["bullish"], sig["trade"]["risk_reward"]))
@@ -3072,6 +3245,15 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         if is_short and opp_news.get("sentiment") == "very_bullish":
             log.append(f"⏭️ Skipped {ticker} short — very bullish news")
             continue
+
+        # SPY directional filter — don't fight the market
+        if spy_trend and spy_trend.get("strong"):
+            if not is_short and spy_trend["direction"] == "bearish":
+                log.append(f"⏭️ Skipped {ticker} long — SPY dumping ({spy_trend['change_pct']:+.1f}%)")
+                continue
+            if is_short and spy_trend["direction"] == "bullish":
+                log.append(f"⏭️ Skipped {ticker} short — SPY ripping ({spy_trend['change_pct']:+.1f}%)")
+                continue
 
         entry = trade["entry"]
         stop = trade["stop_loss"]
@@ -3164,7 +3346,7 @@ def execute(intent: dict) -> dict:
             f"Scanned: {result.get('scanned', '?')} stocks · "
             f"Found: {result.get('opportunities', 0)} opportunities · "
             f"Bought: {result.get('buys', 0)} · Shorted: {result.get('shorts', 0)} · Closed: {result.get('sells', 0)}\n\n"
-            f"*Next scan in 10 minutes. Say \"stop\" to deactivate.*\n\n"
+            f"*Next scan in 5 minutes. Say \"stop\" to deactivate.*\n\n"
             f"---\n\n" +
             "\n\n".join(report_lines)
         )
@@ -3827,7 +4009,7 @@ def _run_autopilot_loop():
         st.rerun()
         return
 
-    INTERVAL = 10 * 60  # 10 minutes — day trading pace
+    INTERVAL = 5 * 60  # 5 minutes — aggressive day trading
 
     last_scan = st.session_state.get("autopilot_last_scan", 0)
     now = time.time()
@@ -3853,7 +4035,7 @@ def _run_autopilot_loop():
                         f"Scanned: {result.get('scanned', '?')} · "
                         f"Found: {result.get('opportunities', 0)} · "
                         f"Bought: {result.get('buys', 0)} · Shorted: {result.get('shorts', 0)} · Closed: {result.get('sells', 0)}\n\n"
-                        f"*Next scan in 10 minutes.*\n\n---\n\n" +
+                        f"*Next scan in 5 minutes.*\n\n---\n\n" +
                         "\n\n".join(report)
                     )
                 else:
