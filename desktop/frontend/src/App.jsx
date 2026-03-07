@@ -11,14 +11,11 @@ const WS_PROTOCOL = BACKEND.startsWith('https') ? 'wss:' : 'ws:'
 const WS_URL = `${WS_PROTOCOL}//${new URL(BACKEND).host}/ws`
 
 function App() {
-  // Auth state
   const [token, setToken] = useState(() => localStorage.getItem('paula_token'))
   const [user, setUser] = useState(() => {
     try { return JSON.parse(localStorage.getItem('paula_user')) } catch { return null }
   })
   const [showSettings, setShowSettings] = useState(false)
-
-  // App state
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -33,6 +30,7 @@ function App() {
   const messagesEnd = useRef(null)
   const wsRef = useRef(null)
   const inputRef = useRef(null)
+  const loggedIn = !!(token && user)
 
   const authHeaders = token ? { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` } : { 'Content-Type': 'application/json' }
 
@@ -52,13 +50,9 @@ function App() {
     setShowSettings(false)
   }
 
-  // If not logged in, show auth page
-  if (!token || !user) {
-    return <AuthPage onLogin={handleLogin} />
-  }
-
-  // ── WebSocket ──
+  // ── WebSocket — always registered ──
   useEffect(() => {
+    if (!loggedIn) return
     const connect = () => {
       const ws = new WebSocket(WS_URL)
       wsRef.current = ws
@@ -90,9 +84,10 @@ function App() {
     }
     connect()
     return () => wsRef.current?.close()
-  }, [])
+  }, [loggedIn])
 
   const refreshData = useCallback(async () => {
+    if (!loggedIn) return
     try {
       const [accRes, posRes, spyRes, healthRes] = await Promise.all([
         fetch(`${API}/api/account`, { headers: authHeaders }).then(r => r.json()),
@@ -106,13 +101,14 @@ function App() {
       if (healthRes.time_et) setTime(healthRes.time_et)
       setAutopilot(healthRes.autopilot)
     } catch (e) {}
-  }, [token])
+  }, [loggedIn, token])
 
   useEffect(() => {
+    if (!loggedIn) return
     refreshData()
     const interval = setInterval(refreshData, 15000)
     return () => clearInterval(interval)
-  }, [refreshData])
+  }, [loggedIn, refreshData])
 
   useEffect(() => {
     messagesEnd.current?.scrollIntoView({ behavior: 'smooth' })
@@ -157,6 +153,11 @@ function App() {
     const endpoint = autopilot ? 'stop' : 'start'
     await fetch(`${API}/api/autopilot/${endpoint}`, { method: 'POST', headers: authHeaders })
     setAutopilot(!autopilot)
+  }
+
+  // ── Not logged in → show auth ──
+  if (!loggedIn) {
+    return <AuthPage onLogin={handleLogin} />
   }
 
   const pnl = account ? (account.equity - (account.last_equity || account.equity)) : 0
