@@ -34,7 +34,6 @@ function App() {
         const { event, data } = JSON.parse(e.data)
         if (event === 'connected') {
           setAutopilot(data.autopilot)
-          if (data.history?.length) setMessages(data.history)
         }
         if (event === 'chat') {
           setMessages(prev => [...prev, data])

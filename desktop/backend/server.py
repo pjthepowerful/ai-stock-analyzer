@@ -94,7 +94,6 @@ async def websocket_endpoint(websocket: WebSocket):
             "event": "connected",
             "data": {
                 "autopilot": autopilot_task is not None and not autopilot_task.done(),
-                "history": chat_history[-50:],
             }
         }))
         while True:
@@ -289,7 +288,8 @@ async def chat(msg: ChatMessage):
         "table": result.get("data") if result and result.get("type") == "list" else None,
     }
 
-    await broadcast("chat", {"role": "assistant", "content": resp})
+    # Don't broadcast here — the REST response already delivers the message
+    # WebSocket is only for autopilot updates and trade notifications
     return response
 
 
