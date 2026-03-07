@@ -12,13 +12,13 @@ from zoneinfo import ZoneInfo
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # ── Import the trading engine ──
-# This imports everything from the existing trading.py
 import engine
+import auth
 
 # ── State ──
 autopilot_task: Optional[asyncio.Task] = None
@@ -65,6 +65,49 @@ class CoverRequest(BaseModel):
     ticker: str
     qty: Optional[int] = None
     cover_all: bool = False
+
+class SignupRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+    display_name: Optional[str] = ""
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class SaveKeysRequest(BaseModel):
+    provider: str = "alpaca_paper"
+    key_id: str
+    secret: str
+    label: Optional[str] = ""
+
+class WatchlistRequest(BaseModel):
+    ticker: str
+    notes: Optional[str] = ""
+
+
+# ── Auth dependency ──
+
+async def get_current_user(authorization: Optional[str] = Header(None)) -> Optional[dict]:
+    """Extract user from Bearer token. Returns None if no token (backward compat)."""
+    if not authorization:
+        return None
+    if not authorization.startswith("Bearer "):
+        return None
+    token = authorization[7:]
+    payload = auth.decode_token(token)
+    if not payload:
+        return None
+    user = auth.get_user(payload["user_id"])
+    return user
+
+async def require_user(authorization: Optional[str] = Header(None)) -> dict:
+    """Require authenticated user."""
+    user = await get_current_user(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
 
 
 # ── Broadcast to WebSocket clients ──
@@ -117,6 +160,85 @@ async def health():
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
     }
+
+
+# ── Auth Endpoints ──
+
+@app.post("/api/auth/signup")
+async def signup(req: SignupRequest):
+    if len(req.password) < 6:
+        return {"ok": False, "error": "Password must be at least 6 characters"}
+    if len(req.username) < 3:
+        return {"ok": False, "error": "Username must be at least 3 characters"}
+    result = auth.create_user(req.username, req.email, req.password, req.display_name)
+    if not result["ok"]:
+        return result
+    # Auto-login after signup
+    login = auth.login_user(req.username, req.password)
+    return login
+
+
+@app.post("/api/auth/login")
+async def login(req: LoginRequest):
+    return auth.login_user(req.username, req.password)
+
+
+@app.get("/api/auth/me")
+async def get_me(user: dict = Depends(require_user)):
+    keys = auth.get_user_providers(user["id"])
+    watchlist = auth.get_watchlist(user["id"])
+    return {
+        "ok": True,
+        "user": user,
+        "connected_brokers": keys,
+        "watchlist": watchlist,
+    }
+
+
+@app.post("/api/auth/keys")
+async def save_keys(req: SaveKeysRequest, user: dict = Depends(require_user)):
+    result = auth.save_api_keys(user["id"], req.provider, req.key_id, req.secret, req.label)
+    return result
+
+
+@app.delete("/api/auth/keys/{provider}")
+async def delete_keys(provider: str, user: dict = Depends(require_user)):
+    return auth.delete_api_keys(user["id"], provider)
+
+
+@app.get("/api/auth/keys")
+async def list_keys(user: dict = Depends(require_user)):
+    return {"ok": True, "providers": auth.get_user_providers(user["id"])}
+
+
+# ── Watchlist ──
+
+@app.get("/api/watchlist")
+async def get_watchlist(user: dict = Depends(require_user)):
+    items = auth.get_watchlist(user["id"])
+    # Fetch live prices for each
+    enriched = []
+    for item in items:
+        price_data = engine.fetch_price(item["ticker"])
+        enriched.append({
+            **item,
+            "price": price_data.get("price") if price_data else None,
+            "change_pct": price_data.get("change_pct") if price_data else None,
+        })
+    return {"ok": True, "watchlist": enriched}
+
+
+@app.post("/api/watchlist")
+async def add_watchlist(req: WatchlistRequest, user: dict = Depends(require_user)):
+    return auth.add_to_watchlist(user["id"], req.ticker, req.notes)
+
+
+@app.delete("/api/watchlist/{ticker}")
+async def remove_watchlist(ticker: str, user: dict = Depends(require_user)):
+    return auth.remove_from_watchlist(user["id"], ticker)
+
+
+# ── Trading Endpoints ──
 
 
 @app.get("/api/account")

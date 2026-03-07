@@ -7,3 +7,6 @@ numpy>=1.24
 plotly>=5.18
 requests>=2.31
 groq>=0.5
+python-jose[cryptography]>=3.3
+passlib[bcrypt]>=1.7
+cryptography>=41.0
