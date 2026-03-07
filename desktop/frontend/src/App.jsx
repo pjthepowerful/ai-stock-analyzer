@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Chart from './Chart'
-import { playBuy, playSell, playNotify, playAlert, playProfit } from './sounds'
+import { playBuy, playSell, playNotify, playAlert, playProfit, playTick } from './sounds'
 import './App.css'
 
 // Auto-detect: use env var if set, otherwise try ngrok, fallback to localhost
@@ -109,6 +109,7 @@ function App() {
         if (data.type === 'trade' && data.message?.includes('Bought')) playBuy()
         else if (data.type === 'trade' && (data.message?.includes('Sold') || data.message?.includes('Shorted'))) playSell()
         else if (data.type === 'trade' && data.message?.includes('Covered')) playProfit()
+        else playTick()  // subtle tick on every response
       } else {
         playAlert()
         setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${data.error}` }])
