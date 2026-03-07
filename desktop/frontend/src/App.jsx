@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Chart from './Chart'
-import AuthPage from './AuthPage'
-import Settings from './Settings'
 import { playBuy, playSell, playNotify, playAlert, playProfit, playTick } from './sounds'
 import './App.css'
 
@@ -11,11 +9,6 @@ const WS_PROTOCOL = BACKEND.startsWith('https') ? 'wss:' : 'ws:'
 const WS_URL = `${WS_PROTOCOL}//${new URL(BACKEND).host}/ws`
 
 function App() {
-  const [token, setToken] = useState(() => localStorage.getItem('paula_token'))
-  const [user, setUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('paula_user')) } catch { return null }
-  })
-  const [showSettings, setShowSettings] = useState(false)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -30,29 +23,8 @@ function App() {
   const messagesEnd = useRef(null)
   const wsRef = useRef(null)
   const inputRef = useRef(null)
-  const loggedIn = !!(token && user)
 
-  const authHeaders = token ? { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` } : { 'Content-Type': 'application/json' }
-
-  const handleLogin = (newToken, newUser) => {
-    setToken(newToken)
-    setUser(newUser)
-    localStorage.setItem('paula_token', newToken)
-    localStorage.setItem('paula_user', JSON.stringify(newUser))
-  }
-
-  const handleLogout = () => {
-    setToken(null)
-    setUser(null)
-    localStorage.removeItem('paula_token')
-    localStorage.removeItem('paula_user')
-    setMessages([])
-    setShowSettings(false)
-  }
-
-  // ── WebSocket — always registered ──
   useEffect(() => {
-    if (!loggedIn) return
     const connect = () => {
       const ws = new WebSocket(WS_URL)
       wsRef.current = ws
@@ -84,15 +56,14 @@ function App() {
     }
     connect()
     return () => wsRef.current?.close()
-  }, [loggedIn])
+  }, [])
 
   const refreshData = useCallback(async () => {
-    if (!loggedIn) return
     try {
       const [accRes, posRes, spyRes, healthRes] = await Promise.all([
-        fetch(`${API}/api/account`, { headers: authHeaders }).then(r => r.json()),
-        fetch(`${API}/api/positions`, { headers: authHeaders }).then(r => r.json()),
-        fetch(`${API}/api/spy-trend`, { headers: authHeaders }).then(r => r.json()),
+        fetch(`${API}/api/account`).then(r => r.json()),
+        fetch(`${API}/api/positions`).then(r => r.json()),
+        fetch(`${API}/api/spy-trend`).then(r => r.json()),
         fetch(`${API}/api/health`).then(r => r.json()),
       ])
       if (accRes.ok) setAccount(accRes.data)
@@ -101,14 +72,13 @@ function App() {
       if (healthRes.time_et) setTime(healthRes.time_et)
       setAutopilot(healthRes.autopilot)
     } catch (e) {}
-  }, [loggedIn, token])
+  }, [])
 
   useEffect(() => {
-    if (!loggedIn) return
     refreshData()
     const interval = setInterval(refreshData, 15000)
     return () => clearInterval(interval)
-  }, [loggedIn, refreshData])
+  }, [refreshData])
 
   useEffect(() => {
     messagesEnd.current?.scrollIntoView({ behavior: 'smooth' })
@@ -122,7 +92,8 @@ function App() {
     setSending(true)
     try {
       const res = await fetch(`${API}/api/chat`, {
-        method: 'POST', headers: authHeaders,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: msg })
       })
       const data = await res.json()
@@ -151,13 +122,8 @@ function App() {
 
   const toggleAutopilot = async () => {
     const endpoint = autopilot ? 'stop' : 'start'
-    await fetch(`${API}/api/autopilot/${endpoint}`, { method: 'POST', headers: authHeaders })
+    await fetch(`${API}/api/autopilot/${endpoint}`, { method: 'POST' })
     setAutopilot(!autopilot)
-  }
-
-  // ── Not logged in → show auth ──
-  if (!loggedIn) {
-    return <AuthPage onLogin={handleLogin} />
   }
 
   const pnl = account ? (account.equity - (account.last_equity || account.equity)) : 0
@@ -174,8 +140,6 @@ function App() {
           </div>
         </div>
         <div className="topbar-right">
-          <span className="user-name">{user.display_name || user.username}</span>
-          <button className="gear-btn" onClick={() => setShowSettings(true)}>⚙</button>
           <div className={`status-dot ${connected ? 'connected' : 'disconnected'}`} />
           <button className={`ap-btn ${autopilot ? 'ap-on' : 'ap-off'}`} onClick={toggleAutopilot}>
             {autopilot ? '◉ Autopilot ON' : '○ Autopilot OFF'}
@@ -249,10 +213,6 @@ function App() {
           placeholder="NVDA… buy 10 AAPL… short TSLA… autopilot…" disabled={sending} />
         <button onClick={send} disabled={sending}>↑</button>
       </div>
-
-      {showSettings && (
-        <Settings token={token} user={user} onClose={() => setShowSettings(false)} onLogout={handleLogout} />
-      )}
     </div>
   )
 }
