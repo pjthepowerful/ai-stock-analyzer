@@ -2,8 +2,11 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import Chart from './Chart'
 import './App.css'
 
-const API = 'http://127.0.0.1:3141'
-const WS_URL = 'ws://127.0.0.1:3141/ws'
+// Auto-detect: use env var if set, otherwise try same host, fallback to localhost
+const BACKEND = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:3141' : '')
+const API = BACKEND
+const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+const WS_URL = BACKEND ? `${WS_PROTOCOL}//${new URL(BACKEND).host}/ws` : `ws://127.0.0.1:3141/ws`
 
 function App() {
   const [messages, setMessages] = useState([])

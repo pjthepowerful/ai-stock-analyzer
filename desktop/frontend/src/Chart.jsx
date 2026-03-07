@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { createChart, CrosshairMode } from 'lightweight-charts'
 
-const API = 'http://127.0.0.1:3141'
+const API_DEFAULT = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:3141' : '')
 
-export default function Chart({ ticker, signal, height = 360 }) {
+export default function Chart({ ticker, signal, height = 360, apiUrl }) {
+  const API = apiUrl || API_DEFAULT
   const containerRef = useRef(null)
   const chartRef = useRef(null)
 
