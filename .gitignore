@@ -1,5 +1,37 @@
-.env
-.streamlit/secrets.toml
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+venv/
 .venv/
+
+# Database
+*.db
+*.sqlite3
+
+# Environment / Secrets
+.env
+.env.local
+.streamlit/secrets.toml
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Tauri
+src-tauri/target/
+*.dmg
+*.app
+*.exe
+*.msi
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp

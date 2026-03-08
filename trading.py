@@ -370,8 +370,8 @@ def polygon_search_ticker(query: str) -> str | None:
 ALPACA_BASE = "https://paper-api.alpaca.markets"
 
 def _alpaca_headers() -> dict:
-    key_id = st.secrets.get("ALPACA_KEY_ID") or os.environ.get("ALPACA_KEY_ID") or "PKAOKE25G5DJNRVJNLNSMEHZ7S"
-    secret = st.secrets.get("ALPACA_SECRET") or os.environ.get("ALPACA_SECRET") or "EGnea2qjnF7dDbU9YioMa6S9o1kW2C1PpuanWwcL6JQf"
+    key_id = st.secrets.get("ALPACA_KEY_ID") or os.environ.get("ALPACA_KEY_ID", "")
+    secret = st.secrets.get("ALPACA_SECRET") or os.environ.get("ALPACA_SECRET", "")
     return {
         "APCA-API-KEY-ID": key_id,
         "APCA-API-SECRET-KEY": secret,

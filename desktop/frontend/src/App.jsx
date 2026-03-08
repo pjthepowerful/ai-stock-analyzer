@@ -19,11 +19,13 @@ function App() {
   const [spyTrend, setSpyTrend] = useState(null)
   const [time, setTime] = useState('')
   const [activeChart, setActiveChart] = useState(null)
+  const [loading, setLoading] = useState(true)
 
   const messagesEnd = useRef(null)
   const wsRef = useRef(null)
   const inputRef = useRef(null)
 
+  // ── WebSocket ──
   useEffect(() => {
     const connect = () => {
       const ws = new WebSocket(WS_URL)
@@ -31,33 +33,36 @@ function App() {
       ws.onopen = () => setConnected(true)
       ws.onclose = () => { setConnected(false); setTimeout(connect, 3000) }
       ws.onmessage = (e) => {
-        const { event, data } = JSON.parse(e.data)
-        if (event === 'connected') setAutopilot(data.autopilot)
-        if (event === 'autopilot') {
-          if (data.status === 'started') setAutopilot(true)
-          if (data.status === 'stopped') setAutopilot(false)
-          if (data.log) {
-            playNotify()
-            setMessages(prev => [...prev, {
-              role: 'assistant',
-              content: `**🟢 Autopilot Scan**\n\n${data.log.join('\n\n')}`,
-              type: 'autopilot'
-            }])
+        try {
+          const { event, data } = JSON.parse(e.data)
+          if (event === 'connected') setAutopilot(data.autopilot)
+          if (event === 'autopilot') {
+            if (data.status === 'started') setAutopilot(true)
+            if (data.status === 'stopped') setAutopilot(false)
+            if (data.log) {
+              playNotify()
+              setMessages(prev => [...prev, {
+                role: 'assistant',
+                content: `**🟢 Autopilot Scan**\n\n${data.log.join('\n\n')}`,
+                type: 'autopilot'
+              }])
+            }
           }
-        }
-        if (event === 'trade') {
-          if (data.action === 'buy') playBuy()
-          else if (data.action === 'sell' || data.action === 'short') playSell()
-          else if (data.action === 'cover') playProfit()
-          else if (data.action === 'close_all') playAlert()
-          refreshData()
-        }
+          if (event === 'trade') {
+            if (data.action === 'buy') playBuy()
+            else if (data.action === 'sell' || data.action === 'short') playSell()
+            else if (data.action === 'cover') playProfit()
+            else if (data.action === 'close_all') playAlert()
+            refreshData()
+          }
+        } catch (e) {}
       }
     }
     connect()
     return () => wsRef.current?.close()
   }, [])
 
+  // ── Refresh data ──
   const refreshData = useCallback(async () => {
     try {
       const [accRes, posRes, spyRes, healthRes] = await Promise.all([
@@ -71,7 +76,10 @@ function App() {
       if (spyRes.ok) setSpyTrend(spyRes.data)
       if (healthRes.time_et) setTime(healthRes.time_et)
       setAutopilot(healthRes.autopilot)
-    } catch (e) {}
+      setLoading(false)
+    } catch (e) {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -84,6 +92,7 @@ function App() {
     messagesEnd.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // ── Send message ──
   const send = async () => {
     const msg = input.trim()
     if (!msg || sending) return
@@ -126,11 +135,17 @@ function App() {
     setAutopilot(!autopilot)
   }
 
+  const quickAction = (text) => {
+    setInput(text)
+    inputRef.current?.focus()
+  }
+
   const pnl = account ? (account.equity - (account.last_equity || account.equity)) : 0
   const pnlPct = account?.equity ? (pnl / account.equity * 100) : 0
 
   return (
     <div className="app">
+      {/* ── Top Bar ── */}
       <header className="topbar">
         <div className="topbar-left">
           <div className="logo">P</div>
@@ -140,14 +155,19 @@ function App() {
           </div>
         </div>
         <div className="topbar-right">
-          <div className={`status-dot ${connected ? 'connected' : 'disconnected'}`} />
+          <div className={`status-dot ${connected ? 'connected' : 'disconnected'}`} title={connected ? 'Connected' : 'Disconnected'} />
           <button className={`ap-btn ${autopilot ? 'ap-on' : 'ap-off'}`} onClick={toggleAutopilot}>
             {autopilot ? '◉ Autopilot ON' : '○ Autopilot OFF'}
           </button>
         </div>
       </header>
 
-      {account && (
+      {/* ── Dashboard ── */}
+      {loading ? (
+        <div className="dashboard">
+          <div className="dash-item"><span className="dash-label">Loading</span><span className="dash-value shimmer">···</span></div>
+        </div>
+      ) : account ? (
         <div className="dashboard">
           <div className="dash-item">
             <span className="dash-label">Equity</span>
@@ -177,20 +197,27 @@ function App() {
             </div>
           )}
         </div>
+      ) : (
+        <div className="dashboard">
+          <div className="dash-item"><span className="dash-label">Status</span><span className="dash-value" style={{color: 'var(--red)'}}>No broker connected</span></div>
+        </div>
       )}
 
+      {/* ── Positions ── */}
       {positions.length > 0 && (
         <div className="positions-strip">
           {positions.map((p, i) => (
             <div key={i} className={`pos-chip ${p.unrealized_pnl >= 0 ? 'pos-green' : 'pos-red'}`}
               onClick={() => setActiveChart({ ticker: p.ticker, signal: null })}>
-              <span className="pos-ticker">{p.side === 'short' ? '🔴' : ''}{p.ticker}</span>
+              <span className="pos-ticker">{p.side === 'short' ? '🔴 ' : ''}{p.ticker}</span>
               <span className="pos-pnl">{p.unrealized_pnl_pct >= 0 ? '+' : ''}{p.unrealized_pnl_pct.toFixed(1)}%</span>
+              <span className="pos-dollars">${Math.abs(p.unrealized_pnl).toFixed(0)}</span>
             </div>
           ))}
         </div>
       )}
 
+      {/* ── Chart ── */}
       {activeChart && (
         <div className="chart-wrapper">
           <button className="chart-close" onClick={() => setActiveChart(null)}>✕</button>
@@ -198,15 +225,40 @@ function App() {
         </div>
       )}
 
+      {/* ── Chat ── */}
       <div className="chat">
+        {messages.length === 0 && !sending && (
+          <div className="welcome">
+            <div className="welcome-icon">P</div>
+            <h2>Hey, I'm Paula</h2>
+            <p>Your intraday trading assistant. Ask me about any stock, run the autopilot, or make trades.</p>
+            <div className="quick-actions">
+              <button onClick={() => quickAction('NVDA')}>NVDA</button>
+              <button onClick={() => quickAction('portfolio')}>Portfolio</button>
+              <button onClick={() => quickAction('top gainers')}>Top Gainers</button>
+              <button onClick={() => quickAction('autopilot')}>Start Autopilot</button>
+              <button onClick={() => quickAction('market regime')}>Market Check</button>
+            </div>
+          </div>
+        )}
         {messages.map((m, i) => (
           <div key={i} className={`msg msg-${m.role}`}>
-            <div className="msg-content" dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }} />
+            {m.role === 'assistant' && sending && i === messages.length - 1 ? null : (
+              <div className="msg-content" dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }} />
+            )}
           </div>
         ))}
+        {sending && (
+          <div className="msg msg-assistant">
+            <div className="typing">
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+        )}
         <div ref={messagesEnd} />
       </div>
 
+      {/* ── Input ── */}
       <div className="input-bar">
         <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && send()}
