@@ -8,13 +8,6 @@ const API = BACKEND
 const WS_PROTOCOL = BACKEND.startsWith('https') ? 'wss:' : 'ws:'
 const WS_URL = `${WS_PROTOCOL}//${new URL(BACKEND).host}/ws`
 
-function getGreeting() {
-  const h = new Date().getHours()
-  if (h < 12) return 'Good Morning'
-  if (h < 17) return 'Good Afternoon'
-  return 'Good Evening'
-}
-
 function App() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -25,14 +18,13 @@ function App() {
   const [connected, setConnected] = useState(false)
   const [spyTrend, setSpyTrend] = useState(null)
   const [time, setTime] = useState('')
-  const [activeChart, setActiveChart] = useState(null)
+  const [positionChart, setPositionChart] = useState(null) // chart in positions area
+  const [chatChart, setChatChart] = useState(null) // chart in chat area
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState('chat') // 'chat' | 'positions'
 
   const messagesEnd = useRef(null)
   const wsRef = useRef(null)
   const inputRef = useRef(null)
-  const hasMessages = messages.length > 0
 
   useEffect(() => {
     const connect = () => {
@@ -51,7 +43,7 @@ function App() {
               playNotify()
               setMessages(prev => [...prev, {
                 role: 'assistant',
-                content: `**🟢 Autopilot Scan**\n\n${data.log.join('\n\n')}`,
+                content: `**Autopilot Scan Complete**\n\n${data.log.join('\n\n')}`,
                 type: 'autopilot'
               }])
             }
@@ -97,8 +89,8 @@ function App() {
     messagesEnd.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const send = async (override) => {
-    const msg = (override || input).trim()
+  const send = async () => {
+    const msg = input.trim()
     if (!msg || sending) return
     setMessages(prev => [...prev, { role: 'user', content: msg }])
     setInput('')
@@ -114,7 +106,10 @@ function App() {
         setMessages(prev => [...prev, {
           role: 'assistant', content: data.message, type: data.type, ticker: data.ticker,
         }])
-        if (data.ticker) setActiveChart({ ticker: data.ticker, signal: data.trade_signal || null })
+        // Chat-triggered charts go in the chat area
+        if (data.ticker) {
+          setChatChart({ ticker: data.ticker, signal: data.trade_signal || null })
+        }
         if (data.type === 'trade' && data.message?.includes('Bought')) playBuy()
         else if (data.type === 'trade' && (data.message?.includes('Sold') || data.message?.includes('Shorted'))) playSell()
         else if (data.type === 'trade' && data.message?.includes('Covered')) playProfit()
@@ -138,164 +133,152 @@ function App() {
     setAutopilot(!autopilot)
   }
 
+  const quickAction = (text) => {
+    setInput(text)
+    setTimeout(() => inputRef.current?.focus(), 50)
+  }
+
   const pnl = account ? (account.equity - (account.last_equity || account.equity)) : 0
   const pnlPct = account?.equity ? (pnl / account.equity * 100) : 0
 
+  const greeting = () => {
+    const h = new Date().getHours()
+    if (h < 12) return 'Good morning'
+    if (h < 17) return 'Good afternoon'
+    return 'Good evening'
+  }
+
   return (
     <div className="app">
-      {/* ── Sidebar ── */}
-      <nav className="sidebar">
-        <div className="sidebar-top">
-          <div className="sidebar-logo">P</div>
-          <button className={`sidebar-btn ${view === 'chat' ? 'active' : ''}`} onClick={() => setView('chat')} title="Chat">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          </button>
-          <button className={`sidebar-btn ${view === 'positions' ? 'active' : ''}`} onClick={() => setView('positions')} title="Positions">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+      {/* ── Top Bar ── */}
+      <header className="topbar">
+        <div className="topbar-left">
+          <div className="logo">P</div>
+          <div>
+            <h1>Paula</h1>
+            <span className="subtitle">{time || '...'}</span>
+          </div>
+        </div>
+        <div className="topbar-right">
+          <div className={`status-dot ${connected ? 'connected' : 'disconnected'}`} />
+          <button className={`ap-btn ${autopilot ? 'ap-on' : 'ap-off'}`} onClick={toggleAutopilot}>
+            {autopilot ? '◉ Autopilot ON' : '○ Autopilot OFF'}
           </button>
         </div>
-        <div className="sidebar-bottom">
-          <div className={`sidebar-dot ${connected ? 'on' : 'off'}`} />
-        </div>
-      </nav>
+      </header>
 
-      {/* ── Main Content ── */}
-      <main className="main">
-        {/* ── Top Strip ── */}
-        <header className="topstrip">
-          {account && (
-            <div className="topstrip-stats">
-              <span className="stat">${account.equity?.toLocaleString(undefined, {minimumFractionDigits: 0})}</span>
-              <span className="stat-divider">·</span>
-              <span className={`stat ${pnl >= 0 ? 'green' : 'red'}`}>{pnl >= 0 ? '+' : ''}{pnl.toFixed(0)} today</span>
-              <span className="stat-divider">·</span>
-              <span className="stat">{positions.length} positions</span>
-              {spyTrend && <>
-                <span className="stat-divider">·</span>
-                <span className={`stat ${spyTrend.change_pct >= 0 ? 'green' : 'red'}`}>SPY {spyTrend.change_pct >= 0 ? '+' : ''}{spyTrend.change_pct}%</span>
-              </>}
+      {/* ── Dashboard ── */}
+      {loading ? (
+        <div className="dashboard">
+          <div className="dash-item"><span className="dash-label">Loading</span><span className="dash-value shimmer">···</span></div>
+        </div>
+      ) : account ? (
+        <div className="dashboard">
+          <div className="dash-item">
+            <span className="dash-label">Equity</span>
+            <span className="dash-value">${account.equity?.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+          </div>
+          <div className="dash-item">
+            <span className="dash-label">Cash</span>
+            <span className="dash-value">${account.cash?.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+          </div>
+          <div className="dash-item">
+            <span className="dash-label">Day P&L</span>
+            <span className={`dash-value ${pnl >= 0 ? 'green' : 'red'}`}>
+              {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)} ({pnlPct.toFixed(2)}%)
+            </span>
+          </div>
+          <div className="dash-item">
+            <span className="dash-label">Positions</span>
+            <span className="dash-value">{positions.length}</span>
+          </div>
+          {spyTrend && (
+            <div className="dash-item">
+              <span className="dash-label">SPY</span>
+              <span className={`dash-value ${spyTrend.change_pct >= 0 ? 'green' : 'red'}`}>
+                {spyTrend.change_pct >= 0 ? '+' : ''}{spyTrend.change_pct}%
+                {spyTrend.above_vwap ? ' ▲V' : ' ▼V'}
+              </span>
             </div>
           )}
-          <div className="topstrip-right">
-            <span className="time-label">{time}</span>
-            <button className={`ap-btn ${autopilot ? 'ap-on' : 'ap-off'}`} onClick={toggleAutopilot}>
-              {autopilot ? '◉ Autopilot' : '○ Autopilot'}
-            </button>
-          </div>
-        </header>
+        </div>
+      ) : null}
 
-        {/* ── Chat View ── */}
-        {view === 'chat' && (
-          <div className="chat-area">
-            {!hasMessages && !sending ? (
-              <div className="welcome">
-                <div className="welcome-orb"></div>
-                <h1>{getGreeting()}</h1>
-                <p>What's on <span className="accent">your mind?</span></p>
-
-                <div className="welcome-input-wrap">
-                  <input
-                    ref={inputRef}
-                    value={input}
-                    onChange={e => setInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && send()}
-                    placeholder="Ask about any stock, start autopilot, make a trade..."
-                    className="welcome-input"
-                    disabled={sending}
-                  />
-                  <button className="welcome-send" onClick={() => send()} disabled={sending}>↑</button>
-                </div>
-
-                <p className="examples-label">GET STARTED WITH AN EXAMPLE</p>
-                <div className="examples">
-                  <button className="example-card" onClick={() => send('analyze NVDA')}>
-                    <span className="example-icon">📊</span>
-                    <span className="example-text">Analyze NVDA<br/><small>full signal breakdown</small></span>
-                  </button>
-                  <button className="example-card" onClick={() => send('top gainers')}>
-                    <span className="example-icon">🔥</span>
-                    <span className="example-text">Top Gainers<br/><small>today's movers</small></span>
-                  </button>
-                  <button className="example-card" onClick={() => send('portfolio')}>
-                    <span className="example-icon">💼</span>
-                    <span className="example-text">My Portfolio<br/><small>positions & P&L</small></span>
-                  </button>
-                  <button className="example-card" onClick={() => send('autopilot')}>
-                    <span className="example-icon">🤖</span>
-                    <span className="example-text">Start Autopilot<br/><small>scan & trade automatically</small></span>
-                  </button>
-                </div>
+      {/* ── Positions + Position Chart ── */}
+      {positions.length > 0 && (
+        <div className="positions-section">
+          <div className="positions-strip">
+            {positions.map((p, i) => (
+              <div key={i}
+                className={`pos-chip ${p.unrealized_pnl >= 0 ? 'pos-green' : 'pos-red'} ${positionChart?.ticker === p.ticker ? 'pos-active' : ''}`}
+                onClick={() => setPositionChart(positionChart?.ticker === p.ticker ? null : { ticker: p.ticker })}>
+                <span className="pos-ticker">{p.side === 'short' ? '↓ ' : ''}{p.ticker}</span>
+                <span className="pos-pnl">{p.unrealized_pnl_pct >= 0 ? '+' : ''}{p.unrealized_pnl_pct.toFixed(1)}%</span>
+                <span className="pos-dollars">${Math.abs(p.unrealized_pnl).toFixed(0)}</span>
               </div>
-            ) : (
-              <>
-                <div className="messages">
-                  {messages.map((m, i) => (
-                    <div key={i} className={`msg msg-${m.role}`}>
-                      {m.role === 'assistant' && <div className="msg-avatar">P</div>}
-                      <div className="msg-content" dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }} />
-                    </div>
-                  ))}
-                  {sending && (
-                    <div className="msg msg-assistant">
-                      <div className="msg-avatar">P</div>
-                      <div className="typing"><span></span><span></span><span></span></div>
-                    </div>
-                  )}
-                  <div ref={messagesEnd} />
-                </div>
+            ))}
+          </div>
+          {positionChart && (
+            <div className="position-chart">
+              <button className="chart-close" onClick={() => setPositionChart(null)}>✕</button>
+              <Chart ticker={positionChart.ticker} signal={null} height={240} />
+            </div>
+          )}
+        </div>
+      )}
 
-                {activeChart && (
-                  <div className="chart-wrapper">
-                    <button className="chart-close" onClick={() => setActiveChart(null)}>✕</button>
-                    <Chart ticker={activeChart.ticker} signal={activeChart.signal} height={260} />
-                  </div>
-                )}
-
-                <div className="input-bar">
-                  <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && send()}
-                    placeholder="Ask Paula anything..." disabled={sending} />
-                  <button onClick={() => send()} disabled={sending}>↑</button>
-                </div>
-              </>
-            )}
+      {/* ── Chat ── */}
+      <div className="chat">
+        {messages.length === 0 && !sending && (
+          <div className="welcome">
+            <h2>{greeting()}</h2>
+            <div className="welcome-examples">
+              <div className="example-card" onClick={() => quickAction('NVDA')}>
+                <span className="example-title">Analyze NVDA</span>
+                <span className="example-desc">signal breakdown</span>
+              </div>
+              <div className="example-card" onClick={() => quickAction('top gainers')}>
+                <span className="example-title">Top Gainers</span>
+                <span className="example-desc">today's movers</span>
+              </div>
+              <div className="example-card" onClick={() => quickAction('portfolio')}>
+                <span className="example-title">My Portfolio</span>
+                <span className="example-desc">positions & P&L</span>
+              </div>
+              <div className="example-card" onClick={() => quickAction('autopilot')}>
+                <span className="example-title">Start Autopilot</span>
+                <span className="example-desc">scan & trade</span>
+              </div>
+            </div>
           </div>
         )}
-
-        {/* ── Positions View ── */}
-        {view === 'positions' && (
-          <div className="positions-view">
-            <h2>Open Positions</h2>
-            {positions.length === 0 ? (
-              <p className="empty-state">No open positions</p>
-            ) : (
-              <div className="positions-list">
-                {positions.map((p, i) => (
-                  <div key={i} className={`position-row ${p.unrealized_pnl >= 0 ? 'pos-green' : 'pos-red'}`}
-                    onClick={() => { setActiveChart({ ticker: p.ticker, signal: null }); setView('chat') }}>
-                    <div className="pos-left">
-                      <span className="pos-ticker-lg">{p.ticker}</span>
-                      <span className="pos-side">{p.side === 'short' ? 'SHORT' : 'LONG'} · {Math.abs(p.qty)} shares</span>
-                    </div>
-                    <div className="pos-middle">
-                      <span className="pos-entry">Entry ${p.avg_entry?.toFixed(2)}</span>
-                      <span className="pos-current">Now ${p.current_price?.toFixed(2)}</span>
-                    </div>
-                    <div className="pos-right">
-                      <span className={`pos-pnl-lg ${p.unrealized_pnl >= 0 ? 'green' : 'red'}`}>
-                        {p.unrealized_pnl >= 0 ? '+' : ''}${p.unrealized_pnl?.toFixed(2)}
-                      </span>
-                      <span className={`pos-pct ${p.unrealized_pnl_pct >= 0 ? 'green' : 'red'}`}>
-                        {p.unrealized_pnl_pct >= 0 ? '+' : ''}{p.unrealized_pnl_pct?.toFixed(2)}%
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+        {messages.map((m, i) => (
+          <div key={i} className={`msg msg-${m.role}`}>
+            <div className="msg-content" dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }} />
+          </div>
+        ))}
+        {/* Chat chart appears inline after messages */}
+        {chatChart && messages.length > 0 && (
+          <div className="chat-chart">
+            <button className="chart-close" onClick={() => setChatChart(null)}>✕</button>
+            <Chart ticker={chatChart.ticker} signal={chatChart.signal} height={260} />
           </div>
         )}
-      </main>
+        {sending && (
+          <div className="msg msg-assistant">
+            <div className="typing"><span></span><span></span><span></span></div>
+          </div>
+        )}
+        <div ref={messagesEnd} />
+      </div>
+
+      {/* ── Input ── */}
+      <div className="input-bar">
+        <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && send()}
+          placeholder="Ask about any stock, start autopilot, make a trade..." disabled={sending} />
+        <button onClick={send} disabled={sending}>↑</button>
+      </div>
     </div>
   )
 }
