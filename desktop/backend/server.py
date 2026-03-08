@@ -255,6 +255,7 @@ async def chart_data(ticker: str, period: str = "6mo"):
 @app.post("/api/chat")
 async def chat(msg: ChatMessage):
     """Process a chat message through Paula's brain."""
+    global autopilot_task
     user_msg = msg.message.strip()
     if not user_msg:
         return {"ok": False, "error": "Empty message"}
@@ -263,18 +264,31 @@ async def chat(msg: ChatMessage):
 
     # Route the message
     intent = engine.route(user_msg)
-    result = engine.execute(intent)
+
+    # If chat triggers autopilot, start/stop the real background task
+    if intent.get("type") == "autopilot":
+        if not autopilot_task or autopilot_task.done():
+            autopilot_task = asyncio.create_task(_autopilot_loop())
+
+    if intent.get("type") == "stop_autopilot":
+        if autopilot_task and not autopilot_task.done():
+            autopilot_task.cancel()
+            autopilot_task = None
+
+    # Run in thread pool since engine functions are blocking
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, engine.execute, intent)
 
     if result and result.get("ok"):
         resp = result.get("msg", "")
         if not resp and result.get("type") == "analysis":
-            resp = engine.ai_response(user_msg, result.get("data"), chat_history, "US")
+            resp = await loop.run_in_executor(None, engine.ai_response, user_msg, result.get("data"), chat_history, "US")
         elif not resp:
-            resp = engine.ai_response(user_msg, None, chat_history, "US")
+            resp = await loop.run_in_executor(None, engine.ai_response, user_msg, None, chat_history, "US")
     elif result and result.get("error"):
         resp = f"⚠️ {result['error']}"
     else:
-        resp = engine.ai_response(user_msg, None, chat_history, "US")
+        resp = await loop.run_in_executor(None, engine.ai_response, user_msg, None, chat_history, "US")
 
     chat_history.append({"role": "assistant", "content": resp})
 
@@ -285,10 +299,9 @@ async def chat(msg: ChatMessage):
         "ticker": result.get("ticker") if result else None,
         "trade_signal": result.get("trade_signal") if result else None,
         "table": result.get("data") if result and result.get("type") == "list" else None,
+        "autopilot": autopilot_task is not None and not autopilot_task.done(),
     }
 
-    # Don't broadcast here — the REST response already delivers the message
-    # WebSocket is only for autopilot updates and trade notifications
     return response
 
 

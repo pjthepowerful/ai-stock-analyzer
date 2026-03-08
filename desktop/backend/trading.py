@@ -2070,9 +2070,16 @@ def route(msg: str) -> dict:
     ticker, market = _find_ticker(msg)
 
     # ── Trading commands ──
-    if any(w in m for w in ["activate autopilot", "activate alpaca", "autopilot", "auto trade",
-                            "start trading", "go autopilot", "run autopilot", "auto pilot",
-                            "scan and trade", "find and buy", "find trades"]):
+    # Autopilot: only activate if clearly a command, NOT a question about it
+    autopilot_questions = ["explain", "what is", "how does", "tell me about", "describe", "strategy", "what does", "how do"]
+    is_asking_about = any(q in m for q in autopilot_questions)
+    if not is_asking_about and any(w in m for w in [
+        "activate autopilot", "activate alpaca", "start autopilot", "auto trade",
+        "start trading", "go autopilot", "run autopilot", "auto pilot",
+        "scan and trade", "find and buy", "find trades"]):
+        return {"type": "autopilot"}
+    # "autopilot" alone = start it, but not if asking a question
+    if m.strip() == "autopilot":
         return {"type": "autopilot"}
     if any(w in m for w in ["force scan", "scan now", "scan anyway", "scan market", "run scan"]):
         return {"type": "force_scan"}

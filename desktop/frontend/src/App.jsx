@@ -117,6 +117,8 @@ function App() {
         else if (data.type === 'trade' && (data.message?.includes('Sold') || data.message?.includes('Shorted'))) playSell()
         else if (data.type === 'trade' && data.message?.includes('Covered')) playProfit()
         else playTick()
+        // Sync autopilot button
+        if (data.autopilot !== undefined) setAutopilot(data.autopilot)
       } else {
         playAlert()
         setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${data.error}` }])
