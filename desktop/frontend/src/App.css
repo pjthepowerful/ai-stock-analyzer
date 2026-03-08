@@ -210,7 +210,9 @@ body {
 }
 
 .chart-container { width: 100%; }
-.chart-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.chart-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 2px;
+}
 .chart-ticker {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.82rem; font-weight: 600; color: var(--bright);
@@ -220,6 +222,28 @@ body {
   font-size: 0.58rem; color: var(--muted);
 }
 .chart-canvas { width: 100%; border-radius: 4px; overflow: hidden; }
+
+.chart-ohlc {
+  display: flex; gap: 12px; padding: 2px 0 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem; color: var(--muted);
+}
+.chart-ohlc b { color: var(--text); font-weight: 500; }
+
+.chart-legend {
+  display: flex; gap: 8px; margin-left: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.55rem;
+}
+
+.chart-signal {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6rem; padding: 2px 8px; border-radius: 4px;
+  font-weight: 500;
+}
+.signal-buy { background: rgba(0,229,160,0.1); color: var(--green); border: 1px solid rgba(0,229,160,0.2); }
+.signal-sell { background: rgba(255,59,92,0.1); color: var(--red); border: 1px solid rgba(255,59,92,0.2); }
+.signal-hold { background: rgba(72,72,96,0.1); color: var(--muted); border: 1px solid var(--border); }
 
 /* ── Chat ── */
 .chat {
