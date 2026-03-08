@@ -1945,6 +1945,70 @@ def _news_sentiment(ticker: str) -> dict:
         return {"score": 0, "sentiment": "neutral", "headlines": [], "count": 0}
 
 
+@st.cache_data(ttl=600)
+def _ai_news_analysis(ticker: str) -> dict:
+    """Use Groq LLM to deeply analyze news headlines for a ticker."""
+    try:
+        basic = _news_sentiment(ticker)
+        headlines = basic.get("headlines", [])
+        if not headlines:
+            return {**basic, "ai_summary": "", "ai_score": 0, "macro_risk": False}
+
+        key = os.environ.get("GROQ_API_KEY", "")
+        if not key:
+            return {**basic, "ai_summary": "", "ai_score": 0, "macro_risk": False}
+
+        from groq import Groq
+        client = Groq(api_key=key)
+
+        headline_text = "\n".join([f"- {h['title']} ({h.get('publisher', '')})" for h in headlines])
+
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{
+                "role": "user",
+                "content": f"""Analyze these news headlines for {ticker}. Respond in EXACTLY this format, nothing else:
+
+SCORE: [number from -10 to 10, negative=bearish, positive=bullish]
+MACRO_RISK: [YES or NO — is there a macro event like war, sanctions, recession, rate hike that could cause a crash?]
+SUMMARY: [one sentence summary of the news sentiment and why]
+
+Headlines:
+{headline_text}"""
+            }],
+            max_tokens=150,
+            temperature=0,
+        )
+
+        text = response.choices[0].message.content.strip()
+        ai_score = 0
+        macro_risk = False
+        ai_summary = ""
+
+        for line in text.split("\n"):
+            line = line.strip()
+            if line.startswith("SCORE:"):
+                try:
+                    ai_score = int(float(line.replace("SCORE:", "").strip()))
+                    ai_score = max(-10, min(10, ai_score))
+                except:
+                    pass
+            elif line.startswith("MACRO_RISK:"):
+                macro_risk = "YES" in line.upper()
+            elif line.startswith("SUMMARY:"):
+                ai_summary = line.replace("SUMMARY:", "").strip()
+
+        return {
+            **basic,
+            "ai_score": ai_score,
+            "ai_summary": ai_summary,
+            "macro_risk": macro_risk,
+        }
+    except Exception:
+        basic = _news_sentiment(ticker)
+        return {**basic, "ai_summary": "", "ai_score": 0, "macro_risk": False}
+
+
 def fetch_scan(ticker: str) -> dict | None:
     """Lightweight fetch for scanning — skips slow .info calls, just gets history + technicals."""
     try:
@@ -2316,9 +2380,38 @@ def check_market_regime() -> dict:
             "sma_50": round(sma_50, 2),
             "sma_200": round(sma_200, 2),
             "rsi": round(rsi, 1),
+            "vix": _get_vix(),
         }
     except Exception as e:
         return {"regime": "unknown", "safe_to_buy": True, "reason": f"Could not check: {str(e)[:60]}"}
+
+
+@st.cache_data(ttl=300)
+def _get_vix() -> dict:
+    """Get VIX (fear index) level."""
+    try:
+        vix = yf.Ticker("^VIX")
+        hist = vix.history(period="5d")
+        if hist is None or hist.empty:
+            return {"level": 0, "status": "unknown"}
+        price = float(hist["Close"].iloc[-1])
+        prev = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else price
+        change = round(price - prev, 2)
+
+        if price >= 35:
+            status = "extreme_fear"
+        elif price >= 25:
+            status = "high_fear"
+        elif price >= 20:
+            status = "elevated"
+        elif price >= 15:
+            status = "normal"
+        else:
+            status = "complacent"
+
+        return {"level": round(price, 2), "change": change, "status": status}
+    except Exception:
+        return {"level": 0, "status": "unknown"}
 
 
 # ── Earnings avoidance ───────────────────────────────────────────────────────
@@ -2491,9 +2584,9 @@ def run_backtest(years: int = 2) -> dict:
     Simulates autopilot with trailing stops over the last N years.
     """
     STARTING_CAPITAL = 25_000
-    RISK_PER_TRADE = 0.015
-    MIN_SCORE = 58              # lower bar — backtester lacks RS/sector/news data (~20-30 pts missing)
-    MIN_RR = 1.5
+    RISK_PER_TRADE = 0.02        # 2% risk per trade — more aggressive
+    MIN_SCORE = 50               # lower bar — backtester has ~20-30 pts missing data
+    MIN_RR = 1.2                 # lower R:R bar = more trades
 
     # 100 stocks
     TEST_UNIVERSE = [
@@ -2559,11 +2652,11 @@ def run_backtest(years: int = 2) -> dict:
 
     log = [f"**Backtesting {len(TEST_UNIVERSE)} stocks over {years} years...**",
            f"Starting capital: ${STARTING_CAPITAL:,}",
-           f"Rules: score≥{MIN_SCORE}, BUY/STRONG_BUY, R:R≥{MIN_RR}, 2x ATR trailing, partial @ +3%",
+           f"Rules: score≥{MIN_SCORE}, BUY/STRONG_BUY, R:R≥{MIN_RR}, 1.5x ATR trail, partial @ +2%",
            f"⚠️ Score threshold lowered to {MIN_SCORE} (live has RS/sector/news data worth ~20+ extra pts)"]
 
-    step = 10       # check every 10 bars instead of 20 — catch more setups
-    max_hold = 40   # max hold period (bars)
+    step = 5        # check every 5 bars — catch the most setups
+    max_hold = 25   # cut dead trades after 25 bars (~5 weeks)
 
     for ticker in TEST_UNIVERSE:
         try:
@@ -2610,18 +2703,32 @@ def run_backtest(years: int = 2) -> dict:
                 if entry_price <= stop or stop <= 0:
                     continue
 
-                # Position sizing
+                # Position sizing — tiered by conviction
                 risk_per_share = entry_price - stop
                 if risk_per_share <= 0:
                     continue
-                max_risk = capital * RISK_PER_TRADE
+
+                # Higher score = bigger position
+                score_mult = 1.0
+                if sig["score"] >= 70:
+                    score_mult = 1.5  # high conviction
+                elif sig["score"] >= 60:
+                    score_mult = 1.2
+
+                max_risk = capital * RISK_PER_TRADE * score_mult
                 qty = max(1, int(max_risk / risk_per_share))
                 cost = qty * entry_price
-                if cost > capital * 0.20:
-                    qty = max(1, int(capital * 0.20 / entry_price))
+                if cost > capital * 0.25:
+                    qty = max(1, int(capital * 0.25 / entry_price))
                     cost = qty * entry_price
                 if cost > capital:
                     continue
+
+                # Momentum filter: 5-day return must be positive
+                if i >= 5:
+                    recent_return = (entry_price - float(hist["Close"].iloc[i-5])) / float(hist["Close"].iloc[i-5])
+                    if recent_return < 0:
+                        continue  # no buying into downtrends
 
                 # ── Simulate trade ──
                 highest = entry_price
@@ -2632,7 +2739,7 @@ def run_backtest(years: int = 2) -> dict:
                 partial_taken = False
                 partial_pnl = 0
                 remaining_qty = qty
-                partial_threshold = entry_price * 1.03  # +3% partial
+                partial_threshold = entry_price * 1.02  # +2% partial (faster)
                 bars_held = 0
 
                 for _, day in future.iterrows():
@@ -2641,20 +2748,20 @@ def run_backtest(years: int = 2) -> dict:
                     day_close = float(day["Close"])
                     bars_held += 1
 
-                    # Check stop FIRST (stops always fill before targets)
+                    # Check stop FIRST
                     if day_low <= current_stop:
                         exit_price = current_stop
                         exit_reason = "STOPPED" if not partial_taken else "TRAILED"
                         break
 
-                    # Partial profit: sell half at +3%
+                    # Partial profit: sell half at +2%
                     if not partial_taken and day_high >= partial_threshold and remaining_qty > 1:
                         half = remaining_qty // 2
                         partial_pnl = (partial_threshold - entry_price) * half
                         remaining_qty -= half
                         partial_taken = True
-                        # Move stop to breakeven + 0.5%
-                        current_stop = max(current_stop, round(entry_price * 1.005, 2))
+                        # Move stop to entry + 1% (lock in profit aggressively)
+                        current_stop = max(current_stop, round(entry_price * 1.01, 2))
 
                     # Check target
                     if day_high >= target:
@@ -2662,10 +2769,10 @@ def run_backtest(years: int = 2) -> dict:
                         exit_reason = "TARGET"
                         break
 
-                    # Trail stop using day_high (not just close)
+                    # Tight trailing: 1.5x ATR from highest
                     if day_high > highest:
                         highest = day_high
-                        new_stop = round(highest - 2.0 * atr, 2)
+                        new_stop = round(highest - 1.5 * atr, 2)
                         if new_stop > current_stop:
                             current_stop = new_stop
 
@@ -2789,7 +2896,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     account = alpaca_account()
     if not account:
         return {"ok": False, "error": "Can't connect to Alpaca."}
-    log.append(f"Portfolio: ${account['equity']:,.2f} · Cash: ${account['cash']:,.2f} · Buying power: ${account['buying_power']:,.2f}")
+    log.append(f"💰 Portfolio: ${account['equity']:,.2f} · Cash: ${account['cash']:,.2f} · Buying power: ${account['buying_power']:,.2f}")
 
     positions = alpaca_positions()
     held_tickers = {p["ticker"] for p in positions} | st.session_state.get("autopilot_bought", set())
@@ -2858,16 +2965,33 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     # ── 1b3. SPY correlation filter — don't go long into a dump ──
     spy_trend = _get_spy_intraday_trend()
     if spy_trend:
-        log.append(f"SPY: {spy_trend['direction']} ({spy_trend['change_pct']:+.2f}%) · VWAP {'above' if spy_trend['above_vwap'] else 'below'}")
+        log.append(f"📈 SPY: {spy_trend['direction']} ({spy_trend['change_pct']:+.2f}%) · VWAP {'above' if spy_trend['above_vwap'] else 'below'}")
 
-    # ── 1c. Market regime check ──
+    # ── 1c. Market regime + VIX check ──
     regime = check_market_regime()
-    log.append(f"Market: {regime['reason']}")
+    vix = regime.get("vix", {})
+    vix_level = vix.get("level", 0)
+    vix_status = vix.get("status", "unknown")
+    log.append(f"📊 Market: {regime['reason']}")
+    if vix_level > 0:
+        vix_emoji = "🟢" if vix_level < 20 else "🟡" if vix_level < 25 else "🔴"
+        log.append(f"{vix_emoji} VIX: {vix_level} ({vix_status}) — {'fear is low, good for trading' if vix_level < 20 else 'elevated fear, trade smaller' if vix_level < 30 else 'EXTREME FEAR — reducing exposure'}")
+
+    # VIX panic mode — shut down longs, only allow shorts
+    vix_panic = vix_level >= 35
+    vix_cautious = vix_level >= 25
+
+    if vix_panic and not dry_run:
+        log.append("🛑 **VIX EXTREME (≥35)** — closing all long positions, only shorts allowed")
+        for pos in positions:
+            if pos.get("side", "long") == "long":
+                alpaca_sell(ticker=pos["ticker"], sell_all=True)
+                log.append(f"🔴 Emergency closed {pos['ticker']} (VIX panic)")
 
     if not regime["safe_to_buy"]:
-        log.append("⛔ Market regime unsafe — skipping new buys, only managing existing positions")
+        log.append("⛔ Market regime unsafe — skipping new longs, only managing existing")
 
-    # ── 1c. Sector strength report ──
+    # ── 1d. Sector strength report ──
     sectors = _get_sector_strength()
     if sectors:
         ranked = sorted(sectors.items(), key=lambda x: x[1].get("rank", 99))
@@ -2876,6 +3000,8 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         log.append(f"Hot sectors: {', '.join(top3)} · Cold: {', '.join(bot3)}")
 
     # ── 2. Trail stops on profitable positions ──
+    log.append("")
+    log.append("**Step 1: Managing existing positions**")
     if positions:
         trail_actions = update_trailing_stops(positions, log)
         for a in trail_actions:
@@ -2961,6 +3087,8 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         log.append(f"No positions hit +{PARTIAL_PROFIT_PCT*100:.1f}% for partial profit yet")
 
     # ── 3. Check existing positions — close if signal flipped ──
+    log.append("")
+    log.append("**Step 2: Checking if positions need closing**")
     sells = []
     for pos in positions:
         try:
@@ -3028,7 +3156,9 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
 
     # ── 4. Scan for new opportunities ──
     # Step A: Pre-market gap scan — find stocks gapping hard on volume
-    log.append("Pre-screening market for gaps and momentum...")
+    log.append("")
+    log.append("**Step 3: Scanning market for new setups**")
+    log.append("Pre-screening for gaps and momentum...")
 
     candidates = []
     gap_stocks = []
@@ -3228,9 +3358,11 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
 
     longs = [o for o in opportunities if o["side"] == "long"]
     shorts = [o for o in opportunities if o["side"] == "short"]
-    log.append(f"Found {len(opportunities)} opportunities ({len(longs)} long, {len(shorts)} short) — executing top {min(open_slots, len(opportunities))}")
+    log.append(f"Found {len(opportunities)} setups ({len(longs)} long, {len(shorts)} short)")
 
     # ── 5. Execute trades on best opportunities ──
+    log.append("")
+    log.append(f"**Step 4: Executing top {min(open_slots, len(opportunities))} trades**")
     executions = []
     for opp in opportunities[:open_slots]:
         ticker = opp["ticker"]
@@ -3244,14 +3376,19 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             log.append(f"⏭️ Skipped {ticker} — earnings on {earn_date}")
             continue
 
-        # News check — skip longs on very bearish news, skip shorts on very bullish news
-        opp_news = opp["data"].get("news_sentiment", {})
-        if not is_short and opp_news.get("sentiment") == "very_bearish":
-            log.append(f"⏭️ Skipped {ticker} long — very bearish news")
+        # Deep news check via AI (only for stocks about to be traded)
+        opp_news = _ai_news_analysis(ticker)
+        if not is_short and opp_news.get("ai_score", 0) <= -5:
+            log.append(f"⏭️ Skipped {ticker} long — AI news bearish ({opp_news.get('ai_summary', '')[:60]})")
             continue
-        if is_short and opp_news.get("sentiment") == "very_bullish":
-            log.append(f"⏭️ Skipped {ticker} short — very bullish news")
+        if is_short and opp_news.get("ai_score", 0) >= 5:
+            log.append(f"⏭️ Skipped {ticker} short — AI news bullish ({opp_news.get('ai_summary', '')[:60]})")
             continue
+        if opp_news.get("macro_risk"):
+            log.append(f"⚠️ MACRO RISK detected for {ticker}: {opp_news.get('ai_summary', '')[:80]}")
+            if not is_short:
+                log.append(f"⏭️ Skipped {ticker} long — macro risk active")
+                continue
 
         # SPY directional filter — don't fight the market
         if spy_trend and spy_trend.get("strong"):
@@ -3261,6 +3398,14 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             if is_short and spy_trend["direction"] == "bullish":
                 log.append(f"⏭️ Skipped {ticker} short — SPY ripping ({spy_trend['change_pct']:+.1f}%)")
                 continue
+
+        # VIX filter — block longs in panic, reduce size in fear
+        if vix_panic and not is_short:
+            log.append(f"⏭️ Skipped {ticker} long — VIX ≥35 (panic mode, shorts only)")
+            continue
+        if vix_cautious and not is_short and not regime["safe_to_buy"]:
+            log.append(f"⏭️ Skipped {ticker} long — VIX elevated + bear regime")
+            continue
 
         entry = trade["entry"]
         stop = trade["stop_loss"]
@@ -3275,7 +3420,13 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         if risk_per_share <= 0:
             continue
 
-        max_risk_dollars = account["equity"] * RISK_PER_TRADE
+        # Scale risk down when VIX is elevated
+        risk_mult = 1.0
+        if vix_cautious:
+            risk_mult = 0.5  # half size when fearful
+            log.append(f"⚠️ VIX elevated — half position size for {ticker}")
+
+        max_risk_dollars = account["equity"] * RISK_PER_TRADE * risk_mult
         qty = max(1, int(max_risk_dollars / risk_per_share))
 
         # Cap at MAX_POS_PCT of equity

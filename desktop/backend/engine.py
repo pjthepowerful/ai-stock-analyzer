@@ -97,6 +97,8 @@ from trading import (
     _market_is_open,
     _get_spy_intraday_trend,
     _get_sector_strength,
+    _get_vix,
+    _ai_news_analysis,
 
     # News
     _news_sentiment,
