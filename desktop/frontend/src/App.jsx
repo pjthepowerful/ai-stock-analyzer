@@ -227,6 +227,14 @@ function App() {
         </div>
       )}
 
+      {/* ── Analysis Chart (fixed, above chat) ── */}
+      {chatChart && (
+        <div className="analysis-chart">
+          <button className="chart-close" onClick={() => setChatChart(null)}>✕</button>
+          <Chart ticker={chatChart.ticker} signal={chatChart.signal} height={240} />
+        </div>
+      )}
+
       {/* ── Chat ── */}
       <div className="chat">
         {messages.length === 0 && !sending && (
@@ -257,13 +265,6 @@ function App() {
             <div className="msg-content" dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }} />
           </div>
         ))}
-        {/* Chat chart appears inline after messages */}
-        {chatChart && messages.length > 0 && (
-          <div className="chat-chart">
-            <button className="chart-close" onClick={() => setChatChart(null)}>✕</button>
-            <Chart ticker={chatChart.ticker} signal={chatChart.signal} height={260} />
-          </div>
-        )}
         {sending && (
           <div className="msg msg-assistant">
             <div className="typing"><span></span><span></span><span></span></div>

@@ -181,19 +181,14 @@ body {
 }
 
 /* ── Chart ── */
-.chat-chart {
+/* ── Analysis Chart (fixed panel above chat) ── */
+.analysis-chart {
   position: relative;
-  margin: 8px 0 12px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  padding: 8px 24px 12px;
+  border-bottom: 1px solid var(--border);
   background: var(--surface);
-  animation: fadeScale 0.25s ease;
-}
-
-@keyframes fadeScale {
-  from { opacity: 0; transform: scale(0.98); }
-  to { opacity: 1; transform: scale(1); }
+  flex-shrink: 0;
+  animation: expandChart 0.25s ease;
 }
 
 .chart-close {
