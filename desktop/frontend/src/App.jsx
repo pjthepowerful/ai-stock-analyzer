@@ -240,22 +240,27 @@ function App() {
         {messages.length === 0 && !sending && (
           <div className="welcome">
             <h2>{greeting()}</h2>
+            <p className="welcome-sub">Ask me anything about the market.</p>
             <div className="welcome-examples">
               <div className="example-card" onClick={() => quickAction('NVDA')}>
+                <span className="example-icon">📊</span>
                 <span className="example-title">Analyze NVDA</span>
-                <span className="example-desc">signal breakdown</span>
+                <span className="example-desc">Full signal breakdown with entry, stop, and targets</span>
               </div>
               <div className="example-card" onClick={() => quickAction('top gainers')}>
+                <span className="example-icon">🔥</span>
                 <span className="example-title">Top Gainers</span>
-                <span className="example-desc">today's movers</span>
+                <span className="example-desc">Today's biggest movers with momentum scores</span>
               </div>
               <div className="example-card" onClick={() => quickAction('portfolio')}>
+                <span className="example-icon">💼</span>
                 <span className="example-title">My Portfolio</span>
-                <span className="example-desc">positions & P&L</span>
+                <span className="example-desc">Open positions, P&L, and account overview</span>
               </div>
               <div className="example-card" onClick={() => quickAction('autopilot')}>
+                <span className="example-icon">⚡</span>
                 <span className="example-title">Start Autopilot</span>
-                <span className="example-desc">scan & trade</span>
+                <span className="example-desc">Scan the market and execute trades automatically</span>
               </div>
             </div>
           </div>
