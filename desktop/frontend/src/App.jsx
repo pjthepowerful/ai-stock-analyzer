@@ -18,8 +18,7 @@ function App() {
   const [connected, setConnected] = useState(false)
   const [spyTrend, setSpyTrend] = useState(null)
   const [time, setTime] = useState('')
-  const [positionChart, setPositionChart] = useState(null) // chart in positions area
-  const [chatChart, setChatChart] = useState(null) // chart in chat area
+  const [positionChart, setPositionChart] = useState(null)
   const [loading, setLoading] = useState(true)
 
   const messagesEnd = useRef(null)
@@ -103,13 +102,14 @@ function App() {
       })
       const data = await res.json()
       if (data.ok) {
+        // Add message with optional chart attached
         setMessages(prev => [...prev, {
-          role: 'assistant', content: data.message, type: data.type, ticker: data.ticker,
+          role: 'assistant',
+          content: data.message,
+          type: data.type,
+          ticker: data.ticker || null,
+          signal: data.trade_signal || null,
         }])
-        // Chat-triggered charts go in the chat area
-        if (data.ticker) {
-          setChatChart({ ticker: data.ticker, signal: data.trade_signal || null })
-        }
         if (data.type === 'trade' && data.message?.includes('Bought')) playBuy()
         else if (data.type === 'trade' && (data.message?.includes('Sold') || data.message?.includes('Shorted'))) playSell()
         else if (data.type === 'trade' && data.message?.includes('Covered')) playProfit()
@@ -150,7 +150,6 @@ function App() {
 
   return (
     <div className="app">
-      {/* ── Top Bar ── */}
       <header className="topbar">
         <div className="topbar-left">
           <div className="logo">P</div>
@@ -167,7 +166,6 @@ function App() {
         </div>
       </header>
 
-      {/* ── Dashboard ── */}
       {loading ? (
         <div className="dashboard">
           <div className="dash-item"><span className="dash-label">Loading</span><span className="dash-value shimmer">···</span></div>
@@ -204,7 +202,6 @@ function App() {
         </div>
       ) : null}
 
-      {/* ── Positions + Position Chart ── */}
       {positions.length > 0 && (
         <div className="positions-section">
           <div className="positions-strip">
@@ -227,15 +224,6 @@ function App() {
         </div>
       )}
 
-      {/* ── Analysis Chart (fixed, above chat) ── */}
-      {chatChart && (
-        <div className="analysis-chart">
-          <button className="chart-close" onClick={() => setChatChart(null)}>✕</button>
-          <Chart ticker={chatChart.ticker} signal={chatChart.signal} height={240} />
-        </div>
-      )}
-
-      {/* ── Chat ── */}
       <div className="chat">
         {messages.length === 0 && !sending && (
           <div className="welcome">
@@ -267,18 +255,35 @@ function App() {
         )}
         {messages.map((m, i) => (
           <div key={i} className={`msg msg-${m.role}`}>
-            <div className="msg-content" dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }} />
+            <div className="msg-avatar">
+              {m.role === 'assistant' ? (
+                <div className="avatar avatar-ai">P</div>
+              ) : (
+                <div className="avatar avatar-user">You</div>
+              )}
+            </div>
+            <div className="msg-body">
+              <div className="msg-content" dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }} />
+              {/* Chart appears directly under the AI message that triggered it */}
+              {m.role === 'assistant' && m.ticker && (
+                <div className="msg-chart">
+                  <Chart ticker={m.ticker} signal={m.signal} height={260} />
+                </div>
+              )}
+            </div>
           </div>
         ))}
         {sending && (
           <div className="msg msg-assistant">
-            <div className="typing"><span></span><span></span><span></span></div>
+            <div className="msg-avatar"><div className="avatar avatar-ai">P</div></div>
+            <div className="msg-body">
+              <div className="typing"><span></span><span></span><span></span></div>
+            </div>
           </div>
         )}
         <div ref={messagesEnd} />
       </div>
 
-      {/* ── Input ── */}
       <div className="input-bar">
         <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && send()}

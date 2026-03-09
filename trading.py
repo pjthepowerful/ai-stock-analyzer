@@ -3809,9 +3809,9 @@ What to avoid:
 - Never be condescending, sarcastic, or dismissive
 - Don't use all lowercase — use proper capitalization
 
-For simple price checks: 1–2 sentences max.
-For general chat: be warm and friendly, no need to force stock talk.
-For full analysis: go deep but stay conversational. 2–3 natural paragraphs. Always close with the trade plan numbers."""
+For simple price checks: 1 sentence max.
+For general chat: 1–2 sentences. Be warm but brief.
+For full analysis: 1 short paragraph with the key insight, then the trade plan numbers. Keep it under 100 words total. No rambling."""
 
     messages = [{"role": "system", "content": system}]
     for h in history[-8:]:
