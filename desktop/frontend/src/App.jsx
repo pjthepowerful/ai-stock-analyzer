@@ -105,12 +105,11 @@ const data = await res.json()
 if (data.ok) {
         // Add message with optional chart attached
 setMessages(prev => [...prev, {
-          role: 'assistant', content: data.message, type: data.type, ticker: data.ticker,
-          role: 'assistant',
-          content: data.message,
-          type: data.type,
-          ticker: data.ticker || null,
-          signal: data.trade_signal || null,
+  role: 'assistant',
+  content: data.message,
+  type: data.type,
+  ticker: data.ticker || null,
+  signal: data.trade_signal || null,
 }])
         // Chat-triggered charts go in the chat area
         if (data.ticker) {
