@@ -2,22 +2,36 @@
   "build": {
     "beforeBuildCommand": "npm run build",
     "beforeDevCommand": "npm run dev",
-    "devPath": "http://localhost:1420",
-    "distDir": "../frontend/dist"
+    "distDir": "dist",              // relative to frontend root
+    "devPath": "http://localhost:1420" // your Vite dev server
   },
   "package": {
     "productName": "Paula",
     "version": "1.0.0"
   },
   "tauri": {
+    "windows": [
+      {
+        "title": "Paula — Intraday Trading",
+        "width": 920,
+        "height": 720,
+        "minWidth": 680,
+        "minHeight": 500,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "transparent": false
+      }
+    ],
     "allowlist": {
-      "all": true,  // full access for development
-      "shell": { "all": true, "open": true },
+      "all": false,
+      "shell": { "all": false, "open": true },
       "window": { "all": true },
       "process": { "all": true }
     },
     "bundle": {
       "active": true,
+      "identifier": "com.paula.trading",
       "icon": [
         "icons/32x32.png",
         "icons/128x128.png",
@@ -25,24 +39,10 @@
         "icons/icon.icns",
         "icons/icon.ico"
       ],
-      "identifier": "com.paula.trading",
       "targets": "all"
     },
     "security": {
       "csp": null
-    },
-    "windows": [
-      {
-        "fullscreen": false,
-        "resizable": true,
-        "title": "Paula — Intraday Trading",
-        "width": 920,
-        "height": 720,
-        "minWidth": 680,
-        "minHeight": 500,
-        "decorations": true,
-        "transparent": false
-      }
-    ]
+    }
   }
 }
