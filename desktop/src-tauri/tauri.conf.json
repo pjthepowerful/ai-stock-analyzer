@@ -2,8 +2,8 @@
   "build": {
     "beforeBuildCommand": "npm run build",
     "beforeDevCommand": "npm run dev",
-    "distDir": "dist",              // relative to frontend root
-    "devPath": "http://localhost:1420" // your Vite dev server
+    "devPath": "http://localhost:1420",
+    "distDir": "../dist"
   },
   "package": {
     "productName": "Paula",
