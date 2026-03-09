@@ -11,17 +11,10 @@
   },
   "tauri": {
     "allowlist": {
-      "all": false,
-      "shell": {
-        "all": false,
-        "open": true
-      },
-      "window": {
-        "all": true
-      },
-      "process": {
-        "all": true
-      }
+      "all": true,  // full access for development
+      "shell": { "all": true, "open": true },
+      "window": { "all": true },
+      "process": { "all": true }
     },
     "bundle": {
       "active": true,
