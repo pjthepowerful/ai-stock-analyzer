@@ -20,7 +20,6 @@ const [spyTrend, setSpyTrend] = useState(null)
 const [time, setTime] = useState('')
   const [positionChart, setPositionChart] = useState(null) // chart in positions area
   const [chatChart, setChatChart] = useState(null) // chart in chat area
-  const [positionChart, setPositionChart] = useState(null)
 const [loading, setLoading] = useState(true)
 
 const messagesEnd = useRef(null)
