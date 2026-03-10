@@ -792,6 +792,19 @@ def alpaca_smart_buy(ticker: str, trade_signal: dict, risk_pct: float = 0.02) ->
     return result
 
 
+def _sanitize_trade_error_message(error: str) -> str:
+    if not error:
+        return error
+    error_lc = error.lower()
+    if (
+        "no day trades permitted" in error_lc
+        or "previous day account equity" in error_lc
+        or "pattern day trader" in error_lc
+    ):
+        return "Order rejected"
+    return error
+
+
 
 def _sanitize_trade_error_message(error: str) -> str:
     if not error:
@@ -3476,7 +3489,8 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             else:
                 raw_err = result.get("error", "")
                 _log_trade_error(f"autopilot {ticker}", raw_err)
-                executions.append(f"⚠️ Failed to {'short' if is_short else 'buy'} {ticker}: {raw_err}")
+                err = _sanitize_trade_error_message(raw_err)
+                executions.append(f"⚠️ Failed to {'short' if is_short else 'buy'} {ticker}: {err}")
 
     for b in executions:
         log.append(b)
@@ -3633,7 +3647,7 @@ def execute(intent: dict) -> dict:
                     "msg": f"🟢 **Bought {qty_str} of {ticker.upper()}** · Status: {result['status']}"}
         raw_err = result.get("error", "Unknown")
         _log_trade_error(f"buy {ticker}", raw_err)
-        return {"ok": False, "error": f"Buy failed: {raw_err}"}
+        return {"ok": False, "error": f"Buy failed: {_sanitize_trade_error_message(raw_err)}"}
 
     if t == "sell":
         ticker = intent["ticker"]
@@ -3646,7 +3660,7 @@ def execute(intent: dict) -> dict:
                     "msg": f"🔴 **{action} {ticker.upper()}** · Status: {result.get('status', 'submitted')}"}
         raw_err = result.get("error", "Unknown")
         _log_trade_error(f"sell {ticker}", raw_err)
-        return {"ok": False, "error": f"Sell failed: {raw_err}"}
+        return {"ok": False, "error": f"Sell failed: {_sanitize_trade_error_message(raw_err)}"}
 
     if t == "short":
         ticker = intent["ticker"]
@@ -3667,7 +3681,7 @@ def execute(intent: dict) -> dict:
             return {"ok": True, "type": "trade", "ticker": ticker, "msg": msg}
         raw_err = result.get("error", "Unknown")
         _log_trade_error(f"short {ticker}", raw_err)
-        return {"ok": False, "error": f"Short failed: {raw_err}"}
+        return {"ok": False, "error": f"Short failed: {_sanitize_trade_error_message(raw_err)}"}
 
     if t == "cover":
         ticker = intent["ticker"]
@@ -3680,7 +3694,7 @@ def execute(intent: dict) -> dict:
                     "msg": f"🟢 **{action} {ticker.upper()}** (short closed) · Status: {result.get('status', 'submitted')}"}
         raw_err = result.get("error", "Unknown")
         _log_trade_error(f"cover {ticker}", raw_err)
-        return {"ok": False, "error": f"Cover failed: {raw_err}"}
+        return {"ok": False, "error": f"Cover failed: {_sanitize_trade_error_message(raw_err)}"}
 
     if t == "smart_buy":
         ticker = intent["ticker"]
@@ -3707,7 +3721,7 @@ def execute(intent: dict) -> dict:
             return {"ok": True, "type": "trade", "ticker": ticker, "msg": msg, "trade_signal": signal}
         raw_err = result.get("error", "Unknown")
         _log_trade_error(f"smart_buy {ticker}", raw_err)
-        return {"ok": False, "error": f"Smart buy failed: {raw_err}"}
+        return {"ok": False, "error": f"Smart buy failed: {_sanitize_trade_error_message(raw_err)}"}
 
     # ── Standard commands ──
     if t == "price":

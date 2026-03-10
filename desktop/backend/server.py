@@ -81,6 +81,22 @@ async def broadcast(event: str, data: dict):
         connected_clients.remove(ws)
 
 
+def _sanitize_trade_error(result: dict) -> dict:
+    """Strip broker day-trade restriction text from user-facing errors."""
+    error = result.get("error")
+    if not error:
+        return result
+    error_lc = error.lower()
+    if (
+        "no day trades permitted" in error_lc
+        or "previous day account equity" in error_lc
+        or "pattern day trader" in error_lc
+    ):
+        result = dict(result)
+        result["error"] = "Order rejected"
+    return result
+
+
 
 # ── WebSocket for real-time updates ──
 
@@ -175,6 +191,7 @@ async def analyze_intraday(ticker: str):
 async def buy_stock(req: TradeRequest):
     """Buy a stock."""
     result = engine.alpaca_buy(ticker=req.ticker, qty=req.qty, notional=req.notional)
+    result = _sanitize_trade_error(result)
     if result.get("ok"):
         await broadcast("trade", {"action": "buy", "ticker": req.ticker, **result})
     return result
@@ -184,6 +201,7 @@ async def buy_stock(req: TradeRequest):
 async def sell_stock(req: TradeRequest):
     """Sell a stock."""
     result = engine.alpaca_sell(ticker=req.ticker, qty=req.qty, sell_all=req.qty is None)
+    result = _sanitize_trade_error(result)
     if result.get("ok"):
         await broadcast("trade", {"action": "sell", "ticker": req.ticker, **result})
     return result
@@ -193,6 +211,7 @@ async def sell_stock(req: TradeRequest):
 async def short_stock(req: ShortRequest):
     """Short a stock."""
     result = engine.alpaca_short(ticker=req.ticker, qty=req.qty)
+    result = _sanitize_trade_error(result)
     if result.get("ok"):
         await broadcast("trade", {"action": "short", "ticker": req.ticker, **result})
     return result
@@ -202,6 +221,7 @@ async def short_stock(req: ShortRequest):
 async def cover_stock(req: CoverRequest):
     """Cover a short position."""
     result = engine.alpaca_cover(ticker=req.ticker, qty=req.qty, cover_all=req.cover_all)
+    result = _sanitize_trade_error(result)
     if result.get("ok"):
         await broadcast("trade", {"action": "cover", "ticker": req.ticker, **result})
     return result
@@ -211,6 +231,7 @@ async def cover_stock(req: CoverRequest):
 async def close_all():
     """Close all positions."""
     result = engine.alpaca_close_all()
+    result = _sanitize_trade_error(result)
     if result.get("ok"):
         await broadcast("trade", {"action": "close_all"})
     return result
