@@ -792,6 +792,19 @@ result["take_profit"] = target
 return result
 
 
+def _sanitize_trade_error_message(error: str) -> str:
+    if not error:
+        return error
+    error_lc = error.lower()
+    if (
+        "no day trades permitted" in error_lc
+        or "previous day account equity" in error_lc
+        or "pattern day trader" in error_lc
+    ):
+        return "Order rejected"
+    return error
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  TECHNICAL ANALYSIS ENGINE
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -3392,12 +3405,9 @@ continue
 
 # SPY directional filter — don't fight the market
 if spy_trend and spy_trend.get("strong"):
-if not is_short and spy_trend["direction"] == "bearish":
-log.append(f"⏭️ Skipped {ticker} long — SPY dumping ({spy_trend['change_pct']:+.1f}%)")
-continue
-if is_short and spy_trend["direction"] == "bullish":
-log.append(f"⏭️ Skipped {ticker} short — SPY ripping ({spy_trend['change_pct']:+.1f}%)")
-continue
+    if not is_short and spy_trend["direction"] == "bearish":
+        log.append(f"⏭️ Skipped {ticker} long — SPY dumping ({spy_trend['change_pct']:+.1f}%)")
+        continue
 
 # VIX filter — block longs in panic, reduce size in fear
 if vix_panic and not is_short:
@@ -3458,7 +3468,8 @@ executions.append(f"{side_emoji} {side_word} {qty} {ticker} @ ~${entry:.2f} · S
 st.session_state.setdefault("autopilot_bought", set()).add(ticker)
 account["buying_power"] -= cost
 else:
-executions.append(f"⚠️ Failed to {'short' if is_short else 'buy'} {ticker}: {result.get('error','')}")
+err = _sanitize_trade_error_message(result.get("error", ""))
+executions.append(f"⚠️ Failed to {'short' if is_short else 'buy'} {ticker}: {err}")
 
 for b in executions:
 log.append(b)
@@ -3613,7 +3624,7 @@ if result["ok"]:
 qty_str = f"{result['qty']} shares" if result.get("qty") else f"${notional}"
 return {"ok": True, "type": "trade",
 "msg": f"🟢 **Bought {qty_str} of {ticker.upper()}** · Status: {result['status']}"}
-return {"ok": False, "error": f"Buy failed: {result.get('error', 'Unknown')}"}
+return {"ok": False, "error": f"Buy failed: {_sanitize_trade_error_message(result.get('error', 'Unknown'))}"}
 
 if t == "sell":
 ticker = intent["ticker"]
@@ -3624,7 +3635,7 @@ if result["ok"]:
 action = "Closed position in" if sell_all else f"Sold {qty or result.get('qty', '')} shares of"
 return {"ok": True, "type": "trade",
 "msg": f"🔴 **{action} {ticker.upper()}** · Status: {result.get('status', 'submitted')}"}
-return {"ok": False, "error": f"Sell failed: {result.get('error', 'Unknown')}"}
+return {"ok": False, "error": f"Sell failed: {_sanitize_trade_error_message(result.get('error', 'Unknown'))}"}
 
 if t == "short":
 ticker = intent["ticker"]
@@ -3643,7 +3654,7 @@ msg = f"🔴 **Shorted {qty} shares of {ticker.upper()}** · Status: {result.get
 if data:
 msg += f"\n\nSignal: {signal['action']} (score: {signal['score']})"
 return {"ok": True, "type": "trade", "ticker": ticker, "msg": msg}
-return {"ok": False, "error": f"Short failed: {result.get('error', 'Unknown')}"}
+return {"ok": False, "error": f"Short failed: {_sanitize_trade_error_message(result.get('error', 'Unknown'))}"}
 
 if t == "cover":
 ticker = intent["ticker"]
@@ -3654,7 +3665,7 @@ if result.get("ok"):
 action = "Covered all of" if cover_all else f"Covered {qty or result.get('qty', '')} shares of"
 return {"ok": True, "type": "trade",
 "msg": f"🟢 **{action} {ticker.upper()}** (short closed) · Status: {result.get('status', 'submitted')}"}
-return {"ok": False, "error": f"Cover failed: {result.get('error', 'Unknown')}"}
+return {"ok": False, "error": f"Cover failed: {_sanitize_trade_error_message(result.get('error', 'Unknown'))}"}
 
 if t == "smart_buy":
 ticker = intent["ticker"]
@@ -3679,7 +3690,7 @@ f"Risk: `${result.get('total_risk', 0):,.2f}` ({signal['trade']['risk_pct']:.1f}
 f"R:R `{signal['trade']['risk_reward']:.1f}:1`"
 )
 return {"ok": True, "type": "trade", "ticker": ticker, "msg": msg, "trade_signal": signal}
-return {"ok": False, "error": f"Smart buy failed: {result.get('error', 'Unknown')}"}
+return {"ok": False, "error": f"Smart buy failed: {_sanitize_trade_error_message(result.get('error', 'Unknown'))}"}
 
 # ── Standard commands ──
 if t == "price":
