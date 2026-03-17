@@ -2219,7 +2219,9 @@ def route(msg: str) -> dict:
         return {"type": "losers", "market": market}
     if any(w in m for w in ["trending", "hot", "movers", "moving"]):
         return {"type": "hot", "market": market}
-    if any(w in m for w in ["price of", "price for", "what's the price", "how much is", "current price", "quote"]):
+    if any(w in m for w in ["price of", "price for", "what's the price", "how much is", "current price", "quote",
+                            "what is the price", "what's the stock price", "how much does", "what does.*trade at",
+                            "price check", "what is it at", "where is it trading"]):
         if ticker:
             return {"type": "price", "ticker": ticker, "market": market}
     if ticker:
@@ -3779,6 +3781,19 @@ INTELLIGENCE RULES:
 - If you see conflicting signals, explain the conflict clearly and say which side you lean toward and why
 - Think about what the user ACTUALLY needs to make a trading decision, not just what data you have
 
+CRITICAL — PRICE ACCURACY:
+- ONLY quote prices that appear in the attached data. NEVER guess or estimate a price.
+- If data shows Price: 142.50 — say $142.50. Don't round to $143 or say "around $140".
+- For trade plans (entry, stop, targets), calculate from the ACTUAL current price in the data.
+- If you don't have price data for a stock, say so — don't make up a number.
+- When listing multiple stocks, use the exact Price and Chg% from the data for each one.
+
+CHAT HISTORY:
+- You have access to the full conversation history. Use it to maintain context.
+- If the user says "what about that one?" — refer to the last stock discussed.
+- If they say "buy it" — they mean the last ticker mentioned.
+- Remember what you've already told them and don't repeat yourself.
+
 IMPORTANT: Autopilot runs a dedicated INTRADAY LONG/SHORT engine using 5-minute bars, VWAP, 9/20 EMA, and intraday momentum. It goes LONG on stocks above VWAP with bullish momentum, and SHORTS stocks below VWAP with bearish momentum. Positions are opened and closed within the same trading day. Everything gets liquidated 15 minutes before market close. When discussing autopilot trades, reference intraday levels (VWAP, intraday EMAs, volume spikes). Users can also manually short via "short TSLA" and cover via "cover TSLA". Don't talk about "holding for weeks" — this is day trading.
 
 CRITICAL — Stock recommendations:
@@ -3827,11 +3842,11 @@ For autopilot questions: Explain exactly what the system does step by step. Be t
 IMPORTANT: When the user asks about top gainers, movers, or recommendations — give REAL analysis on each stock. Don't just list tickers with generic one-liners. Explain the catalyst, the setup quality, and whether you'd actually trade it."""
 
     messages = [{"role": "system", "content": system}]
-    for h in history[-8:]:
+    for h in history[-20:]:
         messages.append({"role": h["role"], "content": h["content"]})
     content = user_msg
     if stock_data:
-        content += f"\n\n---DATA---\n{json.dumps(stock_data, indent=2, default=str)}"
+        content += f"\n\n---LIVE DATA (use these exact prices, do NOT make up numbers)---\n{json.dumps(stock_data, indent=2, default=str)}"
     messages.append({"role": "user", "content": content})
 
     try:
