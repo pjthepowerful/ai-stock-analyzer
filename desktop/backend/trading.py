@@ -792,38 +792,6 @@ def alpaca_smart_buy(ticker: str, trade_signal: dict, risk_pct: float = 0.02) ->
     return result
 
 
-def _sanitize_trade_error_message(error: str) -> str:
-    if not error:
-        return error
-    error_lc = error.lower()
-    if (
-        "no day trades permitted" in error_lc
-        or "previous day account equity" in error_lc
-        or "pattern day trader" in error_lc
-    ):
-        return "Order rejected"
-    return error
-
-
-
-def _sanitize_trade_error_message(error: str) -> str:
-    if not error:
-        return error
-    error_lc = error.lower()
-    if (
-        "no day trades permitted" in error_lc
-        or "previous day account equity" in error_lc
-        or "pattern day trader" in error_lc
-    ):
-        return "Order rejected"
-    return error
-
-
-def _log_trade_error(context: str, error: str) -> None:
-    if error:
-        print(f"TRADE_REJECTED [{context}]: {error}")
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 #  TECHNICAL ANALYSIS ENGINE
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1241,16 +1209,16 @@ def generate_intraday_signal(data: dict) -> dict:
     bullish_count = sum(1 for s in signals if "✓" in s)
     bearish_count = len(warnings)
 
-    if score >= 72 and above_vwap and ema_bullish and vol_ratio >= 1.3:
+    if score >= 68 and above_vwap and ema_bullish:
         action = "STRONG_BUY"
         confidence = min(95, score)
-    elif score >= 62 and above_vwap:
+    elif score >= 56 and (above_vwap or ema_bullish):
         action = "BUY"
         confidence = min(85, score)
-    elif score <= 30:
+    elif score <= 32:
         action = "STRONG_SELL"
         confidence = min(90, 100 - score)
-    elif score <= 38:
+    elif score <= 42 and (not above_vwap or not ema_bullish):
         action = "SELL"
         confidence = min(80, 100 - score)
     else:
@@ -2933,14 +2901,14 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     positions = alpaca_positions()
     held_tickers = {p["ticker"] for p in positions} | st.session_state.get("autopilot_bought", set())
 
-    # Scale positions with equity: 1 per $5k, min 4, max 20
-    MAX_POSITIONS = max(4, min(20, int(account["equity"] / 5000)))
-    RISK_PER_TRADE = 0.01         # 1% risk per trade
-    MAX_POS_PCT = 0.10
-    MIN_SCORE = 62                # intraday — more opportunities
-    MIN_CONFLUENCE = 3
-    MIN_RR = 1.5                  # 1.5:1 minimum (intraday targets are tighter)
-    SELL_BELOW = 40               # quick exits
+    # Scale positions with equity: 1 per $3k, min 5, max 25
+    MAX_POSITIONS = max(5, min(25, int(account["equity"] / 3000)))
+    RISK_PER_TRADE = 0.015        # 1.5% risk per trade
+    MAX_POS_PCT = 0.12
+    MIN_SCORE = 55                # lower bar = more trades
+    MIN_CONFLUENCE = 2            # 2 bullish categories enough
+    MIN_RR = 1.2                  # 1.2:1 minimum — more qualify
+    SELL_BELOW = 42               # quick exits
 
     log.append(f"Open positions: {len(positions)} · Max: {MAX_POSITIONS}")
     log.append("📊 Mode: **Intraday Long/Short** · 5min scans · VWAP · gap scanner · SPY filter · EOD close 3:45 PM")
@@ -3385,7 +3353,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     opportunities.sort(key=lambda x: (action_priority.get(x["action"], 3), -x["score"]))
 
     if not opportunities:
-        log.append("No stocks passed the criteria (longs: score≥62, shorts: score≤38, confluence≥3, R:R≥1.5)")
+        log.append(f"No stocks passed (longs: score≥{MIN_SCORE}, shorts: score≤{100-MIN_SCORE}, confluence≥{MIN_CONFLUENCE}, R:R≥{MIN_RR})")
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells), "scanned": analyzed}
 
     longs = [o for o in opportunities if o["side"] == "long"]
@@ -3426,6 +3394,9 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         if spy_trend and spy_trend.get("strong"):
             if not is_short and spy_trend["direction"] == "bearish":
                 log.append(f"⏭️ Skipped {ticker} long — SPY dumping ({spy_trend['change_pct']:+.1f}%)")
+                continue
+            if is_short and spy_trend["direction"] == "bullish":
+                log.append(f"⏭️ Skipped {ticker} short — SPY ripping ({spy_trend['change_pct']:+.1f}%)")
                 continue
 
         # VIX filter — block longs in panic, reduce size in fear
@@ -3487,10 +3458,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                 st.session_state.setdefault("autopilot_bought", set()).add(ticker)
                 account["buying_power"] -= cost
             else:
-                raw_err = result.get("error", "")
-                _log_trade_error(f"autopilot {ticker}", raw_err)
-                err = _sanitize_trade_error_message(raw_err)
-                executions.append(f"⚠️ Failed to {'short' if is_short else 'buy'} {ticker}: {err}")
+                executions.append(f"⚠️ Failed to {'short' if is_short else 'buy'} {ticker}: {result.get('error','')}")
 
     for b in executions:
         log.append(b)
@@ -3645,9 +3613,7 @@ def execute(intent: dict) -> dict:
             qty_str = f"{result['qty']} shares" if result.get("qty") else f"${notional}"
             return {"ok": True, "type": "trade",
                     "msg": f"🟢 **Bought {qty_str} of {ticker.upper()}** · Status: {result['status']}"}
-        raw_err = result.get("error", "Unknown")
-        _log_trade_error(f"buy {ticker}", raw_err)
-        return {"ok": False, "error": f"Buy failed: {_sanitize_trade_error_message(raw_err)}"}
+        return {"ok": False, "error": f"Buy failed: {result.get('error', 'Unknown')}"}
 
     if t == "sell":
         ticker = intent["ticker"]
@@ -3658,9 +3624,7 @@ def execute(intent: dict) -> dict:
             action = "Closed position in" if sell_all else f"Sold {qty or result.get('qty', '')} shares of"
             return {"ok": True, "type": "trade",
                     "msg": f"🔴 **{action} {ticker.upper()}** · Status: {result.get('status', 'submitted')}"}
-        raw_err = result.get("error", "Unknown")
-        _log_trade_error(f"sell {ticker}", raw_err)
-        return {"ok": False, "error": f"Sell failed: {_sanitize_trade_error_message(raw_err)}"}
+        return {"ok": False, "error": f"Sell failed: {result.get('error', 'Unknown')}"}
 
     if t == "short":
         ticker = intent["ticker"]
@@ -3679,9 +3643,7 @@ def execute(intent: dict) -> dict:
             if data:
                 msg += f"\n\nSignal: {signal['action']} (score: {signal['score']})"
             return {"ok": True, "type": "trade", "ticker": ticker, "msg": msg}
-        raw_err = result.get("error", "Unknown")
-        _log_trade_error(f"short {ticker}", raw_err)
-        return {"ok": False, "error": f"Short failed: {_sanitize_trade_error_message(raw_err)}"}
+        return {"ok": False, "error": f"Short failed: {result.get('error', 'Unknown')}"}
 
     if t == "cover":
         ticker = intent["ticker"]
@@ -3692,9 +3654,7 @@ def execute(intent: dict) -> dict:
             action = "Covered all of" if cover_all else f"Covered {qty or result.get('qty', '')} shares of"
             return {"ok": True, "type": "trade",
                     "msg": f"🟢 **{action} {ticker.upper()}** (short closed) · Status: {result.get('status', 'submitted')}"}
-        raw_err = result.get("error", "Unknown")
-        _log_trade_error(f"cover {ticker}", raw_err)
-        return {"ok": False, "error": f"Cover failed: {_sanitize_trade_error_message(raw_err)}"}
+        return {"ok": False, "error": f"Cover failed: {result.get('error', 'Unknown')}"}
 
     if t == "smart_buy":
         ticker = intent["ticker"]
@@ -3719,9 +3679,7 @@ def execute(intent: dict) -> dict:
                 f"R:R `{signal['trade']['risk_reward']:.1f}:1`"
             )
             return {"ok": True, "type": "trade", "ticker": ticker, "msg": msg, "trade_signal": signal}
-        raw_err = result.get("error", "Unknown")
-        _log_trade_error(f"smart_buy {ticker}", raw_err)
-        return {"ok": False, "error": f"Smart buy failed: {_sanitize_trade_error_message(raw_err)}"}
+        return {"ok": False, "error": f"Smart buy failed: {result.get('error', 'Unknown')}"}
 
     # ── Standard commands ──
     if t == "price":
@@ -3865,7 +3823,7 @@ For full analysis: 1 short paragraph with the key insight, then the trade plan n
 
     try:
         client = Groq(api_key=key)
-        resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=1800, temperature=0.72)
+        resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=400, temperature=0.72)
         return resp.choices[0].message.content
     except Exception as e:
         return f"⚠️ AI error: {str(e)[:120]}"
