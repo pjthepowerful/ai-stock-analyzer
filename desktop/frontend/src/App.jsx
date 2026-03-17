@@ -257,9 +257,17 @@ function App() {
           <div key={i} className={'msg msg-' + m.role}>
             <div className="msg-avatar">
               {m.role === 'assistant' ? (
-                <div className="avatar avatar-ai">P</div>
+                <div className="avatar avatar-ai">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                  </svg>
+                </div>
               ) : (
-                <div className="avatar avatar-user">You</div>
+                <div className="avatar avatar-user">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                  </svg>
+                </div>
               )}
             </div>
             <div className="msg-body">
@@ -275,7 +283,7 @@ function App() {
 
         {sending && (
           <div className="msg msg-assistant">
-            <div className="msg-avatar"><div className="avatar avatar-ai">P</div></div>
+            <div className="msg-avatar"><div className="avatar avatar-ai"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div></div>
             <div className="msg-body">
               <div className="typing"><span></span><span></span><span></span></div>
             </div>
