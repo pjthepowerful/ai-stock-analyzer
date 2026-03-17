@@ -303,8 +303,15 @@ async def chat(msg: ChatMessage):
 
     if result and result.get("ok"):
         resp = result.get("msg", "")
-        if not resp and result.get("type") == "analysis":
-            resp = await loop.run_in_executor(None, engine.ai_response, user_msg, result.get("data"), chat_history, "US")
+        rtype = result.get("type", "")
+
+        if rtype == "analysis":
+            if not resp:
+                resp = await loop.run_in_executor(None, engine.ai_response, user_msg, result.get("data"), chat_history, "US")
+        elif rtype == "list":
+            # Send list data to AI for real analysis instead of just showing a table
+            list_data = result.get("data", [])
+            resp = await loop.run_in_executor(None, engine.ai_response, user_msg, {"list_title": result.get("title", ""), "stocks": list_data}, chat_history, "US")
         elif not resp:
             resp = await loop.run_in_executor(None, engine.ai_response, user_msg, None, chat_history, "US")
     elif result and result.get("error"):

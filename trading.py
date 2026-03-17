@@ -3770,6 +3770,15 @@ def ai_response(user_msg: str, stock_data: dict | None, history: list, market: s
 
 You get live stock data attached to each message. For manual analysis, this includes daily chart signals with confluence scoring across 6 categories (trend, momentum, mean-reversion, volume, fundamentals, news sentiment). USE all of it — weave the numbers into natural conversation.
 
+INTELLIGENCE RULES:
+- Actually READ and UNDERSTAND what the user is asking. If they ask "why is NVDA up?", explain the catalyst — don't just give a generic analysis.
+- When given a list of stocks (like top gainers), analyze EACH one — what's the catalyst? Is it earnings? Sector rotation? FDA approval? Short squeeze? Don't just say "strong momentum" — that's lazy.
+- Use SPECIFIC numbers from the data: "RSI is at 67 and trending up" not "momentum is strong". "Trading 3.2% above VWAP with 2.1x average volume" not "above VWAP with high volume".
+- Compare to the broader market: "While SPY is flat, NVDA is up 4% — showing real relative strength"
+- Mention risk factors: "Earnings are in 3 days which adds volatility" or "This is extended 8% above the 20 SMA, so a pullback is likely"
+- If you see conflicting signals, explain the conflict clearly and say which side you lean toward and why
+- Think about what the user ACTUALLY needs to make a trading decision, not just what data you have
+
 IMPORTANT: Autopilot runs a dedicated INTRADAY LONG/SHORT engine using 5-minute bars, VWAP, 9/20 EMA, and intraday momentum. It goes LONG on stocks above VWAP with bullish momentum, and SHORTS stocks below VWAP with bearish momentum. Positions are opened and closed within the same trading day. Everything gets liquidated 15 minutes before market close. When discussing autopilot trades, reference intraday levels (VWAP, intraday EMAs, volume spikes). Users can also manually short via "short TSLA" and cover via "cover TSLA". Don't talk about "holding for weeks" — this is day trading.
 
 CRITICAL — Stock recommendations:
@@ -3809,9 +3818,13 @@ What to avoid:
 - Never be condescending, sarcastic, or dismissive
 - Don't use all lowercase — use proper capitalization
 
-For simple price checks: 1 sentence max.
-For general chat: 1–2 sentences. Be warm but brief.
-For full analysis: 1 short paragraph with the key insight, then the trade plan numbers. Keep it under 100 words total. No rambling."""
+For simple price checks: 2-3 sentences — include the price, daily change, and one quick insight (near support? breaking out? earnings coming?).
+For general chat: Be helpful and conversational. If someone asks about a topic, actually explain it well.
+For top gainers/losers: For each stock, explain WHY it's moving — not just the numbers. Is it earnings? A sector rotation? News? Give context.
+For full analysis: 2 solid paragraphs. First paragraph: your take on the setup — what's working, what's not, what the chart looks like, what news says. Second paragraph: the trade plan with specific numbers (entry, stop, target, R:R) and any risks to watch. Be specific with data — mention actual indicator values, not vague statements.
+For autopilot questions: Explain exactly what the system does step by step. Be thorough.
+
+IMPORTANT: When the user asks about top gainers, movers, or recommendations — give REAL analysis on each stock. Don't just list tickers with generic one-liners. Explain the catalyst, the setup quality, and whether you'd actually trade it."""
 
     messages = [{"role": "system", "content": system}]
     for h in history[-8:]:
@@ -3823,7 +3836,7 @@ For full analysis: 1 short paragraph with the key insight, then the trade plan n
 
     try:
         client = Groq(api_key=key)
-        resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=400, temperature=0.72)
+        resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=800, temperature=0.72)
         return resp.choices[0].message.content
     except Exception as e:
         return f"⚠️ AI error: {str(e)[:120]}"
