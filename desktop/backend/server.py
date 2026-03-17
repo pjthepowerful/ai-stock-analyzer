@@ -25,6 +25,13 @@ connected_clients: list[WebSocket] = []
 chat_history: list[dict] = []
 
 
+@app.post("/api/chat/clear")
+async def clear_chat():
+    """Clear chat history."""
+    chat_history.clear()
+    return {"ok": True}
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup/shutdown."""
