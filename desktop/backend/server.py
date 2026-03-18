@@ -25,13 +25,6 @@ connected_clients: list[WebSocket] = []
 chat_history: list[dict] = []
 
 
-@app.post("/api/chat/clear")
-async def clear_chat():
-    """Clear chat history."""
-    chat_history.clear()
-    return {"ok": True}
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup/shutdown."""
@@ -140,6 +133,13 @@ async def health():
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
     }
+
+
+@app.post("/api/chat/clear")
+async def clear_chat():
+    """Clear chat history."""
+    chat_history.clear()
+    return {"ok": True}
 
 
 @app.get("/api/account")
