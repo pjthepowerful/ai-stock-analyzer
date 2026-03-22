@@ -978,29 +978,53 @@ def compute_technicals(hist: pd.DataFrame) -> dict:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def compute_intraday_technicals(hist: pd.DataFrame) -> dict:
-    """Compute technicals on 5-minute bars for day trading."""
+    """Compute technicals on 5-minute bars for day trading.
+    
+    Advanced indicators:
+    - Higher timeframe bias (hourly 100 EMA)
+    - VWAP bounce quality (wick analysis)  
+    - First hour trend lock
+    - Parabolic exhaustion detection
+    - RSI extremes with reversal candles
+    - Previous day levels (stop hunt zones)
+    - Stochastic RSI
+    """
     if hist is None or hist.empty or len(hist) < 20:
         return {}
 
     close = hist["Close"]
     high = hist["High"]
     low = hist["Low"]
+    open_ = hist["Open"]
     volume = hist["Volume"]
     price = float(close.iloc[-1])
 
-    # VWAP — Volume Weighted Average Price (the intraday anchor)
+    # ── VWAP ──
     typical_price = (high + low + close) / 3
     cum_tp_vol = (typical_price * volume).cumsum()
     cum_vol = volume.cumsum()
     vwap = cum_tp_vol / cum_vol.replace(0, 1)
     vwap_val = float(vwap.iloc[-1]) if not vwap.empty else price
 
-    # EMAs on 5min bars: 9 (fast) and 20 (medium)
+    # ── EMAs on 5min bars ──
     ema_9 = float(close.ewm(span=9).mean().iloc[-1])
     ema_20 = float(close.ewm(span=20).mean().iloc[-1])
     ema_50 = float(close.ewm(span=50).mean().iloc[-1]) if len(close) >= 50 else ema_20
 
-    # RSI on 5min bars
+    # ── Higher Timeframe Bias: resample to 1H, compute ~20 EMA (proxy for 100 on 5min) ──
+    htf_bias = "neutral"
+    try:
+        hourly = close.resample("1h").last().dropna()
+        if len(hourly) >= 10:
+            htf_ema = float(hourly.ewm(span=10).mean().iloc[-1])  # 10 hourly ~= 100 on 5min
+            if price > htf_ema * 1.002:
+                htf_bias = "bullish"
+            elif price < htf_ema * 0.998:
+                htf_bias = "bearish"
+    except Exception:
+        pass
+
+    # ── RSI ──
     delta = close.diff()
     gain = delta.where(delta > 0, 0).rolling(14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
@@ -1008,19 +1032,28 @@ def compute_intraday_technicals(hist: pd.DataFrame) -> dict:
     rsi_series = 100 - (100 / (1 + rs))
     rsi = float(rsi_series.iloc[-1]) if not rsi_series.empty else 50
 
-    # MACD on 5min bars (shorter periods)
+    # ── Stochastic RSI ──
+    stoch_k, stoch_d = 50.0, 50.0
+    if len(rsi_series.dropna()) >= 14:
+        rsi_min = rsi_series.rolling(14).min()
+        rsi_max = rsi_series.rolling(14).max()
+        stoch_rsi = ((rsi_series - rsi_min) / (rsi_max - rsi_min).replace(0, 1)) * 100
+        stoch_k = float(stoch_rsi.rolling(3).mean().iloc[-1])
+        stoch_d = float(stoch_rsi.rolling(3).mean().rolling(3).mean().iloc[-1])
+
+    # ── MACD ──
     ema12 = close.ewm(span=12).mean()
     ema26 = close.ewm(span=26).mean()
     macd_line = ema12 - ema26
     macd_signal = macd_line.ewm(span=9).mean()
     macd_hist = float((macd_line - macd_signal).iloc[-1])
 
-    # Volume ratio: current bar vs 20-bar average
+    # ── Volume ratio ──
     vol_avg = float(volume.rolling(20).mean().iloc[-1]) if len(volume) >= 20 else float(volume.mean())
     vol_current = float(volume.iloc[-1])
     vol_ratio = round(vol_current / max(vol_avg, 1), 2)
 
-    # ATR on 5min bars (this will be much smaller than daily ATR)
+    # ── ATR ──
     tr = pd.concat([
         high - low,
         (high - close.shift(1)).abs(),
@@ -1028,17 +1061,185 @@ def compute_intraday_technicals(hist: pd.DataFrame) -> dict:
     ], axis=1).max(axis=1)
     atr = float(tr.rolling(14).mean().iloc[-1]) if len(tr) >= 14 else float(tr.mean())
 
-    # Intraday high/low as S/R
+    # ── Day high/low ──
     day_high = float(high.max())
     day_low = float(low.min())
 
-    # Higher lows check (last 6 bars)
+    # ── Previous day high/low (stop hunt levels) ──
+    prev_day_high, prev_day_low = day_high, day_low
+    try:
+        daily_highs = high.resample("D").max().dropna()
+        daily_lows = low.resample("D").min().dropna()
+        if len(daily_highs) >= 2:
+            prev_day_high = float(daily_highs.iloc[-2])
+            prev_day_low = float(daily_lows.iloc[-2])
+    except Exception:
+        pass
+
+    # ── Stop hunt detection ──
+    # Did price just sweep past prev day high/low then reverse?
+    stop_hunt = "none"
+    last_5_high = float(high.tail(5).max())
+    last_5_low = float(low.tail(5).min())
+    if last_5_high > prev_day_high and price < prev_day_high:
+        stop_hunt = "bull_trap"  # swept highs, reversed down → short signal
+    elif last_5_low < prev_day_low and price > prev_day_low:
+        stop_hunt = "bear_trap"  # swept lows, reversed up → long signal
+
+    # ── Higher lows / Lower highs ──
     recent_lows = low.tail(6).values
     higher_lows = all(recent_lows[i] >= recent_lows[i-1] for i in range(1, len(recent_lows))) if len(recent_lows) >= 3 else False
-
-    # Lower highs check
     recent_highs = high.tail(6).values
     lower_highs = all(recent_highs[i] <= recent_highs[i-1] for i in range(1, len(recent_highs))) if len(recent_highs) >= 3 else False
+
+    # ── VWAP bounce quality ──
+    # Look for long wick rejection at VWAP (smart money stepping in)
+    vwap_bounce_quality = 0
+    if len(hist) >= 3:
+        for i in range(-3, 0):
+            bar_low = float(low.iloc[i])
+            bar_close = float(close.iloc[i])
+            bar_open = float(open_.iloc[i])
+            bar_high = float(high.iloc[i])
+            body = abs(bar_close - bar_open)
+            lower_wick = min(bar_close, bar_open) - bar_low
+            bar_vol = float(volume.iloc[i])
+            # Long lower wick near VWAP = bullish rejection
+            if lower_wick > body * 1.5 and abs(bar_low - vwap_val) / price < 0.003 and bar_vol > vol_avg * 1.2:
+                vwap_bounce_quality = max(vwap_bounce_quality, 3)
+            elif lower_wick > body and abs(bar_low - vwap_val) / price < 0.005:
+                vwap_bounce_quality = max(vwap_bounce_quality, 2)
+
+    # ── Parabolic exhaustion ──
+    # 5+ consecutive green or red candles = exhaustion incoming
+    parabolic = "none"
+    if len(close) >= 6:
+        last_colors = [(float(close.iloc[i]) > float(open_.iloc[i])) for i in range(-6, 0)]
+        greens = sum(last_colors)
+        reds = 6 - greens
+        if greens >= 5:
+            # Check if last candle is red (reversal starting)
+            if float(close.iloc[-1]) < float(open_.iloc[-1]):
+                parabolic = "bear_reversal"  # was parabolic green, first red → short
+            else:
+                parabolic = "extended_bull"  # still running but exhaustion likely
+        elif reds >= 5:
+            if float(close.iloc[-1]) > float(open_.iloc[-1]):
+                parabolic = "bull_reversal"  # was parabolic red, first green → long
+            else:
+                parabolic = "extended_bear"
+
+    # ── RSI exhaustion with reversal candle ──
+    rsi_exhaustion = "none"
+    if rsi >= 85:
+        if float(close.iloc[-1]) < float(open_.iloc[-1]):  # red candle
+            rsi_exhaustion = "overbought_reversal"
+    elif rsi <= 15:
+        if float(close.iloc[-1]) > float(open_.iloc[-1]):  # green candle
+            rsi_exhaustion = "oversold_reversal"
+
+    # ── First hour trend ──
+    first_hour_trend = "neutral"
+    try:
+        today = hist.index[-1].date()
+        today_bars = hist[hist.index.date == today]
+        if len(today_bars) >= 6:  # ~30min of data
+            first_6 = today_bars.head(6)
+            fh_open = float(first_6["Open"].iloc[0])
+            fh_close = float(first_6["Close"].iloc[-1])
+            fh_change = (fh_close - fh_open) / fh_open * 100
+            if fh_change > 0.3:
+                first_hour_trend = "bullish"
+            elif fh_change < -0.3:
+                first_hour_trend = "bearish"
+    except Exception:
+        pass
+
+    # ── ADX (trend strength) ──
+    adx_val = 20.0
+    try:
+        plus_dm = high.diff().clip(lower=0)
+        minus_dm = (-low.diff()).clip(lower=0)
+        # Zero out when opposite DM is larger
+        plus_dm[plus_dm < minus_dm] = 0
+        minus_dm[minus_dm < plus_dm] = 0
+        atr_14 = tr.rolling(14).mean()
+        plus_di = 100 * (plus_dm.rolling(14).mean() / atr_14.replace(0, 1))
+        minus_di = 100 * (minus_dm.rolling(14).mean() / atr_14.replace(0, 1))
+        dx = 100 * abs(plus_di - minus_di) / (plus_di + minus_di).replace(0, 1)
+        adx_val = float(dx.rolling(14).mean().iloc[-1])
+    except Exception:
+        adx_val = 20.0
+
+    # ── Candlestick Patterns (last 3 bars) ──
+    candle_pattern = "none"
+    try:
+        c1_open, c1_close = float(open_.iloc[-1]), float(close.iloc[-1])
+        c1_high, c1_low = float(high.iloc[-1]), float(low.iloc[-1])
+        c1_body = abs(c1_close - c1_open)
+        c1_range = c1_high - c1_low
+        c1_lower_wick = min(c1_open, c1_close) - c1_low
+        c1_upper_wick = c1_high - max(c1_open, c1_close)
+        c1_green = c1_close > c1_open
+
+        c2_open, c2_close = float(open_.iloc[-2]), float(close.iloc[-2])
+        c2_body = abs(c2_close - c2_open)
+        c2_green = c2_close > c2_open
+
+        # Hammer (bullish reversal) — long lower wick, small body at top
+        if c1_lower_wick > c1_body * 2 and c1_upper_wick < c1_body * 0.5 and c1_range > 0:
+            candle_pattern = "hammer"
+        # Shooting star (bearish reversal) — long upper wick, small body at bottom
+        elif c1_upper_wick > c1_body * 2 and c1_lower_wick < c1_body * 0.5 and c1_range > 0:
+            candle_pattern = "shooting_star"
+        # Bullish engulfing
+        elif c1_green and not c2_green and c1_body > c2_body * 1.3 and c1_close > c2_open:
+            candle_pattern = "bullish_engulfing"
+        # Bearish engulfing
+        elif not c1_green and c2_green and c1_body > c2_body * 1.3 and c1_close < c2_open:
+            candle_pattern = "bearish_engulfing"
+        # Doji — body is tiny vs range
+        elif c1_range > 0 and c1_body / c1_range < 0.1:
+            candle_pattern = "doji"
+    except Exception:
+        pass
+
+    # ── Support/Resistance from recent swing points ──
+    support_level = day_low
+    resistance_level = day_high
+    try:
+        recent_close = close.tail(40)
+        recent_high = high.tail(40)
+        recent_low = low.tail(40)
+        # Simple S/R: find local min/max
+        if len(recent_close) >= 20:
+            rolling_min = recent_low.rolling(10, center=True).min()
+            rolling_max = recent_high.rolling(10, center=True).max()
+            supports = recent_low[recent_low == rolling_min].dropna().unique()
+            resists = recent_high[recent_high == rolling_max].dropna().unique()
+            if len(supports) > 0:
+                support_level = float(max(s for s in supports if s < price)) if any(s < price for s in supports) else day_low
+            if len(resists) > 0:
+                resistance_level = float(min(r for r in resists if r > price)) if any(r > price for r in resists) else day_high
+    except Exception:
+        pass
+
+    # ── Breakout detection ──
+    breakout = "none"
+    if price > prev_day_high * 1.001:
+        breakout = "above_prev_high"
+    elif price < prev_day_low * 0.999:
+        breakout = "below_prev_low"
+
+    # ── Range detection ──
+    is_ranging = False
+    try:
+        last_20_range = float(high.tail(20).max() - low.tail(20).min())
+        last_20_avg = float(close.tail(20).mean())
+        range_pct = last_20_range / last_20_avg * 100
+        is_ranging = range_pct < 1.5 and adx_val < 20
+    except Exception:
+        pass
 
     return {
         "price": price,
@@ -1047,15 +1248,31 @@ def compute_intraday_technicals(hist: pd.DataFrame) -> dict:
         "ema_20": round(ema_20, 2),
         "ema_50": round(ema_50, 2),
         "rsi": round(rsi, 1),
+        "stoch_k": round(stoch_k, 1),
+        "stoch_d": round(stoch_d, 1),
         "macd_hist": round(macd_hist, 4),
         "vol_ratio": vol_ratio,
         "atr": round(atr, 4),
+        "adx": round(adx_val, 1),
         "day_high": round(day_high, 2),
         "day_low": round(day_low, 2),
+        "prev_day_high": round(prev_day_high, 2),
+        "prev_day_low": round(prev_day_low, 2),
         "higher_lows": higher_lows,
         "lower_highs": lower_highs,
         "above_vwap": price > vwap_val,
         "ema_bullish": ema_9 > ema_20,
+        "htf_bias": htf_bias,
+        "vwap_bounce_quality": vwap_bounce_quality,
+        "stop_hunt": stop_hunt,
+        "parabolic": parabolic,
+        "rsi_exhaustion": rsi_exhaustion,
+        "first_hour_trend": first_hour_trend,
+        "candle_pattern": candle_pattern,
+        "support_level": round(support_level, 2),
+        "resistance_level": round(resistance_level, 2),
+        "breakout": breakout,
+        "is_ranging": is_ranging,
     }
 
 
@@ -1202,6 +1419,120 @@ def generate_intraday_signal(data: dict) -> dict:
         warnings.append(f"Bearish news ({news_sent.get('bearish_count', 0)} negative headlines)")
     elif news_score <= -1:
         score -= 3
+
+    # ── 9. ADX Trend Strength (±8 points) ──
+    adx = tech.get("adx", 20)
+    if adx >= 30:
+        score += 8 if above_vwap else -6
+        signals.append(f"✓ Strong trend (ADX {adx:.0f}) — {'ride it' if above_vwap else 'trending down'}")
+    elif adx >= 22:
+        score += 4 if above_vwap else -3
+        signals.append(f"Moderate trend (ADX {adx:.0f})")
+    elif adx < 15:
+        score -= 2
+        warnings.append(f"No trend (ADX {adx:.0f}) — choppy, beware fakeouts")
+
+    # ── 10. Breakout Detection (±10 points) ──
+    breakout = tech.get("breakout", "none")
+    if breakout == "above_prev_high" and vol_ratio >= 1.3:
+        score += 10
+        signals.append(f"✓ Breakout above prev day high (${tech.get('prev_day_high', 0):.2f}) on volume")
+    elif breakout == "above_prev_high":
+        score += 5
+        signals.append(f"Above prev day high — needs volume confirmation")
+    elif breakout == "below_prev_low" and vol_ratio >= 1.3:
+        score -= 10
+        warnings.append(f"Breakdown below prev day low (${tech.get('prev_day_low', 0):.2f}) on volume")
+    elif breakout == "below_prev_low":
+        score -= 5
+        warnings.append(f"Below prev day low — weak")
+
+    # ── 11. Candlestick Patterns (±8 points) ──
+    candle = tech.get("candle_pattern", "none")
+    if candle == "hammer":
+        score += 8
+        signals.append("✓ Hammer candle — bullish reversal pattern")
+    elif candle == "bullish_engulfing":
+        score += 8
+        signals.append("✓ Bullish engulfing — strong reversal")
+    elif candle == "shooting_star":
+        score -= 8
+        warnings.append("Shooting star — bearish reversal pattern")
+    elif candle == "bearish_engulfing":
+        score -= 8
+        warnings.append("Bearish engulfing — strong reversal down")
+    elif candle == "doji":
+        score -= 2
+        warnings.append("Doji — indecision, wait for confirmation")
+
+    # ── 12. Stop Hunt / Liquidity Sweep (±6 points) ──
+    stop_hunt = tech.get("stop_hunt", "none")
+    if stop_hunt == "bear_trap":
+        score += 6
+        signals.append("✓ Bear trap — swept lows then reversed up (smart money long)")
+    elif stop_hunt == "bull_trap":
+        score -= 6
+        warnings.append("Bull trap — swept highs then reversed down (smart money short)")
+
+    # ── 13. Parabolic / Exhaustion (±6 points) ──
+    parabolic = tech.get("parabolic", "none")
+    if parabolic == "bull_reversal":
+        score += 6
+        signals.append("✓ Parabolic sell-off reversing — bounce play")
+    elif parabolic == "bear_reversal":
+        score -= 6
+        warnings.append("Parabolic rally exhausted — reversal candle")
+    elif parabolic == "extended_bull":
+        score -= 3
+        warnings.append("Extended run (5+ green candles) — exhaustion risk")
+    elif parabolic == "extended_bear":
+        score += 2
+
+    # ── 14. Stochastic RSI (±6 points) ──
+    stoch_k = tech.get("stoch_k", 50)
+    stoch_d = tech.get("stoch_d", 50)
+    if stoch_k < 20 and stoch_k > stoch_d:
+        score += 6
+        signals.append(f"✓ Stoch RSI oversold ({stoch_k:.0f}) crossing up — momentum turning")
+    elif stoch_k > 80 and stoch_k < stoch_d:
+        score -= 6
+        warnings.append(f"Stoch RSI overbought ({stoch_k:.0f}) crossing down — momentum fading")
+    elif stoch_k > 85:
+        score -= 3
+        warnings.append(f"Stoch RSI stretched ({stoch_k:.0f})")
+
+    # ── 15. First Hour Trend (±5 points) ──
+    fh_trend = tech.get("first_hour_trend", "neutral")
+    if fh_trend == "bullish" and above_vwap:
+        score += 5
+        signals.append("✓ First hour trend bullish — momentum from open")
+    elif fh_trend == "bearish" and not above_vwap:
+        score -= 5
+        warnings.append("First hour trend bearish — selling from open")
+
+    # ── 16. Higher Timeframe Bias (±5 points) ──
+    htf = tech.get("htf_bias", "neutral")
+    if htf == "bullish":
+        score += 5
+        signals.append("✓ Hourly trend bullish — higher timeframe supports longs")
+    elif htf == "bearish":
+        score -= 5
+        warnings.append("Hourly trend bearish — higher timeframe favors shorts")
+
+    # ── 17. Range Warning (±4 points) ──
+    is_ranging = tech.get("is_ranging", False)
+    if is_ranging:
+        score -= 4
+        warnings.append("Stock is range-bound (ADX low, tight price action) — breakout or fade")
+
+    # ── 18. VWAP Bounce Quality (±4 points) ──
+    vwap_bounce = tech.get("vwap_bounce_quality", 0)
+    if vwap_bounce >= 3:
+        score += 4
+        signals.append("✓ Clean VWAP bounce with volume — institutional buying")
+    elif vwap_bounce >= 2:
+        score += 2
+        signals.append("VWAP bounce detected")
 
     # ── DETERMINE ACTION ──
     score = max(0, min(100, score))
@@ -3794,7 +4125,21 @@ CHAT HISTORY:
 - If they say "buy it" — they mean the last ticker mentioned.
 - Remember what you've already told them and don't repeat yourself.
 
-IMPORTANT: Autopilot runs a dedicated INTRADAY LONG/SHORT engine using 5-minute bars, VWAP, 9/20 EMA, and intraday momentum. It goes LONG on stocks above VWAP with bullish momentum, and SHORTS stocks below VWAP with bearish momentum. Positions are opened and closed within the same trading day. Everything gets liquidated 15 minutes before market close. When discussing autopilot trades, reference intraday levels (VWAP, intraday EMAs, volume spikes). Users can also manually short via "short TSLA" and cover via "cover TSLA". Don't talk about "holding for weeks" — this is day trading.
+IMPORTANT: Autopilot runs a dedicated INTRADAY engine combining 9 proven day trading strategies on 5-minute bars:
+
+1. TREND TRADING — follows the dominant intraday trend using VWAP + 9/20/50 EMA alignment. Goes long in uptrends, shorts in downtrends.
+2. MOMENTUM — scores momentum via RSI, MACD histogram, Stochastic RSI. Strong momentum = higher conviction entries.
+3. BREAKOUT — detects when price breaks above previous day high or below previous day low on volume. Volume-confirmed breakouts get priority.
+4. PULLBACK — identifies pullbacks to VWAP or 20 EMA in an uptrend as buying opportunities. Best entries are bounces off key levels.
+5. GAP TRADING — pre-market gap scanner finds stocks gapping >1.5% on volume. Gaps with momentum continuation get traded.
+6. RANGE DETECTION — identifies stocks stuck in a range (low ADX, tight price). Avoids these or fades the extremes.
+7. PRICE ACTION — reads candlestick patterns (hammer, engulfing, shooting star, doji) for reversal/continuation signals.
+8. NEWS TRADING — AI-powered headline analysis via Groq. Detects catalysts, macro risks, earnings surprises. Blocks trades against strong news flow.
+9. SCALP-STYLE RISK — tight stops (2x ATR), fast breakeven at +0.5%, partial profits at +1.5%, trailing stops. Kills flat trades after 90 min.
+
+Additional filters: SPY correlation (blocks longs when SPY dumps), VIX panic filter (closes all longs when VIX ≥35), ADX trend strength, stop hunt/liquidity sweep detection, parabolic exhaustion warnings, higher timeframe bias from hourly chart.
+
+Everything gets liquidated 15 minutes before market close. Users can also manually short via "short TSLA" and cover via "cover TSLA". This is day trading — never hold overnight.
 
 CRITICAL — Stock recommendations:
 When asked to suggest, name, or recommend stocks, NEVER just list the same boring mega-caps everyone already knows (AAPL, MSFT, GOOGL, AMZN, TSLA, etc.). Anyone can name those. Instead:
