@@ -44,6 +44,8 @@ body {
   overflow: hidden;
 }
 .sidebar-collapsed { width: 54px; min-width: 54px; }
+.sidebar-collapsed .logo-text { display: none; }
+.sidebar-collapsed .sidebar-header { justify-content: center; padding: 16px 10px; }
 
 .sidebar-header {
   display: flex; align-items: center; justify-content: space-between;

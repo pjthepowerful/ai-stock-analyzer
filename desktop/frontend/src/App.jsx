@@ -152,16 +152,18 @@ function App() {
       {/* ── Sidebar ── */}
       <aside className={'sidebar' + (sidebarOpen ? '' : ' sidebar-collapsed')}>
         <div className="sidebar-header">
-          <div className="logo-group">
+          <div className="logo-group" onClick={() => !sidebarOpen && setSidebarOpen(true)} style={sidebarOpen ? {} : {cursor: 'pointer'}}>
             <div className="logo">P</div>
-            <div className="logo-text">
-              <span className="logo-name">Paula</span>
-              <span className="logo-sub">{time || 'Connecting...'}</span>
-            </div>
+            {sidebarOpen && (
+              <div className="logo-text">
+                <span className="logo-name">Paula</span>
+                <span className="logo-sub">{time || 'Connecting...'}</span>
+              </div>
+            )}
           </div>
-          <button className="sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
-            {sidebarOpen ? '◀' : '▶'}
-          </button>
+          {sidebarOpen && (
+            <button className="sidebar-toggle" onClick={() => setSidebarOpen(false)}>✕</button>
+          )}
         </div>
 
         {sidebarOpen && (
