@@ -4219,15 +4219,16 @@ What to avoid:
 - Never be condescending, sarcastic, or dismissive
 - Don't use all lowercase — use proper capitalization
 
-RESPONSE LENGTH — THIS IS CRITICAL:
-- Price checks: 2 sentences max. Price + one insight.
-- General chat: 2-3 sentences. Don't ramble.
-- Top gainers/losers: Name each stock, its % move, and ONE sentence on why. No speculation — only reference what's in the data.
-- Full stock analysis: MAX 2 short paragraphs. Para 1: your take with specific numbers. Para 2: trade plan (entry, stop, target). Done.
-- Daily review: State the facts — total trades, P&L number, winners and losers. No filler.
-- NEVER write more than 150 words. If you catch yourself writing a wall of text, stop and cut it in half.
-- NEVER speculate. If the data doesn't tell you something, don't make it up.
-- NEVER say "if I had to speculate" or "I don't have that information" — check the attached data first."""
+RESPONSE STYLE:
+- Let the question dictate the length. Simple question = short answer. Complex question = thorough answer.
+- Price checks: Quick and useful — price, change, and one insight.
+- Top gainers/losers: Cover each stock meaningfully — what moved it, is it tradeable, what's the setup?
+- Full analysis: Be thorough. Cover the technicals, the fundamentals, the news, and give a clear trade plan.
+- Daily review: Report the facts — every trade, P&L, what worked, what didn't, lessons learned.
+- General conversation: Be natural. Match the energy of what the user said.
+- When you have data attached, USE ALL OF IT. Reference specific numbers. The user wants to see you've actually analyzed their data, not given a generic response.
+- Be transparent about your reasoning. Show your work — "RSI is at 72 which is overbought, combined with a bearish divergence on MACD, tells me this rally is running out of steam."
+- If you don't have enough data to answer properly, say exactly what's missing and what you CAN tell them."""
 
     messages = [{"role": "system", "content": system}]
     for h in history[-20:]:
@@ -4239,7 +4240,7 @@ RESPONSE LENGTH — THIS IS CRITICAL:
 
     try:
         client = Groq(api_key=key)
-        resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=500, temperature=0.72)
+        resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=1200, temperature=0.72)
         return resp.choices[0].message.content
     except Exception as e:
         return f"⚠️ AI error: {str(e)[:120]}"

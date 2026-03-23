@@ -20,11 +20,13 @@ function App() {
   const [time, setTime] = useState('')
   const [positionChart, setPositionChart] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
 
   const messagesEnd = useRef(null)
   const wsRef = useRef(null)
   const inputRef = useRef(null)
 
+  // WebSocket
   useEffect(() => {
     const connect = () => {
       const ws = new WebSocket(WS_URL)
@@ -54,7 +56,7 @@ function App() {
             else if (data.action === 'close_all') playAlert()
             refreshData()
           }
-        } catch (err) { console.error(err) }
+        } catch (err) {}
       }
     }
     connect()
@@ -79,7 +81,6 @@ function App() {
   }, [])
 
   useEffect(() => {
-    // Clear backend chat history on fresh page load
     fetch(API + '/api/chat/clear', { method: 'POST' }).catch(() => {})
     refreshData()
     const interval = setInterval(refreshData, 15000)
@@ -105,11 +106,8 @@ function App() {
       const data = await res.json()
       if (data.ok) {
         setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: data.message,
-          type: data.type,
-          ticker: data.ticker || null,
-          signal: data.trade_signal || null,
+          role: 'assistant', content: data.message, type: data.type,
+          ticker: data.ticker || null, signal: data.trade_signal || null,
         }])
         if (data.type === 'trade' && data.message && data.message.includes('Bought')) playBuy()
         else if (data.type === 'trade' && data.message && (data.message.includes('Sold') || data.message.includes('Shorted'))) playSell()
@@ -118,11 +116,11 @@ function App() {
         if (data.autopilot !== undefined) setAutopilot(data.autopilot)
       } else {
         playAlert()
-        setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ ' + (data.error || 'Unknown error') }])
+        setMessages(prev => [...prev, { role: 'assistant', content: 'Error: ' + (data.error || 'Unknown error') }])
       }
       refreshData()
     } catch (e) {
-      setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Backend not connected' }])
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Backend not connected.' }])
     }
     setSending(false)
     inputRef.current?.focus()
@@ -150,154 +148,189 @@ function App() {
   var pnlPct = account ? (account.daily_pnl_pct || 0) : 0
 
   return (
-    <div className="app">
-      <header className="topbar">
-        <div className="topbar-left">
-          <div className="logo">P</div>
-          <div>
-            <h1>Paula</h1>
-            <span className="subtitle">{time || '...'}</span>
+    <div className="app-layout">
+      {/* ── Sidebar ── */}
+      <aside className={'sidebar' + (sidebarOpen ? '' : ' sidebar-collapsed')}>
+        <div className="sidebar-header">
+          <div className="logo-group">
+            <div className="logo">P</div>
+            <div className="logo-text">
+              <span className="logo-name">Paula</span>
+              <span className="logo-sub">{time || 'Connecting...'}</span>
+            </div>
           </div>
-        </div>
-        <div className="topbar-right">
-          <div className={'status-dot ' + (connected ? 'connected' : 'disconnected')} />
-          <button className={'ap-btn ' + (autopilot ? 'ap-on' : 'ap-off')} onClick={toggleAutopilot}>
-            {autopilot ? '◉ Autopilot ON' : '○ Autopilot OFF'}
+          <button className="sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
+            {sidebarOpen ? '◀' : '▶'}
           </button>
         </div>
-      </header>
 
-      {loading ? (
-        <div className="dashboard">
-          <div className="dash-item"><span className="dash-label">Loading</span><span className="dash-value shimmer">···</span></div>
-        </div>
-      ) : account ? (
-        <div className="dashboard">
-          <div className="dash-item">
-            <span className="dash-label">Equity</span>
-            <span className="dash-value">{'$' + account.equity.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-          </div>
-          <div className="dash-item">
-            <span className="dash-label">Buying Power</span>
-            <span className="dash-value">{'$' + account.buying_power.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-          </div>
-          <div className="dash-item">
-            <span className="dash-label">Day P&L</span>
-            <span className={'dash-value ' + (pnl >= 0 ? 'green' : 'red')}>
-              {(pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' (' + pnlPct.toFixed(2) + '%)'}
-            </span>
-          </div>
-          <div className="dash-item">
-            <span className="dash-label">Positions</span>
-            <span className="dash-value">{positions.length}</span>
-          </div>
-          {spyTrend && (
-            <div className="dash-item">
-              <span className="dash-label">SPY</span>
-              <span className={'dash-value ' + (spyTrend.change_pct >= 0 ? 'green' : 'red')}>
-                {(spyTrend.change_pct >= 0 ? '+' : '') + spyTrend.change_pct + '%'}
-                {spyTrend.above_vwap ? ' ▲V' : ' ▼V'}
-              </span>
-            </div>
-          )}
-        </div>
-      ) : null}
-
-      {positions.length > 0 && (
-        <div className="positions-section">
-          <div className="positions-strip">
-            {positions.map((p, i) => (
-              <div key={i}
-                className={'pos-chip ' + (p.unrealized_pnl >= 0 ? 'pos-green' : 'pos-red') + (positionChart && positionChart.ticker === p.ticker ? ' pos-active' : '')}
-                onClick={() => setPositionChart(positionChart && positionChart.ticker === p.ticker ? null : { ticker: p.ticker })}>
-                <span className="pos-ticker">{(p.side === 'short' ? '↓ ' : '') + p.ticker}</span>
-                <span className="pos-pnl">{(p.unrealized_pnl_pct >= 0 ? '+' : '') + p.unrealized_pnl_pct.toFixed(1) + '%'}</span>
-                <span className="pos-dollars">{'$' + Math.abs(p.unrealized_pnl).toFixed(0)}</span>
-              </div>
-            ))}
-          </div>
-          {positionChart && (
-            <div className="position-chart">
-              <button className="chart-close" onClick={() => setPositionChart(null)}>✕</button>
-              <Chart ticker={positionChart.ticker} signal={null} height={240} />
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="chat">
-        {messages.length === 0 && !sending && (
-          <div className="welcome">
-            <h2>{getGreeting()}</h2>
-            <p className="welcome-sub">Ask me anything about the market.</p>
-            <div className="welcome-examples">
-              <div className="example-card" onClick={() => quickAction('NVDA')}>
-                <span className="example-icon">📊</span>
-                <span className="example-title">Analyze NVDA</span>
-                <span className="example-desc">Full signal breakdown with entry, stop, and targets</span>
-              </div>
-              <div className="example-card" onClick={() => quickAction('top gainers')}>
-                <span className="example-icon">🔥</span>
-                <span className="example-title">Top Gainers</span>
-                <span className="example-desc">Today's biggest movers with momentum scores</span>
-              </div>
-              <div className="example-card" onClick={() => quickAction('portfolio')}>
-                <span className="example-icon">💼</span>
-                <span className="example-title">My Portfolio</span>
-                <span className="example-desc">Open positions, P&L, and account overview</span>
-              </div>
-              <div className="example-card" onClick={() => quickAction('autopilot')}>
-                <span className="example-icon">⚡</span>
-                <span className="example-title">Start Autopilot</span>
-                <span className="example-desc">Scan the market and execute trades automatically</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {messages.map((m, i) => (
-          <div key={i} className={'msg msg-' + m.role}>
-            <div className="msg-avatar">
-              {m.role === 'assistant' ? (
-                <div className="avatar avatar-ai">P</div>
+        {sidebarOpen && (
+          <>
+            {/* Account */}
+            <div className="sidebar-section">
+              <div className="sidebar-label">Account</div>
+              {account ? (
+                <div className="account-grid">
+                  <div className="account-stat">
+                    <span className="stat-label">Equity</span>
+                    <span className="stat-value">{'$' + account.equity.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                  </div>
+                  <div className="account-stat">
+                    <span className="stat-label">Day P&L</span>
+                    <span className={'stat-value ' + (pnl >= 0 ? 'green' : 'red')}>
+                      {(pnl >= 0 ? '+' : '') + '$' + Math.abs(pnl).toFixed(2)}
+                      <small>{' (' + (pnl >= 0 ? '+' : '') + pnlPct.toFixed(2) + '%)'}</small>
+                    </span>
+                  </div>
+                  <div className="account-stat">
+                    <span className="stat-label">Buying Power</span>
+                    <span className="stat-value">{'$' + account.buying_power.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                  </div>
+                  {spyTrend && (
+                    <div className="account-stat">
+                      <span className="stat-label">SPY</span>
+                      <span className={'stat-value ' + (spyTrend.change_pct >= 0 ? 'green' : 'red')}>
+                        {(spyTrend.change_pct >= 0 ? '+' : '') + spyTrend.change_pct + '%'}
+                        {spyTrend.above_vwap ? ' ▲' : ' ▼'}
+                      </span>
+                    </div>
+                  )}
+                </div>
               ) : (
-                <div className="avatar avatar-user">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-                  </svg>
-                </div>
+                <div className="stat-value shimmer">Loading...</div>
               )}
             </div>
-            <div className="msg-body">
-              <div className="msg-content" dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }} />
-              {m.role === 'assistant' && m.ticker && (
-                <div className="msg-chart">
-                  <Chart ticker={m.ticker} signal={m.signal} height={260} />
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
 
-        {sending && (
-          <div className="msg msg-assistant">
-            <div className="msg-avatar"><div className="avatar avatar-ai">P</div></div>
-            <div className="msg-body">
-              <div className="typing"><span></span><span></span><span></span></div>
+            {/* Positions */}
+            <div className="sidebar-section">
+              <div className="sidebar-label">Positions <span className="badge">{positions.length}</span></div>
+              {positions.length > 0 ? (
+                <div className="positions-list">
+                  {positions.map((p, i) => (
+                    <div key={i}
+                      className={'pos-row ' + (p.unrealized_pnl >= 0 ? 'pos-green' : 'pos-red') + (positionChart && positionChart.ticker === p.ticker ? ' pos-active' : '')}
+                      onClick={() => setPositionChart(positionChart && positionChart.ticker === p.ticker ? null : { ticker: p.ticker })}>
+                      <span className="pos-ticker">{(p.side === 'short' ? '↓' : '') + p.ticker}</span>
+                      <span className="pos-qty">{p.qty}</span>
+                      <span className={'pos-pnl ' + (p.unrealized_pnl >= 0 ? 'green' : 'red')}>
+                        {(p.unrealized_pnl_pct >= 0 ? '+' : '') + p.unrealized_pnl_pct.toFixed(1) + '%'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="no-positions">No open positions</div>
+              )}
+              {positionChart && (
+                <div className="sidebar-chart">
+                  <Chart ticker={positionChart.ticker} signal={null} height={180} />
+                </div>
+              )}
             </div>
-          </div>
+
+            {/* Autopilot */}
+            <div className="sidebar-section">
+              <button className={'autopilot-btn ' + (autopilot ? 'ap-active' : '')} onClick={toggleAutopilot}>
+                <span className={'ap-dot ' + (autopilot ? 'ap-dot-on' : '')}></span>
+                {autopilot ? 'Autopilot Running' : 'Start Autopilot'}
+              </button>
+            </div>
+
+            {/* Status */}
+            <div className="sidebar-footer">
+              <div className={'conn-status ' + (connected ? 'conn-on' : 'conn-off')}>
+                <span className="conn-dot"></span>
+                {connected ? 'Connected' : 'Disconnected'}
+              </div>
+            </div>
+          </>
         )}
-        <div ref={messagesEnd} />
-      </div>
+      </aside>
 
-      <div className="input-bar">
-        <input ref={inputRef} value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') send() }}
-          placeholder="Ask about any stock, start autopilot, make a trade..."
-          disabled={sending} />
-        <button onClick={send} disabled={sending}>↑</button>
-      </div>
+      {/* ── Main Chat ── */}
+      <main className="main">
+        <div className="chat">
+          {messages.length === 0 && !sending && (
+            <div className="welcome">
+              <h2>{getGreeting()}</h2>
+              <p className="welcome-sub">What would you like to know?</p>
+              <div className="welcome-grid">
+                <button className="welcome-card" onClick={() => quickAction('Analyze NVDA')}>
+                  <span className="wc-icon">📊</span>
+                  <div>
+                    <span className="wc-title">Analyze a stock</span>
+                    <span className="wc-desc">Get a full signal breakdown</span>
+                  </div>
+                </button>
+                <button className="welcome-card" onClick={() => quickAction('top gainers')}>
+                  <span className="wc-icon">🔥</span>
+                  <div>
+                    <span className="wc-title">Top gainers</span>
+                    <span className="wc-desc">See what's moving today</span>
+                  </div>
+                </button>
+                <button className="welcome-card" onClick={() => quickAction('How did we do today?')}>
+                  <span className="wc-icon">📋</span>
+                  <div>
+                    <span className="wc-title">Daily recap</span>
+                    <span className="wc-desc">Review today's trades</span>
+                  </div>
+                </button>
+                <button className="welcome-card" onClick={() => quickAction('market regime')}>
+                  <span className="wc-icon">🌍</span>
+                  <div>
+                    <span className="wc-title">Market health</span>
+                    <span className="wc-desc">SPY, VIX, regime check</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {messages.map((m, i) => (
+            <div key={i} className={'msg ' + (m.role === 'user' ? 'msg-user' : 'msg-ai')}>
+              {m.role === 'assistant' && (
+                <div className="msg-avatar"><div className="avatar-p">P</div></div>
+              )}
+              <div className={'msg-bubble ' + (m.role === 'user' ? 'bubble-user' : 'bubble-ai')}>
+                <div dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }} />
+                {m.role === 'assistant' && m.ticker && (
+                  <div className="inline-chart">
+                    <Chart ticker={m.ticker} signal={m.signal} height={260} />
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {sending && (
+            <div className="msg msg-ai">
+              <div className="msg-avatar"><div className="avatar-p">P</div></div>
+              <div className="bubble-ai">
+                <div className="typing"><span></span><span></span><span></span></div>
+              </div>
+            </div>
+          )}
+          <div ref={messagesEnd} />
+        </div>
+
+        {/* Input */}
+        <div className="input-area">
+          <div className="input-wrap">
+            <input ref={inputRef} value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') send() }}
+              placeholder="Ask anything — analyze a stock, start autopilot, make a trade..."
+              disabled={sending} />
+            <button className="send-btn" onClick={send} disabled={sending}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+            </button>
+          </div>
+          <span className="input-hint">Paula can make mistakes. Verify important info.</span>
+        </div>
+      </main>
     </div>
   )
 }
@@ -305,9 +338,7 @@ function App() {
 function formatMessage(text) {
   if (!text) return ''
   return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/`(.+?)`/g, '<code>$1</code>')
     .replace(/\n/g, '<br/>')
