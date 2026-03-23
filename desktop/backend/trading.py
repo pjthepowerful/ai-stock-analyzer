@@ -2494,6 +2494,11 @@ def route(msg: str) -> dict:
         return {"type": "positions"}
     if any(w in m for w in ["my orders", "open orders", "order history", "recent orders", "pending orders"]):
         return {"type": "orders"}
+    if any(w in m for w in ["how did", "today's trades", "recap", "review", "session", "performance",
+                            "how was", "daily summary", "what trades", "trades today", "p&l today",
+                            "pnl today", "how much did", "money lost", "money made", "profit today",
+                            "loss today", "what happened today", "autopilot results", "end of day"]):
+        return {"type": "daily_review"}
     if any(w in m for w in ["close all", "sell everything", "liquidate", "panic sell", "close everything"]):
         return {"type": "close_all"}
 
@@ -3879,6 +3884,32 @@ def execute(intent: dict) -> dict:
         return {"ok": True, "type": "trade", "msg": "\n\n".join(lines)}
 
     # ── Trading commands ──
+    if t == "daily_review":
+        acc = alpaca_account()
+        positions = alpaca_positions()
+        filled_orders = alpaca_orders(status="closed", limit=50)
+        
+        # Filter to today's orders
+        today_str = datetime.now(ZoneInfo("US/Eastern")).strftime("%Y-%m-%d")
+        todays_orders = [o for o in filled_orders if o.get("submitted", "").startswith(today_str)]
+        
+        review_data = {
+            "account": acc or {},
+            "daily_pnl": acc.get("daily_pnl", 0) if acc else 0,
+            "daily_pnl_pct": acc.get("daily_pnl_pct", 0) if acc else 0,
+            "equity": acc.get("equity", 0) if acc else 0,
+            "open_positions": len(positions),
+            "positions": [{"ticker": p["ticker"], "side": p.get("side", "long"), 
+                          "qty": p.get("qty", 0), "pnl": p.get("unrealized_pnl", 0),
+                          "pnl_pct": p.get("unrealized_pnl_pct", 0)} for p in positions],
+            "todays_trades": todays_orders,
+            "total_trades_today": len(todays_orders),
+            "buys_today": len([o for o in todays_orders if o.get("side") == "buy"]),
+            "sells_today": len([o for o in todays_orders if o.get("side") == "sell"]),
+        }
+        
+        return {"ok": True, "type": "analysis", "data": review_data}
+
     if t == "portfolio":
         acc = alpaca_account()
         if not acc:
@@ -4168,12 +4199,22 @@ How you talk:
 - If signals conflict, be transparent: "Momentum looks great but volume isn't confirming, which gives me some pause"
 - Be encouraging and constructive. Never talk down to the user or act annoyed
 
+CRITICAL — Market awareness:
+- You know today's date and can determine if the market is open (9:30 AM - 4:00 PM ET, Mon-Fri)
+- If asked about today's performance and data shows 0 trades, say "No trades were executed today" — don't make up a narrative
+- If the user asks about autopilot results, look at the ACTUAL data attached — trades count, P&L, positions
+- Be honest about results — if the day was a loss, say so and explain what happened
+- If the market hasn't opened yet, say "Market hasn't opened yet" — don't speculate about future trades
+
 What to avoid:
 - NEVER default to just listing AAPL, MSFT, GOOGL, AMZN, META, TSLA when recommending stocks
 - Never start with "Based on the data" or "Let me analyze" — just jump in
 - No robotic headers like "VERDICT:" or "RISK ASSESSMENT:"
 - Don't disclaim you're an AI or say "not financial advice" — the app has that
-- Never say you don't have data. You do
+- If data is attached to the message, USE IT. Reference specific numbers, trades, P&L amounts
+- If no data is attached, say so honestly — "I don't have today's trade data in front of me right now, let me check" 
+- NEVER fabricate trades, P&L numbers, or performance data. Only reference what's in the attached data
+- NEVER say "I don't have real-time access" — you DO get real data attached to your messages
 - Don't pad with filler or repeat points in different words
 - Never be condescending, sarcastic, or dismissive
 - Don't use all lowercase — use proper capitalization
