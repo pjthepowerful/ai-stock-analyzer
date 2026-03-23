@@ -18,15 +18,15 @@ function App() {
   const [connected, setConnected] = useState(false)
   const [spyTrend, setSpyTrend] = useState(null)
   const [time, setTime] = useState('')
-  const [positionChart, setPositionChart] = useState(null)
+  const [selectedPos, setSelectedPos] = useState(null)
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [showPositions, setShowPositions] = useState(false)
 
   const messagesEnd = useRef(null)
   const wsRef = useRef(null)
   const inputRef = useRef(null)
 
-  // WebSocket
   useEffect(() => {
     const connect = () => {
       const ws = new WebSocket(WS_URL)
@@ -91,8 +91,7 @@ function App() {
     messagesEnd.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const send = async () => {
-    const msg = input.trim()
+  const sendMessage = async (msg) => {
     if (!msg || sending) return
     setMessages(prev => [...prev, { role: 'user', content: msg }])
     setInput('')
@@ -116,7 +115,7 @@ function App() {
         if (data.autopilot !== undefined) setAutopilot(data.autopilot)
       } else {
         playAlert()
-        setMessages(prev => [...prev, { role: 'assistant', content: 'Error: ' + (data.error || 'Unknown error') }])
+        setMessages(prev => [...prev, { role: 'assistant', content: 'Error: ' + (data.error || 'Unknown') }])
       }
       refreshData()
     } catch (e) {
@@ -126,10 +125,18 @@ function App() {
     inputRef.current?.focus()
   }
 
-  const toggleAutopilot = async () => {
-    var endpoint = autopilot ? 'stop' : 'start'
-    await fetch(API + '/api/autopilot/' + endpoint, { method: 'POST' })
-    setAutopilot(!autopilot)
+  const send = () => sendMessage(input.trim())
+
+  const toggleAutopilot = () => {
+    if (autopilot) {
+      sendMessage('stop')
+    } else {
+      sendMessage('autopilot')
+    }
+  }
+
+  const tradeAction = async (action, ticker) => {
+    sendMessage(action + ' ' + ticker)
   }
 
   const quickAction = (text) => {
@@ -146,158 +153,158 @@ function App() {
 
   var pnl = account ? (account.daily_pnl || 0) : 0
   var pnlPct = account ? (account.daily_pnl_pct || 0) : 0
+  var totalUnrealized = positions.reduce((sum, p) => sum + (p.unrealized_pnl || 0), 0)
 
   return (
     <div className="app-layout">
       {/* ── Sidebar ── */}
-      <aside className={'sidebar' + (sidebarOpen ? '' : ' sidebar-collapsed')}>
-        <div className="sidebar-header">
-          <div className="logo-group" onClick={() => !sidebarOpen && setSidebarOpen(true)} style={sidebarOpen ? {} : {cursor: 'pointer'}}>
+      <aside className={'sidebar' + (sidebarOpen ? '' : ' collapsed')}>
+        <div className="sb-header">
+          <div className="logo-row" onClick={() => !sidebarOpen && setSidebarOpen(true)} style={sidebarOpen ? {} : {cursor: 'pointer'}}>
             <div className="logo">P</div>
-            {sidebarOpen && (
-              <div className="logo-text">
-                <span className="logo-name">Paula</span>
-                <span className="logo-sub">{time || 'Connecting...'}</span>
-              </div>
-            )}
+            {sidebarOpen && <div className="logo-info"><span className="logo-name">Paula</span><span className="logo-time">{time || '...'}</span></div>}
           </div>
-          {sidebarOpen && (
-            <button className="sidebar-toggle" onClick={() => setSidebarOpen(false)}>✕</button>
-          )}
+          {sidebarOpen && <button className="sb-close" onClick={() => setSidebarOpen(false)}>✕</button>}
         </div>
 
         {sidebarOpen && (
           <>
-            {/* Account */}
-            <div className="sidebar-section">
-              <div className="sidebar-label">Account</div>
+            <div className="sb-section">
+              <div className="sb-label">Account</div>
               {account ? (
-                <div className="account-grid">
-                  <div className="account-stat">
-                    <span className="stat-label">Equity</span>
-                    <span className="stat-value">{'$' + account.equity.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                <div className="stat-grid">
+                  <div className="stat-card">
+                    <span className="sc-label">Equity</span>
+                    <span className="sc-val">{'$' + account.equity.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                   </div>
-                  <div className="account-stat">
-                    <span className="stat-label">Day P&L</span>
-                    <span className={'stat-value ' + (pnl >= 0 ? 'green' : 'red')}>
-                      {(pnl >= 0 ? '+' : '') + '$' + Math.abs(pnl).toFixed(2)}
-                      <small>{' (' + (pnl >= 0 ? '+' : '') + pnlPct.toFixed(2) + '%)'}</small>
+                  <div className="stat-card">
+                    <span className="sc-label">Day P&L</span>
+                    <span className={'sc-val ' + (pnl >= 0 ? 'green' : 'red')}>{(pnl >= 0 ? '+' : '') + '$' + Math.abs(pnl).toFixed(2)}</span>
+                  </div>
+                  <div className="stat-card">
+                    <span className="sc-label">Buying Power</span>
+                    <span className="sc-val">{'$' + account.buying_power.toLocaleString(undefined, {minimumFractionDigits: 0})}</span>
+                  </div>
+                  <div className="stat-card">
+                    <span className="sc-label">SPY</span>
+                    <span className={'sc-val ' + (spyTrend && spyTrend.change_pct >= 0 ? 'green' : 'red')}>
+                      {spyTrend ? (spyTrend.change_pct >= 0 ? '+' : '') + spyTrend.change_pct + '%' : '—'}
                     </span>
                   </div>
-                  <div className="account-stat">
-                    <span className="stat-label">Buying Power</span>
-                    <span className="stat-value">{'$' + account.buying_power.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                  </div>
-                  {spyTrend && (
-                    <div className="account-stat">
-                      <span className="stat-label">SPY</span>
-                      <span className={'stat-value ' + (spyTrend.change_pct >= 0 ? 'green' : 'red')}>
-                        {(spyTrend.change_pct >= 0 ? '+' : '') + spyTrend.change_pct + '%'}
-                        {spyTrend.above_vwap ? ' ▲' : ' ▼'}
-                      </span>
-                    </div>
-                  )}
                 </div>
-              ) : (
-                <div className="stat-value shimmer">Loading...</div>
-              )}
+              ) : <div className="sc-val shimmer">Loading...</div>}
             </div>
 
-            {/* Positions */}
-            <div className="sidebar-section">
-              <div className="sidebar-label">Positions <span className="badge">{positions.length}</span></div>
-              {positions.length > 0 ? (
-                <div className="positions-list">
-                  {positions.map((p, i) => (
-                    <div key={i}
-                      className={'pos-row ' + (p.unrealized_pnl >= 0 ? 'pos-green' : 'pos-red') + (positionChart && positionChart.ticker === p.ticker ? ' pos-active' : '')}
-                      onClick={() => setPositionChart(positionChart && positionChart.ticker === p.ticker ? null : { ticker: p.ticker })}>
-                      <span className="pos-ticker">{(p.side === 'short' ? '↓' : '') + p.ticker}</span>
-                      <span className="pos-qty">{p.qty}</span>
-                      <span className={'pos-pnl ' + (p.unrealized_pnl >= 0 ? 'green' : 'red')}>
-                        {(p.unrealized_pnl_pct >= 0 ? '+' : '') + p.unrealized_pnl_pct.toFixed(1) + '%'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="no-positions">No open positions</div>
-              )}
-              {positionChart && (
-                <div className="sidebar-chart">
-                  <Chart ticker={positionChart.ticker} signal={null} height={180} />
-                </div>
-              )}
-            </div>
-
-            {/* Autopilot */}
-            <div className="sidebar-section">
-              <button className={'autopilot-btn ' + (autopilot ? 'ap-active' : '')} onClick={toggleAutopilot}>
-                <span className={'ap-dot ' + (autopilot ? 'ap-dot-on' : '')}></span>
+            <div className="sb-section">
+              <button className={'ap-btn ' + (autopilot ? 'ap-on' : '')} onClick={toggleAutopilot}>
+                <span className={'ap-dot ' + (autopilot ? 'dot-on' : '')}></span>
                 {autopilot ? 'Autopilot Running' : 'Start Autopilot'}
               </button>
             </div>
 
-            {/* Status */}
-            <div className="sidebar-footer">
-              <div className={'conn-status ' + (connected ? 'conn-on' : 'conn-off')}>
-                <span className="conn-dot"></span>
-                {connected ? 'Connected' : 'Disconnected'}
+            <div className="sb-section sb-grow">
+              <div className="sb-label" onClick={() => setShowPositions(!showPositions)} style={{cursor: 'pointer'}}>
+                Positions <span className="badge">{positions.length}</span>
+                {positions.length > 0 && <span className={'pos-total ' + (totalUnrealized >= 0 ? 'green' : 'red')}>{(totalUnrealized >= 0 ? '+' : '') + '$' + Math.abs(totalUnrealized).toFixed(0)}</span>}
+              </div>
+            </div>
+
+            <div className="sb-footer">
+              <div className={'conn ' + (connected ? 'conn-on' : '')}>
+                <span className="conn-dot"></span>{connected ? 'Connected' : 'Disconnected'}
               </div>
             </div>
           </>
         )}
       </aside>
 
-      {/* ── Main Chat ── */}
+      {/* ── Main ── */}
       <main className="main">
+        {/* Positions Bar */}
+        {positions.length > 0 && (
+          <div className="positions-bar">
+            <div className="pos-chips">
+              {positions.map((p, i) => (
+                <div key={i}
+                  className={'pos-chip ' + (p.unrealized_pnl >= 0 ? 'chip-green' : 'chip-red') + (selectedPos === p.ticker ? ' chip-active' : '')}
+                  onClick={() => setSelectedPos(selectedPos === p.ticker ? null : p.ticker)}>
+                  <span className="chip-ticker">{p.ticker}</span>
+                  <span className="chip-pnl">{(p.unrealized_pnl_pct >= 0 ? '+' : '') + p.unrealized_pnl_pct.toFixed(1) + '%'}</span>
+                </div>
+              ))}
+            </div>
+            {selectedPos && (() => {
+              var p = positions.find(x => x.ticker === selectedPos)
+              if (!p) return null
+              return (
+                <div className="pos-detail">
+                  <div className="pos-detail-info">
+                    <div className="pd-header">
+                      <span className="pd-ticker">{p.ticker}</span>
+                      <span className={'pd-pnl ' + (p.unrealized_pnl >= 0 ? 'green' : 'red')}>
+                        {(p.unrealized_pnl >= 0 ? '+' : '') + '$' + Math.abs(p.unrealized_pnl).toFixed(2)}
+                        {' (' + (p.unrealized_pnl_pct >= 0 ? '+' : '') + p.unrealized_pnl_pct.toFixed(2) + '%)'}
+                      </span>
+                    </div>
+                    <div className="pd-meta">
+                      <span>{p.qty} shares @ ${p.avg_entry_price?.toFixed(2) || '—'}</span>
+                      <span>Market: ${p.current_price?.toFixed(2) || '—'}</span>
+                      <span>{p.side === 'short' ? 'SHORT' : 'LONG'}</span>
+                    </div>
+                    <div className="pd-actions">
+                      <button className="action-btn action-analyze" onClick={() => { sendMessage(p.ticker); setSelectedPos(null) }}>Analyze</button>
+                      <button className="action-btn action-buy" onClick={() => { tradeAction('buy 1', p.ticker); setSelectedPos(null) }}>Buy More</button>
+                      {p.side === 'short' ? (
+                        <button className="action-btn action-sell" onClick={() => { tradeAction('cover', p.ticker); setSelectedPos(null) }}>Cover</button>
+                      ) : (
+                        <button className="action-btn action-sell" onClick={() => { tradeAction('sell', p.ticker); setSelectedPos(null) }}>Sell All</button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="pos-detail-chart">
+                    <Chart ticker={p.ticker} signal={null} height={200} />
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+        )}
+
+        {/* Chat */}
         <div className="chat">
           {messages.length === 0 && !sending && (
             <div className="welcome">
               <h2>{getGreeting()}</h2>
               <p className="welcome-sub">What would you like to know?</p>
               <div className="welcome-grid">
-                <button className="welcome-card" onClick={() => quickAction('Analyze NVDA')}>
+                <button className="wc" onClick={() => quickAction('Analyze NVDA')}>
                   <span className="wc-icon">📊</span>
-                  <div>
-                    <span className="wc-title">Analyze a stock</span>
-                    <span className="wc-desc">Get a full signal breakdown</span>
-                  </div>
+                  <div><span className="wc-title">Analyze a stock</span><span className="wc-desc">Full signal breakdown</span></div>
                 </button>
-                <button className="welcome-card" onClick={() => quickAction('top gainers')}>
+                <button className="wc" onClick={() => quickAction('top gainers')}>
                   <span className="wc-icon">🔥</span>
-                  <div>
-                    <span className="wc-title">Top gainers</span>
-                    <span className="wc-desc">See what's moving today</span>
-                  </div>
+                  <div><span className="wc-title">Top gainers</span><span className="wc-desc">What's moving today</span></div>
                 </button>
-                <button className="welcome-card" onClick={() => quickAction('How did we do today?')}>
+                <button className="wc" onClick={() => quickAction('How did we do today?')}>
                   <span className="wc-icon">📋</span>
-                  <div>
-                    <span className="wc-title">Daily recap</span>
-                    <span className="wc-desc">Review today's trades</span>
-                  </div>
+                  <div><span className="wc-title">Daily recap</span><span className="wc-desc">Review today's trades</span></div>
                 </button>
-                <button className="welcome-card" onClick={() => quickAction('market regime')}>
+                <button className="wc" onClick={() => quickAction('market regime')}>
                   <span className="wc-icon">🌍</span>
-                  <div>
-                    <span className="wc-title">Market health</span>
-                    <span className="wc-desc">SPY, VIX, regime check</span>
-                  </div>
+                  <div><span className="wc-title">Market health</span><span className="wc-desc">SPY, VIX, regime</span></div>
                 </button>
               </div>
             </div>
           )}
 
           {messages.map((m, i) => (
-            <div key={i} className={'msg ' + (m.role === 'user' ? 'msg-user' : 'msg-ai')}>
-              {m.role === 'assistant' && (
-                <div className="msg-avatar"><div className="avatar-p">P</div></div>
-              )}
-              <div className={'msg-bubble ' + (m.role === 'user' ? 'bubble-user' : 'bubble-ai')}>
-                <div dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }} />
+            <div key={i} className={'msg msg-' + m.role}>
+              {m.role === 'assistant' && <div className="msg-av"><div className="av-p">P</div></div>}
+              <div className="msg-body">
+                {m.role === 'user' && <div className="msg-label">You</div>}
+                <div className="msg-text" dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }} />
                 {m.role === 'assistant' && m.ticker && (
-                  <div className="inline-chart">
+                  <div className="msg-chart">
                     <Chart ticker={m.ticker} signal={m.signal} height={260} />
                   </div>
                 )}
@@ -306,31 +313,25 @@ function App() {
           ))}
 
           {sending && (
-            <div className="msg msg-ai">
-              <div className="msg-avatar"><div className="avatar-p">P</div></div>
-              <div className="bubble-ai">
-                <div className="typing"><span></span><span></span><span></span></div>
-              </div>
+            <div className="msg msg-assistant">
+              <div className="msg-av"><div className="av-p">P</div></div>
+              <div className="msg-body"><div className="typing"><span></span><span></span><span></span></div></div>
             </div>
           )}
           <div ref={messagesEnd} />
         </div>
 
-        {/* Input */}
         <div className="input-area">
           <div className="input-wrap">
             <input ref={inputRef} value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') send() }}
-              placeholder="Ask anything — analyze a stock, start autopilot, make a trade..."
+              placeholder="Ask anything — analyze, trade, autopilot..."
               disabled={sending} />
             <button className="send-btn" onClick={send} disabled={sending}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-              </svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
             </button>
           </div>
-          <span className="input-hint">Paula can make mistakes. Verify important info.</span>
         </div>
       </main>
     </div>
