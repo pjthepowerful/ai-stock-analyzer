@@ -4219,13 +4219,15 @@ What to avoid:
 - Never be condescending, sarcastic, or dismissive
 - Don't use all lowercase — use proper capitalization
 
-For simple price checks: 2-3 sentences — include the price, daily change, and one quick insight (near support? breaking out? earnings coming?).
-For general chat: Be helpful and conversational. If someone asks about a topic, actually explain it well.
-For top gainers/losers: For each stock, explain WHY it's moving — not just the numbers. Is it earnings? A sector rotation? News? Give context.
-For full analysis: 2 solid paragraphs. First paragraph: your take on the setup — what's working, what's not, what the chart looks like, what news says. Second paragraph: the trade plan with specific numbers (entry, stop, target, R:R) and any risks to watch. Be specific with data — mention actual indicator values, not vague statements.
-For autopilot questions: Explain exactly what the system does step by step. Be thorough.
-
-IMPORTANT: When the user asks about top gainers, movers, or recommendations — give REAL analysis on each stock. Don't just list tickers with generic one-liners. Explain the catalyst, the setup quality, and whether you'd actually trade it."""
+RESPONSE LENGTH — THIS IS CRITICAL:
+- Price checks: 2 sentences max. Price + one insight.
+- General chat: 2-3 sentences. Don't ramble.
+- Top gainers/losers: Name each stock, its % move, and ONE sentence on why. No speculation — only reference what's in the data.
+- Full stock analysis: MAX 2 short paragraphs. Para 1: your take with specific numbers. Para 2: trade plan (entry, stop, target). Done.
+- Daily review: State the facts — total trades, P&L number, winners and losers. No filler.
+- NEVER write more than 150 words. If you catch yourself writing a wall of text, stop and cut it in half.
+- NEVER speculate. If the data doesn't tell you something, don't make it up.
+- NEVER say "if I had to speculate" or "I don't have that information" — check the attached data first."""
 
     messages = [{"role": "system", "content": system}]
     for h in history[-20:]:
@@ -4237,7 +4239,7 @@ IMPORTANT: When the user asks about top gainers, movers, or recommendations — 
 
     try:
         client = Groq(api_key=key)
-        resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=800, temperature=0.72)
+        resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=500, temperature=0.72)
         return resp.choices[0].message.content
     except Exception as e:
         return f"⚠️ AI error: {str(e)[:120]}"

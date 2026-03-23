@@ -146,8 +146,8 @@ function App() {
     return 'Good evening'
   }
 
-  var pnl = account ? (account.equity - (account.last_equity || account.equity)) : 0
-  var pnlPct = account && account.equity ? (pnl / account.equity * 100) : 0
+  var pnl = account ? (account.daily_pnl || 0) : 0
+  var pnlPct = account ? (account.daily_pnl_pct || 0) : 0
 
   return (
     <div className="app">
@@ -178,8 +178,8 @@ function App() {
             <span className="dash-value">{'$' + account.equity.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
           </div>
           <div className="dash-item">
-            <span className="dash-label">Cash</span>
-            <span className="dash-value">{'$' + account.cash.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+            <span className="dash-label">Buying Power</span>
+            <span className="dash-value">{'$' + account.buying_power.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
           </div>
           <div className="dash-item">
             <span className="dash-label">Day P&L</span>
