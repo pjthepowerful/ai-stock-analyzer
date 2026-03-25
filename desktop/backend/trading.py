@@ -1032,6 +1032,16 @@ def compute_intraday_technicals(hist: pd.DataFrame) -> dict:
     rsi_series = 100 - (100 / (1 + rs))
     rsi = float(rsi_series.iloc[-1]) if not rsi_series.empty else 50
 
+    # ── RSI(2) — ultra-short-term for VWAP pullback strategy ──
+    rsi_2 = 50.0
+    if len(close) >= 3:
+        delta_2 = close.diff()
+        gain_2 = delta_2.where(delta_2 > 0, 0).rolling(2).mean()
+        loss_2 = (-delta_2.where(delta_2 < 0, 0)).rolling(2).mean()
+        rs_2 = gain_2 / loss_2.replace(0, 0.001)
+        rsi_2_series = 100 - (100 / (1 + rs_2))
+        rsi_2 = float(rsi_2_series.iloc[-1]) if not rsi_2_series.empty and not pd.isna(rsi_2_series.iloc[-1]) else 50.0
+
     # ── Stochastic RSI ──
     stoch_k, stoch_d = 50.0, 50.0
     if len(rsi_series.dropna()) >= 14:
@@ -1248,6 +1258,7 @@ def compute_intraday_technicals(hist: pd.DataFrame) -> dict:
         "ema_20": round(ema_20, 2),
         "ema_50": round(ema_50, 2),
         "rsi": round(rsi, 1),
+        "rsi_2": round(rsi_2, 1),
         "stoch_k": round(stoch_k, 1),
         "stoch_d": round(stoch_d, 1),
         "macd_hist": round(macd_hist, 4),
@@ -1256,6 +1267,7 @@ def compute_intraday_technicals(hist: pd.DataFrame) -> dict:
         "adx": round(adx_val, 1),
         "day_high": round(day_high, 2),
         "day_low": round(day_low, 2),
+        "day_open": round(float(open_.iloc[0]), 2) if len(open_) > 0 else 0,
         "prev_day_high": round(prev_day_high, 2),
         "prev_day_low": round(prev_day_low, 2),
         "higher_lows": higher_lows,
@@ -1533,6 +1545,51 @@ def generate_intraday_signal(data: dict) -> dict:
     elif vwap_bounce >= 2:
         score += 2
         signals.append("VWAP bounce detected")
+
+    # ── 19. VWAP Pullback Strategy (±10 points) ──
+    # Based on Brian Shannon method — backtested at 1.69 profit factor
+    # Buy when: price above VWAP + RSI(2) oversold (price pulled back to VWAP)
+    rsi_2 = tech.get("rsi_2", 50)
+    if above_vwap and rsi_2 < 25 and dist_to_vwap < 0.5:
+        score += 10
+        signals.append(f"✓ VWAP Pullback Setup — RSI(2)={rsi_2:.0f}, price at VWAP support")
+    elif above_vwap and rsi_2 < 35 and dist_to_vwap < 0.8:
+        score += 5
+        signals.append(f"Near VWAP pullback — RSI(2)={rsi_2:.0f}")
+    elif not above_vwap and rsi_2 > 75 and dist_to_vwap < 0.5:
+        score -= 10
+        warnings.append(f"Bearish VWAP pullback — RSI(2)={rsi_2:.0f}, price at VWAP resistance")
+    elif not above_vwap and rsi_2 > 65 and dist_to_vwap < 0.8:
+        score -= 5
+
+    # ── 20. Open = High/Low Strategy (±8 points) ──
+    # If open = day high after 15 min → bearish (sellers immediately took over)
+    # If open = day low after 15 min → bullish (buyers stepped in immediately)
+    day_open = tech.get("day_open", 0)
+    if day_open > 0 and day_high > 0 and day_low > 0:
+        open_is_high = abs(day_open - day_high) / price < 0.001  # within 0.1%
+        open_is_low = abs(day_open - day_low) / price < 0.001
+        if open_is_low and price > day_open:
+            score += 8
+            signals.append("✓ Open = Day Low — buyers dominated from the bell")
+        elif open_is_high and price < day_open:
+            score -= 8
+            warnings.append("Open = Day High — sellers dominated from the bell")
+
+    # ── 21. Volume Breakout Confirmation (±6 points) ──
+    # Breakouts only matter with 2x+ volume — confirmed by 2025 research
+    if breakout in ("above_prev_high", "below_prev_low"):
+        if vol_ratio >= 2.0:
+            score += 6 if breakout == "above_prev_high" else -6
+            signals.append(f"✓ Volume-confirmed breakout ({vol_ratio:.1f}x) — high probability")
+        elif vol_ratio < 1.0:
+            # Fake breakout — low volume
+            if breakout == "above_prev_high":
+                score -= 4
+                warnings.append(f"Low-volume breakout ({vol_ratio:.1f}x) — likely fakeout")
+            else:
+                score += 4
+                signals.append(f"Low-volume breakdown ({vol_ratio:.1f}x) — likely fakeout bounce")
 
     # ── DETERMINE ACTION ──
     score = max(0, min(100, score))
