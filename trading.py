@@ -3249,7 +3249,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     SELL_BELOW = 42               # quick exits
 
     log.append(f"Open positions: {len(positions)} · Max: {MAX_POSITIONS}")
-    log.append("📊 Mode: **Intraday Long/Short** · 5min scans · VWAP · gap scanner · SPY filter · EOD close 3:45 PM")
+    log.append("📊 Mode: **Intraday Long/Short** · 5min scans · VWAP · gap scanner · SPY filter · EOD close 3:30 PM")
     DAILY_LOSS_LIMIT = 0.02       # 2% max daily loss
     PARTIAL_PROFIT_PCT = 0.015    # take half off at 1.5% (fast intraday partials)
     PARTIAL_PROFIT_SOLD_KEY = "autopilot_partial_sold"
@@ -3273,22 +3273,36 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     else:
         log.append(f"Daily P&L: {daily_pnl_pct:+.2f}%")
 
-    # ── 1b. EOD Liquidation — close all positions 15min before close ──
+    # ── 1b. EOD Liquidation — close ALL positions 30min before close ──
     now_et = datetime.now(et)
-    market_close = now_et.replace(hour=15, minute=45, second=0, microsecond=0)
-    if now_et >= market_close and positions and not dry_run:
-        log.append("🔔 **EOD LIQUIDATION** — closing all positions before market close")
+    eod_liquidation = now_et.replace(hour=15, minute=30, second=0, microsecond=0)
+    eod_hard_close = now_et.replace(hour=15, minute=50, second=0, microsecond=0)
+
+    if now_et >= eod_liquidation and positions and not dry_run:
+        log.append("🔔 **EOD LIQUIDATION (3:30 PM)** — closing ALL positions to avoid overnight gap risk")
         result = alpaca_close_all()
         if result.get("ok"):
-            log.append(f"Closed {len(positions)} positions — flat for the day")
+            log.append(f"✅ Closed {len(positions)} positions — flat for the day")
         else:
-            log.append(f"⚠️ EOD close failed: {result.get('error', '')}")
+            log.append(f"⚠️ EOD close failed: {result.get('error', '')} — will retry next scan")
+            # Don't return — try again next scan
+            if now_et >= eod_hard_close:
+                # Hard close — try individual sells
+                for pos in positions:
+                    try:
+                        if pos.get("side") == "short":
+                            alpaca_cover(ticker=pos["ticker"], cover_all=True)
+                        else:
+                            alpaca_sell(ticker=pos["ticker"], sell_all=True)
+                        log.append(f"🔴 Force-closed {pos['ticker']}")
+                    except Exception:
+                        pass
         return {"ok": True, "log": log, "buys": 0, "sells": len(positions), "scanned": 0, "opportunities": 0}
-    elif now_et >= market_close and positions and dry_run:
+    elif now_et >= eod_liquidation and positions and dry_run:
         log.append(f"🔔 EOD: Would close {len(positions)} positions (dry run)")
 
     # No new trades in last 30min of trading
-    last_buy_cutoff = now_et.replace(hour=15, minute=30, second=0, microsecond=0)
+    last_buy_cutoff = now_et.replace(hour=15, minute=15, second=0, microsecond=0)
     no_new_buys_eod = now_et >= last_buy_cutoff
 
     # ── 1b2. Avoid the open — first 15min is pure chop ──
@@ -4170,7 +4184,7 @@ IMPORTANT: Autopilot runs a dedicated INTRADAY engine combining 9 proven day tra
 
 Additional filters: SPY correlation (blocks longs when SPY dumps), VIX panic filter (closes all longs when VIX ≥35), ADX trend strength, stop hunt/liquidity sweep detection, parabolic exhaustion warnings, higher timeframe bias from hourly chart.
 
-Everything gets liquidated 15 minutes before market close. Users can also manually short via "short TSLA" and cover via "cover TSLA". This is day trading — never hold overnight.
+Everything gets liquidated 30 minutes before market close (3:30 PM ET) to avoid overnight gap risk. Users can also manually short via "short TSLA" and cover via "cover TSLA". This is day trading — NEVER hold overnight.
 
 CRITICAL — Stock recommendations:
 When asked to suggest, name, or recommend stocks, NEVER just list the same boring mega-caps everyone already knows (AAPL, MSFT, GOOGL, AMZN, TSLA, etc.). Anyone can name those. Instead:

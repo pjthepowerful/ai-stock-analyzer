@@ -177,7 +177,7 @@ function App() {
                     <span className="sc-label">Equity</span>
                     <span className="sc-val">{'$' + account.equity.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                   </div>
-                  <div className="stat-card">
+                  <div className={'stat-card ' + (pnl >= 0 ? 'stat-positive' : 'stat-negative')}>
                     <span className="sc-label">Day P&L</span>
                     <span className={'sc-val ' + (pnl >= 0 ? 'green' : 'red')}>{(pnl >= 0 ? '+' : '') + '$' + Math.abs(pnl).toFixed(2)}</span>
                   </div>
