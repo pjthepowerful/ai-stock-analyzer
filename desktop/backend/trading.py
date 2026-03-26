@@ -2547,7 +2547,9 @@ def route(msg: str) -> dict:
         return {"type": "sector_strength"}
     if any(w in m for w in ["portfolio", "my account", "buying power", "my equity", "account info", "how much do i have"]):
         return {"type": "portfolio"}
-    if any(w in m for w in ["my positions", "what do i own", "what am i holding", "open positions", "show positions"]):
+    if any(w in m for w in ["my positions", "what do i own", "what am i holding", "open positions", "show positions",
+                            "what positions", "current positions", "what do we have", "what are we holding",
+                            "positions do we", "what stocks", "our positions"]):
         return {"type": "positions"}
     if any(w in m for w in ["my orders", "open orders", "order history", "recent orders", "pending orders"]):
         return {"type": "orders"}
