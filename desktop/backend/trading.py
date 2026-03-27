@@ -596,44 +596,26 @@ def alpaca_short(ticker: str, qty: int = 1,
 
 def alpaca_cover(ticker: str, qty: int = None, cover_all: bool = False) -> dict:
     """Cover a short position — buy back shares to close."""
-    if cover_all:
-        try:
-            r = requests.delete(f"{ALPACA_BASE}/v2/positions/{ticker.upper()}",
-                                headers=_alpaca_headers(), timeout=10)
-            data = r.json()
-            if r.status_code in (200, 201, 207):
-                return {"ok": True, "symbol": ticker.upper(), "action": "covered_short",
-                        "qty": data.get("qty", "all"), "status": data.get("status")}
-            else:
-                return {"ok": False, "error": data.get("message", "Failed to cover")}
-        except Exception as e:
-            return {"ok": False, "error": str(e)[:100]}
-
-    order = {
-        "symbol": ticker.upper(),
-        "qty": str(qty or 1),
-        "side": "buy",
-        "type": "market",
-        "time_in_force": "day",
-    }
+    # Always use DELETE endpoint — it handles qty correctly
     try:
-        r = requests.post(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(),
-                          json=order, timeout=10)
-        data = r.json()
-        if r.status_code in (200, 201):
-            return {"ok": True, "order_id": data.get("id"), "symbol": data.get("symbol"),
-                    "qty": data.get("qty"), "side": "cover", "status": data.get("status")}
+        url = f"{ALPACA_BASE}/v2/positions/{ticker.upper()}"
+        if qty and not cover_all:
+            # Partial cover — use query param
+            r = requests.delete(url, headers=_alpaca_headers(),
+                                params={"qty": str(qty)}, timeout=10)
         else:
-            return {"ok": False, "error": data.get("message", "Cover order rejected")}
-    except Exception as e:
-        return {"ok": False, "error": str(e)[:100]}
-
-
-        r = requests.delete(f"{ALPACA_BASE}/v2/positions",
-                            headers=_alpaca_headers(), timeout=10)
-        if r.status_code in (200, 207):
-            return {"ok": True, "message": "All positions closed"}
-        return {"ok": False, "error": "Failed to close all positions"}
+            # Full cover
+            r = requests.delete(url, headers=_alpaca_headers(), timeout=10)
+        
+        if r.status_code in (200, 201, 207):
+            data = r.json() if r.text else {}
+            return {"ok": True, "symbol": ticker.upper(), "action": "covered_short",
+                    "qty": data.get("qty", qty or "all"), "status": data.get("status", "closed")}
+        elif r.status_code == 404:
+            return {"ok": False, "error": f"No position found for {ticker}"}
+        else:
+            data = r.json() if r.text else {}
+            return {"ok": False, "error": data.get("message", f"Failed to cover {ticker}")}
     except Exception as e:
         return {"ok": False, "error": str(e)[:100]}
 
