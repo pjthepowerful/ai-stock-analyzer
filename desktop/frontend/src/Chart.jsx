@@ -8,6 +8,7 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
   const containerRef = useRef(null)
   const chartRef = useRef(null)
   const [priceInfo, setPriceInfo] = useState(null)
+  const [period, setPeriod] = useState('1y')
 
   useEffect(() => {
     if (!ticker || !containerRef.current) return
@@ -35,7 +36,7 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
     const volumeSeries = chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'volume' })
     chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } })
 
-    fetch(`${API}/api/chart/${ticker}?period=6mo`).then(r => r.json()).then(data => {
+    fetch(`${API}/api/chart/${ticker}?period=${period || '1y'}`).then(r => r.json()).then(data => {
       if (!data.ok) return
       const { dates, open, high, low, close, volume } = data.data
 
@@ -123,7 +124,7 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
     const handleResize = () => { if (containerRef.current && chartRef.current) chartRef.current.applyOptions({ width: containerRef.current.clientWidth }) }
     window.addEventListener('resize', handleResize)
     return () => { window.removeEventListener('resize', handleResize); if (chartRef.current) { chartRef.current.remove(); chartRef.current = null } }
-  }, [ticker, signal, height])
+  }, [ticker, signal, height, period])
 
   const fmtVol = (v) => { if (!v) return '0'; if (v >= 1e9) return (v/1e9).toFixed(1)+'B'; if (v >= 1e6) return (v/1e6).toFixed(1)+'M'; if (v >= 1e3) return (v/1e3).toFixed(0)+'K'; return v.toString() }
 
@@ -136,6 +137,13 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
             {signal.action} · {signal.score}
           </span>
         )}
+        <div className="chart-periods">
+          {['1mo','3mo','6mo','1y','2y'].map(p => (
+            <button key={p} className={'cp-btn' + (period === p ? ' cp-active' : '')} onClick={() => setPeriod(p)}>
+              {p.replace('mo','M').replace('y','Y')}
+            </button>
+          ))}
+        </div>
         <div className="chart-legend">
           <span style={{color: '#8866ff'}}>9E</span>
           <span style={{color: '#3388ff'}}>20</span>
