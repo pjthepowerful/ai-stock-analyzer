@@ -5,6 +5,8 @@ import './App.css'
 
 const BACKEND = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:3141' : 'https://scurrilously-inevasible-kailey.ngrok-free.dev')
 const API = BACKEND
+const H = { 'ngrok-skip-browser-warning': '1' }
+const f = (url, opts = {}) => fetch(url, { ...opts, headers: { ...H, ...(opts.headers || {}) } })
 const WS_PROTOCOL = BACKEND.startsWith('https') ? 'wss:' : 'ws:'
 const WS_URL = `${WS_PROTOCOL}//${new URL(BACKEND).host}/ws`
 
@@ -57,10 +59,10 @@ function App() {
   const refreshData = useCallback(async () => {
     try {
       const [accRes, posRes, spyRes, healthRes] = await Promise.all([
-        fetch(API + '/api/account').then(r => r.json()),
-        fetch(API + '/api/positions').then(r => r.json()),
-        fetch(API + '/api/spy-trend').then(r => r.json()),
-        fetch(API + '/api/health').then(r => r.json()),
+        f(API + '/api/account').then(r => r.json()),
+        f(API + '/api/positions').then(r => r.json()),
+        f(API + '/api/spy-trend').then(r => r.json()),
+        f(API + '/api/health').then(r => r.json()),
       ])
       if (accRes.ok) setAccount(accRes.data)
       if (posRes.ok) setPositions(posRes.data)
@@ -72,7 +74,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    fetch(API + '/api/chat/clear', { method: 'POST' }).catch(() => {})
+    f(API + '/api/chat/clear', { method: 'POST' }).catch(() => {})
     refreshData()
     const i = setInterval(refreshData, 15000)
     return () => clearInterval(i)
@@ -86,7 +88,7 @@ function App() {
     setInput('')
     setSending(true)
     try {
-      const res = await fetch(API + '/api/chat', {
+      const res = await f(API + '/api/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: msg })
       })
