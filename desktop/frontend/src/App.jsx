@@ -21,7 +21,6 @@ function App() {
   const [selectedPos, setSelectedPos] = useState(null)
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [showPositions, setShowPositions] = useState(false)
 
   const messagesEnd = useRef(null)
   const wsRef = useRef(null)
@@ -42,11 +41,7 @@ function App() {
             if (data.status === 'stopped') setAutopilot(false)
             if (data.log) {
               playNotify()
-              setMessages(prev => [...prev, {
-                role: 'assistant',
-                content: '**Autopilot Scan Complete**\n\n' + data.log.join('\n\n'),
-                type: 'autopilot'
-              }])
+              setMessages(prev => [...prev, { role: 'assistant', content: '**Autopilot Scan**\n\n' + data.log.join('\n\n'), type: 'autopilot' }])
             }
           }
           if (event === 'trade') {
@@ -87,9 +82,7 @@ function App() {
     return () => clearInterval(interval)
   }, [refreshData])
 
-  useEffect(() => {
-    messagesEnd.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  useEffect(() => { messagesEnd.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
   const sendMessage = async (msg) => {
     if (!msg || sending) return
@@ -97,17 +90,10 @@ function App() {
     setInput('')
     setSending(true)
     try {
-      const res = await fetch(API + '/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: msg })
-      })
+      const res = await fetch(API + '/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg }) })
       const data = await res.json()
       if (data.ok) {
-        setMessages(prev => [...prev, {
-          role: 'assistant', content: data.message, type: data.type,
-          ticker: data.ticker || null, signal: data.trade_signal || null,
-        }])
+        setMessages(prev => [...prev, { role: 'assistant', content: data.message, type: data.type, ticker: data.ticker || null, signal: data.trade_signal || null }])
         if (data.type === 'trade' && data.message && data.message.includes('Bought')) playBuy()
         else if (data.type === 'trade' && data.message && (data.message.includes('Sold') || data.message.includes('Shorted'))) playSell()
         else if (data.type === 'trade' && data.message && data.message.includes('Covered')) playProfit()
@@ -126,209 +112,131 @@ function App() {
   }
 
   const send = () => sendMessage(input.trim())
+  const toggleAutopilot = () => sendMessage(autopilot ? 'stop' : 'autopilot')
+  const quickAction = (text) => { setInput(text); setTimeout(() => inputRef.current?.focus(), 50) }
 
-  const toggleAutopilot = () => {
-    if (autopilot) {
-      sendMessage('stop')
-    } else {
-      sendMessage('autopilot')
-    }
-  }
-
-  const tradeAction = async (action, ticker) => {
-    sendMessage(action + ' ' + ticker)
-  }
-
-  const quickAction = (text) => {
-    setInput(text)
-    setTimeout(() => { if (inputRef.current) inputRef.current.focus() }, 50)
-  }
-
-  const getGreeting = () => {
-    var h = new Date().getHours()
-    if (h < 12) return 'Good morning'
-    if (h < 17) return 'Good afternoon'
-    return 'Good evening'
-  }
-
+  const getGreeting = () => { var h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' }
   var pnl = account ? (account.daily_pnl || 0) : 0
   var pnlPct = account ? (account.daily_pnl_pct || 0) : 0
   var totalUnrealized = positions.reduce((sum, p) => sum + (p.unrealized_pnl || 0), 0)
 
   return (
-    <div className="app-layout">
-      {/* ── Sidebar ── */}
-      <aside className={'sidebar' + (sidebarOpen ? '' : ' collapsed')}>
-        <div className="sb-header">
-          <div className="logo-row" onClick={() => !sidebarOpen && setSidebarOpen(true)} style={sidebarOpen ? {} : {cursor: 'pointer'}}>
-            <div className="logo">P</div>
-            {sidebarOpen && <div className="logo-info"><span className="logo-name">Paula</span><span className="logo-time">{time || '...'}</span></div>}
+    <div className="layout">
+      {/* Sidebar */}
+      <aside className={'side' + (sidebarOpen ? '' : ' side-min')}>
+        <div className="side-top">
+          <div className="side-logo" onClick={() => !sidebarOpen && setSidebarOpen(true)} style={sidebarOpen ? {} : {cursor:'pointer'}}>
+            <div className="p-icon">P</div>
+            {sidebarOpen && <div><div className="p-name">Paula</div><div className="p-time">{time || '...'}</div></div>}
           </div>
-          {sidebarOpen && <button className="sb-close" onClick={() => setSidebarOpen(false)}>✕</button>}
+          {sidebarOpen && <button className="side-x" onClick={() => setSidebarOpen(false)}>✕</button>}
         </div>
-
-        {sidebarOpen && (
-          <>
-            <div className="sb-section">
-              <div className="sb-label">Account</div>
-              {account ? (
-                <div className="stat-grid">
-                  <div className="stat-card">
-                    <span className="sc-label">Equity</span>
-                    <span className="sc-val">{'$' + account.equity.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                  </div>
-                  <div className={'stat-card ' + (pnl >= 0 ? 'stat-positive' : 'stat-negative')}>
-                    <span className="sc-label">Day P&L</span>
-                    <span className={'sc-val ' + (pnl >= 0 ? 'green' : 'red')}>{(pnl >= 0 ? '+' : '') + '$' + Math.abs(pnl).toFixed(2)}</span>
-                  </div>
-                  <div className="stat-card">
-                    <span className="sc-label">Buying Power</span>
-                    <span className="sc-val">{'$' + account.buying_power.toLocaleString(undefined, {minimumFractionDigits: 0})}</span>
-                  </div>
-                  <div className="stat-card">
-                    <span className="sc-label">SPY</span>
-                    <span className={'sc-val ' + (spyTrend && spyTrend.change_pct >= 0 ? 'green' : 'red')}>
-                      {spyTrend ? (spyTrend.change_pct >= 0 ? '+' : '') + spyTrend.change_pct + '%' : '—'}
-                    </span>
-                  </div>
-                </div>
-              ) : <div className="sc-val shimmer">Loading...</div>}
+        {sidebarOpen && <>
+          <div className="side-sec">
+            {account ? <div className="stats">
+              <div className="st"><div className="st-l">Equity</div><div className="st-v">{'$'+account.equity.toLocaleString(undefined,{minimumFractionDigits:2})}</div></div>
+              <div className={'st '+(pnl>=0?'st-up':'st-dn')}><div className="st-l">Day P&L</div><div className="st-v">{(pnl>=0?'+':'')+pnl.toFixed(2)}<span className="st-pct">{' ('+pnlPct.toFixed(1)+'%)'}</span></div></div>
+              <div className="st"><div className="st-l">Buying Power</div><div className="st-v">{'$'+account.buying_power.toLocaleString(undefined,{minimumFractionDigits:0})}</div></div>
+              <div className="st"><div className="st-l">SPY</div><div className={'st-v '+(spyTrend&&spyTrend.change_pct>=0?'up':'dn')}>{spyTrend?(spyTrend.change_pct>=0?'+':'')+spyTrend.change_pct+'%':'—'}</div></div>
+            </div> : <div className="st-v shim">Loading...</div>}
+          </div>
+          <div className="side-sec">
+            <button className={'ap-btn'+(autopilot?' ap-on':'')} onClick={toggleAutopilot}>
+              <span className={'ap-d'+(autopilot?' ap-d-on':'')}></span>{autopilot?'Autopilot Running':'Start Autopilot'}
+            </button>
+          </div>
+          <div className="side-sec side-fill">
+            <div className="sec-h">Positions <span className="cnt">{positions.length}</span>
+              {positions.length>0&&<span className={'ptotal '+(totalUnrealized>=0?'up':'dn')}>{(totalUnrealized>=0?'+':'')+totalUnrealized.toFixed(0)}</span>}
             </div>
-
-            <div className="sb-section">
-              <button className={'ap-btn ' + (autopilot ? 'ap-on' : '')} onClick={toggleAutopilot}>
-                <span className={'ap-dot ' + (autopilot ? 'dot-on' : '')}></span>
-                {autopilot ? 'Autopilot Running' : 'Start Autopilot'}
-              </button>
-            </div>
-
-            <div className="sb-section sb-grow">
-              <div className="sb-label" onClick={() => setShowPositions(!showPositions)} style={{cursor: 'pointer'}}>
-                Positions <span className="badge">{positions.length}</span>
-                {positions.length > 0 && <span className={'pos-total ' + (totalUnrealized >= 0 ? 'green' : 'red')}>{(totalUnrealized >= 0 ? '+' : '') + '$' + Math.abs(totalUnrealized).toFixed(0)}</span>}
-              </div>
-            </div>
-
-            <div className="sb-footer">
-              <div className={'conn ' + (connected ? 'conn-on' : '')}>
-                <span className="conn-dot"></span>{connected ? 'Connected' : 'Disconnected'}
-              </div>
-            </div>
-          </>
-        )}
+          </div>
+          <div className="side-bot"><div className={'con '+(connected?'con-on':'')}>
+            <span className="con-d"></span>{connected?'Connected':'Disconnected'}
+          </div></div>
+        </>}
       </aside>
 
-      {/* ── Main ── */}
+      {/* Main */}
       <main className="main">
-        {/* Positions Bar */}
-        {positions.length > 0 && (
-          <div className="positions-bar">
-            <div className="pos-chips">
-              {positions.map((p, i) => (
-                <div key={i}
-                  className={'pos-chip ' + (p.unrealized_pnl >= 0 ? 'chip-green' : 'chip-red') + (selectedPos === p.ticker ? ' chip-active' : '')}
-                  onClick={() => setSelectedPos(selectedPos === p.ticker ? null : p.ticker)}>
-                  <span className="chip-ticker">{p.ticker}</span>
-                  <span className="chip-pnl">{(p.unrealized_pnl_pct >= 0 ? '+' : '') + p.unrealized_pnl_pct.toFixed(1) + '%'}</span>
-                </div>
-              ))}
-            </div>
-            {selectedPos && (() => {
-              var p = positions.find(x => x.ticker === selectedPos)
-              if (!p) return null
-              return (
-                <div className="pos-detail">
-                  <div className="pos-detail-info">
-                    <div className="pd-header">
-                      <span className="pd-ticker">{p.ticker}</span>
-                      <span className={'pd-pnl ' + (p.unrealized_pnl >= 0 ? 'green' : 'red')}>
-                        {(p.unrealized_pnl >= 0 ? '+' : '') + '$' + Math.abs(p.unrealized_pnl).toFixed(2)}
-                        {' (' + (p.unrealized_pnl_pct >= 0 ? '+' : '') + p.unrealized_pnl_pct.toFixed(2) + '%)'}
-                      </span>
-                    </div>
-                    <div className="pd-meta">
-                      <span>{p.qty} shares @ ${p.avg_entry_price?.toFixed(2) || '—'}</span>
-                      <span>Market: ${p.current_price?.toFixed(2) || '—'}</span>
-                      <span>{p.side === 'short' ? 'SHORT' : 'LONG'}</span>
-                    </div>
-                    <div className="pd-actions">
-                      <button className="action-btn action-analyze" onClick={() => { sendMessage(p.ticker); setSelectedPos(null) }}>Analyze</button>
-                      <button className="action-btn action-buy" onClick={() => { tradeAction('buy 1', p.ticker); setSelectedPos(null) }}>Buy More</button>
-                      {p.side === 'short' ? (
-                        <button className="action-btn action-sell" onClick={() => { tradeAction('cover', p.ticker); setSelectedPos(null) }}>Cover</button>
-                      ) : (
-                        <button className="action-btn action-sell" onClick={() => { tradeAction('sell', p.ticker); setSelectedPos(null) }}>Sell All</button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="pos-detail-chart">
-                    <Chart ticker={p.ticker} signal={null} height={200} />
-                  </div>
-                </div>
-              )
-            })()}
+        {/* Position bar */}
+        {positions.length>0&&<div className="posbar">
+          <div className="chips">{positions.map((p,i)=>(
+            <button key={i} className={'chip '+(p.unrealized_pnl>=0?'c-up':'c-dn')+(selectedPos===p.ticker?' c-sel':'')}
+              onClick={()=>setSelectedPos(selectedPos===p.ticker?null:p.ticker)}>
+              <span className="c-tk">{p.ticker}</span><span className="c-pnl">{(p.unrealized_pnl_pct>=0?'+':'')+p.unrealized_pnl_pct.toFixed(1)+'%'}</span>
+            </button>))}
           </div>
-        )}
+          {selectedPos&&(()=>{var p=positions.find(x=>x.ticker===selectedPos);if(!p)return null;return(
+            <div className="pos-expand">
+              <div className="pos-info">
+                <div className="pos-head"><span className="pos-tk">{p.ticker}</span>
+                  <span className={'pos-pl '+(p.unrealized_pnl>=0?'up':'dn')}>{(p.unrealized_pnl>=0?'+':'-')+'$'+Math.abs(p.unrealized_pnl).toFixed(2)+' ('+(p.unrealized_pnl_pct>=0?'+':'')+p.unrealized_pnl_pct.toFixed(2)+'%)'}</span>
+                </div>
+                <div className="pos-meta">{Math.abs(p.qty)+' shares · $'+(p.avg_entry_price||0).toFixed(2)+' avg · $'+(p.current_price||0).toFixed(2)+' now · '+(p.side==='short'?'SHORT':'LONG')}</div>
+                <div className="pos-acts">
+                  <button className="act act-a" onClick={()=>{sendMessage(p.ticker);setSelectedPos(null)}}>Analyze</button>
+                  <button className="act act-b" onClick={()=>{sendMessage('buy 1 '+p.ticker);setSelectedPos(null)}}>Buy More</button>
+                  <button className="act act-s" onClick={()=>{sendMessage((p.side==='short'?'cover ':'sell ')+p.ticker);setSelectedPos(null)}}>{p.side==='short'?'Cover':'Sell All'}</button>
+                </div>
+              </div>
+              <div className="pos-chart"><Chart ticker={p.ticker} signal={null} height={180}/></div>
+            </div>
+          )})()}
+        </div>}
 
         {/* Chat */}
         <div className="chat">
-          {messages.length === 0 && !sending && (
+          {messages.length===0&&!sending&&(
             <div className="welcome">
+              <div className="w-logo">P</div>
               <h2>{getGreeting()}</h2>
-              <p className="welcome-sub">What would you like to know?</p>
-              <div className="welcome-grid">
-                <button className="wc" onClick={() => quickAction('Analyze NVDA')}>
-                  <span className="wc-icon">📊</span>
-                  <div><span className="wc-title">Analyze a stock</span><span className="wc-desc">Full signal breakdown</span></div>
-                </button>
-                <button className="wc" onClick={() => quickAction('top gainers')}>
-                  <span className="wc-icon">🔥</span>
-                  <div><span className="wc-title">Top gainers</span><span className="wc-desc">What's moving today</span></div>
-                </button>
-                <button className="wc" onClick={() => quickAction('How did we do today?')}>
-                  <span className="wc-icon">📋</span>
-                  <div><span className="wc-title">Daily recap</span><span className="wc-desc">Review today's trades</span></div>
-                </button>
-                <button className="wc" onClick={() => quickAction('market regime')}>
-                  <span className="wc-icon">🌍</span>
-                  <div><span className="wc-title">Market health</span><span className="wc-desc">SPY, VIX, regime</span></div>
-                </button>
+              <p className="w-sub">What would you like to know?</p>
+              <div className="w-grid">
+                {[['📊','Analyze a stock','Full signal breakdown','Analyze NVDA'],['🔥','Top gainers','What\'s moving today','top gainers'],['📋','Daily recap','Review today\'s trades','How did we do today?'],['🌍','Market health','SPY, VIX, regime','market regime']].map(([icon,title,desc,cmd],i)=>(
+                  <button key={i} className="w-card" onClick={()=>quickAction(cmd)}>
+                    <span className="w-icon">{icon}</span><div><span className="w-t">{title}</span><span className="w-d">{desc}</span></div>
+                  </button>
+                ))}
               </div>
             </div>
           )}
 
-          {messages.map((m, i) => (
-            <div key={i} className={'msg msg-' + m.role}>
-              {m.role === 'assistant' && <div className="msg-av"><div className="av-p">P</div></div>}
-              <div className="msg-body">
-                {m.role === 'user' && <div className="msg-label">You</div>}
-                <div className="msg-text" dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }} />
-                {m.role === 'assistant' && m.ticker && (
-                  <div className="msg-chart">
-                    <Chart ticker={m.ticker} signal={m.signal} height={260} />
+          {messages.map((m,i)=>(
+            <div key={i} className={'m m-'+m.role}>
+              {m.role==='assistant'?(
+                <div className="m-row-ai">
+                  <div className="m-av"><div className="av">P</div></div>
+                  <div className="m-ai-wrap">
+                    <div className="m-ai-text" dangerouslySetInnerHTML={{__html:formatMessage(m.content)}}/>
+                    {m.ticker&&<div className="m-chart"><Chart ticker={m.ticker} signal={m.signal} height={240}/></div>}
                   </div>
-                )}
-              </div>
+                </div>
+              ):(
+                <div className="m-row-user">
+                  <div className="m-user-bubble">{m.content}</div>
+                </div>
+              )}
             </div>
           ))}
 
-          {sending && (
-            <div className="msg msg-assistant">
-              <div className="msg-av"><div className="av-p">P</div></div>
-              <div className="msg-body"><div className="typing"><span></span><span></span><span></span></div></div>
+          {sending&&(
+            <div className="m m-assistant">
+              <div className="m-row-ai">
+                <div className="m-av"><div className="av">P</div></div>
+                <div className="m-ai-wrap"><div className="dots"><span/><span/><span/></div></div>
+              </div>
             </div>
           )}
-          <div ref={messagesEnd} />
+          <div ref={messagesEnd}/>
         </div>
 
-        <div className="input-area">
-          <div className="input-wrap">
-            <input ref={inputRef} value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') send() }}
-              placeholder="Ask anything — analyze, trade, autopilot..."
-              disabled={sending} />
-            <button className="send-btn" onClick={send} disabled={sending}>
+        {/* Input */}
+        <div className="inp-area">
+          <div className="inp-box">
+            <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)}
+              onKeyDown={e=>{if(e.key==='Enter')send()}}
+              placeholder="Message Paula..." disabled={sending}/>
+            <button className="inp-send" onClick={send} disabled={sending}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
             </button>
           </div>
@@ -338,13 +246,5 @@ function App() {
   )
 }
 
-function formatMessage(text) {
-  if (!text) return ''
-  return text
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`(.+?)`/g, '<code>$1</code>')
-    .replace(/\n/g, '<br/>')
-}
-
+function formatMessage(t){if(!t)return '';return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/`(.+?)`/g,'<code>$1</code>').replace(/\n/g,'<br/>')}
 export default App
