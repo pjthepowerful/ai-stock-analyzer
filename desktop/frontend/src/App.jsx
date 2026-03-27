@@ -183,7 +183,7 @@ function App() {
         <div className="quick-sec">
           <button className="qk" onClick={() => sendMessage('close all')}>Close All</button>
           <button className="qk" onClick={() => sendMessage('top gainers')}>Gainers</button>
-          <button className="qk" onClick={() => sendMessage('market regime')}>Market</button>
+          <button className="qk" onClick={() => sendMessage('top losers')}>Losers</button>
           <button className="qk" onClick={() => sendMessage('How did we do today?')}>Recap</button>
         </div>
       </aside>
@@ -246,10 +246,10 @@ function App() {
                   </button>
                 </div>
                 <div className="w-pills">
-                  <button className="wp" onClick={() => sendMessage('market regime')}>Market Health</button>
                   <button className="wp" onClick={() => sendMessage('How did we do today?')}>Daily Recap</button>
                   <button className="wp" onClick={() => sendMessage('portfolio')}>My Portfolio</button>
                   <button className="wp" onClick={() => sendMessage('What should I buy?')}>Trade Ideas</button>
+                  <button className="wp" onClick={() => sendMessage('top losers')}>Top Losers</button>
                 </div>
               </div>
               {account && (

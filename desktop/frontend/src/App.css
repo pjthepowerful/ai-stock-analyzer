@@ -74,10 +74,10 @@ b{font-weight:600}
 .qk:first-child:hover{background:rgba(240,64,96,.06);border-color:rgba(240,64,96,.3)}
 .qk:nth-child(2){color:var(--g);border-color:rgba(0,221,160,.15)}
 .qk:nth-child(2):hover{background:rgba(0,221,160,.06);border-color:rgba(0,221,160,.3)}
-.qk:nth-child(3){color:var(--bl);border-color:rgba(64,144,255,.15)}
-.qk:nth-child(3):hover{background:rgba(64,144,255,.06);border-color:rgba(64,144,255,.3)}
-.qk:nth-child(4){color:var(--a);border-color:rgba(240,160,48,.15)}
-.qk:nth-child(4):hover{background:rgba(240,160,48,.06);border-color:rgba(240,160,48,.3)}
+.qk:nth-child(3){color:var(--a);border-color:rgba(240,160,48,.15)}
+.qk:nth-child(3):hover{background:rgba(240,160,48,.06);border-color:rgba(240,160,48,.3)}
+.qk:nth-child(4){color:var(--bl);border-color:rgba(64,144,255,.15)}
+.qk:nth-child(4):hover{background:rgba(64,144,255,.06);border-color:rgba(64,144,255,.3)}
 
 /* ── Main ── */
 .main{flex:1;display:flex;flex-direction:column;min-width:0}
