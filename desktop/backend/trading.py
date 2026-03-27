@@ -2669,16 +2669,16 @@ def _market_is_open() -> tuple[bool, str]:
     weekday = now.weekday()  # 0=Mon, 6=Sun
 
     if weekday >= 5:
-        next_open = "Monday 9:30 AM ET"
+        next_open = "Monday 8:30 AM CT"
         return False, f"Weekend — market reopens {next_open}"
 
     market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
     market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
 
     if now < market_open:
-        return False, f"Pre-market — opens at 9:30 AM ET ({market_open - now} from now)"
+        return False, f"Pre-market — opens at 8:30 AM CT"
     if now >= market_close:
-        return False, "Market closed for today — reopens tomorrow 9:30 AM ET"
+        return False, "Market closed for today — reopens tomorrow 8:30 AM CT"
 
     return True, "Market is open"
 
@@ -3290,7 +3290,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     SELL_BELOW = 42               # quick exits
 
     log.append(f"Open positions: {len(positions)} · Max: {MAX_POSITIONS}")
-    log.append("📊 Mode: **Intraday Long/Short** · 5min scans · VWAP · gap scanner · SPY filter · EOD close 3:30 PM")
+    log.append("📊 Mode: **Intraday Long/Short** · 5min scans · VWAP · gap scanner · SPY filter · EOD close 2:30 PM CT")
     DAILY_LOSS_LIMIT = 0.02       # 2% max daily loss
     PARTIAL_PROFIT_PCT = 0.015    # take half off at 1.5% (fast intraday partials)
     PARTIAL_PROFIT_SOLD_KEY = "autopilot_partial_sold"
@@ -3320,7 +3320,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     eod_hard_close = now_et.replace(hour=15, minute=50, second=0, microsecond=0)
 
     if now_et >= eod_liquidation and positions and not dry_run:
-        log.append("🔔 **EOD LIQUIDATION (3:30 PM)** — closing ALL positions to avoid overnight gap risk")
+        log.append("🔔 **EOD LIQUIDATION (2:30 PM CT)** — closing ALL positions to avoid overnight gap risk")
         result = alpaca_close_all()
         if result.get("ok"):
             log.append(f"✅ Closed {len(positions)} positions — flat for the day")
@@ -4225,7 +4225,7 @@ IMPORTANT: Autopilot runs a dedicated INTRADAY engine combining 9 proven day tra
 
 Additional filters: SPY correlation (blocks longs when SPY dumps), VIX panic filter (closes all longs when VIX ≥35), ADX trend strength, stop hunt/liquidity sweep detection, parabolic exhaustion warnings, higher timeframe bias from hourly chart.
 
-Everything gets liquidated 30 minutes before market close (3:30 PM ET) to avoid overnight gap risk. Users can also manually short via "short TSLA" and cover via "cover TSLA". This is day trading — NEVER hold overnight.
+Everything gets liquidated 30 minutes before market close (2:30 PM CT) to avoid overnight gap risk. Users can also manually short via "short TSLA" and cover via "cover TSLA". This is day trading — NEVER hold overnight.
 
 CRITICAL — Stock recommendations:
 When asked to suggest, name, or recommend stocks, NEVER just list the same boring mega-caps everyone already knows (AAPL, MSFT, GOOGL, AMZN, TSLA, etc.). Anyone can name those. Instead:
@@ -4255,7 +4255,7 @@ How you talk:
 - Be encouraging and constructive. Never talk down to the user or act annoyed
 
 CRITICAL — Market awareness:
-- You know today's date and can determine if the market is open (9:30 AM - 4:00 PM ET, Mon-Fri)
+- You know today's date and can determine if the market is open (8:30 AM - 3:00 PM CT, Mon-Fri)
 - If asked about today's performance and data shows 0 trades, say "No trades were executed today" — don't make up a narrative
 - If the user asks about autopilot results, look at the ACTUAL data attached — trades count, P&L, positions
 - Be honest about results — if the day was a loss, say so and explain what happened

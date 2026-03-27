@@ -350,18 +350,18 @@ async def _autopilot_loop():
             is_open, status_msg = engine._market_is_open()
 
             # CRITICAL: EOD safety net — close positions even if market just closed
-            # This catches the case where the scan missed the 3:30 PM window
             et = ZoneInfo("US/Eastern")
+            ct = ZoneInfo("US/Central")
             now_et = datetime.now(et)
+            now_ct = datetime.now(ct)
             if now_et.weekday() < 5:  # weekday
                 eod_start = now_et.replace(hour=15, minute=25, second=0, microsecond=0)
                 eod_end = now_et.replace(hour=16, minute=15, second=0, microsecond=0)
                 if eod_start <= now_et <= eod_end:
-                    # Check if we have positions that need closing
                     positions = engine.alpaca_positions()
                     if positions:
                         await broadcast("autopilot", {"status": "scanned", "log": [
-                            f"🔔 **EOD SAFETY NET** — {len(positions)} positions still open at {now_et.strftime('%I:%M %p ET')}",
+                            f"🔔 **EOD SAFETY NET** — {len(positions)} positions still open at {now_ct.strftime('%I:%M %p CT')}",
                             "Closing all positions to avoid overnight risk..."
                         ]})
                         result = engine.alpaca_close_all()
@@ -370,7 +370,6 @@ async def _autopilot_loop():
                                 f"✅ Closed {len(positions)} positions — flat for the night"
                             ]})
                         else:
-                            # Try individual sells
                             for pos in positions:
                                 try:
                                     if pos.get("side") == "short":
@@ -382,6 +381,8 @@ async def _autopilot_loop():
                             await broadcast("autopilot", {"status": "scanned", "log": [
                                 f"🔴 Force-closed positions individually"
                             ]})
+                        # Trigger frontend refresh
+                        await broadcast("trade", {"action": "close_all"})
 
             if not is_open:
                 await broadcast("autopilot", {"status": "paused", "reason": status_msg})
