@@ -217,13 +217,6 @@ function App() {
           </div>
         </div>
 
-        {/* Quick actions */}
-        <div className="quick-sec">
-          <button className="qk" onClick={() => sendMessage('close all')}>Close All</button>
-          <button className="qk" onClick={() => sendMessage('top gainers')}>Gainers</button>
-          <button className="qk" onClick={() => sendMessage('top losers')}>Losers</button>
-          <button className="qk" onClick={() => sendMessage('How did we do today?')}>Recap</button>
-        </div>
       </aside>
 
       {/* Main */}
