@@ -240,18 +240,19 @@ function App() {
         <div className="chat">
           {messages.length === 0 && !sending && (
             <div className="welcome">
-              <h2>{getGreeting()}, PJ</h2>
+              <div className="w-head">
+                <div className="w-p">P</div>
+                <h2>{getGreeting()}</h2>
+              </div>
               <div className="w-prompts">
                 {[
-                  'Analyze NVDA',
-                  'What should I buy today?',
-                  'Show me top gainers',
-                  'How did we do today?',
-                  'Chart TSLA',
-                  'Show my portfolio',
-                ].map((prompt, i) => (
-                  <button key={i} className="w-prompt" onClick={() => sendMessage(prompt)}>
-                    {prompt}
+                  ['Analyze a stock', () => quickAction('Analyze ')],
+                  ["What's moving today?", () => sendMessage('top gainers')],
+                  ['Recap my trades', () => sendMessage('How did we do today?')],
+                  ['Give me trade ideas', () => sendMessage('What should I buy?')],
+                ].map(([label, fn], i) => (
+                  <button key={i} className="wpr" onClick={fn}>
+                    <span>{label}</span>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                   </button>
                 ))}
