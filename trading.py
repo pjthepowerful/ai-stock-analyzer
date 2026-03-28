@@ -2561,7 +2561,6 @@ def route(msg: str) -> dict:
         return {"type": "chat"}
 
     # ── Detect questions/advice requests → send to AI, not execute commands ──
-    # If the user is ASKING what to buy/sell (not commanding), route to chat
     is_question = any(q in m for q in [
         "should i", "which", "what should", "can you tell", "can you suggest",
         "recommend", "suggestion", "advice", "ideas", "what are the best",
@@ -2569,6 +2568,29 @@ def route(msg: str) -> dict:
         "give me", "find me", "pick me", "any good", "what do you think",
         "is it a good", "worth buying", "worth selling", "opinion",
     ])
+    # Stock recommendation questions → smart scan
+    wants_picks = any(q in m for q in [
+        "what should i buy", "what to buy", "give me trade ideas", "trade ideas",
+        "what stocks", "which stocks", "recommend", "suggest", "pick me",
+        "what large cap", "large caps", "best stocks", "top stocks",
+        "what should i invest", "what to invest", "find me stocks",
+        "good buys", "what looks good", "any opportunities", "what do you like",
+    ])
+    if wants_picks and not any(cmd in m for cmd in [
+        "close all", "sell everything", "liquidate",
+    ]):
+        # Determine category
+        cat = "all"
+        if any(w in m for w in ["large cap", "large-cap", "mega cap", "big cap", "blue chip", "sp500", "s&p"]):
+            cat = "large"
+        elif any(w in m for w in ["mid cap", "mid-cap", "midcap", "growth"]):
+            cat = "mid"
+        elif any(w in m for w in ["small cap", "small-cap", "smallcap", "penny", "cheap"]):
+            cat = "small"
+        elif any(w in m for w in ["tech", "technology", "software", "ai ", "semiconductor"]):
+            cat = "tech"
+        return {"type": "stock_ideas", "category": cat}
+
     if is_question and not any(cmd in m for cmd in [
         "close all", "sell everything", "liquidate", "stop autopilot",
         "start autopilot", "activate autopilot",
@@ -4218,6 +4240,61 @@ def execute(intent: dict) -> dict:
         return {"ok": False, "error": f"Smart buy failed: {result.get('error', 'Unknown')}"}
 
     # ── Standard commands ──
+    if t == "stock_ideas":
+        cat = intent.get("category", "all")
+        if cat == "large":
+            universe = SP500_TOP[:30]
+        elif cat == "mid":
+            universe = MIDCAP_GROWTH[:20]
+        elif cat == "small":
+            universe = SMALLCAP[:20]
+        elif cat == "tech":
+            universe = ["AAPL","MSFT","NVDA","GOOGL","META","AMZN","AVGO","CRM","ADBE","AMD","INTC","ORCL","PLTR","SNOW","NET","ZS","FTNT","PANW","CRWD","NOW"]
+        else:
+            universe = SP500_TOP[:15] + MIDCAP_GROWTH[:5] + TRENDING[:5]
+
+        picks = []
+        for ticker in universe:
+            try:
+                data = fetch_scan_intraday(ticker)
+                if not data:
+                    continue
+                sig = generate_intraday_signal(data)
+                if sig and sig.get("score", 0) >= 50:
+                    picks.append({
+                        "ticker": ticker,
+                        "score": sig["score"],
+                        "action": sig["action"],
+                        "price": data.get("price", 0),
+                        "change_pct": data.get("change_pct", 0),
+                        "signals": [s for s in sig.get("signals", []) if "✓" in s][:3],
+                        "trade": sig.get("trade", {}),
+                    })
+            except Exception:
+                continue
+
+        picks.sort(key=lambda x: x["score"], reverse=True)
+        top = picks[:5]
+
+        if not top:
+            return {"ok": True, "type": "analysis", "msg": "I scanned " + str(len(universe)) + " stocks but nothing scored high enough right now. The market might be choppy — try again later or ask me to analyze a specific ticker."}
+
+        lines = [f"**Top {len(top)} Picks** — scanned {len(universe)} stocks:\n"]
+        for i, p in enumerate(top, 1):
+            entry = p["trade"].get("entry", p["price"])
+            stop = p["trade"].get("stop_loss", 0)
+            t1 = p["trade"].get("target_1", 0)
+            arrow = "▲" if p["change_pct"] >= 0 else "▼"
+            lines.append(f"**{i}. {p['ticker']}** — Score: `{p['score']}` · {p['action']} · ${p['price']:.2f} {arrow}{p['change_pct']:+.1f}%")
+            if stop and t1:
+                lines.append(f"   Entry: `${entry:.2f}` · Stop: `${stop:.2f}` · Target: `${t1:.2f}`")
+            if p["signals"]:
+                lines.append(f"   {' · '.join(p['signals'][:2])}")
+            lines.append("")
+
+        lines.append("*These are based on my 21-factor signal engine — not financial advice.*")
+        return {"ok": True, "type": "analysis", "ticker": top[0]["ticker"], "msg": "\n".join(lines)}
+
     if t == "chart":
         tick = _ensure_suffix(intent["ticker"], market)
         data = fetch_price(tick)
