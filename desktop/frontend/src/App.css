@@ -60,13 +60,6 @@ b{font-weight:600}
 .pnl-stats{display:flex;justify-content:space-between;font-size:.55rem;color:var(--m)}
 .pnl-stats b{color:var(--br);font-weight:500;margin-left:3px}
 
-/* Win/Loss tracker */
-.wl-block{border-bottom:1px solid var(--b1);padding:10px 16px}
-.wl-row{display:flex;justify-content:space-between}
-.wl-stat{text-align:center;flex:1}
-.wl-n{display:block;font-family:'JetBrains Mono',monospace;font-size:.8rem;font-weight:700;color:var(--br)}
-.wl-l{display:block;font-size:.42rem;text-transform:uppercase;letter-spacing:.08em;color:var(--m);margin-top:1px}
-
 /* Autopilot */
 .ap{width:calc(100% - 32px);margin:14px 16px;padding:11px 14px;border-radius:8px;background:var(--s1);border:1px solid var(--b1);color:var(--m);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:8px;font-family:'DM Sans',sans-serif;font-size:.74rem;font-weight:500}
 .ap:hover{border-color:var(--g);color:var(--g)}

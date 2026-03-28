@@ -433,23 +433,48 @@ def alpaca_account() -> dict | None:
 
 
 def alpaca_positions() -> list[dict]:
-    """Get all open positions."""
+    """Get all open positions with stop loss levels."""
     try:
         r = requests.get(f"{ALPACA_BASE}/v2/positions", headers=_alpaca_headers(), timeout=10)
         if r.status_code != 200:
             return []
+        
+        # Fetch open orders to find stop losses
+        stop_map = {}
+        try:
+            or_ = requests.get(f"{ALPACA_BASE}/v2/orders",
+                              headers=_alpaca_headers(),
+                              params={"status": "open", "limit": 100},
+                              timeout=10)
+            if or_.status_code == 200:
+                for o in or_.json():
+                    sym = o.get("symbol", "")
+                    otype = o.get("type", "")
+                    if otype in ("stop", "stop_limit") and sym:
+                        stop_map[sym] = round(float(o.get("stop_price", 0)), 2)
+        except Exception:
+            pass
+
         positions = []
         for p in r.json():
+            ticker = p.get("symbol", "")
+            entry = round(float(p.get("avg_entry_price", 0)), 2)
+            current = round(float(p.get("current_price", 0)), 2)
+            stop = stop_map.get(ticker, 0)
+            # Calculate stop distance %
+            stop_pct = round((stop - entry) / entry * 100, 2) if stop and entry else 0
             positions.append({
-                "ticker": p.get("symbol", ""),
+                "ticker": ticker,
                 "qty": float(p.get("qty", 0)),
                 "side": p.get("side", "long"),
-                "avg_entry": round(float(p.get("avg_entry_price", 0)), 2),
-                "current_price": round(float(p.get("current_price", 0)), 2),
+                "avg_entry": entry,
+                "current_price": current,
                 "market_value": round(float(p.get("market_value", 0)), 2),
                 "unrealized_pnl": round(float(p.get("unrealized_pl", 0)), 2),
                 "unrealized_pnl_pct": round(float(p.get("unrealized_plpc", 0)) * 100, 2),
                 "today_pnl": round(float(p.get("unrealized_intraday_pl", 0)), 2),
+                "stop_loss": stop,
+                "stop_pct": stop_pct,
             })
         return positions
     except Exception:

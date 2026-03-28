@@ -24,7 +24,6 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [theme, setTheme] = useState(localStorage.getItem('paula-theme') || 'dark')
   const [toasts, setToasts] = useState([])
-  const [tradeLog, setTradeLog] = useState([]) // {ticker, action, pnl, time}
 
   const messagesEnd = useRef(null)
   const wsRef = useRef(null)
@@ -70,10 +69,6 @@ function App() {
             else if (act === 'short') { playSell(); addToast(`Shorted ${ticker}`, 'sell') }
             else if (act === 'cover') { playProfit(); addToast(`Covered ${ticker}`, 'buy') }
             else if (act === 'close_all') { playAlert(); addToast('All positions closed', 'warn') }
-            // Add to trade log
-            if (act && act !== 'close_all') {
-              setTradeLog(prev => [...prev, { ticker, action: act, time: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}), pnl: data.pnl || null }])
-            }
             refreshData()
           }
         } catch (err) {}
@@ -152,9 +147,6 @@ function App() {
   var pnl = account ? (account.daily_pnl || 0) : 0
   var pnlPct = account ? (account.daily_pnl_pct || 0) : 0
   var totalUnrealized = positions.reduce((s, p) => s + (p.unrealized_pnl || 0), 0)
-  var wins = tradeLog.filter(t => (t.pnl || 0) >= 0 && (t.action === 'sell' || t.action === 'cover')).length
-  var losses = tradeLog.filter(t => (t.pnl || 0) < 0 && (t.action === 'sell' || t.action === 'cover')).length
-  var totalTrades = tradeLog.length
 
   return (
     <div className="layout">
@@ -194,18 +186,6 @@ function App() {
           </div>
         </div>
 
-        {/* Win/Loss Tracker */}
-        {totalTrades > 0 && (
-          <div className="wl-block">
-            <div className="wl-row">
-              <div className="wl-stat"><span className="wl-n up">{wins}</span><span className="wl-l">Wins</span></div>
-              <div className="wl-stat"><span className="wl-n dn">{losses}</span><span className="wl-l">Losses</span></div>
-              <div className="wl-stat"><span className="wl-n">{totalTrades}</span><span className="wl-l">Trades</span></div>
-              <div className="wl-stat"><span className={'wl-n ' + (wins >= losses ? 'up' : 'dn')}>{totalTrades > 0 ? Math.round(wins / Math.max(1, wins + losses) * 100) + '%' : '—'}</span><span className="wl-l">Rate</span></div>
-            </div>
-          </div>
-        )}
-
         {/* Autopilot */}
         <button className={'ap ' + (autopilot ? 'ap-on' : '')} onClick={toggleAutopilot}>
           <span className={'ap-dot ' + (autopilot ? 'ap-dot-on' : '')} />
@@ -226,7 +206,7 @@ function App() {
                 onClick={() => setSelectedPos(selectedPos === p.ticker ? null : p.ticker)}>
                 <div className="pr-left">
                   <span className="pr-tk">{p.ticker}</span>
-                  <span className="pr-info">{Math.abs(p.qty) + ' · ' + (p.side === 'short' ? 'SHORT' : 'LONG')}</span>
+                  <span className="pr-info">{Math.abs(p.qty) + ' · ' + (p.side === 'short' ? 'SHORT' : 'LONG')}{p.stop_loss ? ' · SL $' + p.stop_loss : ''}</span>
                 </div>
                 <div className="pr-right">
                   <span className="pr-pnl">{(p.unrealized_pnl >= 0 ? '+' : '') + '$' + Math.abs(p.unrealized_pnl).toFixed(0)}</span>
@@ -260,7 +240,7 @@ function App() {
                     {(p.unrealized_pnl >= 0 ? '+' : '-') + '$' + Math.abs(p.unrealized_pnl).toFixed(2)}
                     {' (' + (p.unrealized_pnl_pct >= 0 ? '+' : '') + p.unrealized_pnl_pct.toFixed(2) + '%)'}
                   </span>
-                  <span className="det-meta">{Math.abs(p.qty) + ' @ $' + (p.avg_entry_price || 0).toFixed(2) + ' → $' + (p.current_price || 0).toFixed(2) + ' · ' + (p.side === 'short' ? 'SHORT' : 'LONG')}</span>
+                  <span className="det-meta">{Math.abs(p.qty) + ' @ $' + (p.avg_entry || 0).toFixed(2) + ' → $' + (p.current_price || 0).toFixed(2) + ' · ' + (p.side === 'short' ? 'SHORT' : 'LONG')}{p.stop_loss ? ' · Stop: $' + p.stop_loss : ''}</span>
                 </div>
                 <div className="det-acts">
                   <button className="da da-a" onClick={() => { sendMessage(p.ticker); setSelectedPos(null) }}>Analyze</button>
