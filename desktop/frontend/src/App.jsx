@@ -156,10 +156,7 @@ function App() {
       {/* Sidebar */}
       <aside className="side">
         <div className="side-head">
-          <div className="brand"><div className="p-icon">P</div><div><div className="p-name">Paula</div><div className="p-time">{time || '...'}</div></div></div>
-          <div className="head-right">
-            <div className={'live-pill ' + (connected ? 'live-on' : '')}><span className="live-dot" />{connected ? 'Live' : 'Off'}</div>
-          </div>
+          <div className="brand"><div className="p-icon">P</div><div><div className="p-name">Paula</div></div></div>
         </div>
 
         {/* P&L */}
