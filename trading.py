@@ -4396,7 +4396,7 @@ RESPONSE STYLE:
 
     try:
         client = Groq(api_key=key)
-        resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=1200, temperature=0.72)
+        resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=1200, temperature=0.3)
         return resp.choices[0].message.content
     except Exception as e:
         return f"⚠️ AI error: {str(e)[:120]}"
