@@ -22,10 +22,27 @@ function App() {
   const [time, setTime] = useState('')
   const [selectedPos, setSelectedPos] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [theme, setTheme] = useState(localStorage.getItem('paula-theme') || 'dark')
+  const [toasts, setToasts] = useState([])
+  const [tradeLog, setTradeLog] = useState([]) // {ticker, action, pnl, time}
 
   const messagesEnd = useRef(null)
   const wsRef = useRef(null)
   const inputRef = useRef(null)
+  const toastId = useRef(0)
+
+  // Theme
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('paula-theme', theme)
+  }, [theme])
+
+  // Toast helper
+  const addToast = useCallback((msg, type = 'info') => {
+    const id = ++toastId.current
+    setToasts(prev => [...prev, { id, msg, type }])
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000)
+  }, [])
 
   useEffect(() => {
     const connect = () => {
@@ -40,13 +57,23 @@ function App() {
           if (event === 'autopilot') {
             if (data.status === 'started') setAutopilot(true)
             if (data.status === 'stopped') setAutopilot(false)
-            if (data.log) { playNotify(); setMessages(prev => [...prev, { role: 'assistant', content: '**Autopilot Scan**\n\n' + data.log.join('\n\n'), type: 'autopilot' }]) }
+            if (data.log) {
+              playNotify()
+              setMessages(prev => [...prev, { role: 'assistant', content: '**Autopilot Scan**\n\n' + data.log.join('\n\n'), type: 'autopilot' }])
+            }
           }
           if (event === 'trade') {
-            if (data.action === 'buy') playBuy()
-            else if (data.action === 'sell' || data.action === 'short') playSell()
-            else if (data.action === 'cover') playProfit()
-            else if (data.action === 'close_all') playAlert()
+            const act = data.action
+            const ticker = data.ticker || data.symbol || '???'
+            if (act === 'buy') { playBuy(); addToast(`Bought ${ticker}`, 'buy') }
+            else if (act === 'sell') { playSell(); addToast(`Sold ${ticker}`, 'sell') }
+            else if (act === 'short') { playSell(); addToast(`Shorted ${ticker}`, 'sell') }
+            else if (act === 'cover') { playProfit(); addToast(`Covered ${ticker}`, 'buy') }
+            else if (act === 'close_all') { playAlert(); addToast('All positions closed', 'warn') }
+            // Add to trade log
+            if (act && act !== 'close_all') {
+              setTradeLog(prev => [...prev, { ticker, action: act, time: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}), pnl: data.pnl || null }])
+            }
             refreshData()
           }
         } catch (err) {}
@@ -99,9 +126,10 @@ function App() {
           ticker: data.ticker || null, signal: data.trade_signal || null,
         }])
         if (data.type === 'trade' && data.message) {
-          if (data.message.includes('Bought')) playBuy()
-          else if (data.message.includes('Sold') || data.message.includes('Shorted')) playSell()
-          else if (data.message.includes('Covered')) playProfit()
+          if (data.message.includes('Bought')) { playBuy(); addToast(data.message.slice(0, 60), 'buy') }
+          else if (data.message.includes('Sold') || data.message.includes('Shorted')) { playSell(); addToast(data.message.slice(0, 60), 'sell') }
+          else if (data.message.includes('Covered')) { playProfit(); addToast(data.message.slice(0, 60), 'buy') }
+          else if (data.message.includes('closed')) { addToast(data.message.slice(0, 60), 'warn') }
         } else playTick()
         if (data.autopilot !== undefined) setAutopilot(data.autopilot)
       } else {
@@ -124,14 +152,32 @@ function App() {
   var pnl = account ? (account.daily_pnl || 0) : 0
   var pnlPct = account ? (account.daily_pnl_pct || 0) : 0
   var totalUnrealized = positions.reduce((s, p) => s + (p.unrealized_pnl || 0), 0)
+  var wins = tradeLog.filter(t => (t.pnl || 0) >= 0 && (t.action === 'sell' || t.action === 'cover')).length
+  var losses = tradeLog.filter(t => (t.pnl || 0) < 0 && (t.action === 'sell' || t.action === 'cover')).length
+  var totalTrades = tradeLog.length
 
   return (
     <div className="layout">
-      {/* ── Sidebar ── */}
+      {/* Toast notifications */}
+      <div className="toast-wrap">
+        {toasts.map(t => (
+          <div key={t.id} className={'toast toast-' + t.type}>
+            <span className="toast-dot" />
+            <span className="toast-msg">{t.msg}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Sidebar */}
       <aside className="side">
         <div className="side-head">
           <div className="brand"><div className="p-icon">P</div><div><div className="p-name">Paula</div><div className="p-time">{time || '...'}</div></div></div>
-          <div className={'live-pill ' + (connected ? 'live-on' : '')}><span className="live-dot" />{connected ? 'Live' : 'Off'}</div>
+          <div className="head-right">
+            <button className="theme-btn" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="Toggle theme">
+              {theme === 'dark' ? '☀' : '🌙'}
+            </button>
+            <div className={'live-pill ' + (connected ? 'live-on' : '')}><span className="live-dot" />{connected ? 'Live' : 'Off'}</div>
+          </div>
         </div>
 
         {/* P&L */}
@@ -140,15 +186,25 @@ function App() {
             <span className="pnl-label">Today</span>
             <span className={'pnl-num ' + (pnl >= 0 ? 'up' : 'dn')}>{(pnl >= 0 ? '+' : '') + pnl.toFixed(2)}</span>
           </div>
-          <div className="pnl-bar-wrap">
-            <div className={'pnl-bar ' + (pnl >= 0 ? 'bar-up' : 'bar-dn')} style={{width: Math.min(100, Math.abs(pnlPct) * 10) + '%'}} />
-          </div>
+          <div className="pnl-bar-wrap"><div className={'pnl-bar ' + (pnl >= 0 ? 'bar-up' : 'bar-dn')} style={{width: Math.min(100, Math.abs(pnlPct) * 10) + '%'}} /></div>
           <div className="pnl-stats">
             <span>Equity <b>{account ? '$' + account.equity.toLocaleString(undefined, {maximumFractionDigits: 0}) : '—'}</b></span>
             <span>Day <b className={pnlPct >= 0 ? 'up' : 'dn'}>{(pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(2) + '%'}</b></span>
             <span>SPY <b className={spyTrend && spyTrend.change_pct >= 0 ? 'up' : 'dn'}>{spyTrend ? (spyTrend.change_pct >= 0 ? '+' : '') + spyTrend.change_pct + '%' : '—'}</b></span>
           </div>
         </div>
+
+        {/* Win/Loss Tracker */}
+        {totalTrades > 0 && (
+          <div className="wl-block">
+            <div className="wl-row">
+              <div className="wl-stat"><span className="wl-n up">{wins}</span><span className="wl-l">Wins</span></div>
+              <div className="wl-stat"><span className="wl-n dn">{losses}</span><span className="wl-l">Losses</span></div>
+              <div className="wl-stat"><span className="wl-n">{totalTrades}</span><span className="wl-l">Trades</span></div>
+              <div className="wl-stat"><span className={'wl-n ' + (wins >= losses ? 'up' : 'dn')}>{totalTrades > 0 ? Math.round(wins / Math.max(1, wins + losses) * 100) + '%' : '—'}</span><span className="wl-l">Rate</span></div>
+            </div>
+          </div>
+        )}
 
         {/* Autopilot */}
         <button className={'ap ' + (autopilot ? 'ap-on' : '')} onClick={toggleAutopilot}>
@@ -190,9 +246,8 @@ function App() {
         </div>
       </aside>
 
-      {/* ── Main ── */}
+      {/* Main */}
       <main className="main">
-        {/* Position detail + chart */}
         {selectedPos && (() => {
           var p = positions.find(x => x.ticker === selectedPos)
           if (!p) return null
@@ -214,37 +269,28 @@ function App() {
                   <button className="det-x" onClick={() => setSelectedPos(null)}>✕</button>
                 </div>
               </div>
-              <div className="det-chart">
-                <Chart ticker={p.ticker} signal={null} height={220} />
-              </div>
+              <div className="det-chart"><Chart ticker={p.ticker} signal={null} height={220} /></div>
             </div>
           )
         })()}
 
-        {/* Chat */}
         <div className="chat">
           {messages.length === 0 && !sending && (
             <div className="welcome">
               <div className="w-hero">
                 <div className="w-p">P</div>
                 <h2>{getGreeting()}</h2>
-                <p className="w-sub">I can analyze stocks, manage trades, and run autopilot for you.</p>
+                <p className="w-sub">I can analyze stocks, manage trades, and run autopilot.</p>
               </div>
               <div className="w-actions">
                 <div className="w-row">
-                  <button className="wa wa-main" onClick={() => quickAction('Analyze ')}>
+                  <button className="wa" onClick={() => quickAction('Analyze ')}>
                     <span className="wa-icon">📊</span>
-                    <div className="wa-content">
-                      <span className="wa-title">Analyze a Stock</span>
-                      <span className="wa-desc">Technical signals, trade plan, news sentiment</span>
-                    </div>
+                    <div className="wa-content"><span className="wa-title">Analyze a Stock</span><span className="wa-desc">Signals, trade plan, news</span></div>
                   </button>
-                  <button className="wa wa-main" onClick={() => quickAction('top gainers')}>
+                  <button className="wa" onClick={() => quickAction('top gainers')}>
                     <span className="wa-icon">🔥</span>
-                    <div className="wa-content">
-                      <span className="wa-title">Top Movers</span>
-                      <span className="wa-desc">Biggest gainers and losers right now</span>
-                    </div>
+                    <div className="wa-content"><span className="wa-title">Top Movers</span><span className="wa-desc">Biggest moves right now</span></div>
                   </button>
                 </div>
                 <div className="w-pills">
@@ -261,10 +307,6 @@ function App() {
                   <span>Today: <b className={pnl >= 0 ? 'up' : 'dn'}>{(pnl >= 0 ? '+' : '') + '$' + Math.abs(pnl).toFixed(0)}</b></span>
                   <span className="w-dot">·</span>
                   <span>Positions: <b>{positions.length}</b></span>
-                  {spyTrend && <>
-                    <span className="w-dot">·</span>
-                    <span>SPY: <b className={spyTrend.change_pct >= 0 ? 'up' : 'dn'}>{(spyTrend.change_pct >= 0 ? '+' : '') + spyTrend.change_pct + '%'}</b></span>
-                  </>}
                 </div>
               )}
             </div>
@@ -273,8 +315,7 @@ function App() {
           {messages.map((m, i) => (
             <div key={i} className={'m m-' + m.role}>
               {m.role === 'assistant' ? (
-                <div className="mai">
-                  <div className="mai-av"><div className="av">P</div></div>
+                <div className="mai"><div className="mai-av"><div className="av">P</div></div>
                   <div className="mai-body">
                     <div className="mai-txt" dangerouslySetInnerHTML={{ __html: fmt(m.content) }} />
                     {m.ticker && <div className="mai-chart"><Chart ticker={m.ticker} signal={m.signal} height={240} /></div>}
