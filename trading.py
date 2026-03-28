@@ -2534,8 +2534,11 @@ def route(msg: str) -> dict:
         return {"type": "autopilot"}
     if any(w in m for w in ["force scan", "scan now", "scan anyway", "scan market", "run scan"]):
         return {"type": "force_scan"}
-    if any(w in m for w in ["stop autopilot", "deactivate", "stop trading", "pause", "stop auto",
-                            "turn off autopilot", "kill autopilot", "stop"]):
+    if any(w in m for w in ["stop autopilot", "deactivate", "stop trading", "stop auto",
+                            "turn off autopilot", "kill autopilot"]):
+        return {"type": "stop_autopilot"}
+    # "stop" alone means stop autopilot, but NOT "stop loss", "stop order", "stop price"
+    if m.strip() == "stop" or m.strip() == "pause":
         return {"type": "stop_autopilot"}
     if any(w in m for w in ["backtest", "back test", "test strategy", "prove it", "historical test",
                             "how would it have done", "test the strategy"]):
