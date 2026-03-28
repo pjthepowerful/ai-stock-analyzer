@@ -2604,6 +2604,10 @@ def route(msg: str) -> dict:
         return {"type": "losers", "market": market}
     if any(w in m for w in ["trending", "hot", "movers", "moving"]):
         return {"type": "hot", "market": market}
+    if any(w in m for w in ["chart", "graph", "show chart", "show graph", "show me the chart",
+                            "pull up", "display chart", "candle", "candlestick", "show me"]):
+        if ticker:
+            return {"type": "chart", "ticker": ticker, "market": market}
     if any(w in m for w in ["price of", "price for", "what's the price", "how much is", "current price", "quote",
                             "what is the price", "what's the stock price", "how much does", "what does.*trade at",
                             "price check", "what is it at", "where is it trading"]):
@@ -4142,6 +4146,15 @@ def execute(intent: dict) -> dict:
         return {"ok": False, "error": f"Smart buy failed: {result.get('error', 'Unknown')}"}
 
     # ── Standard commands ──
+    if t == "chart":
+        tick = _ensure_suffix(intent["ticker"], market)
+        data = fetch_price(tick)
+        if not data:
+            return {"ok": False, "error": f"No data for {intent['ticker']}."}
+        arrow = "▲" if data["change_pct"] >= 0 else "▼"
+        return {"ok": True, "type": "analysis", "ticker": tick, "market": market, "data": data,
+                "msg": f"**{data['name']}** ({tick}) · `${data['price']:,.2f}` {arrow} {data['change_pct']:+.2f}%"}
+
     if t == "price":
         tick = _ensure_suffix(intent["ticker"], market)
         data = fetch_price(tick)
