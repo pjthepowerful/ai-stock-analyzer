@@ -145,7 +145,7 @@ function App() {
           </div>
           <div className="pnl-stats">
             <span>Equity <b>{account ? '$' + account.equity.toLocaleString(undefined, {maximumFractionDigits: 0}) : '—'}</b></span>
-            <span>Power <b>{account ? '$' + account.buying_power.toLocaleString(undefined, {maximumFractionDigits: 0}) : '—'}</b></span>
+            <span>Day <b className={pnlPct >= 0 ? 'up' : 'dn'}>{(pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(2) + '%'}</b></span>
             <span>SPY <b className={spyTrend && spyTrend.change_pct >= 0 ? 'up' : 'dn'}>{spyTrend ? (spyTrend.change_pct >= 0 ? '+' : '') + spyTrend.change_pct + '%' : '—'}</b></span>
           </div>
         </div>
