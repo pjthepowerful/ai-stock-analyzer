@@ -536,13 +536,21 @@ def alpaca_sell(ticker: str, qty: int = None, sell_all: bool = False) -> dict:
 
 
 def alpaca_close_all() -> dict:
-    """Close ALL positions — panic button."""
+    """Close ALL positions — cancel orders first, then close."""
     try:
+        # Step 1: Cancel ALL pending orders (stops, limits, brackets)
+        # These block position closes if not cancelled first
+        requests.delete(f"{ALPACA_BASE}/v2/orders",
+                       headers=_alpaca_headers(), timeout=10)
+
+        # Step 2: Close all positions with cancel_orders flag
         r = requests.delete(f"{ALPACA_BASE}/v2/positions",
-                            headers=_alpaca_headers(), timeout=10)
+                            headers=_alpaca_headers(),
+                            params={"cancel_orders": "true"},
+                            timeout=10)
         if r.status_code in (200, 207):
             return {"ok": True, "message": "All positions closed"}
-        return {"ok": False, "error": "Failed to close all positions"}
+        return {"ok": False, "error": f"Failed to close positions: {r.status_code}"}
     except Exception as e:
         return {"ok": False, "error": str(e)[:100]}
 
@@ -3338,10 +3346,19 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             for pos in positions:
                 try:
                     ticker = pos["ticker"]
+                    # Cancel any pending orders for this ticker first
+                    requests.delete(
+                        f"{ALPACA_BASE}/v2/orders",
+                        headers=_alpaca_headers(),
+                        params={"symbols": ticker.upper()},
+                        timeout=10
+                    )
                     # DELETE /v2/positions/{ticker} works for both long and short
                     r = requests.delete(
                         f"{ALPACA_BASE}/v2/positions/{ticker.upper()}",
-                        headers=_alpaca_headers(), timeout=10
+                        headers=_alpaca_headers(),
+                        params={"cancel_orders": "true"},
+                        timeout=10
                     )
                     if r.status_code in (200, 201, 207):
                         log.append(f"✅ Closed {ticker} ({pos.get('side', 'long')})")
@@ -3356,14 +3373,11 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             remaining = alpaca_positions()
             if remaining:
                 log.append(f"🔴 **HARD CLOSE** — {len(remaining)} positions still open at 2:30 PM CT")
-                for pos in remaining:
-                    try:
-                        requests.delete(
-                            f"{ALPACA_BASE}/v2/positions/{pos['ticker'].upper()}",
-                            headers=_alpaca_headers(), timeout=10
-                        )
-                    except Exception:
-                        pass
+                # Nuclear: cancel ALL orders, then close ALL positions
+                requests.delete(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(), timeout=10)
+                requests.delete(f"{ALPACA_BASE}/v2/positions", headers=_alpaca_headers(),
+                               params={"cancel_orders": "true"}, timeout=10)
+                log.append("🔴 Cancelled all orders + closed all positions")
 
         return {"ok": True, "log": log, "buys": 0, "sells": len(positions), "scanned": 0, "opportunities": 0}
     elif now_et >= eod_liquidation and positions and dry_run:
