@@ -243,13 +243,19 @@ function App() {
               <div className="w-text">
                 <span className="w-hi">{(() => {
                   var h = new Date().getHours(), d = new Date().getDay()
-                  var spy = spyTrend ? (spyTrend.change_pct >= 0 ? '▲' : '▼') + ' SPY ' + (spyTrend.change_pct >= 0 ? '+' : '') + spyTrend.change_pct + '%' : ''
-                  if (d === 0 || d === 6) return 'Markets closed · Weekend'
-                  if (h < 8 || (h === 8 && new Date().getMinutes() < 30)) return 'Pre-market · Opens 8:30 CT'
-                  if (h >= 15) return 'After hours · ' + spy
-                  return 'Markets open · ' + spy
+                  if (d === 0 || d === 6) return 'Markets closed · Enjoy the weekend, PJ'
+                  if (h < 8 || (h === 8 && new Date().getMinutes() < 30)) return 'Pre-market · Opens 8:30 AM CT'
+                  if (h >= 15) return 'Markets closed · See you tomorrow'
+                  if (pnl > 0) return '📈 Up $' + Math.abs(pnl).toFixed(0) + ' today'
+                  if (pnl < 0) return '📉 Down $' + Math.abs(pnl).toFixed(0) + ' today'
+                  return '🔔 Markets are open'
                 })()}</span>
-                <h1>What would you like to<br/>trade today?</h1>
+                <h1>{(() => {
+                  var h = new Date().getHours()
+                  if (h < 12) return <><span className="w-gr">Good morning,</span> PJ</>
+                  if (h < 17) return <><span className="w-gr">Good afternoon,</span> PJ</>
+                  return <><span className="w-gr">Good evening,</span> PJ</>
+                })()}</h1>
               </div>
               <div className="w-prompts">
                 <button className="wp" onClick={() => quickAction('Analyze ')}>Analyze a stock</button>
