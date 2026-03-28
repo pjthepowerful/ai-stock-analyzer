@@ -22,19 +22,12 @@ function App() {
   const [time, setTime] = useState('')
   const [selectedPos, setSelectedPos] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [theme, setTheme] = useState(localStorage.getItem('paula-theme') || 'dark')
   const [toasts, setToasts] = useState([])
 
   const messagesEnd = useRef(null)
   const wsRef = useRef(null)
   const inputRef = useRef(null)
   const toastId = useRef(0)
-
-  // Theme
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme)
-    localStorage.setItem('paula-theme', theme)
-  }, [theme])
 
   // Toast helper
   const addToast = useCallback((msg, type = 'info') => {
@@ -165,9 +158,6 @@ function App() {
         <div className="side-head">
           <div className="brand"><div className="p-icon">P</div><div><div className="p-name">Paula</div><div className="p-time">{time || '...'}</div></div></div>
           <div className="head-right">
-            <button className="theme-btn" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="Toggle theme">
-              {theme === 'dark' ? '☀' : '🌙'}
-            </button>
             <div className={'live-pill ' + (connected ? 'live-on' : '')}><span className="live-dot" />{connected ? 'Live' : 'Off'}</div>
           </div>
         </div>
@@ -180,7 +170,7 @@ function App() {
           </div>
           <div className="pnl-bar-wrap"><div className={'pnl-bar ' + (pnl >= 0 ? 'bar-up' : 'bar-dn')} style={{width: Math.min(100, Math.abs(pnlPct) * 10) + '%'}} /></div>
           <div className="pnl-stats">
-            <span>Equity <b>{account ? '$' + account.equity.toLocaleString(undefined, {maximumFractionDigits: 0}) : '—'}</b></span>
+            <span>Equity <b className={pnl >= 0 ? 'up' : 'dn'}>{account ? '$' + account.equity.toLocaleString(undefined, {maximumFractionDigits: 0}) : '—'}</b></span>
             <span>Day <b className={pnlPct >= 0 ? 'up' : 'dn'}>{(pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(2) + '%'}</b></span>
             <span>SPY <b className={spyTrend && spyTrend.change_pct >= 0 ? 'up' : 'dn'}>{spyTrend ? (spyTrend.change_pct >= 0 ? '+' : '') + spyTrend.change_pct + '%' : '—'}</b></span>
           </div>
