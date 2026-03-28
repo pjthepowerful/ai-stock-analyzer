@@ -243,10 +243,11 @@ function App() {
               <div className="w-text">
                 <span className="w-hi">{(() => {
                   var h = new Date().getHours(), d = new Date().getDay()
+                  var spy = spyTrend ? (spyTrend.change_pct >= 0 ? '▲' : '▼') + ' SPY ' + (spyTrend.change_pct >= 0 ? '+' : '') + spyTrend.change_pct + '%' : ''
                   if (d === 0 || d === 6) return 'Markets closed · Weekend'
                   if (h < 8 || (h === 8 && new Date().getMinutes() < 30)) return 'Pre-market · Opens 8:30 CT'
-                  if (h >= 15) return 'After hours · Closed for today'
-                  return 'Markets are open'
+                  if (h >= 15) return 'After hours · ' + spy
+                  return 'Markets open · ' + spy
                 })()}</span>
                 <h1>What would you like to<br/>trade today?</h1>
               </div>
