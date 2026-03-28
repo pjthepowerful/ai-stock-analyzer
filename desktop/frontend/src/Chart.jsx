@@ -40,12 +40,18 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
       if (!data.ok) return
       const { dates, open, high, low, close, volume } = data.data
 
+      const parseTime = (d) => {
+        // Strip time portion, use just the date string YYYY-MM-DD
+        const dateOnly = d.split(' ')[0]
+        return dateOnly
+      }
+
       const candles = dates.map((d, i) => ({
-        time: d.includes(' ') ? Math.floor(new Date(d).getTime() / 1000) : d,
+        time: parseTime(d),
         open: open[i], high: high[i], low: low[i], close: close[i],
       }))
       const vols = dates.map((d, i) => ({
-        time: d.includes(' ') ? Math.floor(new Date(d).getTime() / 1000) : d,
+        time: parseTime(d),
         value: volume[i],
         color: close[i] >= open[i] ? 'rgba(0,229,160,0.18)' : 'rgba(255,59,92,0.18)',
       }))
