@@ -241,7 +241,13 @@ function App() {
           {messages.length === 0 && !sending && (
             <div className="welcome">
               <div className="w-text">
-                <span className="w-hi">Hi PJ</span>
+                <span className="w-hi">{(() => {
+                  var h = new Date().getHours(), d = new Date().getDay()
+                  if (d === 0 || d === 6) return 'Markets closed · Weekend'
+                  if (h < 8 || (h === 8 && new Date().getMinutes() < 30)) return 'Pre-market · Opens 8:30 CT'
+                  if (h >= 15) return 'After hours · Closed for today'
+                  return 'Markets are open'
+                })()}</span>
                 <h1>What would you like to<br/>trade today?</h1>
               </div>
               <div className="w-prompts">
