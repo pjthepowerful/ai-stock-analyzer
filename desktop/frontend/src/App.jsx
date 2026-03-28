@@ -238,15 +238,6 @@ function App() {
           {messages.length === 0 && !sending && (
             <div className="welcome">
               <div className="w-text">
-                <span className="w-hi">{(() => {
-                  var h = new Date().getHours(), d = new Date().getDay()
-                  if (d === 0 || d === 6) return 'Markets closed · Enjoy the weekend'
-                  if (h < 8 || (h === 8 && new Date().getMinutes() < 30)) return 'Pre-market · Opens 8:30 AM CT'
-                  if (h >= 15) return 'Markets closed · See you tomorrow'
-                  if (pnl > 0) return '📈 Up $' + Math.abs(pnl).toFixed(0) + ' today'
-                  if (pnl < 0) return '📉 Down $' + Math.abs(pnl).toFixed(0) + ' today'
-                  return '🔔 Markets are open'
-                })()}</span>
                 <h1>{(() => {
                   var h = new Date().getHours()
                   if (h < 12) return <><span className="w-gr">Good morning,</span> PJ</>
