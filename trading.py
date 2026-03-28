@@ -152,6 +152,22 @@ _NOISE_WORDS = frozenset([
     "UPPER","INNER","OUTER","WHOLE","TOTAL","CLEAR","BRIEF","QUICK",
     "SEVEN","EIGHT","MAYBE","SINCE","AMONG","ALONG","OFTEN","LATER",
     "UNTIL","SHALL","GONNA","ABOUT","AGAIN",
+    # Words commonly confused with tickers
+    "CAPS","CAP","MEGA","MID","TOP","HOT","NEW","OLD","OWN","RUN",
+    "SET","TRY","WAY","DAY","BIG","FEW","FAR","OUR","OWN","SAY",
+    "ANY","WAR","END","AGE","AID","AIR","ARM","ART","BAD","BAR",
+    "BED","BIT","BOX","BOY","BUS","CUT","DID","DOG","EAR","EAT",
+    "EGG","ERA","EYE","FAN","FIT","FIX","FLY","GAS","GOD","GOT",
+    "GUN","GUY","HAD","HAS","HER","HIM","HIS","HIT","ICE","ILL",
+    "ITS","JOB","KEY","KID","LAW","LAY","LED","LEG","LET","LIE",
+    "LOT","MAP","MAY","MEN","MET","MIX","NOR","NOW","NUT","ODD",
+    "OFF","OIL","ONE","OUT","OWE","PAN","PAY","PEN","PER","PET",
+    "PIE","PIN","PIT","POT","PUT","RAN","RAW","RED","RID","ROW",
+    "SAD","SAT","SAW","SEA","SIT","SIX","SKI","SKY","SON","SUM",
+    "SUN","TAX","TEA","TEN","THE","TIE","TIN","TIP","TOE","TON",
+    "TOO","TWO","USE","VAN","WAS","WET","WHO","WHY","WIN","WON",
+    "YES","YET","DIPS","TIPS","IDEAS","SWING","TRADE","TRADES",
+    "ENTRY","GRAPH","CHART","ORDER","POINT","LEVEL","VALUE","WORTH",
 ])
 
 
@@ -2518,6 +2534,25 @@ def route(msg: str) -> dict:
     m = msg.lower().strip()
     if m in ("hi", "hello", "hey", "thanks", "thank you", "help", "bye"):
         return {"type": "chat"}
+
+    # ── Detect questions/advice requests → send to AI, not execute commands ──
+    # If the user is ASKING what to buy/sell (not commanding), route to chat
+    is_question = any(q in m for q in [
+        "should i", "which", "what should", "can you tell", "can you suggest",
+        "recommend", "suggestion", "advice", "ideas", "what are the best",
+        "tell me which", "help me find", "what to buy", "what to sell",
+        "give me", "find me", "pick me", "any good", "what do you think",
+        "is it a good", "worth buying", "worth selling", "opinion",
+    ])
+    if is_question and not any(cmd in m for cmd in [
+        "close all", "sell everything", "liquidate", "stop autopilot",
+        "start autopilot", "activate autopilot",
+    ]):
+        ticker, market = _find_ticker(msg)
+        if ticker:
+            return {"type": "analyze", "ticker": ticker, "market": market}
+        return {"type": "chat", "market": _detect_market(msg)}
+
     ticker, market = _find_ticker(msg)
 
     # ── Trading commands ──
