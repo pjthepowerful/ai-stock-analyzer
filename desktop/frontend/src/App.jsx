@@ -246,8 +246,8 @@ function App() {
                 })()}</h1>
               </div>
               <div className="w-prompts">
-                <button className="wp" onClick={() => quickAction('Analyze ')}>Analyze a stock</button>
-                <button className="wp" onClick={() => sendMessage('top gainers')}>What's moving?</button>
+                <button className="wp" onClick={() => sendMessage('market regime')}>Analyze the market</button>
+                <button className="wp" onClick={() => sendMessage('top gainers')}>Trending tickers</button>
                 <button className="wp" onClick={() => sendMessage('How did we do today?')}>Recap trades</button>
                 <button className="wp" onClick={() => sendMessage('What should I buy?')}>Trade ideas</button>
               </div>
