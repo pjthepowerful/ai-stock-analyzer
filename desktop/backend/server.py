@@ -259,21 +259,30 @@ async def spy_trend():
 
 
 @app.get("/api/chart/{ticker}")
-async def chart_data(ticker: str, period: str = "6mo"):
+async def chart_data(ticker: str, period: str = "1y"):
     """Get chart OHLCV data."""
     try:
         import yfinance as yf
         hist = yf.Ticker(ticker).history(period=period)
         if hist is None or hist.empty:
             return {"ok": False, "error": "No data"}
-        data = {
-            "dates": hist.index.strftime("%Y-%m-%d %H:%M").tolist(),
-            "open": hist["Open"].round(2).tolist(),
-            "high": hist["High"].round(2).tolist(),
-            "low": hist["Low"].round(2).tolist(),
-            "close": hist["Close"].round(2).tolist(),
-            "volume": hist["Volume"].tolist(),
-        }
+        # Reset index and format dates as YYYY-MM-DD strings
+        hist = hist.reset_index()
+        dates = []
+        opens, highs, lows, closes, volumes = [], [], [], [], []
+        seen = set()
+        for _, row in hist.iterrows():
+            d = str(row.iloc[0])[:10]  # First column is Date, take YYYY-MM-DD
+            if d in seen:
+                continue  # Skip duplicates
+            seen.add(d)
+            dates.append(d)
+            opens.append(round(float(row["Open"]), 2))
+            highs.append(round(float(row["High"]), 2))
+            lows.append(round(float(row["Low"]), 2))
+            closes.append(round(float(row["Close"]), 2))
+            volumes.append(int(row["Volume"]))
+        data = {"dates": dates, "open": opens, "high": highs, "low": lows, "close": closes, "volume": volumes}
         return {"ok": True, "data": data}
     except Exception as e:
         return {"ok": False, "error": str(e)[:100]}

@@ -36,7 +36,12 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
     const volumeSeries = chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'volume' })
     chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } })
 
-    fetch(`${API}/api/chart/${ticker}?period=${period || '1y'}`).then(r => r.json()).then(data => {
+    fetch(`${API}/api/chart/${ticker}?period=${period || '1y'}`, {
+      headers: { 'ngrok-skip-browser-warning': '1' }
+    }).then(r => {
+      if (!r.ok) throw new Error('Failed')
+      return r.json()
+    }).then(data => {
       if (!data.ok) return
       const { dates, open, high, low, close, volume } = data.data
 
@@ -125,7 +130,7 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
             change: bar.close - p.close, changePct: (bar.close - p.close) / p.close * 100, volume: vol?.value || 0 })
         }
       })
-    }).catch(() => {})
+    }).catch(err => { console.error('Chart load error:', err) })
 
     const handleResize = () => { if (containerRef.current && chartRef.current) chartRef.current.applyOptions({ width: containerRef.current.clientWidth }) }
     window.addEventListener('resize', handleResize)
