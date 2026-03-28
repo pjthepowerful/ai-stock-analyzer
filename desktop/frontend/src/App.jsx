@@ -240,38 +240,22 @@ function App() {
         <div className="chat">
           {messages.length === 0 && !sending && (
             <div className="welcome">
-              <div className="w-hero">
-                <div className="w-p">P</div>
-                <h2>{getGreeting()}</h2>
-                <p className="w-sub">I can analyze stocks, manage trades, and run autopilot.</p>
-              </div>
-              <div className="w-actions">
-                <div className="w-row">
-                  <button className="wa" onClick={() => quickAction('Analyze ')}>
-                    <span className="wa-icon">📊</span>
-                    <div className="wa-content"><span className="wa-title">Analyze a Stock</span><span className="wa-desc">Signals, trade plan, news</span></div>
+              <h2>{getGreeting()}, PJ</h2>
+              <div className="w-prompts">
+                {[
+                  'Analyze NVDA',
+                  'What should I buy today?',
+                  'Show me top gainers',
+                  'How did we do today?',
+                  'Chart TSLA',
+                  'Show my portfolio',
+                ].map((prompt, i) => (
+                  <button key={i} className="w-prompt" onClick={() => sendMessage(prompt)}>
+                    {prompt}
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                   </button>
-                  <button className="wa" onClick={() => quickAction('top gainers')}>
-                    <span className="wa-icon">🔥</span>
-                    <div className="wa-content"><span className="wa-title">Top Movers</span><span className="wa-desc">Biggest moves right now</span></div>
-                  </button>
-                </div>
-                <div className="w-pills">
-                  <button className="wp" onClick={() => sendMessage('How did we do today?')}>Daily Recap</button>
-                  <button className="wp" onClick={() => sendMessage('portfolio')}>My Portfolio</button>
-                  <button className="wp" onClick={() => sendMessage('What should I buy?')}>Trade Ideas</button>
-                  <button className="wp" onClick={() => sendMessage('top losers')}>Top Losers</button>
-                </div>
+                ))}
               </div>
-              {account && (
-                <div className="w-summary">
-                  <span>Portfolio: <b>${account.equity.toLocaleString(undefined,{maximumFractionDigits:0})}</b></span>
-                  <span className="w-dot">·</span>
-                  <span>Today: <b className={pnl >= 0 ? 'up' : 'dn'}>{(pnl >= 0 ? '+' : '') + '$' + Math.abs(pnl).toFixed(0)}</b></span>
-                  <span className="w-dot">·</span>
-                  <span>Positions: <b>{positions.length}</b></span>
-                </div>
-              )}
             </div>
           )}
 
