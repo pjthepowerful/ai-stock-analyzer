@@ -88,6 +88,8 @@ from trading import (
     alpaca_cover,
     alpaca_close_all,
     alpaca_portfolio_history,
+    _alpaca_headers,
+    ALPACA_BASE,
 
     # Autopilot
     run_autopilot,

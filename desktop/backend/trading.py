@@ -3290,7 +3290,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     SELL_BELOW = 42               # quick exits
 
     log.append(f"Open positions: {len(positions)} · Max: {MAX_POSITIONS}")
-    log.append("📊 Mode: **Intraday Long/Short** · 5min scans · VWAP · gap scanner · SPY filter · EOD close 2:30 PM CT")
+    log.append("📊 Mode: **Intraday Long/Short** · 5min scans · VWAP · gap scanner · SPY filter · EOD close 2:15 PM CT")
     DAILY_LOSS_LIMIT = 0.02       # 2% max daily loss
     PARTIAL_PROFIT_PCT = 0.015    # take half off at 1.5% (fast intraday partials)
     PARTIAL_PROFIT_SOLD_KEY = "autopilot_partial_sold"
@@ -3314,36 +3314,63 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     else:
         log.append(f"Daily P&L: {daily_pnl_pct:+.2f}%")
 
-    # ── 1b. EOD Liquidation — close ALL positions 30min before close ──
+    # ── 1b. EOD Liquidation — close ALL positions 45min before close ──
     now_et = datetime.now(et)
-    eod_liquidation = now_et.replace(hour=15, minute=30, second=0, microsecond=0)
-    eod_hard_close = now_et.replace(hour=15, minute=50, second=0, microsecond=0)
+    weekday = now_et.strftime("%A")
+    log.append(f"📅 {weekday} {now_et.strftime('%I:%M %p ET')}")
+
+    eod_warning = now_et.replace(hour=15, minute=0, second=0, microsecond=0)    # 3:00 PM ET = 2:00 PM CT
+    eod_liquidation = now_et.replace(hour=15, minute=15, second=0, microsecond=0) # 3:15 PM ET = 2:15 PM CT
+    eod_hard_close = now_et.replace(hour=15, minute=30, second=0, microsecond=0)  # 3:30 PM ET = 2:30 PM CT
+
+    if now_et >= eod_warning and now_et < eod_liquidation and positions:
+        log.append(f"⏰ **EOD WARNING** — closing all in {(eod_liquidation - now_et).seconds // 60} min")
 
     if now_et >= eod_liquidation and positions and not dry_run:
-        log.append("🔔 **EOD LIQUIDATION (2:30 PM CT)** — closing ALL positions to avoid overnight gap risk")
+        log.append(f"🔔 **EOD LIQUIDATION (2:15 PM CT)** — closing ALL {len(positions)} positions")
+        # Try bulk close first
         result = alpaca_close_all()
         if result.get("ok"):
             log.append(f"✅ Closed {len(positions)} positions — flat for the day")
         else:
-            log.append(f"⚠️ EOD close failed: {result.get('error', '')} — will retry next scan")
-            # Don't return — try again next scan
-            if now_et >= eod_hard_close:
-                # Hard close — try individual sells
-                for pos in positions:
+            log.append(f"⚠️ Bulk close failed: {result.get('error', '')} — trying individually")
+            # Individual close — handles both longs and shorts
+            for pos in positions:
+                try:
+                    ticker = pos["ticker"]
+                    # DELETE /v2/positions/{ticker} works for both long and short
+                    r = requests.delete(
+                        f"{ALPACA_BASE}/v2/positions/{ticker.upper()}",
+                        headers=_alpaca_headers(), timeout=10
+                    )
+                    if r.status_code in (200, 201, 207):
+                        log.append(f"✅ Closed {ticker} ({pos.get('side', 'long')})")
+                    else:
+                        err = r.json().get("message", "") if r.text else "unknown"
+                        log.append(f"⚠️ Failed {ticker}: {err}")
+                except Exception as e:
+                    log.append(f"⚠️ Error closing {ticker}: {str(e)[:60]}")
+
+        # Hard close retry at 3:30 PM ET — catch anything that slipped
+        if now_et >= eod_hard_close:
+            remaining = alpaca_positions()
+            if remaining:
+                log.append(f"🔴 **HARD CLOSE** — {len(remaining)} positions still open at 2:30 PM CT")
+                for pos in remaining:
                     try:
-                        if pos.get("side") == "short":
-                            alpaca_cover(ticker=pos["ticker"], cover_all=True)
-                        else:
-                            alpaca_sell(ticker=pos["ticker"], sell_all=True)
-                        log.append(f"🔴 Force-closed {pos['ticker']}")
+                        requests.delete(
+                            f"{ALPACA_BASE}/v2/positions/{pos['ticker'].upper()}",
+                            headers=_alpaca_headers(), timeout=10
+                        )
                     except Exception:
                         pass
+
         return {"ok": True, "log": log, "buys": 0, "sells": len(positions), "scanned": 0, "opportunities": 0}
     elif now_et >= eod_liquidation and positions and dry_run:
         log.append(f"🔔 EOD: Would close {len(positions)} positions (dry run)")
 
-    # No new trades in last 30min of trading
-    last_buy_cutoff = now_et.replace(hour=15, minute=15, second=0, microsecond=0)
+    # No new trades in last 60min of trading
+    last_buy_cutoff = now_et.replace(hour=15, minute=0, second=0, microsecond=0)
     no_new_buys_eod = now_et >= last_buy_cutoff
 
     # ── 1b2. Avoid the open — first 15min is pure chop ──
@@ -4225,7 +4252,7 @@ IMPORTANT: Autopilot runs a dedicated INTRADAY engine combining 9 proven day tra
 
 Additional filters: SPY correlation (blocks longs when SPY dumps), VIX panic filter (closes all longs when VIX ≥35), ADX trend strength, stop hunt/liquidity sweep detection, parabolic exhaustion warnings, higher timeframe bias from hourly chart.
 
-Everything gets liquidated 30 minutes before market close (2:30 PM CT) to avoid overnight gap risk. Users can also manually short via "short TSLA" and cover via "cover TSLA". This is day trading — NEVER hold overnight.
+Everything gets liquidated 45 minutes before market close (2:15 PM CT) to avoid overnight gap risk. Users can also manually short via "short TSLA" and cover via "cover TSLA". This is day trading — NEVER hold overnight.
 
 CRITICAL — Stock recommendations:
 When asked to suggest, name, or recommend stocks, NEVER just list the same boring mega-caps everyone already knows (AAPL, MSFT, GOOGL, AMZN, TSLA, etc.). Anyone can name those. Instead:

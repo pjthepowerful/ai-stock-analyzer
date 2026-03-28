@@ -355,33 +355,39 @@ async def _autopilot_loop():
             now_et = datetime.now(et)
             now_ct = datetime.now(ct)
             if now_et.weekday() < 5:  # weekday
-                eod_start = now_et.replace(hour=15, minute=25, second=0, microsecond=0)
-                eod_end = now_et.replace(hour=16, minute=15, second=0, microsecond=0)
+                eod_start = now_et.replace(hour=15, minute=10, second=0, microsecond=0)
+                eod_end = now_et.replace(hour=15, minute=58, second=0, microsecond=0)
                 if eod_start <= now_et <= eod_end:
                     positions = engine.alpaca_positions()
                     if positions:
                         await broadcast("autopilot", {"status": "scanned", "log": [
                             f"🔔 **EOD SAFETY NET** — {len(positions)} positions still open at {now_ct.strftime('%I:%M %p CT')}",
-                            "Closing all positions to avoid overnight risk..."
+                            "Closing all positions..."
                         ]})
+                        # Use DELETE /positions which handles both longs AND shorts
                         result = engine.alpaca_close_all()
                         if result.get("ok"):
                             await broadcast("autopilot", {"status": "scanned", "log": [
                                 f"✅ Closed {len(positions)} positions — flat for the night"
                             ]})
                         else:
+                            # Individual close using DELETE /positions/{ticker}
+                            # This works for BOTH longs and shorts — no cover/sell issues
+                            import requests
+                            closed = 0
                             for pos in positions:
                                 try:
-                                    if pos.get("side") == "short":
-                                        engine.alpaca_cover(ticker=pos["ticker"], cover_all=True)
-                                    else:
-                                        engine.alpaca_sell(ticker=pos["ticker"], sell_all=True)
+                                    r = requests.delete(
+                                        f"{engine.ALPACA_BASE}/v2/positions/{pos['ticker']}",
+                                        headers=engine._alpaca_headers(), timeout=10
+                                    )
+                                    if r.status_code in (200, 201, 207):
+                                        closed += 1
                                 except Exception:
                                     pass
                             await broadcast("autopilot", {"status": "scanned", "log": [
-                                f"🔴 Force-closed positions individually"
+                                f"🔴 Force-closed {closed}/{len(positions)} positions"
                             ]})
-                        # Trigger frontend refresh
                         await broadcast("trade", {"action": "close_all"})
 
             if not is_open:
