@@ -42,8 +42,10 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
       if (!r.ok) throw new Error('Failed')
       return r.json()
     }).then(data => {
-      if (!data.ok) return
+      if (!data.ok) { console.error('Chart API error:', data.error); return }
       const { dates, open, high, low, close, volume } = data.data
+      if (!dates || dates.length === 0) { console.error('Chart: no dates returned'); return }
+      console.log(`Chart ${ticker}: ${dates.length} bars, first=${dates[0]}, last=${dates[dates.length-1]}`)
 
       const parseTime = (d) => {
         // Strip time portion, use just the date string YYYY-MM-DD
@@ -71,35 +73,40 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
           volume: volume[volume.length - 1] })
       }
 
-      // 9 EMA
-      if (close.length >= 9) {
-        const ema9 = calcEMA(close, 9)
-        chart.addLineSeries({ color: '#8866ff', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, title: '9E' })
-          .setData(ema9.map((v, i) => ({ time: candles[i + (close.length - ema9.length)]?.time, value: v })).filter(d => d.time && d.value))
-      }
-      // 20 SMA
-      if (close.length >= 20) {
-        chart.addLineSeries({ color: '#3388ff', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, title: '20' })
-          .setData(calcSMA(close, 20).map((v, i) => ({ time: candles[i + (close.length - calcSMA(close,20).length)]?.time, value: v })).filter(d => d.time && d.value))
-      }
-      // 50 SMA
-      if (close.length >= 50) {
-        chart.addLineSeries({ color: '#ffb020', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, title: '50' })
-          .setData(calcSMA(close, 50).map((v, i) => ({ time: candles[i + (close.length - calcSMA(close,50).length)]?.time, value: v })).filter(d => d.time && d.value))
-      }
-      // 200 SMA
-      if (close.length >= 200) {
-        chart.addLineSeries({ color: '#ff3b5c', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, title: '200' })
-          .setData(calcSMA(close, 200).map((v, i) => ({ time: candles[i + (close.length - calcSMA(close,200).length)]?.time, value: v })).filter(d => d.time && d.value))
-      }
-      // Bollinger Bands
-      if (close.length >= 20) {
-        const { upper, lower } = calcBollinger(close, 20, 2)
-        chart.addLineSeries({ color: 'rgba(72,72,96,0.45)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
-          .setData(upper.map((v, i) => ({ time: candles[i + (close.length - upper.length)]?.time, value: v })).filter(d => d.time && d.value))
-        chart.addLineSeries({ color: 'rgba(72,72,96,0.45)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false })
-          .setData(lower.map((v, i) => ({ time: candles[i + (close.length - lower.length)]?.time, value: v })).filter(d => d.time && d.value))
-      }
+      try {
+        // 9 EMA
+        if (close.length >= 9) {
+          const ema9 = calcEMA(close, 9)
+          const ema9Data = ema9.map((v, i) => ({ time: candles[candles.length - ema9.length + i]?.time, value: v })).filter(d => d.time && d.value)
+          if (ema9Data.length > 0) chart.addLineSeries({ color: '#8866ff', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, title: '9E' }).setData(ema9Data)
+        }
+        // 20 SMA
+        if (close.length >= 20) {
+          const sma20 = calcSMA(close, 20)
+          const sma20Data = sma20.map((v, i) => ({ time: candles[candles.length - sma20.length + i]?.time, value: v })).filter(d => d.time && d.value)
+          if (sma20Data.length > 0) chart.addLineSeries({ color: '#3388ff', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, title: '20' }).setData(sma20Data)
+        }
+        // 50 SMA
+        if (close.length >= 50) {
+          const sma50 = calcSMA(close, 50)
+          const sma50Data = sma50.map((v, i) => ({ time: candles[candles.length - sma50.length + i]?.time, value: v })).filter(d => d.time && d.value)
+          if (sma50Data.length > 0) chart.addLineSeries({ color: '#ffb020', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, title: '50' }).setData(sma50Data)
+        }
+        // 200 SMA
+        if (close.length >= 200) {
+          const sma200 = calcSMA(close, 200)
+          const sma200Data = sma200.map((v, i) => ({ time: candles[candles.length - sma200.length + i]?.time, value: v })).filter(d => d.time && d.value)
+          if (sma200Data.length > 0) chart.addLineSeries({ color: '#ff3b5c', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, title: '200' }).setData(sma200Data)
+        }
+        // Bollinger Bands
+        if (close.length >= 20) {
+          const { upper, lower } = calcBollinger(close, 20, 2)
+          const upData = upper.map((v, i) => ({ time: candles[candles.length - upper.length + i]?.time, value: v })).filter(d => d.time && d.value)
+          const loData = lower.map((v, i) => ({ time: candles[candles.length - lower.length + i]?.time, value: v })).filter(d => d.time && d.value)
+          if (upData.length > 0) chart.addLineSeries({ color: 'rgba(72,72,96,0.45)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }).setData(upData)
+          if (loData.length > 0) chart.addLineSeries({ color: 'rgba(72,72,96,0.45)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false }).setData(loData)
+        }
+      } catch (overlayErr) { console.warn('Overlay error (chart still works):', overlayErr) }
 
       // Signal lines
       if (signal?.trade) {

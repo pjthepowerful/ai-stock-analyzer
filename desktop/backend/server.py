@@ -266,23 +266,24 @@ async def chart_data(ticker: str, period: str = "1y"):
         hist = yf.Ticker(ticker).history(period=period)
         if hist is None or hist.empty:
             return {"ok": False, "error": "No data"}
-        # Reset index and format dates as YYYY-MM-DD strings
-        hist = hist.reset_index()
-        dates = []
-        opens, highs, lows, closes, volumes = [], [], [], [], []
+        # Format dates as YYYY-MM-DD, deduplicate
+        raw_dates = [str(d)[:10] for d in hist.index]
         seen = set()
-        for _, row in hist.iterrows():
-            d = str(row.iloc[0])[:10]  # First column is Date, take YYYY-MM-DD
-            if d in seen:
-                continue  # Skip duplicates
-            seen.add(d)
-            dates.append(d)
-            opens.append(round(float(row["Open"]), 2))
-            highs.append(round(float(row["High"]), 2))
-            lows.append(round(float(row["Low"]), 2))
-            closes.append(round(float(row["Close"]), 2))
-            volumes.append(int(row["Volume"]))
-        data = {"dates": dates, "open": opens, "high": highs, "low": lows, "close": closes, "volume": volumes}
+        indices = []
+        clean_dates = []
+        for i, d in enumerate(raw_dates):
+            if d not in seen:
+                seen.add(d)
+                indices.append(i)
+                clean_dates.append(d)
+        data = {
+            "dates": clean_dates,
+            "open": [round(float(hist["Open"].iloc[i]), 2) for i in indices],
+            "high": [round(float(hist["High"].iloc[i]), 2) for i in indices],
+            "low": [round(float(hist["Low"].iloc[i]), 2) for i in indices],
+            "close": [round(float(hist["Close"].iloc[i]), 2) for i in indices],
+            "volume": [int(hist["Volume"].iloc[i]) for i in indices],
+        }
         return {"ok": True, "data": data}
     except Exception as e:
         return {"ok": False, "error": str(e)[:100]}

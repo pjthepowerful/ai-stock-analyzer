@@ -179,11 +179,20 @@ def _find_ticker(text: str) -> tuple[str | None, str]:
                 return clean, "India"
             if clean in us_set:
                 return clean, "US"
+    # 2.5) Common misspellings/aliases
+    ALIASES = {"appl": "AAPL", "goog": "GOOGL", "googl": "GOOGL", "msft": "MSFT",
+               "amzn": "AMZN", "tsla": "TSLA", "nvda": "NVDA", "meta": "META",
+               "nflx": "NFLX", "baba": "BABA", "intc": "INTC"}
+    for word in text.lower().split():
+        clean = re.sub(r"[^a-z]", "", word)
+        if clean in ALIASES:
+            tick = ALIASES[clean]
+            return tick, "US"
     # 3) Polygon search — only if the message looks like a specific stock query
     stock_intent = any(w in low for w in [
-        "analyze", "analysis", "price", "buy", "sell", "short", "cover", "chart", "quote",
+        "analyze", "analysis", "price", "buy", "sell", "short", "cover", "chart", "graph", "quote",
         "stock", "ticker", "how is", "how's", "what about", "look at",
-        "check out", "thoughts on", "opinion on", "review",
+        "check out", "thoughts on", "opinion on", "review", "show me", "pull up", "display",
     ])
     if stock_intent:
         words = [w for w in text.split() if len(w) > 3 and w.upper() not in _NOISE_WORDS]
