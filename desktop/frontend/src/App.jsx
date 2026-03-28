@@ -240,22 +240,15 @@ function App() {
         <div className="chat">
           {messages.length === 0 && !sending && (
             <div className="welcome">
-              <div className="w-head">
-                <div className="w-p">P</div>
-                <h2>{getGreeting()}</h2>
+              <div className="w-text">
+                <span className="w-hi">Hi PJ</span>
+                <h1>What would you like to<br/>trade today?</h1>
               </div>
               <div className="w-prompts">
-                {[
-                  ['Analyze a stock', () => quickAction('Analyze ')],
-                  ["What's moving today?", () => sendMessage('top gainers')],
-                  ['Recap my trades', () => sendMessage('How did we do today?')],
-                  ['Give me trade ideas', () => sendMessage('What should I buy?')],
-                ].map(([label, fn], i) => (
-                  <button key={i} className="wpr" onClick={fn}>
-                    <span>{label}</span>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-                  </button>
-                ))}
+                <button className="wp" onClick={() => quickAction('Analyze ')}>Analyze a stock</button>
+                <button className="wp" onClick={() => sendMessage('top gainers')}>What's moving?</button>
+                <button className="wp" onClick={() => sendMessage('How did we do today?')}>Recap trades</button>
+                <button className="wp" onClick={() => sendMessage('What should I buy?')}>Trade ideas</button>
               </div>
             </div>
           )}
