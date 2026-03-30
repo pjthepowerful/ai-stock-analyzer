@@ -3678,7 +3678,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells)}
 
     if no_new_buys_eod and not dry_run:
-        log.append("⏰ Last 30min of trading — no new positions, managing existing only")
+        log.append("⏰ **2:00 PM CT** — no new trades, managing existing positions only")
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells), "scanned": 0, "opportunities": 0}
 
     # Gate: don't buy in bear markets
