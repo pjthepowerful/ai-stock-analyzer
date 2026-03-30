@@ -3980,10 +3980,18 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             executions.append(f"{side_emoji} Would {'short' if is_short else 'buy'} {qty} {ticker} @ ~${entry:.2f} · Stop ${stop:.2f} · Target ${target:.2f} · Score {opp['score']} · R:R {opp['rr']:.1f}:1")
             account["buying_power"] -= cost
         else:
-            if is_short:
-                result = alpaca_short(ticker=ticker, qty=qty, stop_loss=stop, take_profit=target)
+            # After 1:00 PM CT (2:00 PM ET): NO bracket orders — they block EOD closes
+            late_session = now_et.hour >= 14  # 2 PM ET = 1 PM CT
+            if late_session:
+                if is_short:
+                    result = alpaca_short(ticker=ticker, qty=qty)
+                else:
+                    result = alpaca_buy(ticker=ticker, qty=qty)
             else:
-                result = alpaca_buy(ticker=ticker, qty=qty, stop_loss=stop, take_profit=target)
+                if is_short:
+                    result = alpaca_short(ticker=ticker, qty=qty, stop_loss=stop, take_profit=target)
+                else:
+                    result = alpaca_buy(ticker=ticker, qty=qty, stop_loss=stop, take_profit=target)
 
             if result.get("ok"):
                 executions.append(f"{side_emoji} {side_word} {qty} {ticker} @ ~${entry:.2f} · Stop ${stop:.2f} · Target ${target:.2f} · Score {opp['score']} · R:R {opp['rr']:.1f}:1")

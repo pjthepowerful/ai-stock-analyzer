@@ -29,8 +29,11 @@ chat_history: list[dict] = []
 async def lifespan(app: FastAPI):
     """Startup/shutdown."""
     print("🟢 Paula backend starting...")
+    # Start the EOD guardian — runs independently of autopilot
+    eod_task = asyncio.create_task(_eod_guardian())
     yield
     print("🔴 Paula backend stopping...")
+    eod_task.cancel()
     if autopilot_task and not autopilot_task.done():
         autopilot_task.cancel()
 
@@ -353,52 +356,113 @@ async def chat(msg: ChatMessage):
 
 # ── Autopilot ──
 
+async def _eod_guardian():
+    """
+    DEDICATED EOD CLOSER — runs independently of autopilot.
+    Every 30 seconds from 2:00-3:00 PM CT, checks for open positions
+    and force-closes them. Multiple safety layers:
+    1. Cancel ALL orders first
+    2. DELETE /positions with cancel_orders=true
+    3. Verify positions are closed
+    4. If any remain, retry individually
+    """
+    import requests as req
+    while True:
+        try:
+            et = ZoneInfo("US/Eastern")
+            ct = ZoneInfo("US/Central")
+            now_et = datetime.now(et)
+            now_ct = datetime.now(ct)
+
+            # Only run on weekdays during EOD window (3:00-4:00 PM ET = 2:00-3:00 PM CT)
+            if now_et.weekday() < 5:
+                eod_start = now_et.replace(hour=15, minute=0, second=0, microsecond=0)
+                eod_end = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
+
+                if eod_start <= now_et <= eod_end:
+                    positions = engine.alpaca_positions()
+                    if positions:
+                        time_str = now_ct.strftime('%I:%M %p CT')
+                        await broadcast("autopilot", {"status": "scanned", "log": [
+                            f"🔔 **EOD GUARDIAN** — {len(positions)} positions open at {time_str}",
+                        ]})
+
+                        # Step 1: Cancel ALL pending orders
+                        try:
+                            req.delete(f"{engine.ALPACA_BASE}/v2/orders",
+                                      headers=engine._alpaca_headers(), timeout=10)
+                        except Exception:
+                            pass
+
+                        # Step 2: Wait for cancellations to process
+                        await asyncio.sleep(2)
+
+                        # Step 3: Close all positions
+                        try:
+                            req.delete(f"{engine.ALPACA_BASE}/v2/positions",
+                                      headers=engine._alpaca_headers(),
+                                      params={"cancel_orders": "true"}, timeout=10)
+                        except Exception:
+                            pass
+
+                        # Step 4: Wait and verify
+                        await asyncio.sleep(5)
+                        remaining = engine.alpaca_positions()
+
+                        if not remaining:
+                            await broadcast("autopilot", {"status": "scanned", "log": [
+                                f"✅ All positions closed — flat for the night"
+                            ]})
+                            await broadcast("trade", {"action": "close_all"})
+                        else:
+                            # Step 5: Retry individually
+                            await broadcast("autopilot", {"status": "scanned", "log": [
+                                f"⚠️ {len(remaining)} positions survived — retrying individually"
+                            ]})
+                            for pos in remaining:
+                                try:
+                                    # Cancel orders for this ticker
+                                    req.delete(f"{engine.ALPACA_BASE}/v2/orders",
+                                              headers=engine._alpaca_headers(), timeout=10)
+                                    await asyncio.sleep(1)
+                                    # Close position
+                                    req.delete(
+                                        f"{engine.ALPACA_BASE}/v2/positions/{pos['ticker']}",
+                                        headers=engine._alpaca_headers(),
+                                        params={"cancel_orders": "true"}, timeout=10)
+                                except Exception:
+                                    pass
+
+                            await asyncio.sleep(3)
+                            final = engine.alpaca_positions()
+                            if not final:
+                                await broadcast("autopilot", {"status": "scanned", "log": [
+                                    "✅ All positions finally closed"
+                                ]})
+                            else:
+                                await broadcast("autopilot", {"status": "scanned", "log": [
+                                    f"🔴 **{len(final)} POSITIONS STILL OPEN** — will retry in 30s"
+                                ]})
+                            await broadcast("trade", {"action": "close_all"})
+
+                    # During EOD window, check every 30 seconds
+                    await asyncio.sleep(30)
+                    continue
+
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            print(f"EOD Guardian error: {e}")
+
+        # Outside EOD window, sleep 60 seconds
+        await asyncio.sleep(60)
+
+
 async def _autopilot_loop():
     """Background autopilot loop — runs every 5 minutes."""
     while True:
         try:
             is_open, status_msg = engine._market_is_open()
-
-            # CRITICAL: EOD safety net — close positions even if market just closed
-            et = ZoneInfo("US/Eastern")
-            ct = ZoneInfo("US/Central")
-            now_et = datetime.now(et)
-            now_ct = datetime.now(ct)
-            if now_et.weekday() < 5:  # weekday
-                eod_start = now_et.replace(hour=15, minute=10, second=0, microsecond=0)
-                eod_end = now_et.replace(hour=15, minute=58, second=0, microsecond=0)
-                if eod_start <= now_et <= eod_end:
-                    positions = engine.alpaca_positions()
-                    if positions:
-                        await broadcast("autopilot", {"status": "scanned", "log": [
-                            f"🔔 **EOD SAFETY NET** — {len(positions)} positions still open at {now_ct.strftime('%I:%M %p CT')}",
-                            "Closing all positions..."
-                        ]})
-                        # Use DELETE /positions which handles both longs AND shorts
-                        result = engine.alpaca_close_all()
-                        if result.get("ok"):
-                            await broadcast("autopilot", {"status": "scanned", "log": [
-                                f"✅ Closed {len(positions)} positions — flat for the night"
-                            ]})
-                        else:
-                            # Individual close using DELETE /positions/{ticker}
-                            # This works for BOTH longs and shorts — no cover/sell issues
-                            import requests
-                            closed = 0
-                            for pos in positions:
-                                try:
-                                    r = requests.delete(
-                                        f"{engine.ALPACA_BASE}/v2/positions/{pos['ticker']}",
-                                        headers=engine._alpaca_headers(), timeout=10
-                                    )
-                                    if r.status_code in (200, 201, 207):
-                                        closed += 1
-                                except Exception:
-                                    pass
-                            await broadcast("autopilot", {"status": "scanned", "log": [
-                                f"🔴 Force-closed {closed}/{len(positions)} positions"
-                            ]})
-                        await broadcast("trade", {"action": "close_all"})
 
             if not is_open:
                 await broadcast("autopilot", {"status": "paused", "reason": status_msg})
