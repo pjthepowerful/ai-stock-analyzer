@@ -3386,19 +3386,20 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     positions = alpaca_positions()
     held_tickers = {p["ticker"] for p in positions} | st.session_state.get("autopilot_bought", set())
 
-    # Scale positions with equity: 1 per $3k, min 5, max 25
-    MAX_POSITIONS = max(5, min(25, int(account["equity"] / 3000)))
-    RISK_PER_TRADE = 0.015        # 1.5% risk per trade
-    MAX_POS_PCT = 0.12
-    MIN_SCORE = 55                # lower bar = more trades
-    MIN_CONFLUENCE = 2            # 2 bullish categories enough
-    MIN_RR = 1.2                  # 1.2:1 minimum — more qualify
-    SELL_BELOW = 42               # quick exits
+    # Scale positions with equity — TIGHT: max 3 positions at a time
+    MAX_POSITIONS = 3
+    RISK_PER_TRADE = 0.01         # 1% risk per trade — conservative
+    MAX_POS_PCT = 0.15
+    MIN_SCORE = 70                # HIGH bar — only strong signals
+    MIN_CONFLUENCE = 4            # need 4+ bullish signals agreeing
+    MIN_RR = 2.0                  # 2:1 minimum risk-reward
+    SELL_BELOW = 45               # exit when signal weakens
 
     log.append(f"Open positions: {len(positions)} · Max: {MAX_POSITIONS}")
     log.append("📊 Mode: **Intraday Long/Short** · 5min scans · VWAP · gap scanner · SPY filter · EOD close 2:15 PM CT")
-    DAILY_LOSS_LIMIT = 0.02       # 2% max daily loss
-    PARTIAL_PROFIT_PCT = 0.015    # take half off at 1.5% (fast intraday partials)
+    log.append(f"Rules: score≥{MIN_SCORE}, R:R≥{MIN_RR}, max {MAX_POSITIONS} positions, 1% risk/trade")
+    DAILY_LOSS_LIMIT = 0.01       # 1% max daily loss — tighter
+    PARTIAL_PROFIT_PCT = 0.02     # take half off at 2%
     PARTIAL_PROFIT_SOLD_KEY = "autopilot_partial_sold"
 
     # ── 1b. Daily loss limit ──
@@ -3555,7 +3556,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     st.session_state[STALE_KEY] = {k: v for k, v in st.session_state[STALE_KEY].items() if k in held}
 
     stale_kills = []
-    STALE_MINUTES = 90  # kill after 90 min of going nowhere
+    STALE_MINUTES = 45  # kill after 45 min of going nowhere
     for pos in positions:
         ticker = pos["ticker"]
         pnl_pct = pos.get("unrealized_pnl_pct", 0)
@@ -3654,6 +3655,8 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                         result = alpaca_sell(ticker=pos["ticker"], sell_all=True)
                     if result.get("ok"):
                         sells.append(f"🔴 {action_word} {pos['ticker']} {'(short)' if is_short else ''} — score {sig['score']}, signal: {sig['action']}")
+                        # Prevent re-buying this ticker today
+                        st.session_state.setdefault("autopilot_bought", set()).add(pos["ticker"])
                     else:
                         sells.append(f"⚠️ Tried to close {pos['ticker']} but failed: {result.get('error','')}")
         except Exception:
@@ -3813,7 +3816,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     all_scores = []
     analyzed = 0
     errors = 0
-    MAX_ANALYZE = 200
+    MAX_ANALYZE = 40
     for ticker in scan_list[:MAX_ANALYZE]:
         try:
             data = fetch_scan_intraday(ticker)
