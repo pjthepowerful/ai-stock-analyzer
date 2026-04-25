@@ -91,7 +91,7 @@ function App() {
   useEffect(() => {
     f(API + '/api/chat/clear', { method: 'POST' }).catch(() => {})
     refreshData()
-    const i = setInterval(refreshData, 15000)
+    const i = setInterval(refreshData, 5000)
     return () => clearInterval(i)
   }, [refreshData])
 

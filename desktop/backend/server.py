@@ -24,6 +24,51 @@ autopilot_task: Optional[asyncio.Task] = None
 connected_clients: list[WebSocket] = []
 chat_history: list[dict] = []
 
+# ── Phone notifications via ntfy.sh ──
+NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "paula-trades")  # Change this to your own topic
+
+async def send_phone_notification(title: str, message: str, priority: str = "default"):
+    """Send push notification to phone via ntfy.sh (free, no signup)."""
+    try:
+        import requests as req
+        req.post(
+            f"https://ntfy.sh/{NTFY_TOPIC}",
+            data=message.encode(),
+            headers={
+                "Title": title,
+                "Priority": priority,
+                "Tags": "chart_with_upwards_trend" if "Buy" in title or "+" in message else "chart_with_downwards_trend",
+            },
+            timeout=5,
+        )
+    except Exception:
+        pass  # Don't break trading if notification fails
+
+# ── Trade Logger — saves every trade to JSON for performance tracking ──
+import pathlib
+TRADE_LOG_PATH = pathlib.Path(__file__).parent / "trade_log.json"
+
+def log_trade(action: str, ticker: str, qty: float = 0, price: float = 0, pnl: float = 0, extra: dict = None):
+    """Append a trade to the log file."""
+    try:
+        trades = []
+        if TRADE_LOG_PATH.exists():
+            trades = json.loads(TRADE_LOG_PATH.read_text())
+        trades.append({
+            "time": datetime.now().isoformat(),
+            "action": action,
+            "ticker": ticker,
+            "qty": qty,
+            "price": price,
+            "pnl": pnl,
+            **(extra or {}),
+        })
+        # Keep last 500 trades
+        trades = trades[-500:]
+        TRADE_LOG_PATH.write_text(json.dumps(trades, indent=2))
+    except Exception:
+        pass
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -83,6 +128,44 @@ async def broadcast(event: str, data: dict):
     for ws in disconnected:
         connected_clients.remove(ws)
 
+    # ── Push notification via ntfy.sh ──
+    if event == "trade" and data.get("action"):
+        try:
+            import requests as req
+            action = data.get("action", "")
+            ticker = data.get("ticker", data.get("symbol", ""))
+            ntfy_topic = os.environ.get("NTFY_TOPIC", "paula-trades")
+            emoji = {"buy": "📈", "sell": "📉", "short": "📉", "cover": "📈", "close_all": "🔴"}.get(action, "📊")
+            title = f"{emoji} Paula: {action.upper()} {ticker}"
+            if action == "close_all":
+                title = "🔴 Paula: All positions closed"
+            req.post(f"https://ntfy.sh/{ntfy_topic}",
+                     data=title.encode(), headers={"Title": "Paula Trade"}, timeout=3)
+        except Exception:
+            pass  # Don't let notification failure block anything
+
+    # ── Trade logging to JSON ──
+    if event == "trade" and data.get("action"):
+        try:
+            import pathlib
+            log_path = pathlib.Path(__file__).parent / "trade_log.json"
+            existing = []
+            if log_path.exists():
+                existing = json.loads(log_path.read_text())
+            existing.append({
+                "time": datetime.now(ZoneInfo("US/Central")).isoformat(),
+                "action": data.get("action"),
+                "ticker": data.get("ticker", data.get("symbol", "")),
+                "qty": data.get("qty"),
+                "price": data.get("price"),
+                "pnl": data.get("pnl"),
+            })
+            # Keep last 500 trades
+            existing = existing[-500:]
+            log_path.write_text(json.dumps(existing, indent=2))
+        except Exception:
+            pass
+
 
 def _sanitize_trade_error(result: dict) -> dict:
     """Strip broker day-trade restriction text from user-facing errors."""
@@ -135,6 +218,63 @@ async def health():
         "status": "ok",
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
+    }
+
+
+@app.get("/api/performance")
+async def performance():
+    """Performance dashboard data — trade history, daily P&L, win rate."""
+    import pathlib
+    log_path = pathlib.Path(__file__).parent / "trade_log.json"
+    config_path = pathlib.Path(__file__).parent / "autopilot_config.json"
+
+    trades = []
+    if log_path.exists():
+        try:
+            trades = json.loads(log_path.read_text())
+        except Exception:
+            pass
+
+    config = {}
+    if config_path.exists():
+        try:
+            config = json.loads(config_path.read_text())
+        except Exception:
+            pass
+
+    # Calculate stats
+    buys = [t for t in trades if t.get("action") == "buy"]
+    sells = [t for t in trades if t.get("action") in ("sell", "cover")]
+
+    # Group by date
+    daily = {}
+    for t in trades:
+        date = t.get("time", "")[:10]
+        if date not in daily:
+            daily[date] = {"trades": 0, "buys": 0, "sells": 0}
+        daily[date]["trades"] += 1
+        if t.get("action") == "buy":
+            daily[date]["buys"] += 1
+        elif t.get("action") in ("sell", "cover"):
+            daily[date]["sells"] += 1
+
+    # Get Alpaca portfolio history for P&L chart
+    pnl_history = []
+    try:
+        hist = engine.alpaca_portfolio_history()
+        if hist:
+            pnl_history = hist
+    except Exception:
+        pass
+
+    return {
+        "ok": True,
+        "total_trades": len(trades),
+        "recent_trades": trades[-20:],
+        "daily_summary": daily,
+        "tune_history": config.get("tune_history", []),
+        "current_params": {k: v for k, v in config.items() if k not in ("tune_history", "last_tuned")},
+        "pnl_history": pnl_history,
     }
 
 
@@ -204,6 +344,8 @@ async def buy_stock(req: TradeRequest):
     result = _sanitize_trade_error(result)
     if result.get("ok"):
         await broadcast("trade", {"action": "buy", "ticker": req.ticker, **result})
+        log_trade("buy", req.ticker, qty=req.qty or 0, price=result.get("avg_price", 0))
+        await send_phone_notification(f"Bought {req.ticker}", f"Qty: {req.qty or 'notional'}")
     return result
 
 
@@ -214,6 +356,8 @@ async def sell_stock(req: TradeRequest):
     result = _sanitize_trade_error(result)
     if result.get("ok"):
         await broadcast("trade", {"action": "sell", "ticker": req.ticker, **result})
+        log_trade("sell", req.ticker, qty=req.qty or 0)
+        await send_phone_notification(f"Sold {req.ticker}", f"Position closed")
     return result
 
 
@@ -224,6 +368,8 @@ async def short_stock(req: ShortRequest):
     result = _sanitize_trade_error(result)
     if result.get("ok"):
         await broadcast("trade", {"action": "short", "ticker": req.ticker, **result})
+        log_trade("short", req.ticker, qty=req.qty or 0)
+        await send_phone_notification(f"Shorted {req.ticker}", f"Qty: {req.qty}")
     return result
 
 
@@ -234,6 +380,8 @@ async def cover_stock(req: CoverRequest):
     result = _sanitize_trade_error(result)
     if result.get("ok"):
         await broadcast("trade", {"action": "cover", "ticker": req.ticker, **result})
+        log_trade("cover", req.ticker, qty=req.qty or 0)
+        await send_phone_notification(f"Covered {req.ticker}", f"Short closed")
     return result
 
 
@@ -244,6 +392,8 @@ async def close_all():
     result = _sanitize_trade_error(result)
     if result.get("ok"):
         await broadcast("trade", {"action": "close_all"})
+        log_trade("close_all", "ALL")
+        await send_phone_notification("All Positions Closed", "Portfolio is flat", priority="high")
     return result
 
 
@@ -259,6 +409,70 @@ async def spy_trend():
     """Get SPY intraday trend."""
     trend = engine._get_spy_intraday_trend()
     return {"ok": True, "data": trend}
+
+
+@app.get("/api/performance")
+async def get_performance():
+    """Get trading performance data for dashboard."""
+    try:
+        trades = []
+        if TRADE_LOG_PATH.exists():
+            trades = json.loads(TRADE_LOG_PATH.read_text())
+
+        # Also pull from Alpaca for real P&L data
+        import requests as req
+        headers = engine._alpaca_headers()
+        base = engine.ALPACA_BASE
+
+        # Get portfolio history (last 30 days)
+        hist_r = req.get(f"{base}/v2/account/portfolio/history",
+                        headers=headers,
+                        params={"period": "1M", "timeframe": "1D"},
+                        timeout=10)
+        portfolio_history = []
+        if hist_r.status_code == 200:
+            h = hist_r.json()
+            timestamps = h.get("timestamp", [])
+            equity = h.get("equity", [])
+            pnl = h.get("profit_loss", [])
+            pnl_pct = h.get("profit_loss_pct", [])
+            for i, ts in enumerate(timestamps):
+                portfolio_history.append({
+                    "date": datetime.fromtimestamp(ts).strftime("%Y-%m-%d"),
+                    "equity": equity[i] if i < len(equity) else 0,
+                    "pnl": pnl[i] if i < len(pnl) else 0,
+                    "pnl_pct": round((pnl_pct[i] or 0) * 100, 2) if i < len(pnl_pct) else 0,
+                })
+
+        # Get closed orders for win/loss stats (last 7 days)
+        et = ZoneInfo("US/Eastern")
+        from datetime import timedelta
+        orders_r = req.get(f"{base}/v2/orders",
+                          headers=headers,
+                          params={"status": "closed", "limit": 200,
+                                  "after": (datetime.now(et) - timedelta(days=7)).isoformat()},
+                          timeout=15)
+        recent_orders = orders_r.json() if orders_r.status_code == 200 else []
+        filled_orders = [o for o in recent_orders if o.get("filled_qty") and float(o["filled_qty"]) > 0]
+
+        # Auto-tune config
+        config_path = pathlib.Path(__file__).parent / "autopilot_config.json"
+        config = {}
+        if config_path.exists():
+            config = json.loads(config_path.read_text())
+
+        return {
+            "ok": True,
+            "data": {
+                "trade_log": trades[-50:],
+                "portfolio_history": portfolio_history,
+                "recent_orders": len(filled_orders),
+                "config": {k: v for k, v in config.items() if k != "tune_history"},
+                "tune_history": config.get("tune_history", [])[-10:],
+            }
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:100]}
 
 
 @app.get("/api/chart/{ticker}")
@@ -473,14 +687,30 @@ async def _autopilot_loop():
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(None, engine.run_autopilot)
 
+            buys = result.get("buys", 0)
+            sells = result.get("sells", 0)
+            shorts = result.get("shorts", 0)
+
             await broadcast("autopilot", {
                 "status": "scanned",
                 "log": result.get("log", []),
-                "buys": result.get("buys", 0),
-                "shorts": result.get("shorts", 0),
-                "sells": result.get("sells", 0),
+                "buys": buys,
+                "shorts": shorts,
+                "sells": sells,
                 "scanned": result.get("scanned", 0),
             })
+
+            # Send phone notification if trades were made
+            if buys > 0 or sells > 0 or shorts > 0:
+                parts = []
+                if buys: parts.append(f"{buys} bought")
+                if shorts: parts.append(f"{shorts} shorted")
+                if sells: parts.append(f"{sells} sold")
+                await send_phone_notification(
+                    "Paula Autopilot",
+                    " · ".join(parts),
+                    priority="default"
+                )
 
         except asyncio.CancelledError:
             break

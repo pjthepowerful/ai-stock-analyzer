@@ -1656,32 +1656,35 @@ def generate_intraday_signal(data: dict) -> dict:
     # ── RISK MANAGEMENT (Intraday — uses 5min ATR) ──
     if action in ("BUY", "STRONG_BUY"):
         entry = price
-        # Stop: 2x intraday ATR or below VWAP — whichever is tighter
-        stop_atr = round(entry - 2.0 * atr, 2)
-        stop_vwap = round(vwap - 0.5 * atr, 2) if above_vwap and dist_to_vwap < 0.5 else stop_atr
+        # Stop: 3x intraday ATR — give room to breathe
+        stop_atr = round(entry - 3.0 * atr, 2)
+        stop_vwap = round(vwap - 1.0 * atr, 2) if above_vwap and dist_to_vwap < 0.5 else stop_atr
         stop_loss = max(stop_atr, stop_vwap)
-        # Floor: at least 0.3% stop distance
-        min_stop = round(entry * 0.997, 2)
+        # Floor: at least 1.0% stop distance
+        min_stop = round(entry * 0.99, 2)
         if stop_loss > min_stop:
             stop_loss = min_stop
 
         risk = max(entry - stop_loss, 0.01)
-        target_1 = round(entry + 2.0 * risk, 2)
-        target_2 = round(entry + 3.0 * risk, 2)
+        target_1 = round(entry + 2.5 * risk, 2)
+        target_2 = round(entry + 4.0 * risk, 2)
         risk_pct = round(risk / entry * 100, 2)
     elif action in ("SELL", "STRONG_SELL"):
         entry = price
-        stop_loss = round(price + 2.0 * atr, 2)
+        stop_loss = round(price + 3.0 * atr, 2)
+        max_stop = round(entry * 1.01, 2)
+        if stop_loss < max_stop:
+            stop_loss = max_stop
         risk = max(stop_loss - entry, 0.01)
-        target_1 = round(entry - 2.0 * risk, 2)
-        target_2 = round(entry - 3.0 * risk, 2)
+        target_1 = round(entry - 2.5 * risk, 2)
+        target_2 = round(entry - 4.0 * risk, 2)
         risk_pct = round(risk / entry * 100, 2)
     else:
         entry = price
-        stop_loss = round(price - 2.0 * atr, 2)
-        risk = 2.0 * atr
-        target_1 = round(price + 2.0 * atr, 2)
-        target_2 = round(price + 3.0 * atr, 2)
+        stop_loss = round(price - 3.0 * atr, 2)
+        risk = 3.0 * atr
+        target_1 = round(price + 3.0 * atr, 2)
+        target_2 = round(price + 5.0 * atr, 2)
         risk_pct = round(risk / price * 100, 2)
 
     rr = round((target_1 - entry) / risk, 2) if risk > 0 and target_1 > entry else (
@@ -3386,20 +3389,148 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     positions = alpaca_positions()
     held_tickers = {p["ticker"] for p in positions} | st.session_state.get("autopilot_bought", set())
 
-    # Scale positions with equity — TIGHT: max 3 positions at a time
-    MAX_POSITIONS = 3
-    RISK_PER_TRADE = 0.01         # 1% risk per trade — conservative
-    MAX_POS_PCT = 0.15
-    MIN_SCORE = 70                # HIGH bar — only strong signals
-    MIN_CONFLUENCE = 4            # need 4+ bullish signals agreeing
-    MIN_RR = 2.0                  # 2:1 minimum risk-reward
-    SELL_BELOW = 45               # exit when signal weakens
+    # ── AUTO-TUNER: Load params from config, adjust daily based on performance ──
+    import json, os, pathlib
+    CONFIG_PATH = pathlib.Path(__file__).parent / "autopilot_config.json"
 
-    log.append(f"Open positions: {len(positions)} · Max: {MAX_POSITIONS}")
-    log.append("📊 Mode: **Intraday Long/Short** · 5min scans · VWAP · gap scanner · SPY filter · EOD close 2:15 PM CT")
-    log.append(f"Rules: score≥{MIN_SCORE}, R:R≥{MIN_RR}, max {MAX_POSITIONS} positions, 1% risk/trade")
-    DAILY_LOSS_LIMIT = 0.01       # 1% max daily loss — tighter
-    PARTIAL_PROFIT_PCT = 0.02     # take half off at 2%
+    # Default params
+    DEFAULT_PARAMS = {
+        "MAX_POSITIONS": 2,
+        "RISK_PER_TRADE": 0.01,
+        "MAX_POS_PCT": 0.15,
+        "MIN_SCORE": 75,
+        "MIN_CONFLUENCE": 4,
+        "MIN_RR": 2.0,
+        "SELL_BELOW": 30,
+        "DAILY_LOSS_LIMIT": 0.01,
+        "PARTIAL_PROFIT_PCT": 0.03,
+        "MAX_DAILY_ENTRIES": 6,
+        "STALE_MINUTES": 90,
+        "last_tuned": "",
+        "tune_history": [],
+    }
+
+    # Load or create config
+    try:
+        if CONFIG_PATH.exists():
+            params = json.loads(CONFIG_PATH.read_text())
+            # Merge with defaults (in case new keys added)
+            for k, v in DEFAULT_PARAMS.items():
+                if k not in params:
+                    params[k] = v
+        else:
+            params = DEFAULT_PARAMS.copy()
+            CONFIG_PATH.write_text(json.dumps(params, indent=2))
+    except Exception:
+        params = DEFAULT_PARAMS.copy()
+
+    # ── Daily auto-tune: review yesterday's trades and adjust ──
+    if params.get("last_tuned") != today and not dry_run:
+        try:
+            # Pull recent closed trades from Alpaca
+            orders_r = requests.get(f"{ALPACA_BASE}/v2/orders",
+                                    headers=_alpaca_headers(),
+                                    params={"status": "closed", "limit": 100,
+                                            "after": (datetime.now(et) - timedelta(days=2)).isoformat()},
+                                    timeout=15)
+            if orders_r.status_code == 200:
+                closed_orders = orders_r.json()
+                # Match buys to sells by symbol
+                buys = {}
+                sells = {}
+                for o in closed_orders:
+                    if o.get("filled_qty") and float(o["filled_qty"]) > 0:
+                        sym = o["symbol"]
+                        avg = float(o.get("filled_avg_price", 0))
+                        qty = float(o["filled_qty"])
+                        if o["side"] == "buy":
+                            buys.setdefault(sym, []).append({"price": avg, "qty": qty})
+                        else:
+                            sells.setdefault(sym, []).append({"price": avg, "qty": qty})
+
+                # Calculate rough P&L per symbol
+                wins, losses, total_pnl = 0, 0, 0
+                for sym in sells:
+                    if sym in buys:
+                        buy_avg = sum(b["price"] * b["qty"] for b in buys[sym]) / max(1, sum(b["qty"] for b in buys[sym]))
+                        sell_avg = sum(s["price"] * s["qty"] for s in sells[sym]) / max(1, sum(s["qty"] for s in sells[sym]))
+                        pnl = sell_avg - buy_avg
+                        if pnl > 0:
+                            wins += 1
+                        else:
+                            losses += 1
+                        total_pnl += pnl
+
+                total_trades = wins + losses
+                win_rate = wins / max(1, total_trades)
+                tune_msg = []
+
+                if total_trades >= 3:  # Only tune if enough data
+                    # RULE 1: Too many trades → reduce max positions
+                    if total_trades > 12:
+                        params["MAX_POSITIONS"] = max(1, params["MAX_POSITIONS"] - 1)
+                        params["MAX_DAILY_ENTRIES"] = max(3, params["MAX_DAILY_ENTRIES"] - 1)
+                        tune_msg.append(f"Too many trades ({total_trades}) → max_pos={params['MAX_POSITIONS']}, entries={params['MAX_DAILY_ENTRIES']}")
+
+                    # RULE 2: Win rate < 40% → raise MIN_SCORE
+                    if win_rate < 0.4:
+                        params["MIN_SCORE"] = min(85, params["MIN_SCORE"] + 3)
+                        tune_msg.append(f"Low win rate ({win_rate:.0%}) → score={params['MIN_SCORE']}")
+
+                    # RULE 3: Win rate > 60% and profitable → loosen slightly
+                    if win_rate > 0.6 and total_pnl > 0:
+                        params["MIN_SCORE"] = max(65, params["MIN_SCORE"] - 2)
+                        params["MAX_POSITIONS"] = min(3, params["MAX_POSITIONS"] + 1)
+                        tune_msg.append(f"Good day ({win_rate:.0%} WR, +${total_pnl:.0f}) → score={params['MIN_SCORE']}, max_pos={params['MAX_POSITIONS']}")
+
+                    # RULE 4: Big loss day → tighten daily loss limit
+                    if total_pnl < -200:
+                        params["DAILY_LOSS_LIMIT"] = max(0.005, params["DAILY_LOSS_LIMIT"] - 0.002)
+                        params["MAX_DAILY_ENTRIES"] = max(3, params["MAX_DAILY_ENTRIES"] - 1)
+                        tune_msg.append(f"Big loss (${total_pnl:.0f}) → loss_limit={params['DAILY_LOSS_LIMIT']:.1%}, entries={params['MAX_DAILY_ENTRIES']}")
+
+                    # RULE 5: Profitable day → relax loss limit slightly
+                    if total_pnl > 100:
+                        params["DAILY_LOSS_LIMIT"] = min(0.02, params["DAILY_LOSS_LIMIT"] + 0.001)
+                        tune_msg.append(f"Profit day (+${total_pnl:.0f}) → loss_limit={params['DAILY_LOSS_LIMIT']:.1%}")
+
+                    # RULE 6: Clamp all values to safe ranges
+                    params["MIN_SCORE"] = max(65, min(85, params["MIN_SCORE"]))
+                    params["MAX_POSITIONS"] = max(1, min(4, params["MAX_POSITIONS"]))
+                    params["MAX_DAILY_ENTRIES"] = max(3, min(8, params["MAX_DAILY_ENTRIES"]))
+                    params["DAILY_LOSS_LIMIT"] = max(0.005, min(0.02, params["DAILY_LOSS_LIMIT"]))
+                    params["MIN_RR"] = max(1.5, min(3.0, params["MIN_RR"]))
+
+                if tune_msg:
+                    log.append("🔧 **Auto-Tune** — adjusted based on yesterday:")
+                    for m in tune_msg:
+                        log.append(f"   • {m}")
+                    params["tune_history"].append({"date": today, "changes": tune_msg,
+                                                   "stats": {"trades": total_trades, "wins": wins, "losses": losses, "pnl": round(total_pnl, 2)}})
+                    # Keep last 30 days of history
+                    params["tune_history"] = params["tune_history"][-30:]
+
+                params["last_tuned"] = today
+                CONFIG_PATH.write_text(json.dumps(params, indent=2))
+        except Exception as e:
+            log.append(f"⚠️ Auto-tune skipped: {str(e)[:60]}")
+
+    # Apply params
+    MAX_POSITIONS = params["MAX_POSITIONS"]
+    RISK_PER_TRADE = params["RISK_PER_TRADE"]
+    MAX_POS_PCT = params["MAX_POS_PCT"]
+    MIN_SCORE = params["MIN_SCORE"]
+    MIN_CONFLUENCE = params["MIN_CONFLUENCE"]
+    MIN_RR = params["MIN_RR"]
+    SELL_BELOW = params["SELL_BELOW"]
+    MAX_DAILY_ENTRIES = params.get("MAX_DAILY_ENTRIES", 6)
+
+    daily_entries = len(st.session_state.get("autopilot_bought", set()))
+
+    log.append(f"Open positions: {len(positions)} · Max: {MAX_POSITIONS} · Entries today: {daily_entries}/{MAX_DAILY_ENTRIES}")
+    log.append(f"📊 Mode: **Selective Intraday** · Score≥{MIN_SCORE} · R:R≥{MIN_RR} · Max {MAX_POSITIONS} pos")
+    DAILY_LOSS_LIMIT = params["DAILY_LOSS_LIMIT"]
+    PARTIAL_PROFIT_PCT = params["PARTIAL_PROFIT_PCT"]
     PARTIAL_PROFIT_SOLD_KEY = "autopilot_partial_sold"
 
     # ── 1b. Daily loss limit ──
@@ -3556,7 +3687,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     st.session_state[STALE_KEY] = {k: v for k, v in st.session_state[STALE_KEY].items() if k in held}
 
     stale_kills = []
-    STALE_MINUTES = 45  # kill after 45 min of going nowhere
+    STALE_MINUTES = params.get("STALE_MINUTES", 90)
     for pos in positions:
         ticker = pos["ticker"]
         pnl_pct = pos.get("unrealized_pnl_pct", 0)
@@ -3564,7 +3695,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         minutes_held = (time.time() - entry_time) / 60
 
         # If held 90+ min and PnL between -0.5% and +0.5% — it's dead money
-        if minutes_held >= STALE_MINUTES and -0.5 <= pnl_pct <= 0.5:
+        if minutes_held >= STALE_MINUTES and -0.3 <= pnl_pct <= 0.2:
             is_short = pos.get("side") == "short"
             if dry_run:
                 stale_kills.append(f"⏰ Would close {ticker} {'(short)' if is_short else ''} — flat for {minutes_held:.0f}min ({pnl_pct:+.1f}%)")
@@ -3639,9 +3770,9 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             # For longs: close if signal turned bearish
             # For shorts: close if signal turned bullish
             should_close = False
-            if not is_short and (sig["score"] <= SELL_BELOW or sig["action"] in ("SELL", "STRONG_SELL")):
+            if not is_short and (sig["score"] <= SELL_BELOW or sig["action"] == "STRONG_SELL"):
                 should_close = True
-            elif is_short and (sig["score"] >= (100 - SELL_BELOW) or sig["action"] in ("BUY", "STRONG_BUY")):
+            elif is_short and (sig["score"] >= (100 - SELL_BELOW) or sig["action"] == "STRONG_BUY"):
                 should_close = True
 
             if should_close:
@@ -3682,6 +3813,11 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
 
     if no_new_buys_eod and not dry_run:
         log.append("⏰ **2:00 PM CT** — no new trades, managing existing positions only")
+        return {"ok": True, "log": log, "buys": 0, "sells": len(sells), "scanned": 0, "opportunities": 0}
+
+    # Gate: daily entry cap reached
+    if daily_entries >= MAX_DAILY_ENTRIES and not dry_run:
+        log.append(f"🛑 **Daily entry cap reached** ({daily_entries}/{MAX_DAILY_ENTRIES}) — no more new trades today")
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells), "scanned": 0, "opportunities": 0}
 
     # Gate: don't buy in bear markets
@@ -3809,6 +3945,29 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         candidates.extend(fallback[:200])
         log.append(f"Added full universe fallback → total {len(candidates)} candidates")
 
+    # ── SECTOR ROTATION FILTER — prioritize hot sectors ──
+    hot_sectors = set()
+    if sectors:
+        ranked_sectors = sorted(sectors.items(), key=lambda x: x[1].get("rank", 99))
+        hot_sectors = {etf for etf, data in ranked_sectors[:3]}  # Top 3 sectors
+        cold_sectors = {etf for etf, data in ranked_sectors[-2:]}  # Bottom 2
+
+        # Filter candidates: boost hot sector stocks, remove cold sector stocks
+        hot_tickers = []
+        neutral_tickers = []
+        for t in candidates:
+            t_sector = TICKER_SECTOR.get(t)
+            if t_sector in cold_sectors:
+                continue  # Skip stocks in cold sectors
+            elif t_sector in hot_sectors:
+                hot_tickers.append(t)
+            else:
+                neutral_tickers.append(t)
+        # Hot sector stocks first, then rest
+        candidates = hot_tickers + neutral_tickers
+        if hot_tickers:
+            log.append(f"🔥 Sector filter: {len(hot_tickers)} stocks in hot sectors, {len(neutral_tickers)} neutral, skipped cold")
+
     scan_list = candidates
     log.append(f"Deep-analyzing {len(scan_list)} stocks...")
 
@@ -3830,6 +3989,13 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             itech = data.get("intraday_technicals", {})
             if itech.get("vol_ratio", 1) < 0.3:
                 continue  # dead volume
+
+            # ── MOMENTUM FILTER — stock must be moving today ──
+            day_change = data.get("change_pct", 0)
+            # Skip stocks barely moving (between -0.3% and +0.3%) — no momentum
+            if abs(day_change) < 0.3:
+                continue
+
             analyzed += 1
             sig = generate_intraday_signal(data)
             all_scores.append((ticker, sig["score"], sig["action"], sig["confluence"]["bullish"], sig["trade"]["risk_reward"]))
@@ -3838,7 +4004,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             if (sig["score"] >= MIN_SCORE
                     and sig["confluence"]["bullish"] >= MIN_CONFLUENCE
                     and sig["trade"]["risk_reward"] >= MIN_RR
-                    and sig["action"] in ("BUY", "STRONG_BUY")):
+                    and sig["action"] == "STRONG_BUY"):
                 opportunities.append({
                     "ticker": ticker,
                     "score": sig["score"],
@@ -3854,7 +4020,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             elif (sig["score"] <= (100 - MIN_SCORE)
                     and sig["confluence"]["bearish"] >= MIN_CONFLUENCE
                     and sig["trade"]["risk_reward"] >= MIN_RR
-                    and sig["action"] in ("SELL", "STRONG_SELL")):
+                    and sig["action"] == "STRONG_SELL"):
                 opportunities.append({
                     "ticker": ticker,
                     "score": 100 - sig["score"],  # invert so higher = more bearish conviction
@@ -3911,12 +4077,12 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             log.append(f"⏭️ Skipped {ticker} — earnings on {earn_date}")
             continue
 
-        # Deep news check via AI (only for stocks about to be traded)
+        # Deep news check via AI — HARD GATE
         opp_news = _ai_news_analysis(ticker)
-        if not is_short and opp_news.get("ai_score", 0) <= -5:
+        if not is_short and opp_news.get("ai_score", 0) <= -3:
             log.append(f"⏭️ Skipped {ticker} long — AI news bearish ({opp_news.get('ai_summary', '')[:60]})")
             continue
-        if is_short and opp_news.get("ai_score", 0) >= 5:
+        if is_short and opp_news.get("ai_score", 0) >= 3:
             log.append(f"⏭️ Skipped {ticker} short — AI news bullish ({opp_news.get('ai_summary', '')[:60]})")
             continue
         if opp_news.get("macro_risk"):
@@ -3956,10 +4122,20 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             continue
 
         # Scale risk down when VIX is elevated
+        # ── SMART POSITION SIZING — scale with conviction ──
         risk_mult = 1.0
         if vix_cautious:
-            risk_mult = 0.5  # half size when fearful
+            risk_mult = 0.5
             log.append(f"⚠️ VIX elevated — half position size for {ticker}")
+
+        # Score-based sizing: 75-79 = 0.7x, 80-84 = 1.0x, 85+ = 1.3x
+        score = opp["score"]
+        if score >= 85:
+            risk_mult *= 1.3  # high conviction — larger position
+        elif score >= 80:
+            risk_mult *= 1.0  # standard
+        else:
+            risk_mult *= 0.7  # lower conviction — smaller position
 
         max_risk_dollars = account["equity"] * RISK_PER_TRADE * risk_mult
         qty = max(1, int(max_risk_dollars / risk_per_share))
