@@ -47,8 +47,8 @@ function App() {
           const { event, data } = JSON.parse(e.data)
           if (event === 'connected') setAutopilot(data.autopilot)
           if (event === 'autopilot') {
-            if (data.status === 'started') setAutopilot(true)
-            if (data.status === 'stopped') setAutopilot(false)
+            if (data.status === 'started') { setAutopilot(true); addToast('Autopilot activated', 'buy') }
+            if (data.status === 'stopped') { setAutopilot(false); addToast('Autopilot deactivated', 'sell') }
             if (data.log) {
               playNotify()
               setMessages(prev => [...prev, { role: 'assistant', content: '**Autopilot Scan**\n\n' + data.log.join('\n\n'), type: 'autopilot' }])
@@ -148,7 +148,8 @@ function App() {
         {toasts.map(t => (
           <div key={t.id} className={'toast toast-' + t.type}>
             <span className="toast-dot" />
-            <span className="toast-msg">{t.msg}</span>
+            <span className="toast-msg">{t.msg.replace(/\*\*/g, '')}</span>
+            <button className="toast-x" onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))}>✕</button>
           </div>
         ))}
       </div>

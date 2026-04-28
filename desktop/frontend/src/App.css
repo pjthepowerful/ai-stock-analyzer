@@ -23,6 +23,8 @@ b{font-weight:600}
 .toast-warn .toast-dot{background:var(--a);box-shadow:0 0 6px var(--a)}
 .toast-info .toast-dot{background:var(--bl);box-shadow:0 0 6px var(--bl)}
 .toast-msg{font-size:.75rem;color:var(--br);font-weight:500;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.toast-x{background:none;border:none;color:var(--m);font-size:11px;cursor:pointer;padding:0 2px;margin-left:4px;opacity:.5;transition:opacity .15s}
+.toast-x:hover{opacity:1;color:var(--br)}
 @keyframes toastIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
 @keyframes toastOut{from{opacity:1}to{opacity:0;transform:translateY(-8px)}}
 
