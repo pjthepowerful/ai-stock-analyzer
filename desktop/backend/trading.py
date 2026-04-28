@@ -3557,15 +3557,15 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     weekday = now_et.strftime("%A")
     log.append(f"📅 {weekday} {now_et.strftime('%I:%M %p ET')}")
 
-    eod_warning = now_et.replace(hour=15, minute=0, second=0, microsecond=0)    # 3:00 PM ET = 2:00 PM CT
-    eod_liquidation = now_et.replace(hour=15, minute=15, second=0, microsecond=0) # 3:15 PM ET = 2:15 PM CT
-    eod_hard_close = now_et.replace(hour=15, minute=30, second=0, microsecond=0)  # 3:30 PM ET = 2:30 PM CT
+    eod_warning = now_et.replace(hour=15, minute=30, second=0, microsecond=0)    # 3:30 PM ET = 2:30 PM CT
+    eod_liquidation = now_et.replace(hour=15, minute=45, second=0, microsecond=0) # 3:45 PM ET = 2:45 PM CT
+    eod_hard_close = now_et.replace(hour=15, minute=55, second=0, microsecond=0)  # 3:55 PM ET = 2:55 PM CT
 
     if now_et >= eod_warning and now_et < eod_liquidation and positions:
         log.append(f"⏰ **EOD WARNING** — closing all in {(eod_liquidation - now_et).seconds // 60} min")
 
     if now_et >= eod_liquidation and positions and not dry_run:
-        log.append(f"🔔 **EOD LIQUIDATION (2:15 PM CT)** — closing ALL {len(positions)} positions")
+        log.append(f"🔔 **EOD LIQUIDATION (2:45 PM CT)** — closing ALL {len(positions)} positions")
         # Try bulk close first
         result = alpaca_close_all()
         if result.get("ok"):
@@ -3602,7 +3602,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         if now_et >= eod_hard_close:
             remaining = alpaca_positions()
             if remaining:
-                log.append(f"🔴 **HARD CLOSE** — {len(remaining)} positions still open at 2:30 PM CT")
+                log.append(f"🔴 **HARD CLOSE** — {len(remaining)} positions still open at 2:55 PM CT")
                 # Nuclear: cancel ALL orders, then close ALL positions
                 requests.delete(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(), timeout=10)
                 requests.delete(f"{ALPACA_BASE}/v2/positions", headers=_alpaca_headers(),
@@ -3614,7 +3614,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         log.append(f"🔔 EOD: Would close {len(positions)} positions (dry run)")
 
     # No new trades in last 60min of trading
-    last_buy_cutoff = now_et.replace(hour=15, minute=0, second=0, microsecond=0)
+    last_buy_cutoff = now_et.replace(hour=15, minute=30, second=0, microsecond=0)  # 3:30 PM ET = 2:30 PM CT
     no_new_buys_eod = now_et >= last_buy_cutoff
 
     # ── 1b2. Avoid the open — first 15min is pure chop ──
@@ -3812,7 +3812,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells)}
 
     if no_new_buys_eod and not dry_run:
-        log.append("⏰ **2:00 PM CT** — no new trades, managing existing positions only")
+        log.append("⏰ **2:30 PM CT** — no new trades, managing existing positions only")
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells), "scanned": 0, "opportunities": 0}
 
     # Gate: daily entry cap reached
@@ -4160,7 +4160,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             account["buying_power"] -= cost
         else:
             # After 1:00 PM CT (2:00 PM ET): NO bracket orders — they block EOD closes
-            late_session = now_et.hour >= 14  # 2 PM ET = 1 PM CT
+            late_session = now_et.hour > 15 or (now_et.hour == 15 and now_et.minute >= 30)  # After 3:30 PM ET = 2:30 PM CT
             if late_session:
                 if is_short:
                     result = alpaca_short(ticker=ticker, qty=qty)
@@ -4615,7 +4615,7 @@ IMPORTANT: Autopilot runs a dedicated INTRADAY engine combining 9 proven day tra
 
 Additional filters: SPY correlation (blocks longs when SPY dumps), VIX panic filter (closes all longs when VIX ≥35), ADX trend strength, stop hunt/liquidity sweep detection, parabolic exhaustion warnings, higher timeframe bias from hourly chart.
 
-Everything gets liquidated 45 minutes before market close (2:15 PM CT) to avoid overnight gap risk. Users can also manually short via "short TSLA" and cover via "cover TSLA". This is day trading — NEVER hold overnight.
+Everything gets liquidated 15 minutes before market close (2:45 PM CT) to avoid overnight gap risk. Users can also manually short via "short TSLA" and cover via "cover TSLA". This is day trading — NEVER hold overnight.
 
 CRITICAL — Stock recommendations:
 When asked to suggest, name, or recommend stocks, NEVER just list the same boring mega-caps everyone already knows (AAPL, MSFT, GOOGL, AMZN, TSLA, etc.). Anyone can name those. Instead:

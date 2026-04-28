@@ -590,8 +590,8 @@ async def _eod_guardian():
 
             # Only run on weekdays during EOD window (3:00-4:00 PM ET = 2:00-3:00 PM CT)
             if now_et.weekday() < 5:
-                eod_start = now_et.replace(hour=15, minute=0, second=0, microsecond=0)
-                eod_end = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
+                eod_start = now_et.replace(hour=15, minute=30, second=0, microsecond=0)  # 2:30 PM CT
+                eod_end = now_et.replace(hour=16, minute=0, second=0, microsecond=0)    # 3:00 PM CT
 
                 if eod_start <= now_et <= eod_end:
                     positions = engine.alpaca_positions()
