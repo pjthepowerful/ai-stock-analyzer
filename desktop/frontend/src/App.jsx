@@ -23,6 +23,9 @@ function App() {
   const [selectedPos, setSelectedPos] = useState(null)
   const [loading, setLoading] = useState(true)
   const [toasts, setToasts] = useState([])
+  const [view, setView] = useState('chat') // 'chat' or 'dashboard'
+  const [perf, setPerf] = useState(null)
+  const [sideOpen, setSideOpen] = useState(window.innerWidth > 768)
 
   const messagesEnd = useRef(null)
   const wsRef = useRef(null)
@@ -134,6 +137,12 @@ function App() {
 
   const send = () => sendMessage(input.trim())
   const toggleAutopilot = () => sendMessage(autopilot ? 'stop' : 'autopilot')
+  const loadDashboard = async () => {
+    try {
+      const res = await f(API + '/api/performance').then(r => r.json())
+      if (res.ok) setPerf(res)
+    } catch (e) {}
+  }
   const quickAction = (t) => { setInput(t); setTimeout(() => inputRef.current?.focus(), 50) }
   const getGreeting = () => { var h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' }
 
@@ -155,9 +164,16 @@ function App() {
       </div>
 
       {/* Sidebar */}
-      <aside className="side">
+      <aside className={'side' + (sideOpen ? '' : ' side-hidden')}>
         <div className="side-head">
           <div className="brand"><div className="p-icon">P</div><div><div className="p-name">Paula</div></div></div>
+          <button className="side-close" onClick={() => setSideOpen(false)}>✕</button>
+        </div>
+
+        {/* View switcher */}
+        <div className="view-sw">
+          <button className={'vsw' + (view === 'chat' ? ' vsw-on' : '')} onClick={() => setView('chat')}>Chat</button>
+          <button className={'vsw' + (view === 'dashboard' ? ' vsw-on' : '')} onClick={() => { setView('dashboard'); loadDashboard() }}>Dashboard</button>
         </div>
 
         {/* P&L */}
@@ -209,6 +225,58 @@ function App() {
 
       {/* Main */}
       <main className="main">
+        {/* Mobile hamburger */}
+        {!sideOpen && <button className="hamburger" onClick={() => setSideOpen(true)}>☰</button>}
+
+        {view === 'dashboard' ? (
+          /* ── Dashboard View ── */
+          <div className="dash">
+            <h2 className="dash-title">Performance</h2>
+            {perf ? (
+              <div className="dash-grid">
+                <div className="dash-card">
+                  <span className="dc-label">Total Trades</span>
+                  <span className="dc-val">{perf.total_trades}</span>
+                </div>
+                <div className="dash-card">
+                  <span className="dc-label">Current Params</span>
+                  <div className="dc-params">
+                    {perf.current_params && Object.entries(perf.current_params).map(([k, v]) => (
+                      <div key={k} className="dc-param"><span>{k}</span><span>{typeof v === 'number' ? (v < 1 && v > 0 ? (v * 100).toFixed(1) + '%' : v) : String(v)}</span></div>
+                    ))}
+                  </div>
+                </div>
+                <div className="dash-card dc-wide">
+                  <span className="dc-label">Auto-Tune History</span>
+                  <div className="dc-history">
+                    {perf.tune_history && perf.tune_history.length > 0 ? perf.tune_history.slice().reverse().map((h, i) => (
+                      <div key={i} className="dc-tune">
+                        <span className="dc-date">{h.date}</span>
+                        <span className={'dc-pnl ' + ((h.stats?.pnl || 0) >= 0 ? 'up' : 'dn')}>{(h.stats?.pnl >= 0 ? '+' : '') + '$' + Math.abs(h.stats?.pnl || 0).toFixed(0)}</span>
+                        <span className="dc-wr">{h.stats?.wins}W/{h.stats?.losses}L</span>
+                        <div className="dc-changes">{h.changes?.map((c, j) => <div key={j}>{c}</div>)}</div>
+                      </div>
+                    )) : <div className="no-pos">No tune history yet</div>}
+                  </div>
+                </div>
+                <div className="dash-card dc-wide">
+                  <span className="dc-label">Recent Trades</span>
+                  <div className="dc-trades">
+                    {perf.recent_trades && perf.recent_trades.length > 0 ? perf.recent_trades.slice().reverse().map((t, i) => (
+                      <div key={i} className="dc-trade">
+                        <span className={'dc-action ' + (t.action === 'buy' ? 'up' : 'dn')}>{t.action?.toUpperCase()}</span>
+                        <span className="dc-ticker">{t.ticker}</span>
+                        <span className="dc-time">{t.time?.slice(11, 16)}</span>
+                      </div>
+                    )) : <div className="no-pos">No trades logged yet</div>}
+                  </div>
+                </div>
+              </div>
+            ) : <div className="no-pos">Loading dashboard...</div>}
+          </div>
+        ) : (
+          /* ── Chat View ── */
+          <>
         {selectedPos && (() => {
           var p = positions.find(x => x.ticker === selectedPos)
           if (!p) return null
@@ -282,6 +350,8 @@ function App() {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
           </button>
         </div></div>
+          </>
+        )}
       </main>
     </div>
   )

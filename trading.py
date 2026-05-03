@@ -2997,14 +2997,18 @@ def update_trailing_stops(positions: list[dict], log: list) -> list[str]:
                         pass
                 continue
 
-            # Only trail stops on positions that are more profitable
-            if pnl_pct <= 1.5:
+            # Trail stops once position is profitable enough
+            is_short = pos.get("side") == "short"
+
+            # For longs: trail when up 0.8%+. For shorts: trail when down 0.8%+
+            if not is_short and pnl_pct < 0.8:
+                continue
+            if is_short and pnl_pct > -0.8:
                 continue
 
             # Get intraday 5min bars for tighter trailing
             hist = yf.Ticker(ticker).history(period="1d", interval="5m")
             if hist is None or hist.empty or len(hist) < 14:
-                # Fallback to daily
                 hist = yf.Ticker(ticker).history(period="1mo")
                 if hist is None or hist.empty or len(hist) < 14:
                     continue
@@ -3020,44 +3024,73 @@ def update_trailing_stops(positions: list[dict], log: list) -> list[str]:
             ], axis=1).max(axis=1)
             atr = float(tr.rolling(14).mean().iloc[-1])
 
-            # Highest price in recent bars
-            recent_high = float(close.tail(12).max())
+            if not is_short:
+                # LONG: trail stop below highest recent price
+                recent_high = float(close.tail(12).max())
+                new_stop = round(recent_high - (2.5 * atr), 2)
+                # Floor: at least 0.5% profit locked in
+                min_lock = round(entry * 1.005, 2)
+                new_stop = max(new_stop, min_lock)
 
-            # New trailing stop: highest recent price minus 2x intraday ATR
-            new_stop = round(recent_high - (2.0 * atr), 2)
+                if new_stop > entry:
+                    # Cancel existing stops and place new one
+                    orders = alpaca_orders(status="open", limit=20)
+                    for o in orders:
+                        if o["symbol"] == ticker and o["type"] in ("stop", "stop_limit"):
+                            try:
+                                requests.delete(f"{ALPACA_BASE}/v2/orders/{o['id']}",
+                                                headers=_alpaca_headers(), timeout=5)
+                            except Exception:
+                                pass
 
-            # Only move stop UP, never down. And only if it's above entry (lock in profit)
-            if new_stop > entry and new_stop > entry * 1.003:  # lock in at 0.3% profit
-                # Cancel existing orders and place new stop
-                # First check for existing stop orders
-                orders = alpaca_orders(status="open", limit=20)
-                for o in orders:
-                    if o["symbol"] == ticker and o["type"] in ("stop", "stop_limit"):
-                        # Cancel old stop
-                        try:
-                            requests.delete(f"{ALPACA_BASE}/v2/orders/{o['id']}",
-                                            headers=_alpaca_headers(), timeout=5)
-                        except Exception:
-                            pass
+                    stop_order = {
+                        "symbol": ticker,
+                        "qty": str(int(pos["qty"])),
+                        "side": "sell",
+                        "type": "stop",
+                        "stop_price": str(new_stop),
+                        "time_in_force": "day",
+                    }
+                    try:
+                        r = requests.post(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(),
+                                          json=stop_order, timeout=10)
+                        if r.status_code in (200, 201):
+                            actions.append(f"📈 Trailed stop on {ticker}: ${new_stop:.2f} (locking +${new_stop - entry:.2f}/share)")
+                    except Exception:
+                        pass
+            else:
+                # SHORT: trail stop above lowest recent price
+                recent_low = float(close.tail(12).min())
+                new_stop = round(recent_low + (2.5 * atr), 2)
+                # Floor: at least 0.5% profit locked in
+                max_lock = round(entry * 0.995, 2)
+                new_stop = min(new_stop, max_lock)
 
-                # Place new trailing stop as a stop market order
-                stop_order = {
-                    "symbol": ticker,
-                    "qty": str(int(pos["qty"])),
-                    "side": "sell",
-                    "type": "stop",
-                    "stop_price": str(new_stop),
-                    "time_in_force": "day",  # day trading — expires at close
-                }
-                try:
-                    r = requests.post(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(),
-                                      json=stop_order, timeout=10)
-                    if r.status_code in (200, 201):
-                        actions.append(f"📈 Trailed stop on {ticker}: ${entry:.2f} → ${new_stop:.2f} (locking in ${new_stop - entry:.2f}/share profit)")
-                    else:
-                        actions.append(f"⚠️ Failed to trail {ticker}: {r.json().get('message', '')[:60]}")
-                except Exception:
-                    pass
+                if new_stop < entry:
+                    orders = alpaca_orders(status="open", limit=20)
+                    for o in orders:
+                        if o["symbol"] == ticker and o["type"] in ("stop", "stop_limit"):
+                            try:
+                                requests.delete(f"{ALPACA_BASE}/v2/orders/{o['id']}",
+                                                headers=_alpaca_headers(), timeout=5)
+                            except Exception:
+                                pass
+
+                    stop_order = {
+                        "symbol": ticker,
+                        "qty": str(int(abs(pos["qty"]))),
+                        "side": "buy",
+                        "type": "stop",
+                        "stop_price": str(new_stop),
+                        "time_in_force": "day",
+                    }
+                    try:
+                        r = requests.post(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(),
+                                          json=stop_order, timeout=10)
+                        if r.status_code in (200, 201):
+                            actions.append(f"📈 Trailed stop on {ticker} (short): ${new_stop:.2f} (locking +${entry - new_stop:.2f}/share)")
+                    except Exception:
+                        pass
         except Exception:
             continue
 
@@ -3912,38 +3945,14 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             "NTAP","SMCI","TRMB","DPZ","BALL","CFG","HBAN","RF","KEY","CINF",
             "LUV","DAL","UAL","AAL","ALK","JBLU",
             "EQT","RRC","AR","SWN","CTRA",
-            # ── Mid-cap growth ──
+            # ── Mid-cap growth (liquid, established) ──
             "AXON","HIMS","CAVA","DUOL","CELH","ELF","ONON","TOST","BROS","DDOG",
-            "DAVA","HUBS","ESTC","FROG","MANH","ROKU","TTD","SNAP","PINS","MTCH",
-            "CHWY","ETSY","W","OPEN","ZG","CVNA","DASH","GRAB","SE",
-            # ── Small-cap / speculative ──
-            "UPST","AFRM","RKLB","SOUN","ASTS","LUNR","JOBY","BBAI","AEHR",
-            "MARA","RIOT","CLSK","IREN","BTBT","CIFR","HUT","CORZ",
-            "QS","MVST","BLDP","PLUG","FCEL","BE","CHPT","EVGO","BLNK",
-            "IONQ","RGTI","QUBT","ARQQ",
-            "SOFI","HOOD","LMND","ROOT","OSCR","RELY",
-            "PLTR","SMCI","ARM",
-            # ── Sector plays ──
-            "FSLR","ENPH","CEG","VST","SMR","OKLO","NNE","LEU",
-            "LMT","RTX","KTOS","RCAT","AVAV","BWXT","HII","NOC","GD","LHX",
-            "COIN","MSTR","MARA","RIOT","CLSK",
-            "NET","ZS","CRWD","PANW","FTNT","CYBR","QLYS","TENB","RPD","S",
-            "ARGX","MRNA","BNTX","REGN","VRTX","ALNY","BMRN","RARE","NBIX","PCVX",
-            # ── Dividend / value ──
-            "O","STAG","NNN","AGNC","NLY","ARCC","MAIN","TPVG",
-            "EPD","ET","WES","MPLX","PAA","OKE","KMI","WMB",
-            "VALE","FCX","NUE","CLF","STLD","RS","ATI",
-            "MOS","NTR","CF","FMC","IPI",
-            # ── International ADRs ──
-            "BABA","JD","PDD","BIDU","NIO","XPEV","LI","TME","BILI","IQ",
-            "TSM","ASML","SAP","TM","SONY","NVO","AZN","SNY","GSK","DEO",
-            "MELI","NU","GLOB","DLO","STNE",
-            "SE","GRAB","CPNG","BEKE",
+            "HUBS","FROG","MANH","TTD","DASH","CVNA",
         ]
         fallback = [t for t in FULL_UNIVERSE if t not in held_tickers and t not in set(candidates)]
         random.shuffle(fallback)
-        candidates.extend(fallback[:200])
-        log.append(f"Added full universe fallback → total {len(candidates)} candidates")
+        candidates.extend(fallback[:60])
+        log.append(f"Large-cap universe → {len(candidates)} candidates")
 
     # ── SECTOR ROTATION FILTER — prioritize hot sectors ──
     hot_sectors = set()
