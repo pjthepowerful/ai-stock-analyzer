@@ -185,9 +185,13 @@ function App() {
           <div className="chat">
             {messages.length===0&&!sending&&(
               <div className="welcome">
-                <h1><span className="w-hi">Hey {name},</span> what's the move?</h1>
-                <div className="w-pills">{[['Analyze the market','market regime'],['Trending tickers','top gainers'],['Recap trades','How did we do today?'],['Trade ideas','What should I buy?']].map(([l,c],i)=>(
-                  <button key={i} className="pill" onClick={()=>sendMessage(c)}>{l}</button>))}</div>
+                <h1><span className="w-hi">Hey {name},</span> {(() => {
+                  const lines = ["what's the play today?", "ready to trade?", "let's find some setups.", "what are we watching?", "let's get to work.", "what's on your radar?", "let's make some moves."]
+                  return lines[Math.floor(Math.random() * lines.length)]
+                })()}</h1>
+                <div className="w-pills">
+                  {[['Market overview','market regime'],['Top movers','top gainers'],['Today\'s recap','How did we do today?'],['Find trades','What should I buy?'],['Analyze a stock','Analyze ']].map(([l,c],i)=>(
+                    <button key={i} className="pill" onClick={()=>{if(c==='Analyze '){setInput(c);inputRef.current?.focus()}else sendMessage(c)}}>{l}</button>))}</div>
               </div>)}
             {messages.map((m,i)=>(
               <div key={i} className={'msg msg-'+m.role}>
