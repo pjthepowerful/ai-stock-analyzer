@@ -93,6 +93,7 @@ from trading import (
 
     # Autopilot
     run_autopilot,
+    premarket_scan,
 
     # Market
     check_market_regime,

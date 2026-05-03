@@ -262,8 +262,8 @@ async def performance():
     pnl_history = []
     try:
         hist = engine.alpaca_portfolio_history()
-        if hist:
-            pnl_history = hist
+        if hist and hist.get("equity"):
+            pnl_history = [{"equity": e, "ts": t} for t, e in zip(hist["timestamps"], hist["equity"]) if e and e > 0]
     except Exception:
         pass
 
@@ -677,6 +677,19 @@ async def _autopilot_loop():
     while True:
         try:
             is_open, status_msg = engine._market_is_open()
+
+            # ── Pre-market scan: run once between 8:15-8:30 AM CT ──
+            et = ZoneInfo("US/Eastern")
+            now_et = datetime.now(et)
+            if now_et.weekday() < 5 and now_et.hour == 9 and 15 <= now_et.minute <= 29:
+                today = now_et.strftime("%Y-%m-%d")
+                if not hasattr(engine.st.session_state, "premarket_done") or engine.st.session_state.get("premarket_done") != today:
+                    try:
+                        loop = asyncio.get_event_loop()
+                        pm_result = await loop.run_in_executor(None, engine.premarket_scan)
+                        await broadcast("autopilot", {"status": "scanned", "log": pm_result.get("log", [])})
+                    except Exception:
+                        pass
 
             if not is_open:
                 await broadcast("autopilot", {"status": "paused", "reason": status_msg})

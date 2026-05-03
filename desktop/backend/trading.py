@@ -3383,6 +3383,81 @@ def run_backtest(years: int = 2) -> dict:
         "final_capital": round(capital, 2),
     }
 
+def premarket_scan() -> dict:
+    """Run at 8:15 AM CT — build today's watchlist BEFORE market opens."""
+    import yfinance as yf
+    log = ["🌅 **Pre-Market Scan** — building today's watchlist"]
+
+    # Get pre-market movers from Polygon
+    all_snaps = polygon_all_snapshots() or []
+    watchlist = []
+
+    if all_snaps:
+        viable = [s for s in all_snaps if s.get("Price", 0) > 10
+                  and s.get("Volume", 0) > 300_000
+                  and abs(s.get("Chg%", 0)) > 1.0]
+
+        gappers = sorted(viable, key=lambda x: abs(x.get("Chg%", 0)), reverse=True)[:20]
+        for s in gappers:
+            ticker = s.get("Ticker", "")
+            if ticker and not _has_earnings_today(ticker):
+                watchlist.append(ticker)
+                arrow = "▲" if s.get("Chg%", 0) > 0 else "▼"
+                log.append(f"  {arrow} {ticker} {s.get('Chg%', 0):+.1f}% · Vol: {s.get('Volume', 0):,.0f}")
+
+    # Add consistent large-cap movers
+    for ticker in NASDAQ_100[:15]:
+        if ticker not in watchlist:
+            watchlist.append(ticker)
+
+    log.append(f"\n📋 Watchlist: {len(watchlist)} stocks ready for open")
+
+    # Store in session state
+    st.session_state["premarket_watchlist"] = watchlist
+    st.session_state["premarket_done"] = datetime.now(ZoneInfo("US/Eastern")).strftime("%Y-%m-%d")
+
+    return {"ok": True, "log": log, "watchlist": watchlist}
+
+
+def _has_earnings_today(ticker: str) -> bool:
+    """Check if a stock has earnings today — never trade on earnings day."""
+    try:
+        import yfinance as yf
+        cal = yf.Ticker(ticker).calendar
+        if cal is not None:
+            # yfinance returns earnings date in various formats
+            if hasattr(cal, 'get'):
+                earnings_date = cal.get("Earnings Date")
+            elif hasattr(cal, 'iloc'):
+                earnings_date = cal.iloc[0] if len(cal) > 0 else None
+            else:
+                return False
+
+            today = datetime.now(ZoneInfo("US/Eastern")).strftime("%Y-%m-%d")
+            if earnings_date is not None:
+                if isinstance(earnings_date, list):
+                    return any(str(d)[:10] == today for d in earnings_date)
+                return str(earnings_date)[:10] == today
+    except Exception:
+        pass
+    return False
+
+
+def _check_sector_correlation(ticker: str, positions: list, max_per_sector: int = 1) -> bool:
+    """Returns True if adding this ticker would exceed sector limit."""
+    new_sector = TICKER_SECTOR.get(ticker)
+    if not new_sector:
+        return False  # Unknown sector — allow it
+
+    sector_count = 0
+    for pos in positions:
+        pos_sector = TICKER_SECTOR.get(pos.get("ticker", ""))
+        if pos_sector == new_sector:
+            sector_count += 1
+
+    return sector_count >= max_per_sector
+
+
 def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dict:
     """
     Full autopilot cycle:
@@ -3999,6 +4074,10 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             if itech.get("vol_ratio", 1) < 0.3:
                 continue  # dead volume
 
+            # ── EARNINGS FILTER — never trade on earnings day ──
+            if _has_earnings_today(ticker):
+                continue
+
             # ── MOMENTUM FILTER — stock must be moving today ──
             day_change = data.get("change_pct", 0)
             # Skip stocks barely moving (between -0.3% and +0.3%) — no momentum
@@ -4131,6 +4210,11 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             continue
 
         # Scale risk down when VIX is elevated
+        # ── SECTOR CORRELATION — max 1 position per sector ──
+        if _check_sector_correlation(ticker, positions):
+            log.append(f"⏭️ Skipped {ticker} — already have a position in same sector")
+            continue
+
         # ── SMART POSITION SIZING — scale with conviction ──
         risk_mult = 1.0
         if vix_cautious:

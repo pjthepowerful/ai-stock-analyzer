@@ -234,6 +234,13 @@ function App() {
             <h2 className="dash-title">Performance</h2>
             {perf ? (
               <div className="dash-grid">
+                {/* Equity Curve */}
+                {perf.pnl_history && perf.pnl_history.length > 1 && (
+                  <div className="dash-card dc-wide">
+                    <span className="dc-label">Equity Curve</span>
+                    <EquityChart data={perf.pnl_history} />
+                  </div>
+                )}
                 <div className="dash-card">
                   <span className="dc-label">Total Trades</span>
                   <span className="dc-val">{perf.total_trades}</span>
@@ -354,6 +361,33 @@ function App() {
         )}
       </main>
     </div>
+  )
+}
+
+function EquityChart({ data }) {
+  if (!data || data.length < 2) return null
+  const vals = data.map(d => d.equity || d.value || 0).filter(v => v > 0)
+  if (vals.length < 2) return null
+  const min = Math.min(...vals), max = Math.max(...vals)
+  const range = max - min || 1
+  const w = 500, h = 120, pad = 20
+  const points = vals.map((v, i) => {
+    const x = pad + (i / (vals.length - 1)) * (w - pad * 2)
+    const y = pad + (1 - (v - min) / range) * (h - pad * 2)
+    return `${x},${y}`
+  }).join(' ')
+  const isUp = vals[vals.length - 1] >= vals[0]
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} style={{width:'100%',height:'auto'}}>
+      <defs><linearGradient id="eq" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor={isUp ? '#00dda0' : '#f04060'} stopOpacity="0.2"/>
+        <stop offset="100%" stopColor={isUp ? '#00dda0' : '#f04060'} stopOpacity="0"/>
+      </linearGradient></defs>
+      <polygon points={`${pad},${h - pad} ${points} ${w - pad},${h - pad}`} fill="url(#eq)" />
+      <polyline points={points} fill="none" stroke={isUp ? '#00dda0' : '#f04060'} strokeWidth="2" />
+      <text x={pad} y={h - 4} fill="#4d4d66" fontSize="9" fontFamily="JetBrains Mono">${vals[0].toLocaleString(undefined,{maximumFractionDigits:0})}</text>
+      <text x={w - pad} y={h - 4} fill={isUp ? '#00dda0' : '#f04060'} fontSize="9" fontFamily="JetBrains Mono" textAnchor="end">${vals[vals.length-1].toLocaleString(undefined,{maximumFractionDigits:0})}</text>
+    </svg>
   )
 }
 
