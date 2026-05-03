@@ -223,7 +223,7 @@ function Typewriter() {
         setDisplay(phrase.slice(0, s.charIdx))
         if (s.charIdx >= phrase.length) {
           s.paused = true
-          setTimeout(() => { s.paused = false; s.deleting = true }, 3500)
+          setTimeout(() => { s.paused = false; s.deleting = true }, 8000)
         }
       } else {
         s.charIdx--
