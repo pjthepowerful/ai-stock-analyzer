@@ -23,9 +23,21 @@ function App() {
   const [selectedPos, setSelectedPos] = useState(null)
   const [loading, setLoading] = useState(true)
   const [toasts, setToasts] = useState([])
-  const [view, setView] = useState('chat') // 'chat' or 'dashboard'
+  const [view, setView] = useState('chat') // 'chat', 'dashboard', 'settings'
   const [perf, setPerf] = useState(null)
   const [sideOpen, setSideOpen] = useState(window.innerWidth > 768)
+  const [settings, setSettings] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('paula-settings')) || {} } catch { return {} }
+  })
+  const settingsRef = useRef(settings)
+  useEffect(() => { settingsRef.current = settings }, [settings])
+  const updateSetting = (key, val) => {
+    const next = { ...settings, [key]: val }
+    setSettings(next)
+    localStorage.setItem('paula-settings', JSON.stringify(next))
+  }
+  const snd = (fn) => { if (settingsRef.current.sounds !== false) fn() }
+  const toast = (msg, type) => { if (settingsRef.current.toasts !== false) addToast(msg, type) }
 
   const messagesEnd = useRef(null)
   const wsRef = useRef(null)
@@ -53,18 +65,18 @@ function App() {
             if (data.status === 'started') { setAutopilot(true); addToast('Autopilot activated', 'buy') }
             if (data.status === 'stopped') { setAutopilot(false); addToast('Autopilot deactivated', 'sell') }
             if (data.log) {
-              playNotify()
+              if (settingsRef.current.scanSound !== false) playNotify()
               setMessages(prev => [...prev, { role: 'assistant', content: '**Autopilot Scan**\n\n' + data.log.join('\n\n'), type: 'autopilot' }])
             }
           }
           if (event === 'trade') {
             const act = data.action
             const ticker = data.ticker || data.symbol || '???'
-            if (act === 'buy') { playBuy(); addToast(`Bought ${ticker}`, 'buy') }
-            else if (act === 'sell') { playSell(); addToast(`Sold ${ticker}`, 'sell') }
-            else if (act === 'short') { playSell(); addToast(`Shorted ${ticker}`, 'sell') }
-            else if (act === 'cover') { playProfit(); addToast(`Covered ${ticker}`, 'buy') }
-            else if (act === 'close_all') { playAlert(); addToast('All positions closed', 'warn') }
+            if (act === 'buy') { snd(playBuy); toast(`Bought ${ticker}`, 'buy') }
+            else if (act === 'sell') { snd(playSell); toast(`Sold ${ticker}`, 'sell') }
+            else if (act === 'short') { snd(playSell); toast(`Shorted ${ticker}`, 'sell') }
+            else if (act === 'cover') { snd(playProfit); toast(`Covered ${ticker}`, 'buy') }
+            else if (act === 'close_all') { snd(playAlert); toast('All positions closed', 'warn') }
             refreshData()
           }
         } catch (err) {}
@@ -117,14 +129,14 @@ function App() {
           ticker: data.ticker || null, signal: data.trade_signal || null,
         }])
         if (data.type === 'trade' && data.message) {
-          if (data.message.includes('Bought')) { playBuy(); addToast(data.message.slice(0, 60), 'buy') }
-          else if (data.message.includes('Sold') || data.message.includes('Shorted')) { playSell(); addToast(data.message.slice(0, 60), 'sell') }
-          else if (data.message.includes('Covered')) { playProfit(); addToast(data.message.slice(0, 60), 'buy') }
+          if (data.message.includes('Bought')) { snd(playBuy); toast(data.message.slice(0, 60), 'buy') }
+          else if (data.message.includes('Sold') || data.message.includes('Shorted')) { snd(playSell); toast(data.message.slice(0, 60), 'sell') }
+          else if (data.message.includes('Covered')) { snd(playProfit); toast(data.message.slice(0, 60), 'buy') }
           else if (data.message.includes('closed')) { addToast(data.message.slice(0, 60), 'warn') }
-        } else playTick()
+        } else snd(playTick)
         if (data.autopilot !== undefined) setAutopilot(data.autopilot)
       } else {
-        playAlert()
+        snd(playAlert)
         setMessages(prev => [...prev, { role: 'assistant', content: 'Error: ' + (data.error || 'Unknown') }])
       }
       refreshData()
@@ -173,7 +185,8 @@ function App() {
         {/* View switcher */}
         <div className="view-sw">
           <button className={'vsw' + (view === 'chat' ? ' vsw-on' : '')} onClick={() => setView('chat')}>Chat</button>
-          <button className={'vsw' + (view === 'dashboard' ? ' vsw-on' : '')} onClick={() => { setView('dashboard'); loadDashboard() }}>Dashboard</button>
+          <button className={'vsw' + (view === 'dashboard' ? ' vsw-on' : '')} onClick={() => { setView('dashboard'); loadDashboard() }}>Stats</button>
+          <button className={'vsw' + (view === 'settings' ? ' vsw-on' : '')} onClick={() => setView('settings')}>Settings</button>
         </div>
 
         {/* P&L */}
@@ -281,6 +294,65 @@ function App() {
               </div>
             ) : <div className="no-pos">Loading dashboard...</div>}
           </div>
+        ) : view === 'settings' ? (
+          /* ── Settings View ── */
+          <div className="dash">
+            <h2 className="dash-title">Settings</h2>
+            <div className="dash-grid">
+              <div className="dash-card dc-wide">
+                <span className="dc-label">Sounds</span>
+                <div className="set-row">
+                  <span>Trade sounds</span>
+                  <button className={'set-toggle ' + (settings.sounds !== false ? 'set-on' : '')} onClick={() => updateSetting('sounds', !(settings.sounds !== false))}>
+                    {settings.sounds !== false ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+                <div className="set-row">
+                  <span>Scan notification sound</span>
+                  <button className={'set-toggle ' + (settings.scanSound !== false ? 'set-on' : '')} onClick={() => updateSetting('scanSound', !(settings.scanSound !== false))}>
+                    {settings.scanSound !== false ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+              </div>
+              <div className="dash-card dc-wide">
+                <span className="dc-label">Notifications</span>
+                <div className="set-row">
+                  <span>Phone push (ntfy)</span>
+                  <button className={'set-toggle ' + (settings.pushNotif !== false ? 'set-on' : '')} onClick={() => updateSetting('pushNotif', !(settings.pushNotif !== false))}>
+                    {settings.pushNotif !== false ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+                <div className="set-row">
+                  <span>Toast popups</span>
+                  <button className={'set-toggle ' + (settings.toasts !== false ? 'set-on' : '')} onClick={() => updateSetting('toasts', !(settings.toasts !== false))}>
+                    {settings.toasts !== false ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+              </div>
+              <div className="dash-card dc-wide">
+                <span className="dc-label">Daily Recap Email</span>
+                <div className="set-row">
+                  <span>Send daily recap at 3 PM CT</span>
+                  <button className={'set-toggle ' + (settings.dailyEmail ? 'set-on' : '')} onClick={() => updateSetting('dailyEmail', !settings.dailyEmail)}>
+                    {settings.dailyEmail ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+                {settings.dailyEmail && (
+                  <div className="set-row">
+                    <span>ntfy topic</span>
+                    <input className="set-input" value={settings.ntfyTopic || 'paula-trades'} onChange={e => updateSetting('ntfyTopic', e.target.value)} placeholder="paula-trades" />
+                  </div>
+                )}
+              </div>
+              <div className="dash-card dc-wide">
+                <span className="dc-label">Display</span>
+                <div className="set-row">
+                  <span>Your name</span>
+                  <input className="set-input" value={settings.userName || 'PJ'} onChange={e => updateSetting('userName', e.target.value)} placeholder="PJ" />
+                </div>
+              </div>
+            </div>
+          </div>
         ) : (
           /* ── Chat View ── */
           <>
@@ -316,9 +388,9 @@ function App() {
               <div className="w-text">
                 <h1>{(() => {
                   var h = new Date().getHours()
-                  if (h < 12) return <><span className="w-gr">Good morning,</span> PJ</>
-                  if (h < 17) return <><span className="w-gr">Good afternoon,</span> PJ</>
-                  return <><span className="w-gr">Good evening,</span> PJ</>
+                  if (h < 12) return <><span className="w-gr">Good morning,</span> {settings.userName || 'PJ'}</>
+                  if (h < 17) return <><span className="w-gr">Good afternoon,</span> {settings.userName || 'PJ'}</>
+                  return <><span className="w-gr">Good evening,</span> {settings.userName || 'PJ'}</>
                 })()}</h1>
               </div>
               <div className="w-prompts">
