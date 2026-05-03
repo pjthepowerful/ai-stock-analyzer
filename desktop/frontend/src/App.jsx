@@ -23,6 +23,63 @@ function App() {
   const [view, setView] = useState('chat')
   const [perf, setPerf] = useState(null)
   const [sideOpen, setSideOpen] = useState(window.innerWidth > 768)
+
+  // Chat history
+  const [chats, setChats] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('paula-chats')) || [] } catch { return [] }
+  })
+  const [chatId, setChatId] = useState(() => {
+    try { return localStorage.getItem('paula-current-chat') || null } catch { return null }
+  })
+  const saveChats = (updated) => { setChats(updated); localStorage.setItem('paula-chats', JSON.stringify(updated)) }
+  const newChat = () => {
+    const id = Date.now().toString()
+    const chat = { id, title: 'New chat', messages: [], created: new Date().toISOString() }
+    const updated = [chat, ...chats]
+    saveChats(updated)
+    setChatId(id)
+    setMessages([])
+    localStorage.setItem('paula-current-chat', id)
+    f(API + '/api/chat/clear', { method: 'POST' }).catch(() => {})
+  }
+  const switchChat = (id) => {
+    // Save current chat first
+    if (chatId && messages.length > 0) {
+      const updated = chats.map(c => c.id === chatId ? { ...c, messages } : c)
+      saveChats(updated)
+    }
+    setChatId(id)
+    localStorage.setItem('paula-current-chat', id)
+    const chat = chats.find(c => c.id === id)
+    setMessages(chat ? chat.messages : [])
+    f(API + '/api/chat/clear', { method: 'POST' }).catch(() => {})
+  }
+  const deleteChat = (id) => {
+    const updated = chats.filter(c => c.id !== id)
+    saveChats(updated)
+    if (chatId === id) {
+      if (updated.length > 0) { switchChat(updated[0].id) }
+      else { setChatId(null); setMessages([]) }
+    }
+  }
+  // Auto-save messages to current chat
+  useEffect(() => {
+    if (chatId && messages.length > 0) {
+      const updated = chats.map(c => {
+        if (c.id !== chatId) return c
+        // Auto-title from first user message
+        const firstUser = messages.find(m => m.role === 'user')
+        const title = firstUser ? firstUser.content.slice(0, 40) : c.title
+        return { ...c, messages, title }
+      })
+      saveChats(updated)
+    }
+  }, [messages])
+  const [selectedPos, setSelectedPos] = useState(null)
+  const [toasts, setToasts] = useState([])
+  const [view, setView] = useState('chat')
+  const [perf, setPerf] = useState(null)
+  const [sideOpen, setSideOpen] = useState(window.innerWidth > 768)
   const [settings, setSettings] = useState(() => {
     try { return JSON.parse(localStorage.getItem('paula-settings')) || {} } catch { return {} }
   })
@@ -88,11 +145,29 @@ function App() {
     } catch {}
   }, [])
 
-  useEffect(() => { f(API+'/api/chat/clear',{method:'POST'}).catch(()=>{}); refreshData(); const i=setInterval(refreshData,5000); return()=>clearInterval(i) }, [refreshData])
+  useEffect(() => {
+    // Load current chat messages on mount
+    if (chatId) {
+      const chat = chats.find(c => c.id === chatId)
+      if (chat) setMessages(chat.messages)
+    }
+    refreshData()
+    const i = setInterval(refreshData, 5000)
+    return () => clearInterval(i)
+  }, [refreshData])
   useEffect(() => { messagesEnd.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
   const sendMessage = async (msg) => {
     if (!msg || sending) return
+    // Auto-create chat if none selected
+    if (!chatId) {
+      const id = Date.now().toString()
+      const chat = { id, title: msg.slice(0, 40), messages: [], created: new Date().toISOString() }
+      const updated = [chat, ...chats]
+      saveChats(updated)
+      setChatId(id)
+      localStorage.setItem('paula-current-chat', id)
+    }
     setMessages(prev => [...prev, { role: 'user', content: msg }]); setInput(''); setSending(true)
     try {
       const res = await f(API+'/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg}) })
@@ -137,6 +212,20 @@ function App() {
           <button key={v} className={'tab'+(view===v?' tab-on':'')} onClick={()=>{setView(v);if(v==='stats')loadDashboard()}}>
             {v==='chat'?'Chat':v==='stats'?'Stats':'Settings'}
           </button>))}</nav>
+
+        {/* Chat history */}
+        {view==='chat'&&<div className="sb-chats">
+          <button className="new-chat" onClick={newChat}>+ New Chat</button>
+          <div className="chat-list">
+            {chats.slice(0, 20).map(c => (
+              <div key={c.id} className={'chat-item' + (chatId === c.id ? ' ci-active' : '')} onClick={() => switchChat(c.id)}>
+                <span className="ci-title">{c.title}</span>
+                <button className="ci-del" onClick={(e) => { e.stopPropagation(); deleteChat(c.id) }}>×</button>
+              </div>
+            ))}
+          </div>
+        </div>}
+
         {account&&<div className="sb-acct">
           <div className="acct-main">
             <span className="acct-eq">${account.equity.toLocaleString(undefined,{maximumFractionDigits:0})}</span>

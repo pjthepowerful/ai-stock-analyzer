@@ -12,12 +12,13 @@ from zoneinfo import ZoneInfo
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # ── Import the trading engine ──
 import engine
+import auth
 
 # ── State ──
 autopilot_task: Optional[asyncio.Task] = None
@@ -210,6 +211,68 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 # ── REST Endpoints ──
+
+# ── Auth endpoints ──
+
+class AuthRequest(BaseModel):
+    username: str
+    password: str
+    email: str = None
+
+class SettingsRequest(BaseModel):
+    alpaca_key: str = ""
+    alpaca_secret: str = ""
+    groq_key: str = ""
+    polygon_key: str = ""
+    display_name: str = ""
+    settings: dict = {}
+
+def _get_user(authorization: str = Header(None)):
+    """Extract user from Authorization header."""
+    if not authorization:
+        return None
+    token = authorization.replace("Bearer ", "")
+    return auth.get_user(token)
+
+@app.post("/api/auth/signup")
+async def signup(req: AuthRequest):
+    result = auth.signup(req.username, req.password, req.email)
+    return result
+
+@app.post("/api/auth/login")
+async def login(req: AuthRequest):
+    result = auth.login(req.username, req.password)
+    return result
+
+@app.get("/api/auth/me")
+async def me(authorization: str = Header(None)):
+    user = _get_user(authorization)
+    if not user:
+        return {"ok": False, "error": "Not authenticated"}
+    settings = auth.get_settings(user["id"])
+    return {"ok": True, "user": user, "settings": settings}
+
+@app.post("/api/auth/settings")
+async def save_user_settings(req: SettingsRequest, authorization: str = Header(None)):
+    user = _get_user(authorization)
+    if not user:
+        return {"ok": False, "error": "Not authenticated"}
+    result = auth.save_settings(user["id"], req.dict())
+    return result
+
+@app.get("/api/auth/chat-history")
+async def get_chat_hist(authorization: str = Header(None)):
+    user = _get_user(authorization)
+    if not user:
+        return {"ok": False, "error": "Not authenticated"}
+    history = auth.get_chat_history(user["id"])
+    return {"ok": True, "messages": history}
+
+@app.post("/api/auth/save-chat")
+async def save_chat_msg(authorization: str = Header(None)):
+    """Chat saving is handled automatically by the chat endpoint."""
+    return {"ok": True}
+
 
 @app.get("/api/health")
 async def health():
@@ -441,12 +504,17 @@ async def chart_data(ticker: str, period: str = "1y"):
 # ── Chat (AI response via Groq) ──
 
 @app.post("/api/chat")
-async def chat(msg: ChatMessage):
+async def chat(msg: ChatMessage, authorization: str = Header(None)):
     """Process a chat message through Paula's brain."""
     global autopilot_task
     user_msg = msg.message.strip()
     if not user_msg:
         return {"ok": False, "error": "Empty message"}
+
+    # Get user if authenticated
+    user = _get_user(authorization)
+    if user:
+        auth.save_chat(user["id"], "user", user_msg)
 
     chat_history.append({"role": "user", "content": user_msg})
 
@@ -486,6 +554,12 @@ async def chat(msg: ChatMessage):
         resp = await loop.run_in_executor(None, engine.ai_response, user_msg, None, chat_history, "US")
 
     chat_history.append({"role": "assistant", "content": resp})
+
+    # Save assistant response for logged-in users
+    if user:
+        auth.save_chat(user["id"], "assistant", resp,
+                      msg_type=result.get("type", "chat") if result else "chat",
+                      ticker=result.get("ticker") if result else None)
 
     response = {
         "ok": True,

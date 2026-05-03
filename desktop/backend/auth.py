@@ -1,288 +1,234 @@
 """
-Paula Auth — User accounts, API key management, JWT tokens.
-Uses SQLite for storage, bcrypt for passwords, Fernet for key encryption.
+Paula Auth System — SQLite + JWT + PBKDF2 hashing
+No bcrypt dependency — works on Python 3.14
 """
-
-import os
 import sqlite3
-import time
 import hashlib
 import secrets
-from datetime import datetime, timedelta
-from pathlib import Path
-
-from jose import jwt, JWTError
-from cryptography.fernet import Fernet
-
-# ── Config ──
-DB_PATH = Path(__file__).parent / "paula.db"
-JWT_SECRET = os.environ.get("JWT_SECRET", "paula-secret-change-me-in-production")
-JWT_ALGORITHM = "HS256"
-JWT_EXPIRE_HOURS = 72
-
-# Encryption key for API keys — derived from JWT_SECRET
-_key_seed = JWT_SECRET.encode().ljust(32, b'\0')[:32]
+import json
+import time
+import hmac
 import base64
-FERNET_KEY = base64.urlsafe_b64encode(_key_seed)
-fernet = Fernet(FERNET_KEY)
+import os
+from pathlib import Path
+from datetime import datetime, timedelta
 
-
-# ── Password hashing (hashlib + salt) ──
+DB_PATH = Path(__file__).parent / "paula.db"
+JWT_SECRET = os.environ.get("JWT_SECRET", secrets.token_hex(32))
+TOKEN_EXPIRY_DAYS = 30
 
 
 def _get_db():
-    conn = sqlite3.connect(str(DB_PATH))
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    return conn
+    db = sqlite3.connect(str(DB_PATH))
+    db.row_factory = sqlite3.Row
+    return db
 
 
 def init_db():
     """Create tables if they don't exist."""
-    conn = _get_db()
-    conn.executescript("""
+    db = _get_db()
+    db.executescript("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
-            email TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE,
             password_hash TEXT NOT NULL,
+            salt TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            last_login TEXT
+        );
+        CREATE TABLE IF NOT EXISTS user_settings (
+            user_id INTEGER PRIMARY KEY,
+            alpaca_key TEXT DEFAULT '',
+            alpaca_secret TEXT DEFAULT '',
+            groq_key TEXT DEFAULT '',
+            polygon_key TEXT DEFAULT '',
             display_name TEXT DEFAULT '',
-            created_at REAL DEFAULT (strftime('%s','now')),
-            last_login REAL DEFAULT 0,
-            is_admin INTEGER DEFAULT 0
+            settings_json TEXT DEFAULT '{}',
+            FOREIGN KEY (user_id) REFERENCES users(id)
         );
-
-        CREATE TABLE IF NOT EXISTS api_keys (
+        CREATE TABLE IF NOT EXISTS chat_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            provider TEXT NOT NULL DEFAULT 'alpaca_paper',
-            key_id_encrypted TEXT NOT NULL,
-            secret_encrypted TEXT NOT NULL,
-            label TEXT DEFAULT '',
-            is_active INTEGER DEFAULT 1,
-            created_at REAL DEFAULT (strftime('%s','now')),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-
-        CREATE TABLE IF NOT EXISTS watchlist (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            ticker TEXT NOT NULL,
-            added_at REAL DEFAULT (strftime('%s','now')),
-            notes TEXT DEFAULT '',
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            UNIQUE(user_id, ticker)
+            user_id INTEGER,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            msg_type TEXT DEFAULT 'chat',
+            ticker TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
         );
     """)
-    conn.commit()
-    conn.close()
+    db.commit()
+    db.close()
 
 
-# ── Password hashing ──
+def _hash_password(password: str, salt: str = None) -> tuple:
+    """Hash password with PBKDF2-SHA256. Returns (hash, salt)."""
+    if not salt:
+        salt = secrets.token_hex(16)
+    pw_hash = hashlib.pbkdf2_hmac(
+        'sha256', password.encode(), salt.encode(), 100_000
+    ).hex()
+    return pw_hash, salt
 
-def hash_password(password: str) -> str:
-    salt = secrets.token_hex(16)
-    hashed = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000).hex()
-    return f"{salt}${hashed}"
 
-def verify_password(password: str, stored: str) -> bool:
+def _make_jwt(payload: dict) -> str:
+    """Create a simple JWT token."""
+    header = base64.urlsafe_b64encode(json.dumps({"alg": "HS256", "typ": "JWT"}).encode()).decode().rstrip("=")
+    payload["exp"] = int(time.time()) + TOKEN_EXPIRY_DAYS * 86400
+    body = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+    sig = hmac.new(JWT_SECRET.encode(), f"{header}.{body}".encode(), hashlib.sha256).hexdigest()
+    return f"{header}.{body}.{sig}"
+
+
+def _verify_jwt(token: str) -> dict | None:
+    """Verify and decode a JWT token."""
     try:
-        salt, hashed = stored.split('$')
-        check = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000).hex()
-        return check == hashed
+        parts = token.split(".")
+        if len(parts) != 3:
+            return None
+        header, body, sig = parts
+        expected_sig = hmac.new(JWT_SECRET.encode(), f"{header}.{body}".encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected_sig):
+            return None
+        # Pad base64
+        body += "=" * (4 - len(body) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(body))
+        if payload.get("exp", 0) < time.time():
+            return None
+        return payload
     except Exception:
-        return False
-
-
-# ── JWT tokens ──
-
-def create_token(user_id: int, username: str) -> str:
-    expire = datetime.utcnow() + timedelta(hours=JWT_EXPIRE_HOURS)
-    return jwt.encode(
-        {"sub": str(user_id), "username": username, "exp": expire},
-        JWT_SECRET, algorithm=JWT_ALGORITHM
-    )
-
-def decode_token(token: str) -> dict | None:
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        return {"user_id": int(payload["sub"]), "username": payload["username"]}
-    except JWTError:
         return None
 
 
-# ── Encrypt/decrypt API keys ──
+def signup(username: str, password: str, email: str = None) -> dict:
+    """Create a new user."""
+    if not username or len(username) < 2:
+        return {"ok": False, "error": "Username must be at least 2 characters"}
+    if not password or len(password) < 4:
+        return {"ok": False, "error": "Password must be at least 4 characters"}
 
-def encrypt_key(plaintext: str) -> str:
-    return fernet.encrypt(plaintext.encode()).decode()
-
-def decrypt_key(encrypted: str) -> str:
-    return fernet.decrypt(encrypted.encode()).decode()
-
-
-# ── User CRUD ──
-
-def create_user(username: str, email: str, password: str, display_name: str = "") -> dict:
-    conn = _get_db()
+    pw_hash, salt = _hash_password(password)
+    db = _get_db()
     try:
-        conn.execute(
-            "INSERT INTO users (username, email, password_hash, display_name) VALUES (?, ?, ?, ?)",
-            (username.lower().strip(), email.lower().strip(), hash_password(password), display_name or username)
-        )
-        conn.commit()
-        user_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        conn.close()
-        return {"ok": True, "user_id": user_id}
-    except sqlite3.IntegrityError as e:
-        conn.close()
-        if "username" in str(e):
-            return {"ok": False, "error": "Username already taken"}
-        if "email" in str(e):
-            return {"ok": False, "error": "Email already registered"}
-        return {"ok": False, "error": str(e)}
-
-
-def login_user(username: str, password: str) -> dict:
-    conn = _get_db()
-    row = conn.execute(
-        "SELECT id, username, email, password_hash, display_name, is_admin FROM users WHERE username = ?",
-        (username.lower().strip(),)
-    ).fetchone()
-    if not row:
-        conn.close()
-        return {"ok": False, "error": "User not found"}
-    if not verify_password(password, row["password_hash"]):
-        conn.close()
-        return {"ok": False, "error": "Wrong password"}
-    conn.execute("UPDATE users SET last_login = ? WHERE id = ?", (time.time(), row["id"]))
-    conn.commit()
-    conn.close()
-    token = create_token(row["id"], row["username"])
-    return {
-        "ok": True,
-        "token": token,
-        "user": {
-            "id": row["id"],
-            "username": row["username"],
-            "email": row["email"],
-            "display_name": row["display_name"],
-            "is_admin": bool(row["is_admin"]),
-        }
-    }
-
-
-def get_user(user_id: int) -> dict | None:
-    conn = _get_db()
-    row = conn.execute(
-        "SELECT id, username, email, display_name, is_admin, created_at FROM users WHERE id = ?",
-        (user_id,)
-    ).fetchone()
-    conn.close()
-    if not row:
-        return None
-    return {
-        "id": row["id"],
-        "username": row["username"],
-        "email": row["email"],
-        "display_name": row["display_name"],
-        "is_admin": bool(row["is_admin"]),
-        "created_at": row["created_at"],
-    }
-
-
-# ── API Key management ──
-
-def save_api_keys(user_id: int, provider: str, key_id: str, secret: str, label: str = "") -> dict:
-    conn = _get_db()
-    # Deactivate old keys for same provider
-    conn.execute(
-        "UPDATE api_keys SET is_active = 0 WHERE user_id = ? AND provider = ?",
-        (user_id, provider)
-    )
-    conn.execute(
-        "INSERT INTO api_keys (user_id, provider, key_id_encrypted, secret_encrypted, label) VALUES (?, ?, ?, ?, ?)",
-        (user_id, provider, encrypt_key(key_id), encrypt_key(secret), label)
-    )
-    conn.commit()
-    conn.close()
-    return {"ok": True}
-
-
-def get_api_keys(user_id: int, provider: str = "alpaca_paper") -> dict | None:
-    conn = _get_db()
-    row = conn.execute(
-        "SELECT key_id_encrypted, secret_encrypted, label FROM api_keys WHERE user_id = ? AND provider = ? AND is_active = 1 ORDER BY id DESC LIMIT 1",
-        (user_id, provider)
-    ).fetchone()
-    conn.close()
-    if not row:
-        return None
-    return {
-        "key_id": decrypt_key(row["key_id_encrypted"]),
-        "secret": decrypt_key(row["secret_encrypted"]),
-        "label": row["label"],
-    }
-
-
-def get_user_providers(user_id: int) -> list:
-    conn = _get_db()
-    rows = conn.execute(
-        "SELECT DISTINCT provider, label, created_at FROM api_keys WHERE user_id = ? AND is_active = 1",
-        (user_id,)
-    ).fetchall()
-    conn.close()
-    return [{"provider": r["provider"], "label": r["label"], "connected_at": r["created_at"]} for r in rows]
-
-
-def delete_api_keys(user_id: int, provider: str) -> dict:
-    conn = _get_db()
-    conn.execute(
-        "UPDATE api_keys SET is_active = 0 WHERE user_id = ? AND provider = ?",
-        (user_id, provider)
-    )
-    conn.commit()
-    conn.close()
-    return {"ok": True}
-
-
-# ── Watchlist ──
-
-def get_watchlist(user_id: int) -> list:
-    conn = _get_db()
-    rows = conn.execute(
-        "SELECT ticker, notes, added_at FROM watchlist WHERE user_id = ? ORDER BY added_at DESC",
-        (user_id,)
-    ).fetchall()
-    conn.close()
-    return [{"ticker": r["ticker"], "notes": r["notes"], "added_at": r["added_at"]} for r in rows]
-
-
-def add_to_watchlist(user_id: int, ticker: str, notes: str = "") -> dict:
-    conn = _get_db()
-    try:
-        conn.execute(
-            "INSERT INTO watchlist (user_id, ticker, notes) VALUES (?, ?, ?)",
-            (user_id, ticker.upper().strip(), notes)
-        )
-        conn.commit()
-        conn.close()
-        return {"ok": True}
+        db.execute("INSERT INTO users (username, email, password_hash, salt) VALUES (?, ?, ?, ?)",
+                   (username.lower(), email, pw_hash, salt))
+        user_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+        db.execute("INSERT INTO user_settings (user_id, display_name) VALUES (?, ?)",
+                   (user_id, username))
+        db.commit()
+        token = _make_jwt({"user_id": user_id, "username": username.lower()})
+        return {"ok": True, "token": token, "user": {"id": user_id, "username": username.lower()}}
     except sqlite3.IntegrityError:
-        conn.close()
-        return {"ok": False, "error": f"{ticker} already in watchlist"}
+        return {"ok": False, "error": "Username already taken"}
+    finally:
+        db.close()
 
 
-def remove_from_watchlist(user_id: int, ticker: str) -> dict:
-    conn = _get_db()
-    conn.execute(
-        "DELETE FROM watchlist WHERE user_id = ? AND ticker = ?",
-        (user_id, ticker.upper().strip())
-    )
-    conn.commit()
-    conn.close()
-    return {"ok": True}
+def login(username: str, password: str) -> dict:
+    """Authenticate a user."""
+    db = _get_db()
+    try:
+        row = db.execute("SELECT * FROM users WHERE username = ?", (username.lower(),)).fetchone()
+        if not row:
+            return {"ok": False, "error": "Invalid username or password"}
+        pw_hash, _ = _hash_password(password, row["salt"])
+        if pw_hash != row["password_hash"]:
+            return {"ok": False, "error": "Invalid username or password"}
+        db.execute("UPDATE users SET last_login = ? WHERE id = ?",
+                   (datetime.utcnow().isoformat(), row["id"]))
+        db.commit()
+        token = _make_jwt({"user_id": row["id"], "username": row["username"]})
+        return {"ok": True, "token": token, "user": {"id": row["id"], "username": row["username"]}}
+    finally:
+        db.close()
 
 
-# ── Init on import ──
+def get_user(token: str) -> dict | None:
+    """Get user from JWT token."""
+    payload = _verify_jwt(token)
+    if not payload:
+        return None
+    return {"id": payload["user_id"], "username": payload["username"]}
+
+
+def get_settings(user_id: int) -> dict:
+    """Get user settings."""
+    db = _get_db()
+    try:
+        row = db.execute("SELECT * FROM user_settings WHERE user_id = ?", (user_id,)).fetchone()
+        if not row:
+            return {}
+        return {
+            "alpaca_key": row["alpaca_key"] or "",
+            "alpaca_secret": row["alpaca_secret"] or "",
+            "groq_key": row["groq_key"] or "",
+            "polygon_key": row["polygon_key"] or "",
+            "display_name": row["display_name"] or "",
+            "settings": json.loads(row["settings_json"] or "{}"),
+        }
+    finally:
+        db.close()
+
+
+def save_settings(user_id: int, settings: dict) -> dict:
+    """Save user settings."""
+    db = _get_db()
+    try:
+        db.execute("""
+            UPDATE user_settings SET
+                alpaca_key = ?, alpaca_secret = ?, groq_key = ?, polygon_key = ?,
+                display_name = ?, settings_json = ?
+            WHERE user_id = ?
+        """, (
+            settings.get("alpaca_key", ""),
+            settings.get("alpaca_secret", ""),
+            settings.get("groq_key", ""),
+            settings.get("polygon_key", ""),
+            settings.get("display_name", ""),
+            json.dumps(settings.get("settings", {})),
+            user_id,
+        ))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+def save_chat(user_id: int, role: str, content: str, msg_type: str = "chat", ticker: str = None):
+    """Save a chat message."""
+    db = _get_db()
+    try:
+        db.execute("INSERT INTO chat_history (user_id, role, content, msg_type, ticker) VALUES (?, ?, ?, ?, ?)",
+                   (user_id, role, content, msg_type, ticker))
+        db.commit()
+    finally:
+        db.close()
+
+
+def get_chat_history(user_id: int, limit: int = 50) -> list:
+    """Get recent chat history."""
+    db = _get_db()
+    try:
+        rows = db.execute(
+            "SELECT role, content, msg_type, ticker, created_at FROM chat_history WHERE user_id = ? ORDER BY id DESC LIMIT ?",
+            (user_id, limit)
+        ).fetchall()
+        return [{"role": r["role"], "content": r["content"], "type": r["msg_type"],
+                 "ticker": r["ticker"], "time": r["created_at"]} for r in reversed(rows)]
+    finally:
+        db.close()
+
+
+def clear_chat(user_id: int):
+    """Clear chat history for a user."""
+    db = _get_db()
+    try:
+        db.execute("DELETE FROM chat_history WHERE user_id = ?", (user_id,))
+        db.commit()
+    finally:
+        db.close()
+
+
+# Initialize on import
 init_db()
-print("✅ Auth database ready")
