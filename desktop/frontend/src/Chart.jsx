@@ -148,8 +148,8 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
 
   return (
     <div className="chart-container">
-      <div className="chart-header">
-        <span className="chart-ticker">{ticker}</span>
+      <div className="chart-head">
+        <span className="chart-sym">{ticker}</span>
         {signal?.action && (
           <span className={`chart-signal ${signal.action.includes('BUY') ? 'signal-buy' : signal.action.includes('SELL') ? 'signal-sell' : 'signal-hold'}`}>
             {signal.action} · {signal.score}
@@ -157,7 +157,7 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
         )}
         <div className="chart-periods">
           {['1mo','3mo','6mo','1y','2y'].map(p => (
-            <button key={p} className={'cp-btn' + (period === p ? ' cp-active' : '')} onClick={() => setPeriod(p)}>
+            <button key={p} className={'cp' + (period === p ? ' cp-on' : '')} onClick={() => setPeriod(p)}>
               {p.replace('mo','M').replace('y','Y')}
             </button>
           ))}

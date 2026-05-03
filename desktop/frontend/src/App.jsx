@@ -7,8 +7,7 @@ const BACKEND = import.meta.env.VITE_API_URL || (window.location.hostname === 'l
 const API = BACKEND
 const H = { 'ngrok-skip-browser-warning': '1' }
 const f = (url, opts = {}) => fetch(url, { ...opts, headers: { ...H, ...(opts.headers || {}) } })
-const WS_PROTOCOL = BACKEND.startsWith('https') ? 'wss:' : 'ws:'
-const WS_URL = `${WS_PROTOCOL}//${new URL(BACKEND).host}/ws`
+const WS_URL = `${BACKEND.startsWith('https') ? 'wss:' : 'ws:'}//${new URL(BACKEND).host}/ws`
 
 function App() {
   const [messages, setMessages] = useState([])
@@ -19,11 +18,9 @@ function App() {
   const [autopilot, setAutopilot] = useState(false)
   const [connected, setConnected] = useState(false)
   const [spyTrend, setSpyTrend] = useState(null)
-  const [time, setTime] = useState('')
   const [selectedPos, setSelectedPos] = useState(null)
-  const [loading, setLoading] = useState(true)
   const [toasts, setToasts] = useState([])
-  const [view, setView] = useState('chat') // 'chat', 'dashboard', 'settings'
+  const [view, setView] = useState('chat')
   const [perf, setPerf] = useState(null)
   const [sideOpen, setSideOpen] = useState(window.innerWidth > 768)
   const [settings, setSettings] = useState(() => {
@@ -31,23 +28,18 @@ function App() {
   })
   const settingsRef = useRef(settings)
   useEffect(() => { settingsRef.current = settings }, [settings])
-  const updateSetting = (key, val) => {
-    const next = { ...settings, [key]: val }
-    setSettings(next)
-    localStorage.setItem('paula-settings', JSON.stringify(next))
-  }
+  const updateSetting = (k, v) => { const n = { ...settings, [k]: v }; setSettings(n); localStorage.setItem('paula-settings', JSON.stringify(n)) }
   const snd = (fn) => { if (settingsRef.current.sounds !== false) fn() }
-  const toast = (msg, type) => { if (settingsRef.current.toasts !== false) addToast(msg, type) }
 
   const messagesEnd = useRef(null)
   const wsRef = useRef(null)
   const inputRef = useRef(null)
   const toastId = useRef(0)
 
-  // Toast helper
   const addToast = useCallback((msg, type = 'info') => {
+    if (settingsRef.current.toasts === false) return
     const id = ++toastId.current
-    setToasts(prev => [...prev, { id, msg, type }])
+    setToasts(prev => [...prev, { id, msg: msg.replace(/\*\*/g, ''), type }])
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000)
   }, [])
 
@@ -70,16 +62,15 @@ function App() {
             }
           }
           if (event === 'trade') {
-            const act = data.action
-            const ticker = data.ticker || data.symbol || '???'
-            if (act === 'buy') { snd(playBuy); toast(`Bought ${ticker}`, 'buy') }
-            else if (act === 'sell') { snd(playSell); toast(`Sold ${ticker}`, 'sell') }
-            else if (act === 'short') { snd(playSell); toast(`Shorted ${ticker}`, 'sell') }
-            else if (act === 'cover') { snd(playProfit); toast(`Covered ${ticker}`, 'buy') }
-            else if (act === 'close_all') { snd(playAlert); toast('All positions closed', 'warn') }
+            const act = data.action, ticker = data.ticker || data.symbol || ''
+            if (act === 'buy') { snd(playBuy); addToast('Bought ' + ticker, 'buy') }
+            else if (act === 'sell') { snd(playSell); addToast('Sold ' + ticker, 'sell') }
+            else if (act === 'short') { snd(playSell); addToast('Shorted ' + ticker, 'sell') }
+            else if (act === 'cover') { snd(playProfit); addToast('Covered ' + ticker, 'buy') }
+            else if (act === 'close_all') { snd(playAlert); addToast('All positions closed', 'warn') }
             refreshData()
           }
-        } catch (err) {}
+        } catch {}
       }
     }
     connect()
@@ -88,380 +79,181 @@ function App() {
 
   const refreshData = useCallback(async () => {
     try {
-      const [accRes, posRes, spyRes, healthRes] = await Promise.all([
-        f(API + '/api/account').then(r => r.json()),
-        f(API + '/api/positions').then(r => r.json()),
-        f(API + '/api/spy-trend').then(r => r.json()),
-        f(API + '/api/health').then(r => r.json()),
+      const [a, p, s, h] = await Promise.all([
+        f(API+'/api/account').then(r=>r.json()), f(API+'/api/positions').then(r=>r.json()),
+        f(API+'/api/spy-trend').then(r=>r.json()), f(API+'/api/health').then(r=>r.json()),
       ])
-      if (accRes.ok) setAccount(accRes.data)
-      if (posRes.ok) setPositions(posRes.data)
-      if (spyRes.ok) setSpyTrend(spyRes.data)
-      if (healthRes.time_et) setTime(healthRes.time_et)
-      setAutopilot(healthRes.autopilot)
-      setLoading(false)
-    } catch (e) { setLoading(false) }
+      if (a.ok) setAccount(a.data); if (p.ok) setPositions(p.data)
+      if (s.ok) setSpyTrend(s.data); setAutopilot(h.autopilot)
+    } catch {}
   }, [])
 
-  useEffect(() => {
-    f(API + '/api/chat/clear', { method: 'POST' }).catch(() => {})
-    refreshData()
-    const i = setInterval(refreshData, 5000)
-    return () => clearInterval(i)
-  }, [refreshData])
-
+  useEffect(() => { f(API+'/api/chat/clear',{method:'POST'}).catch(()=>{}); refreshData(); const i=setInterval(refreshData,5000); return()=>clearInterval(i) }, [refreshData])
   useEffect(() => { messagesEnd.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
   const sendMessage = async (msg) => {
     if (!msg || sending) return
-    setMessages(prev => [...prev, { role: 'user', content: msg }])
-    setInput('')
-    setSending(true)
+    setMessages(prev => [...prev, { role: 'user', content: msg }]); setInput(''); setSending(true)
     try {
-      const res = await f(API + '/api/chat', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: msg })
-      })
+      const res = await f(API+'/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg}) })
       const data = await res.json()
       if (data.ok) {
-        setMessages(prev => [...prev, {
-          role: 'assistant', content: data.message, type: data.type,
-          ticker: data.ticker || null, signal: data.trade_signal || null,
-        }])
-        if (data.type === 'trade' && data.message) {
-          if (data.message.includes('Bought')) { snd(playBuy); toast(data.message.slice(0, 60), 'buy') }
-          else if (data.message.includes('Sold') || data.message.includes('Shorted')) { snd(playSell); toast(data.message.slice(0, 60), 'sell') }
-          else if (data.message.includes('Covered')) { snd(playProfit); toast(data.message.slice(0, 60), 'buy') }
-          else if (data.message.includes('closed')) { addToast(data.message.slice(0, 60), 'warn') }
+        setMessages(prev => [...prev, { role:'assistant', content:data.message, type:data.type, ticker:data.ticker||null, signal:data.trade_signal||null }])
+        if (data.type==='trade'&&data.message) {
+          if(data.message.includes('Bought')){snd(playBuy);addToast(data.message.slice(0,60),'buy')}
+          else if(data.message.includes('Sold')||data.message.includes('Shorted')){snd(playSell);addToast(data.message.slice(0,60),'sell')}
+          else if(data.message.includes('Covered')){snd(playProfit);addToast(data.message.slice(0,60),'buy')}
+          else if(data.message.includes('closed')){addToast(data.message.slice(0,60),'warn')}
         } else snd(playTick)
-        if (data.autopilot !== undefined) setAutopilot(data.autopilot)
-      } else {
-        snd(playAlert)
-        setMessages(prev => [...prev, { role: 'assistant', content: 'Error: ' + (data.error || 'Unknown') }])
-      }
+        if (data.autopilot!==undefined) setAutopilot(data.autopilot)
+      } else { snd(playAlert); setMessages(prev=>[...prev,{role:'assistant',content:'Error: '+(data.error||'Unknown')}]) }
       refreshData()
-    } catch (e) {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Backend not connected.' }])
-    }
-    setSending(false)
-    inputRef.current?.focus()
+    } catch { setMessages(prev=>[...prev,{role:'assistant',content:'Connection lost.'}]) }
+    setSending(false); inputRef.current?.focus()
   }
 
   const send = () => sendMessage(input.trim())
-  const toggleAutopilot = () => sendMessage(autopilot ? 'stop' : 'autopilot')
-  const loadDashboard = async () => {
-    try {
-      const res = await f(API + '/api/performance').then(r => r.json())
-      if (res.ok) setPerf(res)
-    } catch (e) {}
-  }
-  const quickAction = (t) => { setInput(t); setTimeout(() => inputRef.current?.focus(), 50) }
-  const getGreeting = () => { var h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' }
+  const loadDashboard = async () => { try { const r = await f(API+'/api/performance').then(r=>r.json()); if(r.ok)setPerf(r) } catch{} }
 
-  var pnl = account ? (account.daily_pnl || 0) : 0
-  var pnlPct = account ? (account.daily_pnl_pct || 0) : 0
-  var totalUnrealized = positions.reduce((s, p) => s + (p.unrealized_pnl || 0), 0)
+  const pnl = account?(account.daily_pnl||0):0, pnlPct = account?(account.daily_pnl_pct||0):0
+  const totalUnrealized = positions.reduce((s,p)=>s+(p.unrealized_pnl||0),0)
+  const name = settings.userName || 'PJ'
 
   return (
-    <div className="layout">
-      {/* Toast notifications */}
-      <div className="toast-wrap">
-        {toasts.map(t => (
-          <div key={t.id} className={'toast toast-' + t.type}>
-            <span className="toast-dot" />
-            <span className="toast-msg">{t.msg.replace(/\*\*/g, '')}</span>
-            <button className="toast-x" onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))}>✕</button>
-          </div>
-        ))}
-      </div>
+    <div className="app">
+      {/* Toasts */}
+      <div className="toasts">{toasts.map(t=>(
+        <div key={t.id} className={'toast t-'+t.type}><span className="t-dot"/>{t.msg}
+          <button className="t-x" onClick={()=>setToasts(p=>p.filter(x=>x.id!==t.id))}>×</button>
+        </div>))}</div>
 
       {/* Sidebar */}
-      <aside className={'side' + (sideOpen ? '' : ' side-hidden')}>
-        <div className="side-head">
-          <div className="brand"><div className="p-icon">P</div><div><div className="p-name">Paula</div></div></div>
-          <button className="side-close" onClick={() => setSideOpen(false)}>✕</button>
+      <aside className={'sb'+(sideOpen?'':' sb-hide')}>
+        <div className="sb-top">
+          <div className="sb-logo"><span className="logo-p">P</span>Paula</div>
+          <button className="sb-close" onClick={()=>setSideOpen(false)}>×</button>
         </div>
-
-        {/* View switcher */}
-        <div className="view-sw">
-          <button className={'vsw' + (view === 'chat' ? ' vsw-on' : '')} onClick={() => setView('chat')}>Chat</button>
-          <button className={'vsw' + (view === 'dashboard' ? ' vsw-on' : '')} onClick={() => { setView('dashboard'); loadDashboard() }}>Stats</button>
-          <button className={'vsw' + (view === 'settings' ? ' vsw-on' : '')} onClick={() => setView('settings')}>Settings</button>
-        </div>
-
-        {/* P&L */}
-        <div className="pnl-block">
-          <div className="pnl-top">
-            <span className="pnl-label">Today</span>
-            <span className={'pnl-num ' + (pnl >= 0 ? 'up' : 'dn')}>{(pnl >= 0 ? '+' : '') + pnl.toFixed(2)}</span>
+        <nav className="sb-tabs">{['chat','stats','settings'].map(v=>(
+          <button key={v} className={'tab'+(view===v?' tab-on':'')} onClick={()=>{setView(v);if(v==='stats')loadDashboard()}}>
+            {v==='chat'?'Chat':v==='stats'?'Stats':'Settings'}
+          </button>))}</nav>
+        {account&&<div className="sb-acct">
+          <div className="acct-main">
+            <span className="acct-eq">${account.equity.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
+            <span className={'acct-chg '+(pnl>=0?'up':'dn')}>{pnl>=0?'+':''}{pnl.toFixed(0)} ({pnlPct>=0?'+':''}{pnlPct.toFixed(2)}%)</span>
           </div>
-          <div className="pnl-bar-wrap"><div className={'pnl-bar ' + (pnl >= 0 ? 'bar-up' : 'bar-dn')} style={{width: Math.min(100, Math.abs(pnlPct) * 10) + '%'}} /></div>
-          <div className="pnl-stats">
-            <span>Equity <b className={pnl >= 0 ? 'up' : 'dn'}>{account ? '$' + account.equity.toLocaleString(undefined, {maximumFractionDigits: 0}) : '—'}</b></span>
-            <span>Day <b className={pnlPct >= 0 ? 'up' : 'dn'}>{(pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(2) + '%'}</b></span>
-            <span>SPY <b className={spyTrend && spyTrend.change_pct >= 0 ? 'up' : 'dn'}>{spyTrend ? (spyTrend.change_pct >= 0 ? '+' : '') + spyTrend.change_pct + '%' : '—'}</b></span>
-          </div>
-        </div>
-
-        {/* Autopilot */}
-        <button className={'ap ' + (autopilot ? 'ap-on' : '')} onClick={toggleAutopilot}>
-          <span className={'ap-dot ' + (autopilot ? 'ap-dot-on' : '')} />
-          <span className="ap-txt">{autopilot ? 'Autopilot Running' : 'Start Autopilot'}</span>
+          {spyTrend&&<span className={'acct-spy '+(spyTrend.change_pct>=0?'up':'dn')}>SPY {spyTrend.change_pct>=0?'+':''}{spyTrend.change_pct}%</span>}
+        </div>}
+        <button className={'sb-ap'+(autopilot?' ap-go':'')} onClick={()=>sendMessage(autopilot?'stop':'autopilot')}>
+          <span className={'ap-dot'+(autopilot?' dot-on':'')}/>{autopilot?'Autopilot On':'Autopilot Off'}
         </button>
-
-        {/* Positions */}
-        <div className="pos-sec">
-          <div className="pos-header">
-            <span>Positions</span>
-            <span className="pos-count">{positions.length}</span>
-            {positions.length > 0 && <span className={'pos-sum ' + (totalUnrealized >= 0 ? 'up' : 'dn')}>{(totalUnrealized >= 0 ? '+' : '') + '$' + Math.abs(totalUnrealized).toFixed(0)}</span>}
+        <div className="sb-pos">
+          <div className="pos-head">Positions <span className="pos-n">{positions.length}</span>
+            {positions.length>0&&<span className={'pos-tot '+(totalUnrealized>=0?'up':'dn')}>{totalUnrealized>=0?'+':''}{totalUnrealized.toFixed(0)}</span>}
           </div>
-          <div className="pos-scroll">
-            {positions.length > 0 ? positions.map((p, i) => (
-              <div key={i}
-                className={'pos-row ' + (p.unrealized_pnl >= 0 ? 'pr-up' : 'pr-dn') + (selectedPos === p.ticker ? ' pr-sel' : '')}
-                onClick={() => setSelectedPos(selectedPos === p.ticker ? null : p.ticker)}>
-                <div className="pr-left">
-                  <span className="pr-tk">{p.ticker}</span>
-                  <span className="pr-info">{Math.abs(p.qty) + ' · ' + (p.side === 'short' ? 'SHORT' : 'LONG')}{p.stop_loss ? ' · SL $' + p.stop_loss : ''}</span>
-                </div>
-                <div className="pr-right">
-                  <span className="pr-pnl">{(p.unrealized_pnl >= 0 ? '+' : '') + '$' + Math.abs(p.unrealized_pnl).toFixed(0)}</span>
-                  <span className="pr-pct">{(p.unrealized_pnl_pct >= 0 ? '+' : '') + p.unrealized_pnl_pct.toFixed(1) + '%'}</span>
-                </div>
-              </div>
-            )) : <div className="no-pos">No open positions</div>}
-          </div>
+          <div className="pos-list">{positions.length>0?positions.map((p,i)=>(
+            <button key={i} className={'pi'+(selectedPos===p.ticker?' pi-sel':'')+(p.unrealized_pnl>=0?' pi-up':' pi-dn')}
+              onClick={()=>setSelectedPos(selectedPos===p.ticker?null:p.ticker)}>
+              <div className="pi-l"><span className="pi-sym">{p.ticker}</span><span className="pi-meta">{Math.abs(p.qty)}·{p.side==='short'?'S':'L'}{p.stop_loss?' SL$'+p.stop_loss:''}</span></div>
+              <span className="pi-pnl">{p.unrealized_pnl>=0?'+':''}{p.unrealized_pnl.toFixed(0)}</span>
+            </button>)):<span className="empty-txt">No positions</span>}</div>
         </div>
-
+        <div className="sb-bottom"><span className={'conn'+(connected?' c-on':'')}>{connected?'● Connected':'○ Offline'}</span></div>
       </aside>
 
       {/* Main */}
       <main className="main">
-        {/* Mobile hamburger */}
-        {!sideOpen && <button className="hamburger" onClick={() => setSideOpen(true)}>☰</button>}
-
-        {view === 'dashboard' ? (
-          /* ── Dashboard View ── */
-          <div className="dash">
-            <h2 className="dash-title">Performance</h2>
-            {perf ? (
-              <div className="dash-grid">
-                {/* Equity Curve */}
-                {perf.pnl_history && perf.pnl_history.length > 1 && (
-                  <div className="dash-card dc-wide">
-                    <span className="dc-label">Equity Curve</span>
-                    <EquityChart data={perf.pnl_history} />
-                  </div>
-                )}
-                <div className="dash-card">
-                  <span className="dc-label">Total Trades</span>
-                  <span className="dc-val">{perf.total_trades}</span>
-                </div>
-                <div className="dash-card">
-                  <span className="dc-label">Current Params</span>
-                  <div className="dc-params">
-                    {perf.current_params && Object.entries(perf.current_params).map(([k, v]) => (
-                      <div key={k} className="dc-param"><span>{k}</span><span>{typeof v === 'number' ? (v < 1 && v > 0 ? (v * 100).toFixed(1) + '%' : v) : String(v)}</span></div>
-                    ))}
-                  </div>
-                </div>
-                <div className="dash-card dc-wide">
-                  <span className="dc-label">Auto-Tune History</span>
-                  <div className="dc-history">
-                    {perf.tune_history && perf.tune_history.length > 0 ? perf.tune_history.slice().reverse().map((h, i) => (
-                      <div key={i} className="dc-tune">
-                        <span className="dc-date">{h.date}</span>
-                        <span className={'dc-pnl ' + ((h.stats?.pnl || 0) >= 0 ? 'up' : 'dn')}>{(h.stats?.pnl >= 0 ? '+' : '') + '$' + Math.abs(h.stats?.pnl || 0).toFixed(0)}</span>
-                        <span className="dc-wr">{h.stats?.wins}W/{h.stats?.losses}L</span>
-                        <div className="dc-changes">{h.changes?.map((c, j) => <div key={j}>{c}</div>)}</div>
-                      </div>
-                    )) : <div className="no-pos">No tune history yet</div>}
-                  </div>
-                </div>
-                <div className="dash-card dc-wide">
-                  <span className="dc-label">Recent Trades</span>
-                  <div className="dc-trades">
-                    {perf.recent_trades && perf.recent_trades.length > 0 ? perf.recent_trades.slice().reverse().map((t, i) => (
-                      <div key={i} className="dc-trade">
-                        <span className={'dc-action ' + (t.action === 'buy' ? 'up' : 'dn')}>{t.action?.toUpperCase()}</span>
-                        <span className="dc-ticker">{t.ticker}</span>
-                        <span className="dc-time">{t.time?.slice(11, 16)}</span>
-                      </div>
-                    )) : <div className="no-pos">No trades logged yet</div>}
-                  </div>
-                </div>
+        {!sideOpen&&<button className="ham" onClick={()=>setSideOpen(true)}>☰</button>}
+        {view==='stats'?<DashView perf={perf}/>
+        :view==='settings'?<SetView settings={settings} update={updateSetting}/>
+        :(<>
+          {selectedPos&&(()=>{const p=positions.find(x=>x.ticker===selectedPos);if(!p)return null;return(
+            <div className="detail-bar">
+              <div className="db-info">
+                <span className="db-sym">{p.ticker}</span>
+                <span className={'db-pnl '+(p.unrealized_pnl>=0?'up':'dn')}>{p.unrealized_pnl>=0?'+':'-'}${Math.abs(p.unrealized_pnl).toFixed(2)}</span>
+                <span className="db-meta">{Math.abs(p.qty)} @ ${(p.avg_entry||0).toFixed(2)} → ${(p.current_price||0).toFixed(2)}</span>
               </div>
-            ) : <div className="no-pos">Loading dashboard...</div>}
+              <div className="db-acts">
+                <button className="btn-sm" onClick={()=>{sendMessage(p.ticker);setSelectedPos(null)}}>Analyze</button>
+                <button className="btn-sm btn-g" onClick={()=>{sendMessage('buy 1 '+p.ticker);setSelectedPos(null)}}>Buy</button>
+                <button className="btn-sm btn-r" onClick={()=>{sendMessage((p.side==='short'?'cover ':'sell ')+p.ticker);setSelectedPos(null)}}>{p.side==='short'?'Cover':'Sell'}</button>
+                <button className="btn-x" onClick={()=>setSelectedPos(null)}>×</button>
+              </div>
+              <div className="db-chart"><Chart ticker={p.ticker} signal={null} height={200}/></div>
+            </div>)})()}
+          <div className="chat">
+            {messages.length===0&&!sending&&(
+              <div className="welcome">
+                <h1><span className="w-hi">Hey {name},</span> what's the move?</h1>
+                <div className="w-pills">{[['Analyze the market','market regime'],['Trending tickers','top gainers'],['Recap trades','How did we do today?'],['Trade ideas','What should I buy?']].map(([l,c],i)=>(
+                  <button key={i} className="pill" onClick={()=>sendMessage(c)}>{l}</button>))}</div>
+              </div>)}
+            {messages.map((m,i)=>(
+              <div key={i} className={'msg msg-'+m.role}>
+                {m.role==='assistant'?(<div className="ai"><div className="ai-av">P</div><div className="ai-body">
+                  <div className="ai-txt" dangerouslySetInnerHTML={{__html:fmt(m.content)}}/>
+                  {m.ticker&&<div className="ai-chart"><Chart ticker={m.ticker} signal={m.signal} height={260}/></div>}
+                </div></div>):(<div className="user-bubble">{m.content}</div>)}
+              </div>))}
+            {sending&&<div className="msg"><div className="ai"><div className="ai-av">P</div><div className="ai-body"><div className="dots"><span/><span/><span/></div></div></div></div>}
+            <div ref={messagesEnd}/>
           </div>
-        ) : view === 'settings' ? (
-          /* ── Settings View ── */
-          <div className="dash">
-            <h2 className="dash-title">Settings</h2>
-            <div className="dash-grid">
-              <div className="dash-card dc-wide">
-                <span className="dc-label">Sounds</span>
-                <div className="set-row">
-                  <span>Trade sounds</span>
-                  <button className={'set-toggle ' + (settings.sounds !== false ? 'set-on' : '')} onClick={() => updateSetting('sounds', !(settings.sounds !== false))}>
-                    {settings.sounds !== false ? 'ON' : 'OFF'}
-                  </button>
-                </div>
-                <div className="set-row">
-                  <span>Scan notification sound</span>
-                  <button className={'set-toggle ' + (settings.scanSound !== false ? 'set-on' : '')} onClick={() => updateSetting('scanSound', !(settings.scanSound !== false))}>
-                    {settings.scanSound !== false ? 'ON' : 'OFF'}
-                  </button>
-                </div>
-              </div>
-              <div className="dash-card dc-wide">
-                <span className="dc-label">Notifications</span>
-                <div className="set-row">
-                  <span>Phone push (ntfy)</span>
-                  <button className={'set-toggle ' + (settings.pushNotif !== false ? 'set-on' : '')} onClick={() => updateSetting('pushNotif', !(settings.pushNotif !== false))}>
-                    {settings.pushNotif !== false ? 'ON' : 'OFF'}
-                  </button>
-                </div>
-                <div className="set-row">
-                  <span>Toast popups</span>
-                  <button className={'set-toggle ' + (settings.toasts !== false ? 'set-on' : '')} onClick={() => updateSetting('toasts', !(settings.toasts !== false))}>
-                    {settings.toasts !== false ? 'ON' : 'OFF'}
-                  </button>
-                </div>
-              </div>
-              <div className="dash-card dc-wide">
-                <span className="dc-label">Daily Recap Email</span>
-                <div className="set-row">
-                  <span>Send daily recap at 3 PM CT</span>
-                  <button className={'set-toggle ' + (settings.dailyEmail ? 'set-on' : '')} onClick={() => updateSetting('dailyEmail', !settings.dailyEmail)}>
-                    {settings.dailyEmail ? 'ON' : 'OFF'}
-                  </button>
-                </div>
-                {settings.dailyEmail && (
-                  <div className="set-row">
-                    <span>ntfy topic</span>
-                    <input className="set-input" value={settings.ntfyTopic || 'paula-trades'} onChange={e => updateSetting('ntfyTopic', e.target.value)} placeholder="paula-trades" />
-                  </div>
-                )}
-              </div>
-              <div className="dash-card dc-wide">
-                <span className="dc-label">Display</span>
-                <div className="set-row">
-                  <span>Your name</span>
-                  <input className="set-input" value={settings.userName || 'PJ'} onChange={e => updateSetting('userName', e.target.value)} placeholder="PJ" />
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          /* ── Chat View ── */
-          <>
-        {selectedPos && (() => {
-          var p = positions.find(x => x.ticker === selectedPos)
-          if (!p) return null
-          return (
-            <div className="detail">
-              <div className="det-top">
-                <div className="det-left">
-                  <span className="det-tk">{p.ticker}</span>
-                  <span className={'det-pnl ' + (p.unrealized_pnl >= 0 ? 'up' : 'dn')}>
-                    {(p.unrealized_pnl >= 0 ? '+' : '-') + '$' + Math.abs(p.unrealized_pnl).toFixed(2)}
-                    {' (' + (p.unrealized_pnl_pct >= 0 ? '+' : '') + p.unrealized_pnl_pct.toFixed(2) + '%)'}
-                  </span>
-                  <span className="det-meta">{Math.abs(p.qty) + ' @ $' + (p.avg_entry || 0).toFixed(2) + ' → $' + (p.current_price || 0).toFixed(2) + ' · ' + (p.side === 'short' ? 'SHORT' : 'LONG')}{p.stop_loss ? ' · Stop: $' + p.stop_loss : ''}</span>
-                </div>
-                <div className="det-acts">
-                  <button className="da da-a" onClick={() => { sendMessage(p.ticker); setSelectedPos(null) }}>Analyze</button>
-                  <button className="da da-b" onClick={() => { sendMessage('buy 1 ' + p.ticker); setSelectedPos(null) }}>Buy More</button>
-                  <button className="da da-s" onClick={() => { sendMessage((p.side === 'short' ? 'cover ' : 'sell ') + p.ticker); setSelectedPos(null) }}>{p.side === 'short' ? 'Cover' : 'Sell'}</button>
-                  <button className="det-x" onClick={() => setSelectedPos(null)}>✕</button>
-                </div>
-              </div>
-              <div className="det-chart"><Chart ticker={p.ticker} signal={null} height={220} /></div>
-            </div>
-          )
-        })()}
-
-        <div className="chat">
-          {messages.length === 0 && !sending && (
-            <div className="welcome">
-              <div className="w-text">
-                <h1>{(() => {
-                  var h = new Date().getHours()
-                  if (h < 12) return <><span className="w-gr">Good morning,</span> {settings.userName || 'PJ'}</>
-                  if (h < 17) return <><span className="w-gr">Good afternoon,</span> {settings.userName || 'PJ'}</>
-                  return <><span className="w-gr">Good evening,</span> {settings.userName || 'PJ'}</>
-                })()}</h1>
-              </div>
-              <div className="w-prompts">
-                <button className="wp" onClick={() => sendMessage('market regime')}>Analyze the market</button>
-                <button className="wp" onClick={() => sendMessage('top gainers')}>Trending tickers</button>
-                <button className="wp" onClick={() => sendMessage('How did we do today?')}>Recap trades</button>
-                <button className="wp" onClick={() => sendMessage('What should I buy?')}>Trade ideas</button>
-              </div>
-            </div>
-          )}
-
-          {messages.map((m, i) => (
-            <div key={i} className={'m m-' + m.role}>
-              {m.role === 'assistant' ? (
-                <div className="mai"><div className="mai-av"><div className="av">P</div></div>
-                  <div className="mai-body">
-                    <div className="mai-txt" dangerouslySetInnerHTML={{ __html: fmt(m.content) }} />
-                    {m.ticker && <div className="mai-chart"><Chart ticker={m.ticker} signal={m.signal} height={240} /></div>}
-                  </div>
-                </div>
-              ) : (
-                <div className="mu"><div className="mu-b">{m.content}</div></div>
-              )}
-            </div>
-          ))}
-
-          {sending && <div className="m"><div className="mai"><div className="mai-av"><div className="av">P</div></div><div className="mai-body"><div className="dots"><span /><span /><span /></div></div></div></div>}
-          <div ref={messagesEnd} />
-        </div>
-
-        <div className="inp-area"><div className="inp-box">
-          <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') send() }}
-            placeholder="Message Paula..." disabled={sending} />
-          <button className="inp-send" onClick={send} disabled={sending}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
-          </button>
-        </div></div>
-          </>
-        )}
+          <div className="input-area"><div className="input-box">
+            <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')send()}} placeholder="Message Paula..." disabled={sending}/>
+            <button className="send" onClick={send} disabled={sending}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9Z"/></svg></button>
+          </div></div>
+        </>)}
       </main>
+    </div>)
+}
+
+function DashView({perf}){
+  if(!perf)return <div className="view-msg">Loading...</div>
+  return(<div className="view-scroll"><h2 className="view-h">Performance</h2>
+    {perf.pnl_history?.length>1&&<div className="card wide"><label>Equity</label><EqChart data={perf.pnl_history}/></div>}
+    <div className="card-row">
+      <div className="card"><label>Trades</label><span className="big">{perf.total_trades}</span></div>
+      <div className="card"><label>Config</label><div className="params">{perf.current_params&&Object.entries(perf.current_params).map(([k,v])=>(
+        <div key={k} className="pr"><span>{k}</span><span>{typeof v==='number'?(v<1&&v>0?(v*100).toFixed(1)+'%':v):String(v)}</span></div>))}</div></div>
     </div>
-  )
+    {perf.tune_history?.length>0&&<div className="card wide"><label>Auto-Tune</label>{perf.tune_history.slice().reverse().map((h,i)=>(
+      <div key={i} className="tune"><span className="t-date">{h.date}</span><span className={'t-pnl '+(((h.stats?.pnl)||0)>=0?'up':'dn')}>{(h.stats?.pnl>=0?'+':'')+'$'+Math.abs(h.stats?.pnl||0).toFixed(0)}</span><span className="t-wr">{h.stats?.wins}W {h.stats?.losses}L</span><div className="t-ch">{h.changes?.map((c,j)=><div key={j}>{c}</div>)}</div></div>))}</div>}
+    {perf.recent_trades?.length>0&&<div className="card wide"><label>Recent</label>{perf.recent_trades.slice().reverse().slice(0,12).map((t,i)=>(
+      <div key={i} className="tr-row"><span className={'tr-act '+(t.action==='buy'?'up':'dn')}>{t.action?.toUpperCase()}</span><span className="tr-sym">{t.ticker}</span><span className="tr-time">{t.time?.slice(11,16)}</span></div>))}</div>}
+  </div>)
 }
 
-function EquityChart({ data }) {
-  if (!data || data.length < 2) return null
-  const vals = data.map(d => d.equity || d.value || 0).filter(v => v > 0)
-  if (vals.length < 2) return null
-  const min = Math.min(...vals), max = Math.max(...vals)
-  const range = max - min || 1
-  const w = 500, h = 120, pad = 20
-  const points = vals.map((v, i) => {
-    const x = pad + (i / (vals.length - 1)) * (w - pad * 2)
-    const y = pad + (1 - (v - min) / range) * (h - pad * 2)
-    return `${x},${y}`
-  }).join(' ')
-  const isUp = vals[vals.length - 1] >= vals[0]
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} style={{width:'100%',height:'auto'}}>
-      <defs><linearGradient id="eq" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stopColor={isUp ? '#00dda0' : '#f04060'} stopOpacity="0.2"/>
-        <stop offset="100%" stopColor={isUp ? '#00dda0' : '#f04060'} stopOpacity="0"/>
-      </linearGradient></defs>
-      <polygon points={`${pad},${h - pad} ${points} ${w - pad},${h - pad}`} fill="url(#eq)" />
-      <polyline points={points} fill="none" stroke={isUp ? '#00dda0' : '#f04060'} strokeWidth="2" />
-      <text x={pad} y={h - 4} fill="#4d4d66" fontSize="9" fontFamily="JetBrains Mono">${vals[0].toLocaleString(undefined,{maximumFractionDigits:0})}</text>
-      <text x={w - pad} y={h - 4} fill={isUp ? '#00dda0' : '#f04060'} fontSize="9" fontFamily="JetBrains Mono" textAnchor="end">${vals[vals.length-1].toLocaleString(undefined,{maximumFractionDigits:0})}</text>
-    </svg>
-  )
+function SetView({settings,update}){
+  return(<div className="view-scroll"><h2 className="view-h">Settings</h2>
+    <div className="card wide"><label>Sounds</label>
+      <Tog l="Trade sounds" on={settings.sounds!==false} fn={()=>update('sounds',!(settings.sounds!==false))}/>
+      <Tog l="Scan notification" on={settings.scanSound!==false} fn={()=>update('scanSound',!(settings.scanSound!==false))}/>
+    </div>
+    <div className="card wide"><label>Notifications</label>
+      <Tog l="Toast popups" on={settings.toasts!==false} fn={()=>update('toasts',!(settings.toasts!==false))}/>
+      <Tog l="Phone push" on={settings.pushNotif!==false} fn={()=>update('pushNotif',!(settings.pushNotif!==false))}/>
+    </div>
+    <div className="card wide"><label>Display</label>
+      <div className="s-row"><span>Name</span><input className="s-inp" value={settings.userName||'PJ'} onChange={e=>update('userName',e.target.value)}/></div>
+    </div>
+  </div>)
 }
 
-function fmt(t) { if (!t) return ''; return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`(.+?)`/g, '<code>$1</code>').replace(/\n/g, '<br/>') }
+function Tog({l,on,fn}){return <div className="s-row"><span>{l}</span><button className={'tog'+(on?' tog-on':'')} onClick={fn}>{on?'ON':'OFF'}</button></div>}
+
+function EqChart({data}){
+  if(!data||data.length<2)return null
+  const v=data.map(d=>d.equity||d.value||0).filter(x=>x>0);if(v.length<2)return null
+  const mn=Math.min(...v),mx=Math.max(...v),rng=mx-mn||1,W=600,H=130,P=20
+  const pts=v.map((y,i)=>`${P+(i/(v.length-1))*(W-P*2)},${P+(1-(y-mn)/rng)*(H-P*2)}`).join(' ')
+  const up=v[v.length-1]>=v[0]
+  return(<svg viewBox={`0 0 ${W} ${H}`} className="eq-svg">
+    <defs><linearGradient id="eg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={up?'#00dda0':'#f04060'} stopOpacity=".12"/><stop offset="100%" stopColor={up?'#00dda0':'#f04060'} stopOpacity="0"/></linearGradient></defs>
+    <polygon points={`${P},${H-P} ${pts} ${W-P},${H-P}`} fill="url(#eg)"/>
+    <polyline points={pts} fill="none" stroke={up?'#00dda0':'#f04060'} strokeWidth="1.5"/>
+  </svg>)
+}
+
+function fmt(t){if(!t)return '';return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/`(.+?)`/g,'<code>$1</code>').replace(/\n/g,'<br/>')}
 export default App
