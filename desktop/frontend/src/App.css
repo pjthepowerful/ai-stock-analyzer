@@ -124,6 +124,8 @@ code{font-family:'Geist Mono',monospace;background:var(--c2);color:var(--grn);pa
 .welcome{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 28px}
 .welcome h1{font-size:1.8rem;font-weight:600;color:var(--wh);letter-spacing:-.03em;margin-bottom:28px;line-height:1.2}
 .w-hi{background:linear-gradient(135deg,var(--grn),var(--grn2),var(--blu));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.tw{color:var(--wh)}.cursor{color:var(--grn);font-weight:300;animation:blinkcur .8s step-end infinite}
+@keyframes blinkcur{0%,100%{opacity:1}50%{opacity:0}}
 .w-pills{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
 .pill{background:var(--c1);border:1px solid var(--brd);border-radius:22px;padding:9px 18px;font-size:.74rem;color:var(--txt);cursor:pointer;font-family:inherit;font-weight:500;transition:.15s}
 .pill:hover{background:var(--c2);color:var(--grn);border-color:rgba(0,221,160,.25);box-shadow:0 0 16px rgba(0,221,160,.06);transform:translateY(-1px)}
