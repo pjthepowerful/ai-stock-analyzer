@@ -211,23 +211,33 @@ function App() {
 
 const PHRASES = ["what's the play today?","ready to trade?","let's find some setups.","what are we watching?","let's get to work.","what's on your radar?","let's make some moves."]
 function Typewriter() {
-  const [text, setText] = useState('')
-  const [idx, setIdx] = useState(0)
-  const [deleting, setDeleting] = useState(false)
+  const [display, setDisplay] = useState('')
+  const state = useRef({ idx: 0, charIdx: 0, deleting: false, paused: false })
   useEffect(() => {
-    const phrase = PHRASES[idx % PHRASES.length]
-    const timer = setTimeout(() => {
-      if (!deleting) {
-        setText(phrase.slice(0, text.length + 1))
-        if (text.length + 1 === phrase.length) setTimeout(() => setDeleting(true), 2000)
+    const tick = () => {
+      const s = state.current
+      const phrase = PHRASES[s.idx % PHRASES.length]
+      if (s.paused) return
+      if (!s.deleting) {
+        s.charIdx++
+        setDisplay(phrase.slice(0, s.charIdx))
+        if (s.charIdx >= phrase.length) {
+          s.paused = true
+          setTimeout(() => { s.paused = false; s.deleting = true }, 3500)
+        }
       } else {
-        setText(phrase.slice(0, text.length - 1))
-        if (text.length === 0) { setDeleting(false); setIdx(i => i + 1) }
+        s.charIdx--
+        setDisplay(phrase.slice(0, s.charIdx))
+        if (s.charIdx <= 0) {
+          s.deleting = false
+          s.idx++
+        }
       }
-    }, deleting ? 40 : 70)
-    return () => clearTimeout(timer)
-  }, [text, deleting, idx])
-  return <span className="tw">{text}<span className="cursor">|</span></span>
+    }
+    const id = setInterval(tick, state.current.deleting ? 30 : 60)
+    return () => clearInterval(id)
+  }, [])
+  return <span className="tw">{display}<span className="cursor">|</span></span>
 }
 
 function DashView({perf}){
