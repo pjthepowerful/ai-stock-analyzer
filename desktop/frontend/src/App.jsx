@@ -241,17 +241,63 @@ function Typewriter() {
 }
 
 function DashView({perf}){
-  if(!perf)return <div className="view-msg">Loading...</div>
+  const [period, setPeriod] = useState('1M')
+  const [data, setData] = useState(perf)
+  const loadPeriod = async (p) => {
+    setPeriod(p)
+    try { const r = await f(API+'/api/performance?period='+p).then(r=>r.json()); if(r.ok)setData(r) } catch{}
+  }
+  useEffect(()=>{if(perf)setData(perf)},[perf])
+  const d = data || perf
+  if(!d)return <div className="view-msg">Loading...</div>
+
+  const startEq = d.pnl_history?.[0]?.equity || 0
+  const endEq = d.pnl_history?.[d.pnl_history.length-1]?.equity || 0
+  const totalChg = endEq - startEq
+  const totalPct = startEq > 0 ? ((endEq/startEq - 1)*100) : 0
+
   return(<div className="view-scroll"><h2 className="view-h">Performance</h2>
-    {perf.pnl_history?.length>1&&<div className="card wide"><label>Equity</label><EqChart data={perf.pnl_history}/></div>}
-    <div className="card-row">
-      <div className="card"><label>Trades</label><span className="big">{perf.total_trades}</span></div>
-      <div className="card"><label>Config</label><div className="params">{perf.current_params&&Object.entries(perf.current_params).map(([k,v])=>(
-        <div key={k} className="pr"><span>{k}</span><span>{typeof v==='number'?(v<1&&v>0?(v*100).toFixed(1)+'%':v):String(v)}</span></div>))}</div></div>
+    {/* Period selector */}
+    <div className="period-bar">
+      {[['1D','Day'],['1W','Week'],['1M','Month'],['3M','3M'],['6M','6M'],['1A','YTD'],['all','All']].map(([k,label])=>(
+        <button key={k} className={'per-btn'+(period===k?' per-on':'')} onClick={()=>loadPeriod(k)}>{label}</button>
+      ))}
     </div>
-    {perf.tune_history?.length>0&&<div className="card wide"><label>Auto-Tune</label>{perf.tune_history.slice().reverse().map((h,i)=>(
-      <div key={i} className="tune"><span className="t-date">{h.date}</span><span className={'t-pnl '+(((h.stats?.pnl)||0)>=0?'up':'dn')}>{(h.stats?.pnl>=0?'+':'')+'$'+Math.abs(h.stats?.pnl||0).toFixed(0)}</span><span className="t-wr">{h.stats?.wins}W {h.stats?.losses}L</span><div className="t-ch">{h.changes?.map((c,j)=><div key={j}>{c}</div>)}</div></div>))}</div>}
-    {perf.recent_trades?.length>0&&<div className="card wide"><label>Recent</label>{perf.recent_trades.slice().reverse().slice(0,12).map((t,i)=>(
+
+    {/* Equity chart card */}
+    <div className="eq-card">
+      <div className="eq-header">
+        <div>
+          <span className="eq-title">Portfolio Value</span>
+          <span className="eq-value">${(d.equity||endEq||0).toLocaleString(undefined,{maximumFractionDigits:0})}</span>
+        </div>
+        <div className="eq-change">
+          <span className={(totalChg>=0?'up':'dn')+' eq-chg'}>{totalChg>=0?'+':''}{totalChg.toFixed(0)}</span>
+          <span className={(totalPct>=0?'up':'dn')+' eq-pct'}>{totalPct>=0?'+':''}{totalPct.toFixed(2)}%</span>
+        </div>
+      </div>
+      {d.pnl_history?.length>1 ? <EqChart data={d.pnl_history}/> : <div className="eq-empty">No data for this period</div>}
+    </div>
+
+    {/* Stats row */}
+    <div className="stat-row">
+      <div className="stat-card"><span className="stat-n">{d.total_trades}</span><span className="stat-l">Trades</span></div>
+      <div className="stat-card"><span className={'stat-n '+(d.daily_pnl>=0?'up':'dn')}>{d.daily_pnl>=0?'+':''}{(d.daily_pnl||0).toFixed(0)}</span><span className="stat-l">Today</span></div>
+      <div className="stat-card"><span className={'stat-n '+(totalChg>=0?'up':'dn')}>{totalChg>=0?'+':''}{totalChg.toFixed(0)}</span><span className="stat-l">{period} P&L</span></div>
+    </div>
+
+    {/* Config */}
+    {d.current_params&&<div className="card wide"><label>Auto-Tuner Config</label>
+      <div className="params">{Object.entries(d.current_params).map(([k,v])=>(
+        <div key={k} className="pr"><span>{k}</span><span>{typeof v==='number'?(v<1&&v>0?(v*100).toFixed(1)+'%':v):String(v)}</span></div>))}</div>
+    </div>}
+
+    {/* Tune history */}
+    {d.tune_history?.length>0&&<div className="card wide"><label>Auto-Tune Log</label>{d.tune_history.slice().reverse().map((h,i)=>(
+      <div key={i} className="tune"><span className="t-date">{h.date}</span><span className={'t-pnl '+((h.stats?.pnl||0)>=0?'up':'dn')}>{h.stats?.pnl>=0?'+':''}${Math.abs(h.stats?.pnl||0).toFixed(0)}</span><span className="t-wr">{h.stats?.wins}W {h.stats?.losses}L</span><div className="t-ch">{h.changes?.map((c,j)=><div key={j}>{c}</div>)}</div></div>))}</div>}
+
+    {/* Recent trades */}
+    {d.recent_trades?.length>0&&<div className="card wide"><label>Recent Trades</label>{d.recent_trades.slice().reverse().slice(0,12).map((t,i)=>(
       <div key={i} className="tr-row"><span className={'tr-act '+(t.action==='buy'?'up':'dn')}>{t.action?.toUpperCase()}</span><span className="tr-sym">{t.ticker}</span><span className="tr-time">{t.time?.slice(11,16)}</span></div>))}</div>}
   </div>)
 }
@@ -276,14 +322,28 @@ function Tog({l,on,fn}){return <div className="s-row"><span>{l}</span><button cl
 
 function EqChart({data}){
   if(!data||data.length<2)return null
-  const v=data.map(d=>d.equity||d.value||0).filter(x=>x>0);if(v.length<2)return null
-  const mn=Math.min(...v),mx=Math.max(...v),rng=mx-mn||1,W=600,H=130,P=20
-  const pts=v.map((y,i)=>`${P+(i/(v.length-1))*(W-P*2)},${P+(1-(y-mn)/rng)*(H-P*2)}`).join(' ')
+  const v=data.map(d=>d.equity||0).filter(x=>x>0);if(v.length<2)return null
+  const mn=Math.min(...v),mx=Math.max(...v),rng=mx-mn||1,W=700,H=180,P=30
+  const pts=v.map((y,i)=>[P+(i/(v.length-1))*(W-P*2), P+(1-(y-mn)/rng)*(H-P*2)])
+  const line=pts.map(p=>p.join(',')).join(' ')
   const up=v[v.length-1]>=v[0]
+  const col=up?'#00dda0':'#f04060'
+  // Grid lines
+  const gridY=[0,.25,.5,.75,1].map(f=>P+(1-f)*(H-P*2))
+  const gridLabels=[mn,mn+rng*.25,mn+rng*.5,mn+rng*.75,mx]
   return(<svg viewBox={`0 0 ${W} ${H}`} className="eq-svg">
-    <defs><linearGradient id="eg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={up?'#00dda0':'#f04060'} stopOpacity=".12"/><stop offset="100%" stopColor={up?'#00dda0':'#f04060'} stopOpacity="0"/></linearGradient></defs>
-    <polygon points={`${P},${H-P} ${pts} ${W-P},${H-P}`} fill="url(#eg)"/>
-    <polyline points={pts} fill="none" stroke={up?'#00dda0':'#f04060'} strokeWidth="1.5"/>
+    <defs>
+      <linearGradient id="eqfill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor={col} stopOpacity=".18"/>
+        <stop offset="100%" stopColor={col} stopOpacity="0"/>
+      </linearGradient>
+    </defs>
+    {gridY.map((y,i)=><line key={i} x1={P} y1={y} x2={W-P} y2={y} stroke="#1a1c26" strokeWidth="1"/>)}
+    {gridLabels.map((val,i)=><text key={i} x={P-4} y={gridY[i]+3} fill="#3a3c50" fontSize="8" fontFamily="Geist Mono" textAnchor="end">${(val/1000).toFixed(1)}k</text>)}
+    <polygon points={`${P},${H-P} ${line} ${W-P},${H-P}`} fill="url(#eqfill)"/>
+    <polyline points={line} fill="none" stroke={col} strokeWidth="2" strokeLinejoin="round"/>
+    <circle cx={pts[pts.length-1][0]} cy={pts[pts.length-1][1]} r="3" fill={col}/>
+    <circle cx={pts[pts.length-1][0]} cy={pts[pts.length-1][1]} r="6" fill={col} opacity=".2"/>
   </svg>)
 }
 

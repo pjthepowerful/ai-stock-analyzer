@@ -222,8 +222,8 @@ async def health():
 
 
 @app.get("/api/performance")
-async def performance():
-    """Performance dashboard data — trade history, daily P&L, win rate."""
+async def performance(period: str = "1M"):
+    """Performance dashboard data with period selector."""
     import pathlib
     log_path = pathlib.Path(__file__).parent / "trade_log.json"
     config_path = pathlib.Path(__file__).parent / "autopilot_config.json"
@@ -242,39 +242,35 @@ async def performance():
         except Exception:
             pass
 
-    # Calculate stats
-    buys = [t for t in trades if t.get("action") == "buy"]
-    sells = [t for t in trades if t.get("action") in ("sell", "cover")]
-
-    # Group by date
-    daily = {}
-    for t in trades:
-        date = t.get("time", "")[:10]
-        if date not in daily:
-            daily[date] = {"trades": 0, "buys": 0, "sells": 0}
-        daily[date]["trades"] += 1
-        if t.get("action") == "buy":
-            daily[date]["buys"] += 1
-        elif t.get("action") in ("sell", "cover"):
-            daily[date]["sells"] += 1
-
-    # Get Alpaca portfolio history for P&L chart
+    # Get Alpaca portfolio history for equity chart
     pnl_history = []
     try:
-        hist = engine.alpaca_portfolio_history()
+        # Map frontend periods to Alpaca API periods
+        period_map = {"1D": "1D", "1W": "1W", "1M": "1M", "3M": "3M", "6M": "6M", "1A": "1A", "all": "all"}
+        api_period = period_map.get(period, "1M")
+        timeframe = "15Min" if api_period in ("1D",) else "1D"
+
+        hist = engine.alpaca_portfolio_history(period=api_period)
         if hist and hist.get("equity"):
-            pnl_history = [{"equity": e, "ts": t} for t, e in zip(hist["timestamps"], hist["equity"]) if e and e > 0]
+            pnl_history = [{"equity": round(e, 2), "pnl": round(p, 2), "ts": t}
+                          for t, e, p in zip(hist["timestamps"], hist["equity"], hist.get("profit_loss", [0]*len(hist["equity"])))
+                          if e and e > 0]
     except Exception:
         pass
+
+    # Account info for stats
+    acc = engine.alpaca_account() or {}
 
     return {
         "ok": True,
         "total_trades": len(trades),
         "recent_trades": trades[-20:],
-        "daily_summary": daily,
         "tune_history": config.get("tune_history", []),
         "current_params": {k: v for k, v in config.items() if k not in ("tune_history", "last_tuned")},
         "pnl_history": pnl_history,
+        "equity": acc.get("equity", 0),
+        "daily_pnl": acc.get("daily_pnl", 0),
+        "daily_pnl_pct": acc.get("daily_pnl_pct", 0),
     }
 
 
@@ -409,70 +405,6 @@ async def spy_trend():
     """Get SPY intraday trend."""
     trend = engine._get_spy_intraday_trend()
     return {"ok": True, "data": trend}
-
-
-@app.get("/api/performance")
-async def get_performance():
-    """Get trading performance data for dashboard."""
-    try:
-        trades = []
-        if TRADE_LOG_PATH.exists():
-            trades = json.loads(TRADE_LOG_PATH.read_text())
-
-        # Also pull from Alpaca for real P&L data
-        import requests as req
-        headers = engine._alpaca_headers()
-        base = engine.ALPACA_BASE
-
-        # Get portfolio history (last 30 days)
-        hist_r = req.get(f"{base}/v2/account/portfolio/history",
-                        headers=headers,
-                        params={"period": "1M", "timeframe": "1D"},
-                        timeout=10)
-        portfolio_history = []
-        if hist_r.status_code == 200:
-            h = hist_r.json()
-            timestamps = h.get("timestamp", [])
-            equity = h.get("equity", [])
-            pnl = h.get("profit_loss", [])
-            pnl_pct = h.get("profit_loss_pct", [])
-            for i, ts in enumerate(timestamps):
-                portfolio_history.append({
-                    "date": datetime.fromtimestamp(ts).strftime("%Y-%m-%d"),
-                    "equity": equity[i] if i < len(equity) else 0,
-                    "pnl": pnl[i] if i < len(pnl) else 0,
-                    "pnl_pct": round((pnl_pct[i] or 0) * 100, 2) if i < len(pnl_pct) else 0,
-                })
-
-        # Get closed orders for win/loss stats (last 7 days)
-        et = ZoneInfo("US/Eastern")
-        from datetime import timedelta
-        orders_r = req.get(f"{base}/v2/orders",
-                          headers=headers,
-                          params={"status": "closed", "limit": 200,
-                                  "after": (datetime.now(et) - timedelta(days=7)).isoformat()},
-                          timeout=15)
-        recent_orders = orders_r.json() if orders_r.status_code == 200 else []
-        filled_orders = [o for o in recent_orders if o.get("filled_qty") and float(o["filled_qty"]) > 0]
-
-        # Auto-tune config
-        config_path = pathlib.Path(__file__).parent / "autopilot_config.json"
-        config = {}
-        if config_path.exists():
-            config = json.loads(config_path.read_text())
-
-        return {
-            "ok": True,
-            "data": {
-                "trade_log": trades[-50:],
-                "portfolio_history": portfolio_history,
-                "recent_orders": len(filled_orders),
-                "config": {k: v for k, v in config.items() if k != "tune_history"},
-                "tune_history": config.get("tune_history", [])[-10:],
-            }
-        }
-    except Exception as e:
-        return {"ok": False, "error": str(e)[:100]}
 
 
 @app.get("/api/chart/{ticker}")
