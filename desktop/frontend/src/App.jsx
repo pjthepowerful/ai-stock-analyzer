@@ -3,7 +3,7 @@ import Chart from './Chart'
 import { playBuy, playSell, playNotify, playAlert, playProfit, playTick } from './sounds'
 import './App.css'
 
-const BACKEND = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:3141' : 'https://scurrilously-inevasible-kailey.ngrok-free.dev')
+const BACKEND = (import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:3141' : 'https://scurrilously-inevasible-kailey.ngrok-free.dev')).replace(/\/+$/, '')
 const API = BACKEND
 const H = { 'ngrok-skip-browser-warning': '1' }
 const f = (url, opts = {}) => fetch(url, { ...opts, headers: { ...H, ...(opts.headers || {}) } })
