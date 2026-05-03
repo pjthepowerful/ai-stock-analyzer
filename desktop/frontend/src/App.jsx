@@ -6,10 +6,88 @@ import './App.css'
 const BACKEND = (import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:3141' : 'https://scurrilously-inevasible-kailey.ngrok-free.dev')).replace(/\/+$/, '')
 const API = BACKEND
 const H = { 'ngrok-skip-browser-warning': '1' }
-const f = (url, opts = {}) => fetch(url, { ...opts, headers: { ...H, ...(opts.headers || {}) } })
+const f = (url, opts = {}) => {
+  const headers = { ...H, ...(opts.headers || {}) }
+  const tk = localStorage.getItem('paula-token')
+  if (tk) headers['Authorization'] = 'Bearer ' + tk
+  return fetch(url, { ...opts, headers })
+}
 const WS_URL = `${BACKEND.startsWith('https') ? 'wss:' : 'ws:'}//${new URL(BACKEND).host}/ws`
 
 function App() {
+  const [user, setUser] = useState(null)
+  const [token, setToken] = useState(localStorage.getItem('paula-token'))
+  const [authLoading, setAuthLoading] = useState(true)
+
+  // Check auth on mount
+  useEffect(() => {
+    if (token) {
+      f(API + '/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } })
+        .then(r => r.json())
+        .then(data => { if (data.ok) setUser(data.user); else { setToken(null); localStorage.removeItem('paula-token') } })
+        .catch(() => {})
+        .finally(() => setAuthLoading(false))
+    } else { setAuthLoading(false) }
+  }, [token])
+
+  const doAuth = async (username, password, isSignup) => {
+    const res = await f(API + '/api/auth/' + (isSignup ? 'signup' : 'login'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    }).then(r => r.json())
+    if (res.ok) { setToken(res.token); setUser(res.user); localStorage.setItem('paula-token', res.token) }
+    return res
+  }
+
+  const logout = () => { setUser(null); setToken(null); localStorage.removeItem('paula-token') }
+
+  if (authLoading) return <div className="auth-loading"><div className="logo-p">P</div></div>
+  if (!user) return <LoginPage onAuth={doAuth} />
+
+  return <MainApp user={user} token={token} logout={logout} />
+}
+
+function LoginPage({ onAuth }) {
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [isSignup, setIsSignup] = useState(false)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const submit = async (e) => {
+    e?.preventDefault()
+    if (!username || !password) return
+    setLoading(true); setError('')
+    const res = await onAuth(username, password, isSignup)
+    if (!res.ok) setError(res.error)
+    setLoading(false)
+  }
+
+  return (
+    <div className="login-page">
+      <div className="login-card">
+        <div className="login-header">
+          <div className="logo-p">P</div>
+          <h1>Paula</h1>
+          <p>{isSignup ? 'Create your account' : 'Welcome back'}</p>
+        </div>
+        <div className="login-form">
+          <input className="login-input" placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit() }} autoFocus />
+          <input className="login-input" type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit() }} />
+          {error && <div className="login-error">{error}</div>}
+          <button className="login-btn" onClick={submit} disabled={loading}>
+            {loading ? '...' : isSignup ? 'Create Account' : 'Sign In'}
+          </button>
+          <button className="login-toggle" onClick={() => { setIsSignup(!isSignup); setError('') }}>
+            {isSignup ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MainApp({ user, token, logout }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -192,7 +270,7 @@ function App() {
 
   const pnl = account?(account.daily_pnl||0):0, pnlPct = account?(account.daily_pnl_pct||0):0
   const totalUnrealized = positions.reduce((s,p)=>s+(p.unrealized_pnl||0),0)
-  const name = settings.userName || 'PJ'
+  const name = settings.userName || user?.username || 'PJ'
 
   return (
     <div className="app">
@@ -247,7 +325,10 @@ function App() {
               <span className="pi-pnl">{p.unrealized_pnl>=0?'+':''}{p.unrealized_pnl.toFixed(0)}</span>
             </button>)):<span className="empty-txt">No positions</span>}</div>
         </div>
-        <div className="sb-bottom"><span className={'conn'+(connected?' c-on':'')}>{connected?'● Connected':'○ Offline'}</span></div>
+        <div className="sb-bottom">
+          <span className={'conn'+(connected?' c-on':'')}>{connected?'● Connected':'○ Offline'}</span>
+          <button className="logout-btn" onClick={logout}>Sign out</button>
+        </div>
       </aside>
 
       {/* Main */}

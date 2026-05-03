@@ -84,7 +84,7 @@ code{font-family:'Geist Mono',monospace;background:var(--c2);color:var(--grn);pa
 .pi-pnl{font-family:'Geist Mono',monospace;font-size:.7rem;font-weight:600}
 .pi-up .pi-pnl{color:var(--grn)}.pi-dn .pi-pnl{color:var(--red)}
 .empty-txt{font-size:.68rem;color:var(--dim);padding:10px;display:block}
-.sb-bottom{margin-top:auto;padding:10px 16px;border-top:1px solid var(--brd)}
+.sb-bottom{margin-top:auto;padding:10px 16px;border-top:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between}
 .conn{font-size:.54rem;font-family:'Geist Mono',monospace;color:var(--dim)}
 .c-on{color:var(--grn)}
 
@@ -218,6 +218,31 @@ code{font-family:'Geist Mono',monospace;background:var(--c2);color:var(--grn);pa
 .stat-card:nth-child(1) .stat-n{color:var(--blu)}
 .stat-card:nth-child(3) .stat-n{color:var(--pur)}
 .stat-l{display:block;font-size:.48rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);margin-top:4px;font-weight:600}
+
+/* Mobile */
+@media(max-width:768px){
+
+/* Login */
+.auth-loading{display:flex;align-items:center;justify-content:center;height:100vh;background:var(--bg)}
+.login-page{display:flex;align-items:center;justify-content:center;height:100vh;background:var(--bg);
+  background:radial-gradient(ellipse at 50% 30%,rgba(0,221,160,.04),transparent 60%),var(--bg)}
+.login-card{width:360px;padding:40px 32px;text-align:center}
+.login-header{margin-bottom:32px}
+.login-header .logo-p{width:48px;height:48px;background:linear-gradient(135deg,var(--grn),var(--grn2));border-radius:12px;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;color:var(--bg);margin-bottom:16px;box-shadow:0 4px 20px rgba(0,221,160,.2)}
+.login-header h1{font-size:1.6rem;font-weight:700;color:var(--wh);margin-bottom:6px}
+.login-header p{font-size:.82rem;color:var(--dim)}
+.login-form{display:flex;flex-direction:column;gap:10px}
+.login-input{background:var(--c1);border:1px solid var(--brd);border-radius:10px;padding:12px 16px;color:var(--lt);font-family:inherit;font-size:.85rem;outline:none;transition:.2s}
+.login-input:focus{border-color:rgba(0,221,160,.3);box-shadow:0 0 0 3px rgba(0,221,160,.04)}
+.login-input::placeholder{color:var(--dim)}
+.login-error{font-size:.72rem;color:var(--red);padding:4px 0}
+.login-btn{padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,var(--grn),var(--grn2));color:var(--bg);font-family:inherit;font-size:.85rem;font-weight:600;cursor:pointer;transition:.15s;margin-top:4px}
+.login-btn:hover{box-shadow:0 4px 18px rgba(0,221,160,.25);transform:translateY(-1px)}
+.login-btn:disabled{opacity:.5;transform:none}
+.login-toggle{background:none;border:none;color:var(--dim);font-size:.7rem;cursor:pointer;padding:8px;font-family:inherit}
+.login-toggle:hover{color:var(--grn)}
+.logout-btn{background:none;border:none;color:var(--dim);font-size:.52rem;cursor:pointer;font-family:'Geist Mono',monospace;margin-left:auto;padding:2px 6px;border-radius:3px;transition:.1s}
+.logout-btn:hover{color:var(--red);background:rgba(240,64,96,.06)}
 
 /* Mobile */
 @media(max-width:768px){
