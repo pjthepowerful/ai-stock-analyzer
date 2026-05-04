@@ -248,7 +248,7 @@ function MainApp({ user, token, logout }) {
     let newChatId = null
     if (!chatId) {
       newChatId = Date.now().toString()
-      persistChats([{ id: newChatId, title: 'New chat', messages: [], created: new Date().toISOString() }, ...chatsRef.current])
+      persistChats([{ id: newChatId, title: msg.slice(0, 35), messages: [], created: new Date().toISOString() }, ...chatsRef.current])
       setChatId(newChatId)
       localStorage.setItem('paula-current-chat', newChatId)
     }
