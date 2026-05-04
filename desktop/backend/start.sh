@@ -1,27 +1,27 @@
 #!/bin/bash
-# Paula auto-restart watchdog — restarts on crash during market hours
+# Paula auto-restart watchdog
+# API keys are loaded from DB automatically — no env vars needed after first save
 cd "$(dirname "$0")"
 source venv/bin/activate 2>/dev/null
 
-export ALPACA_KEY_ID="${ALPACA_KEY_ID:-PKW2FMYEUHRNKNLSR6XC3NX25N}"
-export ALPACA_SECRET="${ALPACA_SECRET:-CkKDNZSWjaAqNMsXvgia15BBHihYQ6nnt6kD3G5jPoXH}"
-export GROQ_API_KEY="${GROQ_API_KEY:-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}"
-export POLYGON_API_KEY="${POLYGON_API_KEY:-wzJ5v31KgEA_rwFQxViseXokW5TLoSrG}"
+# Fallback env vars (used only if DB has no keys saved)
+export ALPACA_KEY_ID="${ALPACA_KEY_ID:-}"
+export ALPACA_SECRET="${ALPACA_SECRET:-}"
+export GROQ_API_KEY="${GROQ_API_KEY:-}"
+export POLYGON_API_KEY="${POLYGON_API_KEY:-}"
 
 echo "🟢 Paula watchdog started"
+echo "   Keys will load from DB if saved in Settings"
 
 while true; do
     echo "$(date) — Starting Paula backend..."
     python server.py
     EXIT_CODE=$?
-    echo "$(date) — Paula crashed with exit code $EXIT_CODE"
-    
-    # If it was a clean shutdown (Ctrl+C), don't restart
+    echo "$(date) — Paula exited with code $EXIT_CODE"
     if [ $EXIT_CODE -eq 0 ] || [ $EXIT_CODE -eq 130 ]; then
         echo "Clean shutdown — exiting watchdog"
         break
     fi
-    
     echo "Restarting in 5 seconds..."
     sleep 5
 done

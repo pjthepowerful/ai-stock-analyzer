@@ -75,6 +75,28 @@ def log_trade(action: str, ticker: str, qty: float = 0, price: float = 0, pnl: f
 async def lifespan(app: FastAPI):
     """Startup/shutdown."""
     print("🟢 Paula backend starting...")
+
+    # Load saved API keys from DB (first user's keys)
+    try:
+        db = auth._get_db()
+        row = db.execute("SELECT * FROM user_settings LIMIT 1").fetchone()
+        db.close()
+        if row:
+            if row["alpaca_key"] and not os.environ.get("ALPACA_KEY_ID"):
+                os.environ["ALPACA_KEY_ID"] = row["alpaca_key"]
+                print(f"  ✓ Loaded Alpaca key from DB")
+            if row["alpaca_secret"] and not os.environ.get("ALPACA_SECRET"):
+                os.environ["ALPACA_SECRET"] = row["alpaca_secret"]
+                print(f"  ✓ Loaded Alpaca secret from DB")
+            if row["groq_key"] and not os.environ.get("GROQ_API_KEY"):
+                os.environ["GROQ_API_KEY"] = row["groq_key"]
+                print(f"  ✓ Loaded Groq key from DB")
+            if row["polygon_key"] and not os.environ.get("POLYGON_API_KEY"):
+                os.environ["POLYGON_API_KEY"] = row["polygon_key"]
+                print(f"  ✓ Loaded Polygon key from DB")
+    except Exception as e:
+        print(f"  ⚠️ Could not load keys from DB: {e}")
+
     # Start the EOD guardian — runs independently of autopilot
     eod_task = asyncio.create_task(_eod_guardian())
     yield
@@ -258,6 +280,17 @@ async def save_user_settings(req: SettingsRequest, authorization: str = Header(N
     if not user:
         return {"ok": False, "error": "Not authenticated"}
     result = auth.save_settings(user["id"], req.dict())
+
+    # Hot-reload API keys into environment (no restart needed)
+    if req.alpaca_key:
+        os.environ["ALPACA_KEY_ID"] = req.alpaca_key
+    if req.alpaca_secret:
+        os.environ["ALPACA_SECRET"] = req.alpaca_secret
+    if req.groq_key:
+        os.environ["GROQ_API_KEY"] = req.groq_key
+    if req.polygon_key:
+        os.environ["POLYGON_API_KEY"] = req.polygon_key
+
     return result
 
 @app.get("/api/auth/chat-history")
