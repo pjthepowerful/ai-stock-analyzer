@@ -245,12 +245,13 @@ function MainApp({ user, token, logout }) {
   const sendMessage = async (msg) => {
     if (!msg || sending) return
     // Auto-create chat if none selected
-    let newChatId = null
+    let targetChatId = chatId
+    const isFirstMessage = !messages.length
     if (!chatId) {
-      newChatId = Date.now().toString()
-      persistChats([{ id: newChatId, title: msg.slice(0, 35), messages: [], created: new Date().toISOString() }, ...chatsRef.current])
-      setChatId(newChatId)
-      localStorage.setItem('paula-current-chat', newChatId)
+      targetChatId = Date.now().toString()
+      persistChats([{ id: targetChatId, title: 'New chat', messages: [], created: new Date().toISOString() }, ...chatsRef.current])
+      setChatId(targetChatId)
+      localStorage.setItem('paula-current-chat', targetChatId)
     }
     setMessages(prev => [...prev, { role: 'user', content: msg }]); setInput(''); setSending(true)
     try {
@@ -259,15 +260,19 @@ function MainApp({ user, token, logout }) {
       if (data.ok) {
         setMessages(prev => [...prev, { role:'assistant', content:data.message, type:data.type, ticker:data.ticker||null, signal:data.trade_signal||null }])
 
-        // AI-generate title for new chats
-        if (newChatId) {
+        // AI-generate title on first message of any chat
+        if (isFirstMessage && targetChatId) {
           f(API+'/api/chat/title', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg}) })
             .then(r=>r.json()).then(t=>{
               if (t.ok && t.title) {
-                const updated = chatsRef.current.map(c => c.id === newChatId ? { ...c, title: t.title } : c)
+                const updated = chatsRef.current.map(c => c.id === targetChatId ? { ...c, title: t.title } : c)
                 persistChats(updated)
               }
-            }).catch(()=>{})
+            }).catch(()=>{
+              // Fallback: use message text as title
+              const updated = chatsRef.current.map(c => c.id === targetChatId && c.title === 'New chat' ? { ...c, title: msg.slice(0, 35) } : c)
+              persistChats(updated)
+            })
         }
 
         if (data.type==='trade'&&data.message) {
