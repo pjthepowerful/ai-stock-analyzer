@@ -489,6 +489,35 @@ async def performance(period: str = "1M"):
     }
 
 
+class TitleRequest(BaseModel):
+    message: str
+
+@app.post("/api/chat/title")
+async def generate_title(req: TitleRequest):
+    """Generate a short chat title from the first message using AI."""
+    try:
+        import requests as r
+        key = os.environ.get("GROQ_API_KEY", "")
+        if not key:
+            return {"ok": True, "title": req.message[:30]}
+        resp = r.post("https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={
+                "model": "llama-3.3-70b-versatile",
+                "messages": [
+                    {"role": "system", "content": "Generate a 3-5 word title for this chat. No quotes, no punctuation, just the title. Examples: 'AAPL Analysis', 'Market Recap Today', 'Buy NVDA Discussion', 'Portfolio Strategy', 'Top Gainers Scan'"},
+                    {"role": "user", "content": req.message[:200]}
+                ],
+                "max_tokens": 15, "temperature": 0.3
+            }, timeout=5)
+        if resp.status_code == 200:
+            title = resp.json()["choices"][0]["message"]["content"].strip().strip('"').strip("'")
+            return {"ok": True, "title": title[:40]}
+    except Exception:
+        pass
+    return {"ok": True, "title": req.message[:30]}
+
+
 @app.post("/api/chat/clear")
 async def clear_chat():
     """Clear chat history."""

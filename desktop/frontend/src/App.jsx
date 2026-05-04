@@ -145,10 +145,7 @@ function MainApp({ user, token, logout }) {
     if (chatId && messages.length > 0) {
       const updated = chats.map(c => {
         if (c.id !== chatId) return c
-        // Auto-title from first user message
-        const firstUser = messages.find(m => m.role === 'user')
-        const title = firstUser ? firstUser.content.slice(0, 40) : c.title
-        return { ...c, messages, title }
+        return { ...c, messages }
       })
       saveChats(updated)
     }
@@ -233,9 +230,11 @@ function MainApp({ user, token, logout }) {
   const sendMessage = async (msg) => {
     if (!msg || sending) return
     // Auto-create chat if none selected
+    let isNewChat = false
     if (!chatId) {
+      isNewChat = true
       const id = Date.now().toString()
-      const chat = { id, title: msg.slice(0, 40), messages: [], created: new Date().toISOString() }
+      const chat = { id, title: 'New chat', messages: [], created: new Date().toISOString() }
       const updated = [chat, ...chats]
       saveChats(updated)
       setChatId(id)
@@ -247,6 +246,21 @@ function MainApp({ user, token, logout }) {
       const data = await res.json()
       if (data.ok) {
         setMessages(prev => [...prev, { role:'assistant', content:data.message, type:data.type, ticker:data.ticker||null, signal:data.trade_signal||null }])
+
+        // AI-generate title for new chats
+        if (isNewChat) {
+          f(API+'/api/chat/title', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg}) })
+            .then(r=>r.json()).then(t=>{
+              if(t.ok&&t.title){
+                setChats(prev=>{
+                  const updated=prev.map(c=>c.id===localStorage.getItem('paula-current-chat')?{...c,title:t.title}:c)
+                  localStorage.setItem('paula-chats',JSON.stringify(updated))
+                  return updated
+                })
+              }
+            }).catch(()=>{})
+        }
+
         if (data.type==='trade'&&data.message) {
           if(data.message.includes('Bought')){snd(playBuy);addToast(data.message.slice(0,60),'buy')}
           else if(data.message.includes('Sold')||data.message.includes('Shorted')){snd(playSell);addToast(data.message.slice(0,60),'sell')}
