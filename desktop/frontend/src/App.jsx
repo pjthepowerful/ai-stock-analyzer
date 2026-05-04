@@ -506,10 +506,10 @@ function SetView({settings,update,user,token,logout}){
 
     {/* API Keys */}
     {user&&<div className="card wide"><label>API Keys</label>
-      <div className="s-row"><span>Alpaca Key</span><input className="s-inp s-wide" value={keys.alpaca_key} onChange={e=>setKeys({...keys,alpaca_key:e.target.value})} placeholder="PK..."/></div>
+      <div className="s-row"><span>Alpaca Key</span><input className="s-inp s-wide" type="password" value={keys.alpaca_key} onChange={e=>setKeys({...keys,alpaca_key:e.target.value})} placeholder="PK..."/></div>
       <div className="s-row"><span>Alpaca Secret</span><input className="s-inp s-wide" type="password" value={keys.alpaca_secret} onChange={e=>setKeys({...keys,alpaca_secret:e.target.value})} placeholder="••••••"/></div>
       <div className="s-row"><span>Groq Key</span><input className="s-inp s-wide" type="password" value={keys.groq_key} onChange={e=>setKeys({...keys,groq_key:e.target.value})} placeholder="gsk_..."/></div>
-      <div className="s-row"><span>Polygon Key</span><input className="s-inp s-wide" value={keys.polygon_key} onChange={e=>setKeys({...keys,polygon_key:e.target.value})} placeholder="..."/></div>
+      <div className="s-row"><span>Polygon Key</span><input className="s-inp s-wide" type="password" value={keys.polygon_key} onChange={e=>setKeys({...keys,polygon_key:e.target.value})} placeholder="..."/></div>
       <button className={'login-btn s-save'+(keySaved?' s-saved':'')} onClick={saveKeys}>{keySaved?'✓ Saved':'Save Keys'}</button>
     </div>}
 

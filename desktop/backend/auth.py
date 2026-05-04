@@ -30,7 +30,7 @@ def init_db():
     db.executescript("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
+            username TEXT UNIQUE NOT NULL COLLATE NOCASE,
             email TEXT UNIQUE,
             password_hash TEXT NOT NULL,
             salt TEXT NOT NULL,
@@ -112,13 +112,13 @@ def signup(username: str, password: str, email: str = None) -> dict:
     db = _get_db()
     try:
         db.execute("INSERT INTO users (username, email, password_hash, salt) VALUES (?, ?, ?, ?)",
-                   (username.lower(), email, pw_hash, salt))
+                   (username, email, pw_hash, salt))
         user_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
         db.execute("INSERT INTO user_settings (user_id, display_name) VALUES (?, ?)",
                    (user_id, username))
         db.commit()
-        token = _make_jwt({"user_id": user_id, "username": username.lower()})
-        return {"ok": True, "token": token, "user": {"id": user_id, "username": username.lower()}}
+        token = _make_jwt({"user_id": user_id, "username": username})
+        return {"ok": True, "token": token, "user": {"id": user_id, "username": username}}
     except sqlite3.IntegrityError:
         return {"ok": False, "error": "Username already taken"}
     finally:
@@ -129,7 +129,7 @@ def login(username: str, password: str) -> dict:
     """Authenticate a user."""
     db = _get_db()
     try:
-        row = db.execute("SELECT * FROM users WHERE username = ?", (username.lower(),)).fetchone()
+        row = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
         if not row:
             return {"ok": False, "error": "Invalid username or password"}
         pw_hash, _ = _hash_password(password, row["salt"])
