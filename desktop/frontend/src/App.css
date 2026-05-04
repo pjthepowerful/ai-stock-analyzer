@@ -191,6 +191,10 @@ code{font-family:'Geist Mono',monospace;background:var(--c2);color:var(--grn);pa
 .tog-on{background:rgba(0,221,160,.1);color:var(--grn);border-color:rgba(0,221,160,.25);box-shadow:0 0 8px rgba(0,221,160,.1)}
 .s-inp{background:var(--c2);border:1px solid var(--brd);border-radius:6px;padding:4px 8px;color:var(--lt);font-size:.72rem;font-family:inherit;width:110px;outline:none}
 .s-inp:focus{border-color:var(--grn);box-shadow:0 0 0 2px rgba(0,221,160,.05)}
+.s-wide{width:180px;font-family:'Geist Mono',monospace;font-size:.65rem}
+.s-user{font-family:'Geist Mono',monospace;color:var(--grn);font-weight:500;font-size:.72rem}
+.s-save{width:100%;margin-top:8px;padding:8px;font-size:.72rem;border-radius:6px}
+.s-saved{background:rgba(0,221,160,.15)!important;box-shadow:none!important;transform:none!important}
 .eq-svg{width:100%;height:auto;display:block}
 
 /* Dashboard extras */

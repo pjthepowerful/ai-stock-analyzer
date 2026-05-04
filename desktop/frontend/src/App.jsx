@@ -335,7 +335,7 @@ function MainApp({ user, token, logout }) {
       <main className="main">
         {!sideOpen&&<button className="ham" onClick={()=>setSideOpen(true)}>☰</button>}
         {view==='stats'?<DashView perf={perf}/>
-        :view==='settings'?<SetView settings={settings} update={updateSetting}/>
+        :view==='settings'?<SetView settings={settings} update={updateSetting} user={user} token={token} logout={logout}/>
         :(<>
           {selectedPos&&(()=>{const p=positions.find(x=>x.ticker===selectedPos);if(!p)return null;return(
             <div className="detail-bar">
@@ -472,8 +472,52 @@ function DashView({perf}){
   </div>)
 }
 
-function SetView({settings,update}){
+function SetView({settings,update,user,token,logout}){
+  const [keys, setKeys] = useState({alpaca_key:'',alpaca_secret:'',groq_key:'',polygon_key:''})
+  const [keySaved, setKeySaved] = useState(false)
+  const [keyLoaded, setKeyLoaded] = useState(false)
+
+  // Load saved keys on mount
+  useEffect(()=>{
+    if(token&&!keyLoaded){
+      f(API+'/api/auth/me').then(r=>r.json()).then(d=>{
+        if(d.ok&&d.settings){
+          setKeys({
+            alpaca_key:d.settings.alpaca_key||'',
+            alpaca_secret:d.settings.alpaca_secret||'',
+            groq_key:d.settings.groq_key||'',
+            polygon_key:d.settings.polygon_key||'',
+          })
+        }
+        setKeyLoaded(true)
+      }).catch(()=>setKeyLoaded(true))
+    }
+  },[token])
+
+  const saveKeys = async ()=>{
+    const res = await f(API+'/api/auth/settings',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({...keys,display_name:settings.userName||user?.username||''})
+    }).then(r=>r.json())
+    if(res.ok){setKeySaved(true);setTimeout(()=>setKeySaved(false),2000)}
+  }
+
   return(<div className="view-scroll"><h2 className="view-h">Settings</h2>
+    {/* Account */}
+    {user&&<div className="card wide"><label>Account</label>
+      <div className="s-row"><span>Logged in as</span><span className="s-user">{user.username}</span></div>
+      <div className="s-row"><span>Sign out</span><button className="tog" onClick={logout}>Logout</button></div>
+    </div>}
+
+    {/* API Keys */}
+    {user&&<div className="card wide"><label>API Keys</label>
+      <div className="s-row"><span>Alpaca Key</span><input className="s-inp s-wide" value={keys.alpaca_key} onChange={e=>setKeys({...keys,alpaca_key:e.target.value})} placeholder="PK..."/></div>
+      <div className="s-row"><span>Alpaca Secret</span><input className="s-inp s-wide" type="password" value={keys.alpaca_secret} onChange={e=>setKeys({...keys,alpaca_secret:e.target.value})} placeholder="••••••"/></div>
+      <div className="s-row"><span>Groq Key</span><input className="s-inp s-wide" type="password" value={keys.groq_key} onChange={e=>setKeys({...keys,groq_key:e.target.value})} placeholder="gsk_..."/></div>
+      <div className="s-row"><span>Polygon Key</span><input className="s-inp s-wide" value={keys.polygon_key} onChange={e=>setKeys({...keys,polygon_key:e.target.value})} placeholder="..."/></div>
+      <button className={'login-btn s-save'+(keySaved?' s-saved':'')} onClick={saveKeys}>{keySaved?'✓ Saved':'Save Keys'}</button>
+    </div>}
+
     <div className="card wide"><label>Sounds</label>
       <Tog l="Trade sounds" on={settings.sounds!==false} fn={()=>update('sounds',!(settings.sounds!==false))}/>
       <Tog l="Scan notification" on={settings.scanSound!==false} fn={()=>update('scanSound',!(settings.scanSound!==false))}/>
@@ -483,7 +527,7 @@ function SetView({settings,update}){
       <Tog l="Phone push" on={settings.pushNotif!==false} fn={()=>update('pushNotif',!(settings.pushNotif!==false))}/>
     </div>
     <div className="card wide"><label>Display</label>
-      <div className="s-row"><span>Name</span><input className="s-inp" value={settings.userName||'PJ'} onChange={e=>update('userName',e.target.value)}/></div>
+      <div className="s-row"><span>Name</span><input className="s-inp" value={settings.userName||''} onChange={e=>update('userName',e.target.value)} placeholder={user?.username||'PJ'}/></div>
     </div>
   </div>)
 }
