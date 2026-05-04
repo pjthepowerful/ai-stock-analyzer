@@ -153,11 +153,6 @@ function MainApp({ user, token, logout }) {
       saveChats(updated)
     }
   }, [messages])
-  const [selectedPos, setSelectedPos] = useState(null)
-  const [toasts, setToasts] = useState([])
-  const [view, setView] = useState('chat')
-  const [perf, setPerf] = useState(null)
-  const [sideOpen, setSideOpen] = useState(window.innerWidth > 768)
   const [settings, setSettings] = useState(() => {
     try { return JSON.parse(localStorage.getItem('paula-settings')) || {} } catch { return {} }
   })
