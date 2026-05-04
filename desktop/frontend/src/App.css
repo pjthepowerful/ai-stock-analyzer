@@ -185,6 +185,18 @@ code{font-family:'Geist Mono',monospace;background:var(--c2);color:var(--grn);pa
 .tr-act.dn{background:rgba(240,64,96,.08);border:1px solid rgba(240,64,96,.15)}
 .tr-sym{font-family:'Geist Mono',monospace;color:var(--wh);font-weight:600}
 .tr-time{margin-left:auto;font-family:'Geist Mono',monospace;color:var(--dim)}
+
+/* Recaps */
+.recap-day{padding:8px 6px;border-bottom:1px solid var(--brd);border-radius:6px;transition:.1s;margin-bottom:2px}
+.recap-day:hover{background:var(--c2)}
+.recap-day:last-child{border-bottom:none}
+.recap-head{display:flex;align-items:center;gap:10px;margin-bottom:3px}
+.recap-date{font-family:'Geist Mono',monospace;font-size:.68rem;font-weight:600;color:var(--lt);min-width:80px}
+.recap-pnl{font-family:'Geist Mono',monospace;font-size:.72rem;font-weight:700}
+.recap-count{font-family:'Geist Mono',monospace;font-size:.56rem;color:var(--dim);margin-left:auto;background:var(--c2);padding:1px 6px;border-radius:3px}
+.recap-detail{display:flex;align-items:center;gap:8px;margin-top:2px}
+.recap-bs{font-family:'Geist Mono',monospace;font-size:.52rem;color:var(--txt);background:var(--c1);padding:1px 6px;border-radius:3px}
+.recap-tickers{font-family:'Geist Mono',monospace;font-size:.52rem;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .s-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--brd);font-size:.74rem}
 .s-row:last-child{border-bottom:none}
 .tog{padding:4px 12px;border-radius:12px;font-size:.62rem;font-weight:600;cursor:pointer;border:1px solid var(--brd);background:var(--c2);color:var(--dim);font-family:'Geist Mono',monospace;transition:.12s}

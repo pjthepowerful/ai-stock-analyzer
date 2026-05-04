@@ -451,6 +451,23 @@ function DashView({perf}){
       <div className="stat-card"><span className={'stat-n '+(totalChg>=0?'up':'dn')}>{totalChg>=0?'+':''}{totalChg.toFixed(0)}</span><span className="stat-l">{period} P&L</span></div>
     </div>
 
+    {/* Daily Recaps */}
+    {d.daily_recaps?.length>0&&<div className="card wide"><label>{period==='1D'?'Today\'s Trades':period==='1W'?'This Week — Daily Recap':'Trade Recap'}</label>
+      {d.daily_recaps.map((day,i)=>(
+        <div key={i} className="recap-day">
+          <div className="recap-head">
+            <span className="recap-date">{new Date(day.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</span>
+            <span className={'recap-pnl '+((day.pnl||0)>=0?'up':'dn')}>{(day.pnl||0)>=0?'+':''}{(day.pnl||0).toFixed(0)}</span>
+            <span className="recap-count">{day.trades} trades</span>
+          </div>
+          <div className="recap-detail">
+            <span className="recap-bs">{day.buys}B / {day.sells}S</span>
+            <span className="recap-tickers">{day.tickers?.join(', ')}</span>
+          </div>
+        </div>
+      ))}
+    </div>}
+
     {/* Config */}
     {d.current_params&&<div className="card wide"><label>Auto-Tuner Config</label>
       <div className="params">{Object.entries(d.current_params).map(([k,v])=>(

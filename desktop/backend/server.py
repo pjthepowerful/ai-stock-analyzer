@@ -319,8 +319,11 @@ async def health():
 
 @app.get("/api/performance")
 async def performance(period: str = "1M"):
-    """Performance dashboard data with period selector."""
+    """Performance dashboard data with period-specific trade recaps."""
     import pathlib
+    from datetime import timedelta
+    import requests as req
+
     log_path = pathlib.Path(__file__).parent / "trade_log.json"
     config_path = pathlib.Path(__file__).parent / "autopilot_config.json"
 
@@ -341,11 +344,8 @@ async def performance(period: str = "1M"):
     # Get Alpaca portfolio history for equity chart
     pnl_history = []
     try:
-        # Map frontend periods to Alpaca API periods
         period_map = {"1D": "1D", "1W": "1W", "1M": "1M", "3M": "3M", "6M": "6M", "1A": "1A", "all": "all"}
         api_period = period_map.get(period, "1M")
-        timeframe = "15Min" if api_period in ("1D",) else "1D"
-
         hist = engine.alpaca_portfolio_history(period=api_period)
         if hist and hist.get("equity"):
             pnl_history = [{"equity": round(e, 2), "pnl": round(p, 2), "ts": t}
@@ -354,13 +354,66 @@ async def performance(period: str = "1M"):
     except Exception:
         pass
 
-    # Account info for stats
+    # Account info
     acc = engine.alpaca_account() or {}
+
+    # Pull closed orders from Alpaca for trade recaps
+    daily_recaps = []
+    try:
+        et = ZoneInfo("US/Eastern")
+        days_map = {"1D": 1, "1W": 7, "1M": 30, "3M": 90, "6M": 180, "1A": 365, "all": 730}
+        lookback = days_map.get(period, 30)
+        headers = engine._alpaca_headers()
+        base = engine.ALPACA_BASE
+
+        orders_r = req.get(f"{base}/v2/orders", headers=headers,
+                          params={"status": "closed", "limit": 500,
+                                  "after": (datetime.now(et) - timedelta(days=lookback)).isoformat()},
+                          timeout=15)
+        if orders_r.status_code == 200:
+            closed = orders_r.json()
+            filled = [o for o in closed if o.get("filled_qty") and float(o["filled_qty"]) > 0]
+
+            # Group by date
+            by_date = {}
+            for o in filled:
+                date = (o.get("filled_at") or o.get("created_at", ""))[:10]
+                if not date:
+                    continue
+                if date not in by_date:
+                    by_date[date] = {"buys": 0, "sells": 0, "tickers": set(), "total_orders": 0}
+                by_date[date]["total_orders"] += 1
+                if o["side"] == "buy":
+                    by_date[date]["buys"] += 1
+                else:
+                    by_date[date]["sells"] += 1
+                by_date[date]["tickers"].add(o["symbol"])
+
+            # Match with P&L from portfolio history
+            pnl_by_date = {}
+            for p in pnl_history:
+                if p.get("ts"):
+                    d = datetime.fromtimestamp(p["ts"], tz=et).strftime("%Y-%m-%d")
+                    pnl_by_date[d] = p.get("pnl", 0)
+
+            for date in sorted(by_date.keys(), reverse=True):
+                d = by_date[date]
+                daily_recaps.append({
+                    "date": date,
+                    "trades": d["total_orders"],
+                    "buys": d["buys"],
+                    "sells": d["sells"],
+                    "tickers": sorted(list(d["tickers"]))[:8],
+                    "pnl": round(pnl_by_date.get(date, 0), 2),
+                })
+    except Exception:
+        pass
 
     return {
         "ok": True,
         "total_trades": len(trades),
         "recent_trades": trades[-20:],
+        "daily_recaps": daily_recaps,
         "tune_history": config.get("tune_history", []),
         "current_params": {k: v for k, v in config.items() if k not in ("tune_history", "last_tuned")},
         "pnl_history": pnl_history,
@@ -713,6 +766,8 @@ async def _eod_guardian():
 
 async def _autopilot_loop():
     """Background autopilot loop — runs every 5 minutes."""
+    last_hourly_update = -1  # track which hour we last sent status
+
     while True:
         try:
             is_open, status_msg = engine._market_is_open()
@@ -720,6 +775,8 @@ async def _autopilot_loop():
             # ── Pre-market scan: run once between 8:15-8:30 AM CT ──
             et = ZoneInfo("US/Eastern")
             now_et = datetime.now(et)
+            ct_hour = (now_et.hour - 1) % 24  # rough CT
+
             if now_et.weekday() < 5 and now_et.hour == 9 and 15 <= now_et.minute <= 29:
                 today = now_et.strftime("%Y-%m-%d")
                 if not hasattr(engine.st.session_state, "premarket_done") or engine.st.session_state.get("premarket_done") != today:
@@ -727,10 +784,57 @@ async def _autopilot_loop():
                         loop = asyncio.get_event_loop()
                         pm_result = await loop.run_in_executor(None, engine.premarket_scan)
                         await broadcast("autopilot", {"status": "scanned", "log": pm_result.get("log", [])})
+                        await send_phone_notification(
+                            "🌅 Pre-Market Scan",
+                            f"Watchlist ready: {len(pm_result.get('watchlist', []))} stocks",
+                            priority="low"
+                        )
                     except Exception:
                         pass
 
+            # ── Hourly status update (during market hours) ──
+            if is_open and now_et.hour != last_hourly_update:
+                last_hourly_update = now_et.hour
+                try:
+                    acc = engine.alpaca_account() or {}
+                    positions = engine.alpaca_positions() or []
+                    equity = acc.get("equity", 0)
+                    daily_pnl = acc.get("daily_pnl", 0)
+                    pnl_sign = "+" if daily_pnl >= 0 else ""
+                    pos_count = len(positions)
+
+                    # Build position summary
+                    pos_summary = ""
+                    if positions:
+                        pos_names = [p.get("ticker", "?") for p in positions[:4]]
+                        pos_summary = f" | Holding: {', '.join(pos_names)}"
+
+                    ct_time = now_et.strftime("%-I:%M %p")
+                    await send_phone_notification(
+                        f"📊 Paula Status — {ct_time}",
+                        f"Equity: ${equity:,.0f} | Today: {pnl_sign}${abs(daily_pnl):,.0f} ({pnl_sign}{acc.get('daily_pnl_pct', 0):.2f}%) | {pos_count} positions{pos_summary}",
+                        priority="low"
+                    )
+                except Exception:
+                    pass
+
             if not is_open:
+                # ── EOD recap notification ──
+                if now_et.hour == 16 and now_et.minute < 5 and last_hourly_update != 160:
+                    last_hourly_update = 160
+                    try:
+                        acc = engine.alpaca_account() or {}
+                        daily_pnl = acc.get("daily_pnl", 0)
+                        pnl_sign = "+" if daily_pnl >= 0 else ""
+                        emoji = "🟢" if daily_pnl >= 0 else "🔴"
+                        await send_phone_notification(
+                            f"{emoji} Market Closed — Daily Recap",
+                            f"P&L: {pnl_sign}${abs(daily_pnl):,.0f} ({pnl_sign}{acc.get('daily_pnl_pct', 0):.2f}%) | Equity: ${acc.get('equity', 0):,.0f} | 0 positions",
+                            priority="default"
+                        )
+                    except Exception:
+                        pass
+
                 await broadcast("autopilot", {"status": "paused", "reason": status_msg})
                 await asyncio.sleep(60)
                 continue
@@ -752,17 +856,22 @@ async def _autopilot_loop():
                 "scanned": result.get("scanned", 0),
             })
 
-            # Send phone notification if trades were made
+            # Send detailed phone notification if trades were made
             if buys > 0 or sells > 0 or shorts > 0:
                 parts = []
-                if buys: parts.append(f"{buys} bought")
-                if shorts: parts.append(f"{shorts} shorted")
-                if sells: parts.append(f"{sells} sold")
-                await send_phone_notification(
-                    "Paula Autopilot",
-                    " · ".join(parts),
-                    priority="default"
-                )
+                if buys: parts.append(f"📈 {buys} bought")
+                if shorts: parts.append(f"📉 {shorts} shorted")
+                if sells: parts.append(f"💰 {sells} closed")
+                try:
+                    acc = engine.alpaca_account() or {}
+                    pnl = acc.get("daily_pnl", 0)
+                    pnl_sign = "+" if pnl >= 0 else ""
+                    pos_count = len(engine.alpaca_positions() or [])
+                    detail = f"{' | '.join(parts)} | Day: {pnl_sign}${abs(pnl):,.0f} | {pos_count} open"
+                except Exception:
+                    detail = " | ".join(parts)
+
+                await send_phone_notification("Paula Trade", detail, priority="default")
 
         except asyncio.CancelledError:
             break
