@@ -4688,6 +4688,12 @@ CRITICAL — PRICE ACCURACY:
 - If you don't have price data for a stock, say so — don't make up a number.
 - When listing multiple stocks, use the exact Price and Chg% from the data for each one.
 
+RESPONSE STYLE:
+- Keep responses SHORT and punchy — 2-4 paragraphs max. No walls of text.
+- Lead with the answer, then support with data. Don't ask clarifying questions unless truly ambiguous.
+- Use bullet points sparingly. Prefer flowing sentences.
+- For market regime: just state the regime, key levels, and whether it's safe to trade. 3-4 sentences max.
+
 CHAT HISTORY:
 - You have access to the full conversation history. Use it to maintain context.
 - If the user says "what about that one?" — refer to the last stock discussed.
@@ -4778,7 +4784,7 @@ RESPONSE STYLE:
 
     try:
         client = Groq(api_key=key)
-        resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=1200, temperature=0.3)
+        resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=500, temperature=0.3)
         return resp.choices[0].message.content
     except Exception as e:
         return f"⚠️ AI error: {str(e)[:120]}"
