@@ -451,21 +451,27 @@ function DashView({perf}){
       <div className="stat-card"><span className={'stat-n '+(totalChg>=0?'up':'dn')}>{totalChg>=0?'+':''}{totalChg.toFixed(0)}</span><span className="stat-l">{period} P&L</span></div>
     </div>
 
-    {/* Daily Recaps */}
-    {d.daily_recaps?.length>0&&<div className="card wide"><label>{period==='1D'?'Today\'s Trades':period==='1W'?'This Week — Daily Recap':'Trade Recap'}</label>
-      {d.daily_recaps.map((day,i)=>(
+    {/* Recaps */}
+    {d.recaps?.length>0&&<div className="card wide"><label>{{daily:'Daily Recap',weekly:'Weekly Recap',monthly:'Monthly Recap'}[d.recap_type||'daily']}</label>
+      {d.recaps.map((r,i)=>{
+        const type = d.recap_type||'daily'
+        const dateLabel = type==='monthly'
+          ? new Date(r.date+'T12:00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'})
+          : type==='weekly'
+          ? new Date(r.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})+' — '+(r.end_date?new Date(r.end_date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'')
+          : new Date(r.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})
+        return(
         <div key={i} className="recap-day">
           <div className="recap-head">
-            <span className="recap-date">{new Date(day.date+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</span>
-            <span className={'recap-pnl '+((day.pnl||0)>=0?'up':'dn')}>{(day.pnl||0)>=0?'+':''}{(day.pnl||0).toFixed(0)}</span>
-            <span className="recap-count">{day.trades} trades</span>
+            <span className="recap-date">{dateLabel}</span>
+            <span className={'recap-pnl '+((r.pnl||0)>=0?'up':'dn')}>{(r.pnl||0)>=0?'+':''}{(r.pnl||0).toFixed(0)}</span>
+            <span className="recap-count">{r.trades} trades{r.days>1?' · '+r.days+' days':''}</span>
           </div>
           <div className="recap-detail">
-            <span className="recap-bs">{day.buys}B / {day.sells}S</span>
-            <span className="recap-tickers">{day.tickers?.join(', ')}</span>
+            <span className="recap-bs">{r.buys}B / {r.sells}S</span>
+            <span className="recap-tickers">{r.tickers?.join(', ')}</span>
           </div>
-        </div>
-      ))}
+        </div>)})}
     </div>}
 
     {/* Config */}

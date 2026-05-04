@@ -359,6 +359,8 @@ async def performance(period: str = "1M"):
 
     # Pull closed orders from Alpaca for trade recaps
     daily_recaps = []
+    recaps = []
+    recap_type = "daily"  # daily, weekly, monthly
     try:
         et = ZoneInfo("US/Eastern")
         days_map = {"1D": 1, "1W": 7, "1M": 30, "3M": 90, "6M": 180, "1A": 365, "all": 730}
@@ -396,6 +398,7 @@ async def performance(period: str = "1M"):
                     d = datetime.fromtimestamp(p["ts"], tz=et).strftime("%Y-%m-%d")
                     pnl_by_date[d] = p.get("pnl", 0)
 
+            # Build daily recaps
             for date in sorted(by_date.keys(), reverse=True):
                 d = by_date[date]
                 daily_recaps.append({
@@ -406,6 +409,68 @@ async def performance(period: str = "1M"):
                     "tickers": sorted(list(d["tickers"]))[:8],
                     "pnl": round(pnl_by_date.get(date, 0), 2),
                 })
+
+            # Aggregate based on period
+            if period in ("1D", "1W"):
+                # Day/Week: show daily recaps
+                recaps = daily_recaps
+                recap_type = "daily"
+            elif period == "1M":
+                # Month: group into ~4 weekly recaps
+                recap_type = "weekly"
+                from collections import defaultdict
+                weeks = defaultdict(lambda: {"trades": 0, "buys": 0, "sells": 0, "tickers": set(), "pnl": 0, "days": 0, "start": "", "end": ""})
+                for dr in daily_recaps:
+                    dt = datetime.strptime(dr["date"], "%Y-%m-%d")
+                    week_key = dt.strftime("%Y-W%U")
+                    w = weeks[week_key]
+                    w["trades"] += dr["trades"]
+                    w["buys"] += dr["buys"]
+                    w["sells"] += dr["sells"]
+                    w["tickers"].update(dr["tickers"])
+                    w["pnl"] += dr["pnl"]
+                    w["days"] += 1
+                    if not w["start"] or dr["date"] < w["start"]:
+                        w["start"] = dr["date"]
+                    if not w["end"] or dr["date"] > w["end"]:
+                        w["end"] = dr["date"]
+                for wk in sorted(weeks.keys(), reverse=True):
+                    w = weeks[wk]
+                    recaps.append({
+                        "date": w["start"],
+                        "end_date": w["end"],
+                        "trades": w["trades"],
+                        "buys": w["buys"],
+                        "sells": w["sells"],
+                        "tickers": sorted(list(w["tickers"]))[:10],
+                        "pnl": round(w["pnl"], 2),
+                        "days": w["days"],
+                    })
+            else:
+                # 3M/6M/YTD/All: group into monthly recaps
+                recap_type = "monthly"
+                from collections import defaultdict
+                months = defaultdict(lambda: {"trades": 0, "buys": 0, "sells": 0, "tickers": set(), "pnl": 0, "days": 0})
+                for dr in daily_recaps:
+                    month_key = dr["date"][:7]  # YYYY-MM
+                    m = months[month_key]
+                    m["trades"] += dr["trades"]
+                    m["buys"] += dr["buys"]
+                    m["sells"] += dr["sells"]
+                    m["tickers"].update(dr["tickers"])
+                    m["pnl"] += dr["pnl"]
+                    m["days"] += 1
+                for mk in sorted(months.keys(), reverse=True):
+                    m = months[mk]
+                    recaps.append({
+                        "date": mk + "-01",
+                        "trades": m["trades"],
+                        "buys": m["buys"],
+                        "sells": m["sells"],
+                        "tickers": sorted(list(m["tickers"]))[:12],
+                        "pnl": round(m["pnl"], 2),
+                        "days": m["days"],
+                    })
     except Exception:
         pass
 
@@ -413,7 +478,8 @@ async def performance(period: str = "1M"):
         "ok": True,
         "total_trades": len(trades),
         "recent_trades": trades[-20:],
-        "daily_recaps": daily_recaps,
+        "recaps": recaps,
+        "recap_type": recap_type,
         "tune_history": config.get("tune_history", []),
         "current_params": {k: v for k, v in config.items() if k not in ("tune_history", "last_tuned")},
         "pnl_history": pnl_history,
