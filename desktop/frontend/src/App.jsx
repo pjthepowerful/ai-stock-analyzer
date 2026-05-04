@@ -35,7 +35,12 @@ function App() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
     }).then(r => r.json())
-    if (res.ok) { setToken(res.token); setUser(res.user); localStorage.setItem('paula-token', res.token) }
+    if (res.ok) {
+      setToken(res.token); setUser(res.user); localStorage.setItem('paula-token', res.token)
+      // Auto-set display name from username
+      const s = JSON.parse(localStorage.getItem('paula-settings') || '{}')
+      if (!s.userName) { s.userName = res.user.username; localStorage.setItem('paula-settings', JSON.stringify(s)) }
+    }
     return res
   }
 
@@ -249,14 +254,16 @@ function MainApp({ user, token, logout }) {
 
         // AI-generate title for new chats
         if (isNewChat) {
+          const titleChatId = localStorage.getItem('paula-current-chat')
           f(API+'/api/chat/title', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg}) })
             .then(r=>r.json()).then(t=>{
               if(t.ok&&t.title){
-                setChats(prev=>{
-                  const updated=prev.map(c=>c.id===localStorage.getItem('paula-current-chat')?{...c,title:t.title}:c)
-                  localStorage.setItem('paula-chats',JSON.stringify(updated))
-                  return updated
-                })
+                try {
+                  const stored = JSON.parse(localStorage.getItem('paula-chats')||'[]')
+                  const updated = stored.map(c=>c.id===titleChatId?{...c,title:t.title}:c)
+                  localStorage.setItem('paula-chats', JSON.stringify(updated))
+                  setChats(updated)
+                } catch {}
               }
             }).catch(()=>{})
         }
@@ -559,7 +566,7 @@ function SetView({settings,update,user,token,logout}){
       <Tog l="Phone push" on={settings.pushNotif!==false} fn={()=>update('pushNotif',!(settings.pushNotif!==false))}/>
     </div>
     <div className="card wide"><label>Display</label>
-      <div className="s-row"><span>Name</span><input className="s-inp" value={settings.userName||''} onChange={e=>update('userName',e.target.value)} placeholder={user?.username||'PJ'}/></div>
+      <div className="s-row"><span>Name</span><input className="s-inp" value={settings.userName||user?.username||''} onChange={e=>update('userName',e.target.value)} placeholder="Your name"/></div>
     </div>
   </div>)
 }
