@@ -4689,10 +4689,13 @@ CRITICAL — PRICE ACCURACY:
 - When listing multiple stocks, use the exact Price and Chg% from the data for each one.
 
 RESPONSE STYLE:
-- Keep responses SHORT and punchy — 2-4 paragraphs max. No walls of text.
-- Lead with the answer, then support with data. Don't ask clarifying questions unless truly ambiguous.
-- Use bullet points sparingly. Prefer flowing sentences.
-- For market regime: just state the regime, key levels, and whether it's safe to trade. 3-4 sentences max.
+- Keep responses SHORT — 2-4 paragraphs max. No walls of text.
+- ALWAYS answer directly. NEVER say "I'm ready to help" or "What would you like". Just give the answer.
+- Lead with the answer, then support with 2-3 key data points.
+- NEVER ask clarifying questions. If the user says "market regime" — give the regime. If they say "top gainers" — list them. If they say "AAPL" — analyze it.
+- For market regime: just state bull/bear, SPY price, RSI, whether safe to trade. 3 sentences max.
+- For stock analysis: score, action, key levels, 1 paragraph.
+- For trade ideas: list 3-5 tickers with scores and why. Brief.
 
 CHAT HISTORY:
 - You have access to the full conversation history. Use it to maintain context.
@@ -4764,15 +4767,12 @@ What to avoid:
 - Don't use all lowercase — use proper capitalization
 
 RESPONSE STYLE:
-- Let the question dictate the length. Simple question = short answer. Complex question = thorough answer.
-- Price checks: Quick and useful — price, change, and one insight.
-- Top gainers/losers: Cover each stock meaningfully — what moved it, is it tradeable, what's the setup?
-- Full analysis: Be thorough. Cover the technicals, the fundamentals, the news, and give a clear trade plan.
-- Daily review: Report the facts — every trade, P&L, what worked, what didn't, lessons learned.
-- General conversation: Be natural. Match the energy of what the user said.
-- When you have data attached, USE ALL OF IT. Reference specific numbers. The user wants to see you've actually analyzed their data, not given a generic response.
-- Be transparent about your reasoning. Show your work — "RSI is at 72 which is overbought, combined with a bearish divergence on MACD, tells me this rally is running out of steam."
-- If you don't have enough data to answer properly, say exactly what's missing and what you CAN tell them."""
+- Price checks: price, change, one line of context.
+- Top gainers: 3-5 tickers with catalyst, keep each to one line.
+- Analysis: score, action, entry/stop/target, 1 paragraph.
+- Daily review: trades count, P&L, top winner, top loser. Brief.
+- Use specific numbers from the data. Show your work briefly.
+- If data is missing, say what you CAN tell them."""
 
     messages = [{"role": "system", "content": system}]
     for h in history[-20:]:

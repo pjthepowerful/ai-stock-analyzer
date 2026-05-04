@@ -494,28 +494,37 @@ class TitleRequest(BaseModel):
 
 @app.post("/api/chat/title")
 async def generate_title(req: TitleRequest):
-    """Generate a short chat title from the first message using AI."""
+    """Generate a short chat title from the first message."""
+    msg = req.message.strip()
+    # Simple fallback: capitalize and shorten
+    fallback = msg[:30].strip().title() if len(msg) <= 30 else msg[:28].strip() + '...'
+
     try:
         import requests as r
         key = os.environ.get("GROQ_API_KEY", "")
         if not key:
-            return {"ok": True, "title": req.message[:30]}
+            return {"ok": True, "title": fallback}
         resp = r.post("https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
             json={
                 "model": "llama-3.3-70b-versatile",
                 "messages": [
-                    {"role": "system", "content": "Generate a 3-5 word title for this chat. No quotes, no punctuation, just the title. Examples: 'AAPL Analysis', 'Market Recap Today', 'Buy NVDA Discussion', 'Portfolio Strategy', 'Top Gainers Scan'"},
-                    {"role": "user", "content": req.message[:200]}
+                    {"role": "system", "content": "You are a title generator. Output ONLY a 2-5 word title. Nothing else. No sentences. No punctuation. No quotes. No explanation. Just the title words.\n\nExamples:\nInput: 'market regime' → Market Regime Check\nInput: 'top gainers' → Top Gainers Today\nInput: 'analyze AAPL' → AAPL Analysis\nInput: 'What should I buy?' → Trade Ideas\nInput: 'How did we do today?' → Daily Recap\nInput: 'buy 10 NVDA' → Buy NVDA Order"},
+                    {"role": "user", "content": msg[:100]}
                 ],
-                "max_tokens": 15, "temperature": 0.3
-            }, timeout=5)
+                "max_tokens": 10, "temperature": 0.1
+            }, timeout=4)
         if resp.status_code == 200:
-            title = resp.json()["choices"][0]["message"]["content"].strip().strip('"').strip("'")
+            title = resp.json()["choices"][0]["message"]["content"].strip()
+            # Clean up: remove quotes, periods, anything after a newline
+            title = title.split('\n')[0].strip().strip('"').strip("'").rstrip('.')
+            # If it looks conversational (>8 words), use fallback
+            if len(title.split()) > 8 or len(title) > 40:
+                return {"ok": True, "title": fallback}
             return {"ok": True, "title": title[:40]}
     except Exception:
         pass
-    return {"ok": True, "title": req.message[:30]}
+    return {"ok": True, "title": fallback}
 
 
 @app.post("/api/chat/clear")
