@@ -131,8 +131,8 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .hdr-ap { display: flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 6px; background: var(--c1); border: 1px solid var(--brd); color: var(--dim); font-family: var(--mono); font-size: .6rem; font-weight: 500; cursor: pointer; transition: .12s }
 .hdr-ap:hover { border-color: rgba(16,185,129,.2); color: var(--grn) }
 .hap-on { color: var(--grn); border-color: rgba(16,185,129,.2) }
-.hdr-logout { background: none; border: none; color: var(--dim); font-size: .8rem; cursor: pointer; padding: 2px 4px; transition: .12s }
-.hdr-logout:hover { color: var(--red) }
+.hdr-logout { background: none; border: 1px solid var(--brd); color: var(--dim); font-size: .58rem; cursor: pointer; padding: 4px 10px; transition: .12s; border-radius: 5px; font-family: var(--sans) }
+.hdr-logout:hover { color: var(--red); border-color: rgba(239,68,68,.2) }
 
 /* Detail bar */
 .detail-bar { border-bottom: 1px solid var(--brd); background: var(--c1); animation: slideDown .15s ease; flex-shrink: 0 }

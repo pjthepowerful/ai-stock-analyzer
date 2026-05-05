@@ -300,21 +300,21 @@ function MainApp({ user, token, logout }) {
       {/* Toasts */}
       <div className="toasts">{toasts.map(t=>(
         <div key={t.id} className={'toast t-'+t.type}><span className="t-dot"/>{t.msg}
-          <button className="t-x" onClick={()=>setToasts(p=>p.filter(x=>x.id!==t.id))}>\u00d7</button>
+          <button className="t-x" onClick={()=>setToasts(p=>p.filter(x=>x.id!==t.id))}>×</button>
         </div>))}</div>
 
       {/* Sidebar — chats + positions only */}
       <aside className={'sb'+(sideOpen?'':' sb-hide')}>
         <div className="sb-top">
           <div className="sb-logo"><span className="logo-p">P</span>Paula</div>
-          <button className="sb-close" onClick={()=>setSideOpen(false)}>\u00d7</button>
+          <button className="sb-close" onClick={()=>setSideOpen(false)}>×</button>
         </div>
         <button className="new-chat" onClick={newChat}>+ New Chat</button>
         <div className="chat-list">
           {chats.slice(0, 20).map(c => (
             <div key={c.id} className={'chat-item' + (chatId === c.id ? ' ci-active' : '')} onClick={() => {switchChat(c.id);setView('chat')}}>
               <span className="ci-title">{c.title}</span>
-              <button className="ci-del" onClick={(e) => { e.stopPropagation(); deleteChat(c.id) }}>\u00d7</button>
+              <button className="ci-del" onClick={(e) => { e.stopPropagation(); deleteChat(c.id) }}>×</button>
             </div>
           ))}
         </div>
@@ -325,18 +325,18 @@ function MainApp({ user, token, logout }) {
           <div className="pos-list">{positions.length>0?positions.map((p,i)=>(
             <button key={i} className={'pi'+(selectedPos===p.ticker?' pi-sel':'')+(p.unrealized_pnl>=0?' pi-up':' pi-dn')}
               onClick={()=>setSelectedPos(selectedPos===p.ticker?null:p.ticker)}>
-              <div className="pi-l"><span className="pi-sym">{p.ticker}</span><span className="pi-meta">{Math.abs(p.qty)}\u00b7{p.side==='short'?'S':'L'}{p.stop_loss?' SL$'+p.stop_loss:''}</span></div>
+              <div className="pi-l"><span className="pi-sym">{p.ticker}</span><span className="pi-meta">{Math.abs(p.qty)}·{p.side==='short'?'S':'L'}{p.stop_loss?' SL$'+p.stop_loss:''}</span></div>
               <span className="pi-pnl">{p.unrealized_pnl>=0?'+':''}{p.unrealized_pnl.toFixed(0)}</span>
             </button>)):<span className="empty-txt">Flat</span>}</div>
         </div>
         <div className="sb-bottom">
-          <span className={'conn'+(connected?' c-on':'')}>{connected?'\u25cf Connected':'\u25cb Offline'}</span>
+          <span className={'conn'+(connected?' c-on':'')}>{connected?'● Connected':'○ Offline'}</span>
         </div>
       </aside>
 
       {/* Main */}
       <main className="main">
-        {!sideOpen&&<button className="ham" onClick={()=>setSideOpen(true)}>\u2630</button>}
+        {!sideOpen&&<button className="ham" onClick={()=>setSideOpen(true)}>☰</button>}
 
         {/* Header bar — account, nav, autopilot */}
         <div className="hdr">
@@ -348,7 +348,7 @@ function MainApp({ user, token, logout }) {
             </>}
           </div>
           <nav className="hdr-nav">
-            {[['chat','Chat'],['stats','Stats'],['settings','\u2699']].map(([v,label])=>(
+            {[['chat','Chat'],['stats','Stats'],['settings','Settings']].map(([v,label])=>(
               <button key={v} className={'hdr-tab'+(view===v?' ht-on':'')} onClick={()=>{setView(v);if(v==='stats')loadDashboard()}}>{label}</button>
             ))}
           </nav>
@@ -356,7 +356,7 @@ function MainApp({ user, token, logout }) {
             <button className={'hdr-ap'+(autopilot?' hap-on':'')} onClick={()=>sendMessage(autopilot?'stop':'autopilot')}>
               <span className={'ap-dot'+(autopilot?' dot-on':'')}/>{autopilot?'On':'Off'}
             </button>
-            <button className="hdr-logout" onClick={logout}>\u2192</button>
+            <button className="hdr-logout" onClick={logout}>Sign out</button>
           </div>
         </div>
 
