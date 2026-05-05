@@ -388,27 +388,35 @@ function MainApp({ user, token, logout }) {
               <div className="db-chart"><Chart ticker={p.ticker} signal={null} height={200}/></div>
             </div>)})()}
           <div className="chat">
+            <div className="chat-inner">
             {messages.length===0&&!sending&&(
               <div className="welcome">
                 <h1><span className="w-hi">Hey {name},</span> <Typewriter/></h1>
                 <div className="w-pills">
-                  {[['Market overview','market regime'],['Top movers','top gainers'],['Today\'s recap','How did we do today?'],['Find trades','What should I buy?'],['Analyze a stock','Analyze ']].map(([l,c],i)=>(
+                  {[['Market overview','market regime'],['Top movers','top gainers'],["Today's recap",'How did we do today?'],['Find trades','What should I buy?'],['Analyze a stock','Analyze ']].map(([l,c],i)=>(
                     <button key={i} className="pill" onClick={()=>{if(c==='Analyze '){setInput(c);inputRef.current?.focus()}else sendMessage(c)}}>{l}</button>))}</div>
               </div>)}
             {messages.map((m,i)=>(
               <div key={i} className={'msg msg-'+m.role}>
-                {m.role==='assistant'?(<div className="ai"><div className="ai-av">P</div><div className="ai-body">
-                  <div className="ai-txt" dangerouslySetInnerHTML={{__html:fmt(m.content)}}/>
-                  {m.ticker&&<div className="ai-chart"><Chart ticker={m.ticker} signal={m.signal} height={260}/></div>}
-                </div></div>):(<div className="user-bubble">{m.content}</div>)}
+                {m.role==='assistant'?(
+                  <div className="ai">
+                    <div className="ai-av">P</div>
+                    <div className="ai-body">
+                      <div className="ai-name">Paula</div>
+                      <div className="ai-txt" dangerouslySetInnerHTML={{__html:fmt(m.content)}}/>
+                      {m.ticker&&<div className="ai-chart"><Chart ticker={m.ticker} signal={m.signal} height={260}/></div>}
+                    </div>
+                  </div>
+                ):(<div className="user-bubble">{m.content}</div>)}
               </div>))}
-            {sending&&<div className="msg"><div className="ai"><div className="ai-av">P</div><div className="ai-body"><div className="dots"><span/><span/><span/></div></div></div></div>}
+            {sending&&<div className="msg msg-assistant"><div className="ai"><div className="ai-av">P</div><div className="ai-body"><div className="ai-name">Paula</div><div className="dots"><span/><span/><span/></div></div></div></div>}
             <div ref={messagesEnd}/>
+            </div>
           </div>
-          <div className="input-area"><div className="input-box">
+          <div className="input-area"><div className="input-wrap"><div className="input-box">
             <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')send()}} placeholder="Message Paula..." disabled={sending}/>
             <button className="send" onClick={send} disabled={sending}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9Z"/></svg></button>
-          </div></div>
+          </div></div></div>
         </>)}
       </main>
     </div>)
