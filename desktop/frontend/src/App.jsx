@@ -249,8 +249,10 @@ function MainApp({ user, token, logout }) {
     const isFirstMessage = !messages.length
     if (!chatId) {
       targetChatId = Date.now().toString()
-      persistChats([{ id: targetChatId, title: 'New chat', messages: [], created: new Date().toISOString() }, ...chatsRef.current])
+      const newChats = [{ id: targetChatId, title: 'New chat', messages: [], created: new Date().toISOString() }, ...chatsRef.current]
+      persistChats(newChats)
       setChatId(targetChatId)
+      setView('chat')
       localStorage.setItem('paula-current-chat', targetChatId)
     }
     setMessages(prev => [...prev, { role: 'user', content: msg }]); setInput(''); setSending(true)

@@ -70,7 +70,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .sb-chats { display: none } /* no longer needed as wrapper */
 .new-chat { width: calc(100% - 20px); margin: 4px 10px 6px; padding: 8px 10px; border-radius: 7px; background: var(--c1); border: 1px solid var(--brd); color: var(--txt); font-family: var(--sans); font-size: .68rem; font-weight: 500; cursor: pointer; transition: .15s; text-align: left }
 .new-chat:hover { color: var(--grn); border-color: rgba(16,185,129,.2) }
-.chat-list { flex: 1; overflow-y: auto; padding: 2px 6px 8px }
+.chat-list { flex: 1; overflow-y: auto; padding: 2px 6px 8px; min-height: 60px }
 .chat-item { display: flex; align-items: center; justify-content: space-between; padding: 7px 8px; border-radius: 6px; cursor: pointer; transition: .12s; margin-bottom: 1px }
 .chat-item:hover { background: var(--c1) }
 .ci-active { background: var(--c2) !important }
@@ -95,11 +95,11 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .3 } }
 
 /* Positions */
-.sb-pos { flex: 1; display: flex; flex-direction: column; overflow: hidden; border-top: 1px solid var(--brd) }
+.sb-pos { display: flex; flex-direction: column; overflow: hidden; border-top: 1px solid var(--brd) }
 .pos-head { padding: 10px 14px 6px; font-size: .5rem; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); font-weight: 600; display: flex; align-items: center; gap: 5px }
 .pos-n { background: var(--c2); border-radius: 3px; padding: 1px 5px; font-size: .48rem; color: var(--txt); font-family: var(--mono) }
 .pos-tot { margin-left: auto; font-family: var(--mono); font-size: .58rem; font-weight: 600 }
-.pos-list { flex: 1; overflow-y: auto; padding: 0 6px 6px }
+.pos-list { overflow-y: auto; padding: 0 6px 6px; max-height: 200px }
 .pi { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 7px 8px; border: none; background: none; border-radius: 6px; cursor: pointer; transition: .12s; font-family: inherit; text-align: left; margin-bottom: 1px }
 .pi:hover { background: var(--c1) }
 .pi-sel { background: var(--c2) !important }
@@ -109,7 +109,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .pi-meta { font-size: .44rem; color: var(--dim); font-family: var(--mono) }
 .pi-pnl { font-family: var(--mono); font-size: .66rem; font-weight: 600 }
 .pi-up .pi-pnl { color: var(--grn3) } .pi-dn .pi-pnl { color: var(--red2) }
-.empty-txt { font-size: .66rem; color: var(--dim); padding: 10px 8px; display: block }
+.empty-txt { font-size: .62rem; color: var(--dim); padding: 4px 8px; display: block }
 .sb-bottom { margin-top: auto; padding: 8px 14px; border-top: 1px solid var(--brd); display: flex; align-items: center; justify-content: space-between }
 .conn { font-size: .5rem; font-family: var(--mono); color: var(--dim) } .c-on { color: var(--grn) }
 
