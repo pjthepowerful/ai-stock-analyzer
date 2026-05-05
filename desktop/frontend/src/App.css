@@ -62,18 +62,16 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .logo-p { width: 28px; height: 28px; background: var(--grn); border-radius: 7px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: var(--bg); font-family: var(--mono) }
 .sb-close { display: none; background: none; border: none; color: var(--dim); cursor: pointer; font-size: 14px; -webkit-app-region: no-drag }
 
-/* Nav tabs */
-.sb-tabs { display: flex; gap: 1px; padding: 4px 10px 10px; }
-.tab { flex: 1; padding: 6px; border: none; background: none; color: var(--dim); font-size: .66rem; font-weight: 500; cursor: pointer; border-radius: 6px; font-family: var(--sans); transition: .15s; letter-spacing: .02em }
-.tab:hover { color: var(--txt); background: var(--c1) }
-.tab-on { background: var(--c1); color: var(--grn); font-weight: 600 }
+/* Nav tabs — now in header, keeping for mobile */
+.sb-tabs { display: none }
+.tab { display: none }
 
-/* Chat history sidebar */
-.sb-chats { border-bottom: 1px solid var(--brd); display: flex; flex-direction: column; max-height: 200px }
-.new-chat { width: calc(100% - 20px); margin: 6px 10px 4px; padding: 7px 10px; border-radius: 7px; background: var(--c1); border: 1px solid var(--brd); color: var(--txt); font-family: var(--sans); font-size: .68rem; font-weight: 500; cursor: pointer; transition: .15s; text-align: left }
+/* Chat history sidebar — this is now the main sidebar content */
+.sb-chats { display: none } /* no longer needed as wrapper */
+.new-chat { width: calc(100% - 20px); margin: 4px 10px 6px; padding: 8px 10px; border-radius: 7px; background: var(--c1); border: 1px solid var(--brd); color: var(--txt); font-family: var(--sans); font-size: .68rem; font-weight: 500; cursor: pointer; transition: .15s; text-align: left }
 .new-chat:hover { color: var(--grn); border-color: rgba(16,185,129,.2) }
-.chat-list { overflow-y: auto; padding: 2px 6px 8px }
-.chat-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-radius: 6px; cursor: pointer; transition: .12s; margin-bottom: 1px }
+.chat-list { flex: 1; overflow-y: auto; padding: 2px 6px 8px }
+.chat-item { display: flex; align-items: center; justify-content: space-between; padding: 7px 8px; border-radius: 6px; cursor: pointer; transition: .12s; margin-bottom: 1px }
 .chat-item:hover { background: var(--c1) }
 .ci-active { background: var(--c2) !important }
 .ci-title { font-size: .64rem; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; transition: .12s }
@@ -82,17 +80,16 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .chat-item:hover .ci-del { color: var(--dim) }
 .ci-del:hover { color: var(--red) !important }
 
-/* Account strip */
-.sb-acct { padding: 12px 14px; border-bottom: 1px solid var(--brd) }
-.acct-main { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 2px }
-.acct-eq { font-family: var(--mono); font-size: .92rem; font-weight: 700; color: var(--wh) }
-.acct-chg { font-family: var(--mono); font-size: .68rem; font-weight: 600 }
-.acct-spy { font-family: var(--mono); font-size: .56rem; display: block; margin-top: 1px }
+/* Account strip — moved to header */
+.sb-acct { display: none }
+.acct-main { display: none }
+.acct-eq { display: none }
+.acct-chg { display: none }
+.acct-spy { display: none }
 
-/* Autopilot */
-.sb-ap { width: calc(100% - 24px); margin: 8px 12px; padding: 8px 12px; border-radius: 7px; background: var(--c1); border: 1px solid var(--brd); color: var(--dim); cursor: pointer; display: flex; align-items: center; gap: 8px; font-family: var(--sans); font-size: .7rem; font-weight: 500; transition: .15s }
-.sb-ap:hover { border-color: rgba(16,185,129,.2); color: var(--grn) }
-.ap-go { border-color: rgba(16,185,129,.2); color: var(--grn); background: rgba(16,185,129,.03) }
+/* Autopilot — moved to header */
+.sb-ap { display: none }
+.ap-go { display: none }
 .ap-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dim); flex-shrink: 0; transition: .2s }
 .dot-on { background: var(--grn); box-shadow: 0 0 8px var(--grn); animation: pulse 2.5s ease infinite }
 @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .3 } }
@@ -119,6 +116,23 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 /* ═══ Main content ═══ */
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--bg) }
 .ham { position: fixed; top: 10px; left: 10px; z-index: 100; background: var(--c1); border: 1px solid var(--brd); border-radius: 8px; color: var(--lt); font-size: 15px; padding: 5px 9px; cursor: pointer; display: none }
+
+/* Header bar */
+.hdr { display: flex; align-items: center; padding: 8px 20px; border-bottom: 1px solid var(--brd); gap: 12px; flex-shrink: 0 }
+.hdr-left { display: flex; align-items: center; gap: 10px }
+.hdr-eq { font-family: var(--mono); font-size: .82rem; font-weight: 700; color: var(--wh) }
+.hdr-pnl { font-family: var(--mono); font-size: .68rem; font-weight: 600 }
+.hdr-spy { font-family: var(--mono); font-size: .56rem }
+.hdr-nav { display: flex; gap: 2px; margin: 0 auto; background: var(--c1); border-radius: 6px; padding: 2px; border: 1px solid var(--brd) }
+.hdr-tab { padding: 5px 14px; border: none; background: none; color: var(--dim); font-family: var(--sans); font-size: .68rem; font-weight: 500; cursor: pointer; border-radius: 4px; transition: .12s }
+.hdr-tab:hover { color: var(--txt) }
+.ht-on { background: var(--c2); color: var(--grn); font-weight: 600 }
+.hdr-right { display: flex; align-items: center; gap: 6px }
+.hdr-ap { display: flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 6px; background: var(--c1); border: 1px solid var(--brd); color: var(--dim); font-family: var(--mono); font-size: .6rem; font-weight: 500; cursor: pointer; transition: .12s }
+.hdr-ap:hover { border-color: rgba(16,185,129,.2); color: var(--grn) }
+.hap-on { color: var(--grn); border-color: rgba(16,185,129,.2) }
+.hdr-logout { background: none; border: none; color: var(--dim); font-size: .8rem; cursor: pointer; padding: 2px 4px; transition: .12s }
+.hdr-logout:hover { color: var(--red) }
 
 /* Detail bar */
 .detail-bar { border-bottom: 1px solid var(--brd); background: var(--c1); animation: slideDown .15s ease; flex-shrink: 0 }
@@ -292,10 +306,13 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 @media (max-width: 768px) {
   .sb { position: fixed; left: 0; top: 0; bottom: 0; z-index: 200; box-shadow: 8px 0 24px rgba(0,0,0,.4) }
   .sb-close { display: block } .ham { display: block }
-  .chat { padding: 14px 16px; padding-top: 48px }
+  .hdr { padding: 6px 12px; gap: 8px; padding-left: 44px }
+  .hdr-eq { font-size: .72rem } .hdr-pnl { font-size: .58rem } .hdr-spy { display: none }
+  .hdr-tab { padding: 4px 10px; font-size: .6rem }
+  .chat { padding: 14px 16px }
   .input-area { padding: 4px 16px 14px }
   .welcome h1 { font-size: 1.4rem }
-  .view-scroll { padding: 16px; padding-top: 48px }
+  .view-scroll { padding: 16px }
   .user-bubble, .ai-body { max-width: 88vw }
   .db-info { flex-direction: column; align-items: flex-start; gap: 6px }
   .stat-row { grid-template-columns: 1fr }

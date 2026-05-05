@@ -300,43 +300,24 @@ function MainApp({ user, token, logout }) {
       {/* Toasts */}
       <div className="toasts">{toasts.map(t=>(
         <div key={t.id} className={'toast t-'+t.type}><span className="t-dot"/>{t.msg}
-          <button className="t-x" onClick={()=>setToasts(p=>p.filter(x=>x.id!==t.id))}>×</button>
+          <button className="t-x" onClick={()=>setToasts(p=>p.filter(x=>x.id!==t.id))}>\u00d7</button>
         </div>))}</div>
 
-      {/* Sidebar */}
+      {/* Sidebar — chats + positions only */}
       <aside className={'sb'+(sideOpen?'':' sb-hide')}>
         <div className="sb-top">
           <div className="sb-logo"><span className="logo-p">P</span>Paula</div>
-          <button className="sb-close" onClick={()=>setSideOpen(false)}>×</button>
+          <button className="sb-close" onClick={()=>setSideOpen(false)}>\u00d7</button>
         </div>
-        <nav className="sb-tabs">{['chat','stats','settings'].map(v=>(
-          <button key={v} className={'tab'+(view===v?' tab-on':'')} onClick={()=>{setView(v);if(v==='stats')loadDashboard()}}>
-            {v==='chat'?'Chat':v==='stats'?'Stats':'Settings'}
-          </button>))}</nav>
-
-        {/* Chat history */}
-        {view==='chat'&&<div className="sb-chats">
-          <button className="new-chat" onClick={newChat}>+ New Chat</button>
-          <div className="chat-list">
-            {chats.slice(0, 20).map(c => (
-              <div key={c.id} className={'chat-item' + (chatId === c.id ? ' ci-active' : '')} onClick={() => switchChat(c.id)}>
-                <span className="ci-title">{c.title}</span>
-                <button className="ci-del" onClick={(e) => { e.stopPropagation(); deleteChat(c.id) }}>×</button>
-              </div>
-            ))}
-          </div>
-        </div>}
-
-        {account&&<div className="sb-acct">
-          <div className="acct-main">
-            <span className="acct-eq">${account.equity.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
-            <span className={'acct-chg '+(pnl>=0?'up':'dn')}>{pnl>=0?'+':''}{pnl.toFixed(0)} ({pnlPct>=0?'+':''}{pnlPct.toFixed(2)}%)</span>
-          </div>
-          {spyTrend&&<span className={'acct-spy '+(spyTrend.change_pct>=0?'up':'dn')}>SPY {spyTrend.change_pct>=0?'+':''}{spyTrend.change_pct}%</span>}
-        </div>}
-        <button className={'sb-ap'+(autopilot?' ap-go':'')} onClick={()=>sendMessage(autopilot?'stop':'autopilot')}>
-          <span className={'ap-dot'+(autopilot?' dot-on':'')}/>{autopilot?'Autopilot On':'Autopilot Off'}
-        </button>
+        <button className="new-chat" onClick={newChat}>+ New Chat</button>
+        <div className="chat-list">
+          {chats.slice(0, 20).map(c => (
+            <div key={c.id} className={'chat-item' + (chatId === c.id ? ' ci-active' : '')} onClick={() => {switchChat(c.id);setView('chat')}}>
+              <span className="ci-title">{c.title}</span>
+              <button className="ci-del" onClick={(e) => { e.stopPropagation(); deleteChat(c.id) }}>\u00d7</button>
+            </div>
+          ))}
+        </div>
         <div className="sb-pos">
           <div className="pos-head">Positions <span className="pos-n">{positions.length}</span>
             {positions.length>0&&<span className={'pos-tot '+(totalUnrealized>=0?'up':'dn')}>{totalUnrealized>=0?'+':''}{totalUnrealized.toFixed(0)}</span>}
@@ -344,19 +325,41 @@ function MainApp({ user, token, logout }) {
           <div className="pos-list">{positions.length>0?positions.map((p,i)=>(
             <button key={i} className={'pi'+(selectedPos===p.ticker?' pi-sel':'')+(p.unrealized_pnl>=0?' pi-up':' pi-dn')}
               onClick={()=>setSelectedPos(selectedPos===p.ticker?null:p.ticker)}>
-              <div className="pi-l"><span className="pi-sym">{p.ticker}</span><span className="pi-meta">{Math.abs(p.qty)}·{p.side==='short'?'S':'L'}{p.stop_loss?' SL$'+p.stop_loss:''}</span></div>
+              <div className="pi-l"><span className="pi-sym">{p.ticker}</span><span className="pi-meta">{Math.abs(p.qty)}\u00b7{p.side==='short'?'S':'L'}{p.stop_loss?' SL$'+p.stop_loss:''}</span></div>
               <span className="pi-pnl">{p.unrealized_pnl>=0?'+':''}{p.unrealized_pnl.toFixed(0)}</span>
-            </button>)):<span className="empty-txt">No positions</span>}</div>
+            </button>)):<span className="empty-txt">Flat</span>}</div>
         </div>
         <div className="sb-bottom">
-          <span className={'conn'+(connected?' c-on':'')}>{connected?'● Connected':'○ Offline'}</span>
-          <button className="logout-btn" onClick={logout}>Sign out</button>
+          <span className={'conn'+(connected?' c-on':'')}>{connected?'\u25cf Connected':'\u25cb Offline'}</span>
         </div>
       </aside>
 
       {/* Main */}
       <main className="main">
-        {!sideOpen&&<button className="ham" onClick={()=>setSideOpen(true)}>☰</button>}
+        {!sideOpen&&<button className="ham" onClick={()=>setSideOpen(true)}>\u2630</button>}
+
+        {/* Header bar — account, nav, autopilot */}
+        <div className="hdr">
+          <div className="hdr-left">
+            {account&&<>
+              <span className="hdr-eq">${account.equity.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
+              <span className={'hdr-pnl '+(pnl>=0?'up':'dn')}>{pnl>=0?'+':''}{pnl.toFixed(0)}</span>
+              {spyTrend&&<span className={'hdr-spy '+(spyTrend.change_pct>=0?'up':'dn')}>SPY {spyTrend.change_pct>=0?'+':''}{spyTrend.change_pct}%</span>}
+            </>}
+          </div>
+          <nav className="hdr-nav">
+            {[['chat','Chat'],['stats','Stats'],['settings','\u2699']].map(([v,label])=>(
+              <button key={v} className={'hdr-tab'+(view===v?' ht-on':'')} onClick={()=>{setView(v);if(v==='stats')loadDashboard()}}>{label}</button>
+            ))}
+          </nav>
+          <div className="hdr-right">
+            <button className={'hdr-ap'+(autopilot?' hap-on':'')} onClick={()=>sendMessage(autopilot?'stop':'autopilot')}>
+              <span className={'ap-dot'+(autopilot?' dot-on':'')}/>{autopilot?'On':'Off'}
+            </button>
+            <button className="hdr-logout" onClick={logout}>\u2192</button>
+          </div>
+        </div>
+
         {view==='stats'?<DashView perf={perf}/>
         :view==='settings'?<SetView settings={settings} update={updateSetting} user={user} token={token} logout={logout}/>
         :(<>
