@@ -294,6 +294,10 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .login-input:focus { border-color: rgba(16,185,129,.3) }
 .login-input::placeholder { color: var(--dim) }
 .login-error { font-size: .72rem; color: var(--red); padding: 2px 0 }
+.pw-wrap { position: relative }
+.pw-input { width: 100%; padding-right: 40px }
+.pw-eye { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--dim); cursor: pointer; padding: 2px; transition: .15s; display: flex; align-items: center }
+.pw-eye:hover { color: var(--lt) }
 .login-btn { padding: 12px; border: none; border-radius: 10px; background: var(--grn); color: var(--bg); font-family: var(--sans); font-size: .84rem; font-weight: 600; cursor: pointer; transition: .15s; margin-top: 4px }
 .login-btn:hover { background: var(--grn3); transform: translateY(-1px) }
 .login-btn:disabled { opacity: .4; transform: none }
