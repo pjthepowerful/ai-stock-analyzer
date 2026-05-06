@@ -377,7 +377,7 @@ function MainApp({ user, token, logout }) {
         </div>
 
         {view==='stats'?<DashView perf={perf}/>
-        :view==='heatmap'?<HeatmapView data={heatmapData} onAnalyze={(t)=>{sendMessage(t);setView('chat')}}/>
+        :view==='heatmap'?<HeatmapView data={heatmapData} onAnalyze={(t)=>{newChat();sendMessage(t);setView('chat')}}/>
         :view==='settings'?<SetView settings={settings} update={updateSetting} user={user} token={token} logout={logout}/>
         :(<>
           {selectedPos&&(()=>{const p=positions.find(x=>x.ticker===selectedPos);if(!p)return null;return(
