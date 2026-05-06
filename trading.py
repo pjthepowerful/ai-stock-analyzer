@@ -2719,22 +2719,26 @@ def route(msg: str) -> dict:
 def _get_spy_intraday_trend() -> dict | None:
     """Check SPY's intraday trend to filter trades directionally."""
     try:
-        spy = yf.Ticker("SPY")
-        hist = spy.history(period="1d", interval="5m")
-        if hist is None or hist.empty or len(hist) < 10:
-            # Fallback to daily
-            hist = spy.history(period="5d")
-            if hist is None or hist.empty:
-                return None
-            price = float(hist["Close"].iloc[-1])
-            prev = float(hist["Close"].iloc[-2])
-            return {
-                "price": price,
-                "change_pct": round((price - prev) / prev * 100, 2),
-                "direction": "bullish" if price > prev else "bearish",
-                "above_vwap": True,  # can't calc intraday VWAP from daily
-                "strong": abs((price - prev) / prev * 100) > 0.5,
-            }
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            spy = yf.Ticker("SPY")
+            hist = spy.history(period="2d", interval="5m")
+            if hist is None or hist.empty or len(hist) < 10:
+                hist = spy.history(period="5d", interval="1d")
+                if hist is None or hist.empty or len(hist) < 2:
+                    hist = spy.history(period="1mo", interval="1d")
+                    if hist is None or hist.empty or len(hist) < 2:
+                        return None
+                price = float(hist["Close"].iloc[-1])
+                prev = float(hist["Close"].iloc[-2])
+                return {
+                    "price": price,
+                    "change_pct": round((price - prev) / prev * 100, 2),
+                    "direction": "bullish" if price > prev else "bearish",
+                    "above_vwap": True,
+                    "strong": abs((price - prev) / prev * 100) > 0.5,
+                }
 
         close = hist["Close"]
         high = hist["High"]

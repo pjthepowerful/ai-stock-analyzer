@@ -13,13 +13,13 @@ import os
 from pathlib import Path
 from datetime import datetime, timedelta
 
-DB_PATH = Path(__file__).resolve().parent / "paula.db"
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "paula.db")
 JWT_SECRET = os.environ.get("JWT_SECRET", secrets.token_hex(32))
 TOKEN_EXPIRY_DAYS = 30
 
 
 def _get_db():
-    db = sqlite3.connect(str(DB_PATH), check_same_thread=False)
+    db = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=10)
     db.row_factory = sqlite3.Row
     return db
 
@@ -196,14 +196,15 @@ def save_settings(user_id: int, settings: dict) -> dict:
 
 
 def save_chat(user_id: int, role: str, content: str, msg_type: str = "chat", ticker: str = None):
-    """Save a chat message."""
-    db = _get_db()
+    """Save a chat message. Never raises — DB errors are silently ignored."""
     try:
+        db = _get_db()
         db.execute("INSERT INTO chat_history (user_id, role, content, msg_type, ticker) VALUES (?, ?, ?, ?, ?)",
                    (user_id, role, content, msg_type, ticker))
         db.commit()
-    finally:
         db.close()
+    except Exception:
+        pass
 
 
 def get_chat_history(user_id: int, limit: int = 50) -> list:
