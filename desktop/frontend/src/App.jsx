@@ -136,6 +136,8 @@ function MainApp({ user, token, logout }) {
     setChatId(id)
     setMessages([])
     localStorage.setItem('paula-current-chat', id)
+    // Clear backend chat context
+    f(API + '/api/chat/clear', { method: 'POST' }).catch(() => {})
   }
 
   const switchChat = (id) => {
@@ -149,6 +151,8 @@ function MainApp({ user, token, logout }) {
     localStorage.setItem('paula-current-chat', id)
     const chat = chatsRef.current.find(c => c.id === id)
     setMessages(chat?.messages || [])
+    // Clear backend chat context so AI doesn't reference old chat
+    f(API + '/api/chat/clear', { method: 'POST' }).catch(() => {})
   }
 
   const deleteChat = (id) => {
@@ -322,6 +326,7 @@ function MainApp({ user, token, logout }) {
         <div className="chat-list">
           {chats.slice(0, 20).map(c => (
             <div key={c.id} className={'chat-item' + (chatId === c.id ? ' ci-active' : '')} onClick={() => {switchChat(c.id);setView('chat')}}>
+              <span className="ci-icon">💬</span>
               <span className="ci-title">{c.title}</span>
               <button className="ci-del" onClick={(e) => { e.stopPropagation(); deleteChat(c.id) }}>×</button>
             </div>
@@ -413,7 +418,7 @@ function MainApp({ user, token, logout }) {
             <div ref={messagesEnd}/>
             </div>
           </div>
-          <div className="input-area"><div className="input-wrap"><div className="input-box">
+          <div className={'input-area'+(messages.length?' ia-active':'')}><div className="input-wrap"><div className="input-box">
             <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')send()}} placeholder="Message Paula..." disabled={sending}/>
             <button className="send" onClick={send} disabled={sending}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9Z"/></svg></button>
           </div></div></div>
