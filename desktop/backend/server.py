@@ -653,6 +653,54 @@ async def market_regime():
     return {"ok": True, "data": regime}
 
 
+@app.get("/api/heatmap")
+async def heatmap():
+    """Market heatmap — sectors and stocks with live performance."""
+    import yfinance as yf
+
+    sectors = {
+        "Tech": ["AAPL","MSFT","NVDA","GOOGL","META","AMZN","AMD","CRM","ADBE","NFLX","AVGO","ORCL","CSCO","INTC","QCOM"],
+        "Finance": ["JPM","BAC","WFC","GS","MS","V","MA","AXP","BLK","SCHW","C","USB","PNC","COF","BK"],
+        "Health": ["UNH","JNJ","LLY","PFE","ABBV","MRK","TMO","ABT","AMGN","ISRG","MDT","BMY","GILD","VRTX","SYK"],
+        "Energy": ["XOM","CVX","COP","SLB","EOG","MPC","PSX","VLO","OXY","WMB","KMI","HAL","DVN","FANG","HES"],
+        "Consumer": ["TSLA","HD","MCD","NKE","SBUX","LOW","TJX","COST","WMT","PG","KO","PEP","PM","CL","EL"],
+        "Industrial": ["CAT","DE","UNP","HON","RTX","LMT","GE","BA","MMM","UPS","FDX","EMR","ITW","ETN","PH"],
+        "Semis": ["TSM","AVGO","AMD","AMAT","LRCX","KLAC","MRVL","MU","TXN","ADI","MCHP","ON","NXPI","SWKS","QRVO"],
+    }
+
+    result = {}
+    try:
+        # Flatten all tickers
+        all_tickers = []
+        for s, tickers in sectors.items():
+            all_tickers.extend(tickers)
+        all_tickers = list(set(all_tickers))
+
+        # Batch download
+        data = yf.download(all_tickers, period="2d", group_by="ticker", progress=False, threads=True)
+
+        for sector, tickers in sectors.items():
+            stocks = []
+            for t in tickers:
+                try:
+                    if t in data.columns.get_level_values(0):
+                        hist = data[t]["Close"].dropna()
+                        if len(hist) >= 2:
+                            price = round(float(hist.iloc[-1]), 2)
+                            prev = float(hist.iloc[-2])
+                            chg = round((price - prev) / prev * 100, 2)
+                            stocks.append({"ticker": t, "price": price, "chg": chg})
+                except Exception:
+                    pass
+            if stocks:
+                sector_chg = round(sum(s["chg"] for s in stocks) / len(stocks), 2)
+                result[sector] = {"stocks": sorted(stocks, key=lambda x: abs(x["chg"]), reverse=True), "chg": sector_chg}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:100]}
+
+    return {"ok": True, "sectors": result}
+
+
 @app.get("/api/spy-trend")
 async def spy_trend():
     """Get SPY intraday trend."""

@@ -292,6 +292,19 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .s-saved { background: rgba(16,185,129,.12) !important; box-shadow: none !important; transform: none !important }
 .eq-svg { width: 100%; height: auto; display: block }
 
+/* ═══ Heatmap ═══ */
+.hm-grid { display: flex; flex-direction: column; gap: 12px }
+.hm-sector { background: var(--c1); border: 1px solid var(--brd); border-radius: 10px; padding: 14px; overflow: hidden }
+.hm-sector-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px }
+.hm-sector-name { font-size: .72rem; font-weight: 700; color: var(--wh); letter-spacing: .01em }
+.hm-sector-chg { font-family: var(--mono); font-size: .68rem; font-weight: 700 }
+.hm-stocks { display: flex; flex-wrap: wrap; gap: 4px }
+.hm-stock { position: relative; padding: 8px 10px; border-radius: 6px; border: 1px solid; cursor: pointer; transition: all .15s cubic-bezier(.16,1,.3,1); display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 62px; font-family: inherit }
+.hm-stock:hover { transform: scale(1.06); z-index: 2; box-shadow: 0 4px 16px rgba(0,0,0,.3) }
+.hm-ticker { font-family: var(--mono); font-size: .62rem; font-weight: 700; color: var(--wh) }
+.hm-chg { font-family: var(--mono); font-size: .52rem; font-weight: 600 }
+.hm-price { position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%); font-family: var(--mono); font-size: .5rem; color: var(--lt); background: var(--c3); padding: 2px 6px; border-radius: 4px; white-space: nowrap; z-index: 3; border: 1px solid var(--brd); pointer-events: none }
+
 /* ═══ Login ═══ */
 .auth-loading { display: flex; align-items: center; justify-content: center; height: 100vh; background: var(--bg) }
 .login-page { display: flex; align-items: center; justify-content: center; height: 100vh; background: var(--bg) }

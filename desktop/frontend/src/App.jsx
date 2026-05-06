@@ -112,6 +112,7 @@ function MainApp({ user, token, logout }) {
   const [toasts, setToasts] = useState([])
   const [view, setView] = useState('chat')
   const [perf, setPerf] = useState(null)
+  const [heatmapData, setHeatmapData] = useState(null)
   const [sideOpen, setSideOpen] = useState(window.innerWidth > 768)
 
   // ── Chat system (localStorage-backed) ──
@@ -303,6 +304,7 @@ function MainApp({ user, token, logout }) {
 
   const send = () => sendMessage(input.trim())
   const loadDashboard = async () => { try { const r = await f(API+'/api/performance').then(r=>r.json()); if(r.ok)setPerf(r) } catch{} }
+  const loadHeatmap = async () => { try { const r = await f(API+'/api/heatmap').then(r=>r.json()); if(r.ok)setHeatmapData(r.sectors) } catch{} }
 
   const pnl = account?(account.daily_pnl||0):0, pnlPct = account?(account.daily_pnl_pct||0):0
   const totalUnrealized = positions.reduce((s,p)=>s+(p.unrealized_pnl||0),0)
@@ -362,8 +364,8 @@ function MainApp({ user, token, logout }) {
             </>}
           </div>
           <nav className="hdr-nav">
-            {[['chat','Chat'],['stats','Stats'],['settings','Settings']].map(([v,label])=>(
-              <button key={v} className={'hdr-tab'+(view===v?' ht-on':'')} onClick={()=>{setView(v);if(v==='stats')loadDashboard()}}>{label}</button>
+            {[['chat','Chat'],['heatmap','Map'],['stats','Stats'],['settings','Settings']].map(([v,label])=>(
+              <button key={v} className={'hdr-tab'+(view===v?' ht-on':'')} onClick={()=>{setView(v);if(v==='stats')loadDashboard();if(v==='heatmap')loadHeatmap()}}>{label}</button>
             ))}
           </nav>
           <div className="hdr-right">
@@ -375,6 +377,7 @@ function MainApp({ user, token, logout }) {
         </div>
 
         {view==='stats'?<DashView perf={perf}/>
+        :view==='heatmap'?<HeatmapView data={heatmapData} onAnalyze={(t)=>{sendMessage(t);setView('chat')}}/>
         :view==='settings'?<SetView settings={settings} update={updateSetting} user={user} token={token} logout={logout}/>
         :(<>
           {selectedPos&&(()=>{const p=positions.find(x=>x.ticker===selectedPos);if(!p)return null;return(
@@ -599,6 +602,51 @@ function SetView({settings,update,user,token,logout}){
       <div className="s-row"><span>Name</span><input className="s-inp" value={settings.userName||user?.username||''} onChange={e=>update('userName',e.target.value)} placeholder="Your name"/></div>
     </div>
   </div>)
+}
+
+function HeatmapView({ data, onAnalyze }) {
+  const [hover, setHover] = useState(null)
+  if (!data) return <div className="view-msg">Loading heatmap...</div>
+  const sectors = Object.entries(data)
+  if (!sectors.length) return <div className="view-msg">No data</div>
+
+  return (
+    <div className="view-scroll">
+      <h2 className="view-h">Market Heatmap</h2>
+      <div className="hm-grid">
+        {sectors.map(([sector, info]) => (
+          <div key={sector} className="hm-sector">
+            <div className="hm-sector-head">
+              <span className="hm-sector-name">{sector}</span>
+              <span className={'hm-sector-chg ' + (info.chg >= 0 ? 'up' : 'dn')}>{info.chg >= 0 ? '+' : ''}{info.chg}%</span>
+            </div>
+            <div className="hm-stocks">
+              {info.stocks.map(s => {
+                const intensity = Math.min(Math.abs(s.chg) / 3, 1)
+                const bg = s.chg >= 0
+                  ? `rgba(16,185,129,${(.06 + intensity * .18).toFixed(2)})`
+                  : `rgba(239,68,68,${(.06 + intensity * .18).toFixed(2)})`
+                const border = s.chg >= 0
+                  ? `rgba(16,185,129,${(.1 + intensity * .2).toFixed(2)})`
+                  : `rgba(239,68,68,${(.1 + intensity * .2).toFixed(2)})`
+                return (
+                  <button key={s.ticker} className="hm-stock"
+                    style={{ background: bg, borderColor: border }}
+                    onClick={() => onAnalyze(s.ticker)}
+                    onMouseEnter={() => setHover(s.ticker)}
+                    onMouseLeave={() => setHover(null)}>
+                    <span className="hm-ticker">{s.ticker}</span>
+                    <span className={'hm-chg ' + (s.chg >= 0 ? 'up' : 'dn')}>{s.chg >= 0 ? '+' : ''}{s.chg}%</span>
+                    {hover === s.ticker && <span className="hm-price">${s.price}</span>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function Tog({l,on,fn}){return <div className="s-row"><span>{l}</span><button className={'tog'+(on?' tog-on':'')} onClick={fn}>{on?'ON':'OFF'}</button></div>}
