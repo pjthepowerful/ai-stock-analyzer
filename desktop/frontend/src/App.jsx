@@ -364,7 +364,7 @@ function MainApp({ user, token, logout }) {
             </>}
           </div>
           <nav className="hdr-nav">
-            {[['chat','Chat'],['heatmap','Market'],['stats','Stats'],['settings','Settings']].map(([v,label])=>(
+            {[['chat','Chat'],['heatmap','Map'],['stats','Stats'],['settings','Settings']].map(([v,label])=>(
               <button key={v} className={'hdr-tab'+(view===v?' ht-on':'')} onClick={()=>{setView(v);if(v==='stats')loadDashboard();if(v==='heatmap')loadHeatmap()}}>{label}</button>
             ))}
           </nav>
