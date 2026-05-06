@@ -665,7 +665,7 @@ async def heatmap():
         "CRM":310,"NFLX":300,"AMD":280,"ADBE":270,"CSCO":240,"INTC":130,"QCOM":190,
         "BAC":350,"WFC":240,"GS":190,"MS":180,"AXP":200,"BLK":150,"SCHW":140,"C":130,"USB":75,"PNC":80,"COF":70,"BK":55,
         "JNJ":380,"PFE":160,"ABBV":340,"MRK":300,"TMO":200,"ABT":200,"AMGN":160,"ISRG":180,"MDT":110,"BMY":120,"GILD":110,"VRTX":120,"SYK":130,
-        "XOM":480,"CVX":280,"COP":140,"SLB":65,"EOG":70,"MPC":60,"PSX":55,"VLO":45,"OXY":40,"WMB":60,"KMI":50,"HAL":30,"DVN":25,"FANG":35,"HES":45,
+        "XOM":480,"CVX":280,"COP":140,"SLB":65,"EOG":70,"MPC":60,"PSX":55,"VLO":45,"OXY":40,"WMB":60,"KMI":50,"HAL":30,"DVN":25,"FANG":35,"ENB":45,
         "MCD":210,"NKE":120,"SBUX":110,"LOW":150,"TJX":130,"WMT":600,"PG":400,"KO":270,"PEP":230,"PM":200,"CL":80,"EL":30,
         "CAT":180,"DE":120,"UNP":150,"HON":150,"RTX":160,"LMT":130,"GE":200,"BA":130,"MMM":70,"UPS":100,"FDX":70,"EMR":70,"ITW":80,"ETN":130,"PH":90,
         "TSM":800,"AMAT":160,"LRCX":100,"KLAC":90,"MRVL":70,"MU":120,"TXN":180,"ADI":110,"MCHP":40,"ON":30,"NXPI":55,"SWKS":20,"QRVO":8,
@@ -675,7 +675,7 @@ async def heatmap():
         "Tech": ["AAPL","MSFT","NVDA","GOOGL","META","AMZN","AVGO","ORCL","CRM","NFLX","AMD","ADBE","CSCO","INTC","QCOM"],
         "Finance": ["JPM","BAC","WFC","GS","MS","V","MA","AXP","BLK","SCHW","C","USB","PNC","COF","BK"],
         "Health": ["UNH","JNJ","LLY","PFE","ABBV","MRK","TMO","ABT","AMGN","ISRG","MDT","BMY","GILD","VRTX","SYK"],
-        "Energy": ["XOM","CVX","COP","SLB","EOG","MPC","PSX","VLO","OXY","WMB","KMI","HAL","DVN","FANG","HES"],
+        "Energy": ["XOM","CVX","COP","SLB","EOG","MPC","PSX","VLO","OXY","WMB","KMI","HAL","DVN","FANG","ENB"],
         "Consumer": ["TSLA","HD","MCD","NKE","SBUX","LOW","TJX","COST","WMT","PG","KO","PEP","PM","CL","EL"],
         "Industrial": ["CAT","DE","UNP","HON","RTX","LMT","GE","BA","MMM","UPS","FDX","EMR","ITW","ETN","PH"],
         "Semis": ["TSM","AVGO","AMD","AMAT","LRCX","KLAC","MRVL","MU","TXN","ADI","MCHP","ON","NXPI","SWKS","QRVO"],
@@ -684,7 +684,21 @@ async def heatmap():
     result = {}
     try:
         all_tickers = list(set(t for tl in sectors.values() for t in tl))
-        data = yf.download(all_tickers, period="2d", group_by="ticker", progress=False, threads=True)
+        # Download in batches to avoid yfinance SQLite cache lock
+        import pandas as pd
+        data = pd.DataFrame()
+        batch_size = 25
+        for i in range(0, len(all_tickers), batch_size):
+            batch = all_tickers[i:i+batch_size]
+            try:
+                batch_data = yf.download(batch, period="2d", group_by="ticker", progress=False, threads=True)
+                if not batch_data.empty:
+                    if data.empty:
+                        data = batch_data
+                    else:
+                        data = pd.concat([data, batch_data], axis=1)
+            except Exception:
+                pass
 
         for sector, tickers in sectors.items():
             stocks = []

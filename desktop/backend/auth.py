@@ -13,13 +13,13 @@ import os
 from pathlib import Path
 from datetime import datetime, timedelta
 
-DB_PATH = Path(__file__).parent / "paula.db"
+DB_PATH = Path(__file__).resolve().parent / "paula.db"
 JWT_SECRET = os.environ.get("JWT_SECRET", secrets.token_hex(32))
 TOKEN_EXPIRY_DAYS = 30
 
 
 def _get_db():
-    db = sqlite3.connect(str(DB_PATH))
+    db = sqlite3.connect(str(DB_PATH), check_same_thread=False)
     db.row_factory = sqlite3.Row
     return db
 
