@@ -20,6 +20,14 @@ from pydantic import BaseModel
 import engine
 import auth
 
+# Disable yfinance timezone cache (prevents SQLite lock errors)
+try:
+    import yfinance as yf
+    import tempfile, os
+    yf.set_tz_cache_location(os.path.join(tempfile.gettempdir(), "yf_tz_cache"))
+except Exception:
+    pass
+
 # ── State ──
 autopilot_task: Optional[asyncio.Task] = None
 connected_clients: list[WebSocket] = []

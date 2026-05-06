@@ -304,7 +304,7 @@ function MainApp({ user, token, logout }) {
 
   const send = () => sendMessage(input.trim())
   const loadDashboard = async () => { try { const r = await f(API+'/api/performance').then(r=>r.json()); if(r.ok)setPerf(r) } catch{} }
-  const loadHeatmap = async () => { try { const r = await f(API+'/api/heatmap').then(r=>r.json()); if(r.ok)setHeatmapData(r.sectors) } catch{} }
+  const loadHeatmap = async () => { if(!heatmapData) { try { const r = await f(API+'/api/heatmap').then(r=>r.json()); if(r.ok)setHeatmapData(r.sectors) } catch{} } }
 
   const pnl = account?(account.daily_pnl||0):0, pnlPct = account?(account.daily_pnl_pct||0):0
   const totalUnrealized = positions.reduce((s,p)=>s+(p.unrealized_pnl||0),0)
@@ -402,7 +402,7 @@ function MainApp({ user, token, logout }) {
                 <h1><span className="w-hi">Hey {name},</span> <Typewriter/></h1>
                 <div className="w-pills">
                   {[['Market overview','market regime'],['Top movers','top gainers'],["Today's recap",'How did we do today?'],['Find trades','What should I buy?'],['Analyze a stock','Analyze ']].map(([l,c],i)=>(
-                    <button key={i} className="pill" onClick={()=>{if(c==='Analyze '){setInput(c);inputRef.current?.focus()}else sendMessage(c)}}>{l}</button>))}</div>
+                    <button key={i} className="pill" disabled={sending} onClick={()=>{if(c==='Analyze '){setInput(c);inputRef.current?.focus()}else sendMessage(c)}}>{l}</button>))}</div>
               </div>)}
             {messages.map((m,i)=>(
               <div key={i} className={'msg msg-'+m.role}>
