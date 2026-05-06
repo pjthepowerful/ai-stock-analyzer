@@ -326,7 +326,7 @@ function MainApp({ user, token, logout }) {
         <div className="chat-list">
           {chats.slice(0, 20).map(c => (
             <div key={c.id} className={'chat-item' + (chatId === c.id ? ' ci-active' : '')} onClick={() => {switchChat(c.id);setView('chat')}}>
-              <span className="ci-icon">💬</span>
+              <span className="ci-icon">{chatEmoji(c.title)}</span>
               <span className="ci-title">{c.title}</span>
               <button className="ci-del" onClick={(e) => { e.stopPropagation(); deleteChat(c.id) }}>×</button>
             </div>
@@ -635,5 +635,28 @@ function EqChart({data}){
     </>}
   </svg>)
 }
+function chatEmoji(title) {
+  if (!title) return '💬'
+  const t = title.toLowerCase()
+  if (/market.*regime|regime|bull|bear|spy/i.test(t)) return '🌍'
+  if (/gain|mover|top|trending|hot/i.test(t)) return '🔥'
+  if (/recap|review|today|performance|how did/i.test(t)) return '📊'
+  if (/buy|bought|long|order/i.test(t)) return '📈'
+  if (/sell|sold|short|cover/i.test(t)) return '📉'
+  if (/trade.*idea|find|setup|scan|pick/i.test(t)) return '🎯'
+  if (/autopilot|auto|bot|run/i.test(t)) return '🤖'
+  if (/risk|stop|loss|drawdown/i.test(t)) return '🛡️'
+  if (/news|earnings|report/i.test(t)) return '📰'
+  if (/sector|rotation|etf/i.test(t)) return '🏭'
+  if (/portfolio|equity|account|balance/i.test(t)) return '💰'
+  if (/chart|technical|rsi|macd|vwap/i.test(t)) return '📉'
+  if (/analys|analyze|research|deep dive/i.test(t)) return '🔍'
+  if (/hello|hi|hey|gm|what.*up/i.test(t)) return '👋'
+  if (/help|how|what|why|explain/i.test(t)) return '💡'
+  // Check for ticker symbols (1-5 uppercase letters)
+  if (/\b[A-Z]{1,5}\b/.test(title)) return '📊'
+  return '💬'
+}
+
 function fmt(t){if(!t)return '';return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/`(.+?)`/g,'<code>$1</code>').replace(/\n/g,'<br/>')}
 export default App

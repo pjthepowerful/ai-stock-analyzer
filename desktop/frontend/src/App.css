@@ -74,8 +74,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .chat-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; cursor: pointer; transition: all .12s; margin-bottom: 2px }
 .chat-item:hover { background: var(--c1) }
 .ci-active { background: var(--c2) !important; border-left: 2px solid var(--grn) }
-.ci-icon { width: 18px; height: 18px; border-radius: 5px; background: var(--c2); display: flex; align-items: center; justify-content: center; font-size: 8px; color: var(--dim); flex-shrink: 0; font-family: var(--mono) }
-.ci-active .ci-icon { background: rgba(16,185,129,.08); color: var(--grn) }
+.ci-icon { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0 }
 .ci-title { font-size: .66rem; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; transition: .12s }
 .ci-active .ci-title { color: var(--lt); font-weight: 500 }
 .ci-del { background: none; border: none; color: transparent; font-size: 10px; cursor: pointer; padding: 2px 4px; transition: .12s; flex-shrink: 0; border-radius: 3px }
