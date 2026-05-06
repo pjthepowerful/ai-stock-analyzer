@@ -655,11 +655,24 @@ async def market_regime():
 
 @app.get("/api/heatmap")
 async def heatmap():
-    """Market heatmap — sectors and stocks with live performance."""
+    """Market heatmap — treemap with market cap sizing."""
     import yfinance as yf
 
+    # Market caps in billions (approximate, for sizing tiles)
+    MCAPS = {
+        "AAPL":3400,"MSFT":3100,"NVDA":2800,"GOOGL":2200,"AMZN":2100,"META":1500,"AVGO":800,"TSLA":780,
+        "LLY":750,"JPM":680,"V":580,"UNH":560,"MA":450,"HD":380,"COST":370,"ORCL":360,
+        "CRM":310,"NFLX":300,"AMD":280,"ADBE":270,"CSCO":240,"INTC":130,"QCOM":190,
+        "BAC":350,"WFC":240,"GS":190,"MS":180,"AXP":200,"BLK":150,"SCHW":140,"C":130,"USB":75,"PNC":80,"COF":70,"BK":55,
+        "JNJ":380,"PFE":160,"ABBV":340,"MRK":300,"TMO":200,"ABT":200,"AMGN":160,"ISRG":180,"MDT":110,"BMY":120,"GILD":110,"VRTX":120,"SYK":130,
+        "XOM":480,"CVX":280,"COP":140,"SLB":65,"EOG":70,"MPC":60,"PSX":55,"VLO":45,"OXY":40,"WMB":60,"KMI":50,"HAL":30,"DVN":25,"FANG":35,"HES":45,
+        "MCD":210,"NKE":120,"SBUX":110,"LOW":150,"TJX":130,"WMT":600,"PG":400,"KO":270,"PEP":230,"PM":200,"CL":80,"EL":30,
+        "CAT":180,"DE":120,"UNP":150,"HON":150,"RTX":160,"LMT":130,"GE":200,"BA":130,"MMM":70,"UPS":100,"FDX":70,"EMR":70,"ITW":80,"ETN":130,"PH":90,
+        "TSM":800,"AMAT":160,"LRCX":100,"KLAC":90,"MRVL":70,"MU":120,"TXN":180,"ADI":110,"MCHP":40,"ON":30,"NXPI":55,"SWKS":20,"QRVO":8,
+    }
+
     sectors = {
-        "Tech": ["AAPL","MSFT","NVDA","GOOGL","META","AMZN","AMD","CRM","ADBE","NFLX","AVGO","ORCL","CSCO","INTC","QCOM"],
+        "Tech": ["AAPL","MSFT","NVDA","GOOGL","META","AMZN","AVGO","ORCL","CRM","NFLX","AMD","ADBE","CSCO","INTC","QCOM"],
         "Finance": ["JPM","BAC","WFC","GS","MS","V","MA","AXP","BLK","SCHW","C","USB","PNC","COF","BK"],
         "Health": ["UNH","JNJ","LLY","PFE","ABBV","MRK","TMO","ABT","AMGN","ISRG","MDT","BMY","GILD","VRTX","SYK"],
         "Energy": ["XOM","CVX","COP","SLB","EOG","MPC","PSX","VLO","OXY","WMB","KMI","HAL","DVN","FANG","HES"],
@@ -670,17 +683,12 @@ async def heatmap():
 
     result = {}
     try:
-        # Flatten all tickers
-        all_tickers = []
-        for s, tickers in sectors.items():
-            all_tickers.extend(tickers)
-        all_tickers = list(set(all_tickers))
-
-        # Batch download
+        all_tickers = list(set(t for tl in sectors.values() for t in tl))
         data = yf.download(all_tickers, period="2d", group_by="ticker", progress=False, threads=True)
 
         for sector, tickers in sectors.items():
             stocks = []
+            sector_mcap = 0
             for t in tickers:
                 try:
                     if t in data.columns.get_level_values(0):
@@ -689,12 +697,18 @@ async def heatmap():
                             price = round(float(hist.iloc[-1]), 2)
                             prev = float(hist.iloc[-2])
                             chg = round((price - prev) / prev * 100, 2)
-                            stocks.append({"ticker": t, "price": price, "chg": chg})
+                            mcap = MCAPS.get(t, 50)
+                            sector_mcap += mcap
+                            stocks.append({"ticker": t, "price": price, "chg": chg, "mcap": mcap})
                 except Exception:
                     pass
             if stocks:
-                sector_chg = round(sum(s["chg"] for s in stocks) / len(stocks), 2)
-                result[sector] = {"stocks": sorted(stocks, key=lambda x: abs(x["chg"]), reverse=True), "chg": sector_chg}
+                sector_chg = round(sum(s["chg"] * s["mcap"] for s in stocks) / max(1, sector_mcap), 2)
+                result[sector] = {
+                    "stocks": sorted(stocks, key=lambda x: x["mcap"], reverse=True),
+                    "chg": sector_chg,
+                    "mcap": sector_mcap,
+                }
     except Exception as e:
         return {"ok": False, "error": str(e)[:100]}
 
