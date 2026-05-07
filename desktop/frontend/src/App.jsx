@@ -112,7 +112,7 @@ function MainApp({ user, token, logout }) {
   const [toasts, setToasts] = useState([])
   const [view, setView] = useState('chat')
   const [perf, setPerf] = useState(null)
-  const [heatmapData, setHeatmapData] = useState(null)
+  
   const [sideOpen, setSideOpen] = useState(window.innerWidth > 768)
 
   // ── Chat system (localStorage-backed) ──
@@ -304,7 +304,6 @@ function MainApp({ user, token, logout }) {
 
   const send = () => sendMessage(input.trim())
   const loadDashboard = async () => { try { const r = await f(API+'/api/performance').then(r=>r.json()); if(r.ok)setPerf(r) } catch{} }
-  const loadHeatmap = async () => { if(!heatmapData) { try { const r = await f(API+'/api/heatmap').then(r=>r.json()); if(r.ok)setHeatmapData(r.sectors) } catch{} } }
 
   const pnl = account?(account.daily_pnl||0):0, pnlPct = account?(account.daily_pnl_pct||0):0
   const totalUnrealized = positions.reduce((s,p)=>s+(p.unrealized_pnl||0),0)
@@ -364,8 +363,7 @@ function MainApp({ user, token, logout }) {
             </>}
           </div>
           <nav className="hdr-nav">
-            {[['chat','Chat'],['heatmap','Map'],['stats','Stats'],['settings','Settings']].map(([v,label])=>(
-              <button key={v} className={'hdr-tab'+(view===v?' ht-on':'')} onClick={()=>{setView(v);if(v==='stats')loadDashboard();if(v==='heatmap')loadHeatmap()}}>{label}</button>
+            {[['chat','Chat'],['stats','Stats'],['settings','Settings']].map(([v,label])=>(
             ))}
           </nav>
           <div className="hdr-right">
@@ -377,7 +375,7 @@ function MainApp({ user, token, logout }) {
         </div>
 
         {view==='stats'?<DashView perf={perf}/>
-        :view==='heatmap'?<HeatmapView data={heatmapData} onAnalyze={(t)=>{newChat();sendMessage(t);setView('chat')}}/>
+        
         :view==='settings'?<SetView settings={settings} update={updateSetting} user={user} token={token} logout={logout}/>
         :(<>
           {selectedPos&&(()=>{const p=positions.find(x=>x.ticker===selectedPos);if(!p)return null;return(
@@ -602,57 +600,6 @@ function SetView({settings,update,user,token,logout}){
       <div className="s-row"><span>Name</span><input className="s-inp" value={settings.userName||user?.username||''} onChange={e=>update('userName',e.target.value)} placeholder="Your name"/></div>
     </div>
   </div>)
-}
-
-function HeatmapView({ data, onAnalyze }) {
-  const [hover, setHover] = useState(null)
-  if (!data) return <div className="view-msg">Loading market data...</div>
-  const sectors = Object.entries(data).sort((a,b) => (b[1].mcap||0) - (a[1].mcap||0))
-  if (!sectors.length) return <div className="view-msg">No data</div>
-
-  const totalMcap = sectors.reduce((s,[_,v]) => s + (v.mcap||1), 0)
-
-  return (
-    <div className="view-scroll hm-scroll">
-      <h2 className="view-h">Market</h2>
-      <div className="hm-treemap">
-        {sectors.map(([sector, info]) => {
-          const sectorPct = ((info.mcap || 1) / totalMcap * 100)
-          return (
-            <div key={sector} className="hm-sector" style={{flex: `${sectorPct} 1 0%`}}>
-              <div className="hm-sector-head">
-                <span className="hm-sector-name">{sector}</span>
-                <span className={'hm-sector-chg ' + (info.chg >= 0 ? 'up' : 'dn')}>{info.chg >= 0 ? '+' : ''}{info.chg}%</span>
-              </div>
-              <div className="hm-tiles">
-                {info.stocks.map(s => {
-                  const pct = (s.mcap || 1) / (info.mcap || 1) * 100
-                  const intensity = Math.min(Math.abs(s.chg) / 2.5, 1)
-                  const isUp = s.chg >= 0
-                  const bg = isUp
-                    ? `rgb(${Math.round(6 + intensity * 30)}, ${Math.round(40 + intensity * 120)}, ${Math.round(20 + intensity * 60)})`
-                    : `rgb(${Math.round(50 + intensity * 140)}, ${Math.round(15 + intensity * 20)}, ${Math.round(15 + intensity * 25)})`
-                  const isLarge = pct > 15
-                  const isMed = pct > 8
-                  return (
-                    <div key={s.ticker} className={'hm-tile' + (hover===s.ticker?' hm-hover':'')}
-                      style={{flex: `${pct} 1 0%`, background: bg, minWidth: isMed ? '60px' : '44px'}}
-                      onClick={() => onAnalyze(s.ticker)}
-                      onMouseEnter={() => setHover(s.ticker)}
-                      onMouseLeave={() => setHover(null)}>
-                      <span className={'hm-t-sym' + (isLarge?' hm-lg':isMed?' hm-md':'')}>{s.ticker}</span>
-                      <span className="hm-t-chg">{s.chg >= 0 ? '+' : ''}{s.chg}%</span>
-                      {hover === s.ticker && <div className="hm-tooltip">${s.price} · ${s.mcap}B</div>}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
 }
 
 function Tog({l,on,fn}){return <div className="s-row"><span>{l}</span><button className={'tog'+(on?' tog-on':'')} onClick={fn}>{on?'ON':'OFF'}</button></div>}

@@ -293,22 +293,6 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .s-saved { background: rgba(16,185,129,.12) !important; box-shadow: none !important; transform: none !important }
 .eq-svg { width: 100%; height: auto; display: block }
 
-/* ═══ Heatmap Treemap ═══ */
-.hm-scroll { padding-bottom: 40px }
-.hm-treemap { display: flex; flex-wrap: wrap; gap: 6px; min-height: 500px }
-.hm-sector { display: flex; flex-direction: column; min-width: 140px; border: 1px solid var(--brd); border-radius: 8px; overflow: hidden; background: var(--c1) }
-.hm-sector-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--brd) }
-.hm-sector-name { font-size: .68rem; font-weight: 700; color: var(--wh) }
-.hm-sector-chg { font-family: var(--mono); font-size: .62rem; font-weight: 700 }
-.hm-tiles { display: flex; flex-wrap: wrap; flex: 1; gap: 2px; padding: 3px }
-.hm-tile { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 52px; border-radius: 4px; cursor: pointer; transition: all .12s cubic-bezier(.16,1,.3,1); overflow: hidden; gap: 1px; border: 1px solid rgba(255,255,255,.04) }
-.hm-tile:hover, .hm-hover { transform: scale(1.04); z-index: 2; border-color: rgba(255,255,255,.15); box-shadow: 0 4px 20px rgba(0,0,0,.4) }
-.hm-t-sym { font-family: var(--mono); font-weight: 700; color: rgba(255,255,255,.95); text-shadow: 0 1px 3px rgba(0,0,0,.5) }
-.hm-lg { font-size: .82rem }
-.hm-md { font-size: .68rem }
-.hm-t-sym:not(.hm-lg):not(.hm-md) { font-size: .56rem }
-.hm-t-chg { font-family: var(--mono); font-size: .48rem; font-weight: 600; color: rgba(255,255,255,.7) }
-.hm-tooltip { position: absolute; bottom: -22px; left: 50%; transform: translateX(-50%); font-family: var(--mono); font-size: .5rem; color: var(--wh); background: var(--c3); padding: 3px 8px; border-radius: 4px; white-space: nowrap; z-index: 10; border: 1px solid var(--brd); pointer-events: none; box-shadow: 0 2px 8px rgba(0,0,0,.3) }
 
 /* ═══ Login ═══ */
 .auth-loading { display: flex; align-items: center; justify-content: center; height: 100vh; background: var(--bg) }
