@@ -367,7 +367,9 @@ function MainApp({ user, token, logout }) {
             ))}
           </nav>
           <div className="hdr-right">
-            <button className={'hdr-ap'+(autopilot?' hap-on':'')} onClick={()=>sendMessage(autopilot?'stop':'autopilot')}>
+            <button className={'hdr-ap'+(autopilot?' hap-on':'')} onClick={async ()=>{
+              try { await f(API+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:autopilot?'stop':'autopilot'})}); refreshData() } catch{}
+            }}>
               <span className={'ap-dot'+(autopilot?' dot-on':'')}/>{autopilot?'On':'Off'}
             </button>
             <button className="hdr-logout" onClick={logout}>Sign out</button>

@@ -602,7 +602,7 @@ async def buy_stock(req: TradeRequest):
     if result.get("ok"):
         await broadcast("trade", {"action": "buy", "ticker": req.ticker, **result})
         log_trade("buy", req.ticker, qty=req.qty or 0, price=result.get("avg_price", 0))
-        await send_phone_notification(f"Bought {req.ticker}", f"Qty: {req.qty or 'notional'}")
+        await send_phone_notification(f"📈 Bought {req.ticker}", f"Qty: {req.qty or 'notional'} | Entry: ${result.get('price', '?')}")
     return result
 
 
@@ -614,7 +614,7 @@ async def sell_stock(req: TradeRequest):
     if result.get("ok"):
         await broadcast("trade", {"action": "sell", "ticker": req.ticker, **result})
         log_trade("sell", req.ticker, qty=req.qty or 0)
-        await send_phone_notification(f"Sold {req.ticker}", f"Position closed")
+        await send_phone_notification(f"📉 Sold {req.ticker}", f"Position closed at ${result.get('price', '?')}")
     return result
 
 
@@ -879,6 +879,7 @@ async def _eod_guardian():
 async def _autopilot_loop():
     """Background autopilot loop — runs every 5 minutes."""
     last_hourly_update = -1  # track which hour we last sent status
+    last_milestone_reset = ""
 
     while True:
         try:
@@ -903,6 +904,13 @@ async def _autopilot_loop():
                         )
                     except Exception:
                         pass
+
+            # ── Reset daily flags ──
+            today_str = now_et.strftime("%Y-%m-%d")
+            if today_str != last_milestone_reset:
+                last_milestone_reset = today_str
+                for m in [100, 200, 500]:
+                    setattr(engine, f"_notified_{m}", False)
 
             # ── Hourly status update (during market hours) ──
             if is_open and now_et.hour != last_hourly_update:
@@ -985,10 +993,40 @@ async def _autopilot_loop():
 
                 await send_phone_notification("Paula Trade", detail, priority="default")
 
+            # P&L milestone alerts
+            try:
+                acc = engine.alpaca_account() or {}
+                daily_pnl = acc.get("daily_pnl", 0)
+                # Check milestones: ±$100, ±$200, ±$500
+                for milestone in [500, 200, 100]:
+                    milestone_key = f"_notified_{milestone}"
+                    if abs(daily_pnl) >= milestone and not getattr(engine, milestone_key, False):
+                        setattr(engine, milestone_key, True)
+                        emoji = "🎉" if daily_pnl > 0 else "⚠️"
+                        await send_phone_notification(
+                            f"{emoji} P&L Alert: {'+'if daily_pnl>0 else ''}{daily_pnl:.0f}",
+                            f"{'Great day!' if daily_pnl > 0 else 'Consider stopping.'} Equity: ${acc.get('equity', 0):,.0f}",
+                            priority="high" if milestone >= 200 else "default"
+                        )
+                        break
+            except Exception:
+                pass
+
+            # Notify about interesting setups found (even if not traded)
+            scanned = result.get("scanned", 0)
+            opportunities = result.get("opportunities", 0)
+            if opportunities > 0 and buys == 0 and sells == 0 and shorts == 0:
+                await send_phone_notification(
+                    f"👀 {opportunities} setups found",
+                    f"Scanned {scanned} stocks. Setups didn't meet entry criteria yet.",
+                    priority="low"
+                )
+
         except asyncio.CancelledError:
             break
         except Exception as e:
             await broadcast("autopilot", {"status": "error", "error": str(e)[:200]})
+            await send_phone_notification("⚠️ Paula Error", str(e)[:80], priority="high")
 
         await asyncio.sleep(5 * 60)  # 5 minutes
 
@@ -1002,6 +1040,7 @@ async def start_autopilot():
 
     autopilot_task = asyncio.create_task(_autopilot_loop())
     await broadcast("autopilot", {"status": "started"})
+    await send_phone_notification("🟢 Autopilot Started", "Paula is now scanning for trades every 5 minutes", priority="default")
     return {"ok": True, "message": "Autopilot started"}
 
 
@@ -1013,6 +1052,13 @@ async def stop_autopilot():
         autopilot_task.cancel()
         autopilot_task = None
     await broadcast("autopilot", {"status": "stopped"})
+    try:
+        acc = engine.alpaca_account() or {}
+        pnl = acc.get("daily_pnl", 0)
+        pnl_sign = "+" if pnl >= 0 else ""
+        await send_phone_notification("🔴 Autopilot Stopped", f"Day so far: {pnl_sign}${abs(pnl):,.0f} | Equity: ${acc.get('equity', 0):,.0f}", priority="default")
+    except Exception:
+        await send_phone_notification("🔴 Autopilot Stopped", "Paula is no longer trading", priority="default")
     return {"ok": True, "message": "Autopilot stopped"}
 
 
