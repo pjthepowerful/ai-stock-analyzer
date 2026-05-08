@@ -316,7 +316,6 @@ function MainApp({ user, token, logout }) {
         <div key={t.id} className={'toast t-'+t.type}><span className="t-dot"/>{t.msg}
           <button className="t-x" onClick={()=>setToasts(p=>p.filter(x=>x.id!==t.id))}>×</button>
         </div>))}</div>
-
       {/* Sidebar — chats + positions only */}
       <aside className={'sb'+(sideOpen?'':' sb-hide')}>
         <div className="sb-top">
@@ -364,6 +363,7 @@ function MainApp({ user, token, logout }) {
           </div>
           <nav className="hdr-nav">
             {[['chat','Chat'],['stats','Stats'],['settings','Settings']].map(([v,label])=>(
+              <button key={v} className={'hdr-tab'+(view===v?' ht-on':'')} onClick={()=>{setView(v);if(v==='stats')loadDashboard()}}>{label}</button>
             ))}
           </nav>
           <div className="hdr-right">
@@ -537,7 +537,6 @@ function DashView({perf}){
     {/* Tune history */}
     {d.tune_history?.length>0&&<div className="card wide"><label>Auto-Tune Log</label>{d.tune_history.slice().reverse().map((h,i)=>(
       <div key={i} className="tune"><span className="t-date">{h.date}</span><span className={'t-pnl '+((h.stats?.pnl||0)>=0?'up':'dn')}>{h.stats?.pnl>=0?'+':''}${Math.abs(h.stats?.pnl||0).toFixed(0)}</span><span className="t-wr">{h.stats?.wins}W {h.stats?.losses}L</span><div className="t-ch">{h.changes?.map((c,j)=><div key={j}>{c}</div>)}</div></div>))}</div>}
-
     {/* Recent trades */}
     {d.recent_trades?.length>0&&<div className="card wide"><label>Recent Trades</label>{d.recent_trades.slice().reverse().slice(0,12).map((t,i)=>(
       <div key={i} className="tr-row"><span className={'tr-act '+(t.action==='buy'?'up':'dn')}>{t.action?.toUpperCase()}</span><span className="tr-sym">{t.ticker}</span><span className="tr-time">{t.time?.slice(11,16)}</span></div>))}</div>}
