@@ -110,6 +110,7 @@ from trading import (
     route,
     execute,
     ai_response,
+    ai_response_stream,
 
     # Charts
     build_chart,

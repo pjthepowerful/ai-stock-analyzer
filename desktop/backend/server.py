@@ -701,6 +701,87 @@ async def chart_data(ticker: str, period: str = "1y"):
 
 # ── Chat (AI response via Groq) ──
 
+@app.post("/api/chat/stream")
+async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
+    """Stream AI response token by token via SSE."""
+    from starlette.responses import StreamingResponse
+
+    user_msg = msg.message.strip()
+    if not user_msg:
+        return {"ok": False, "error": "Empty message"}
+
+    user = _get_user(authorization)
+    if user:
+        auth.save_chat(user["id"], "user", user_msg)
+
+    chat_history.append({"role": "user", "content": user_msg})
+
+    # Route first to get data
+    intent = engine.route(user_msg)
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, engine.execute, intent)
+
+    # Determine if we need AI streaming
+    stock_data = None
+    need_ai = False
+    resp_prefix = ""
+
+    if result and result.get("ok"):
+        rtype = result.get("type", "")
+        resp_prefix = result.get("msg", "")
+        if rtype == "analysis":
+            stock_data = result.get("data")
+            need_ai = True
+        elif rtype == "list":
+            stock_data = {"list_title": result.get("title", ""), "stocks": result.get("data", [])}
+            need_ai = True
+        elif not resp_prefix:
+            need_ai = True
+    elif result and result.get("error"):
+        resp_prefix = f"⚠️ {result['error']}"
+    else:
+        need_ai = True
+
+    if not need_ai:
+        # Non-AI response — return instantly
+        chat_history.append({"role": "assistant", "content": resp_prefix})
+        if user:
+            auth.save_chat(user["id"], "assistant", resp_prefix,
+                          msg_type=result.get("type", "chat") if result else "chat",
+                          ticker=result.get("ticker") if result else None)
+        return {
+            "ok": True, "message": resp_prefix, "stream": False,
+            "type": result.get("type") if result else "chat",
+            "ticker": result.get("ticker") if result else None,
+            "trade_signal": result.get("trade_signal") if result else None,
+            "autopilot": autopilot_task is not None and not autopilot_task.done(),
+        }
+
+    # Stream AI response
+    async def generate():
+        full_response = ""
+        try:
+            gen = engine.ai_response_stream(user_msg, stock_data, chat_history, "US")
+            for chunk in gen:
+                full_response += chunk
+                yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'chunk': f'⚠️ {str(e)[:80]}'})}\n\n"
+
+        # Save complete response
+        chat_history.append({"role": "assistant", "content": full_response})
+        if user:
+            auth.save_chat(user["id"], "assistant", full_response,
+                          msg_type=result.get("type", "chat") if result else "chat",
+                          ticker=result.get("ticker") if result else None)
+
+        # Final message with metadata
+        yield f"data: {json.dumps({'done': True, 'type': result.get('type') if result else 'chat', 'ticker': result.get('ticker') if result else None, 'trade_signal': result.get('trade_signal') if result else None})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream",
+                            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 @app.post("/api/chat")
 async def chat(msg: ChatMessage, authorization: str = Header(None)):
     """Process a chat message through Paula's brain."""

@@ -4794,6 +4794,37 @@ RESPONSE STYLE:
         return f"⚠️ AI error: {str(e)[:120]}"
 
 
+def ai_response_stream(user_msg: str, stock_data: dict | None, history: list, market: str):
+    """Streaming version — yields text chunks as they come from Groq."""
+    key = os.environ.get("GROQ_API_KEY", "")
+    if not key:
+        yield "AI not configured — set GROQ_API_KEY."
+        return
+
+    system = f"""You're Paula — a sharp, knowledgeable trading assistant. Today is {datetime.now(ZoneInfo("US/Eastern")).strftime("%Y-%m-%d")}. Market: {market}.
+RESPONSE STYLE: Keep responses SHORT — 2-4 paragraphs max. ALWAYS answer directly. NEVER say "I'm ready to help" or "What would you like". Just give the answer. Lead with the answer, then support with data."""
+
+    messages = [{"role": "system", "content": system}]
+    for h in (history or [])[-8:]:
+        messages.append({"role": h.get("role", "user"), "content": str(h.get("content", ""))[:600]})
+    content = user_msg
+    if stock_data:
+        content += f"\n\n---LIVE DATA---\n{json.dumps(stock_data, indent=2, default=str)}"
+    messages.append({"role": "user", "content": content})
+
+    try:
+        client = Groq(api_key=key)
+        stream = client.chat.completions.create(
+            model="llama-3.3-70b-versatile", messages=messages,
+            max_tokens=500, temperature=0.3, stream=True
+        )
+        for chunk in stream:
+            if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
+    except Exception as e:
+        yield f"⚠️ AI error: {str(e)[:120]}"
+
+
 # ── UI ───────────────────────────────────────────────────────────────────────
 
 def main():

@@ -256,47 +256,80 @@ function MainApp({ user, token, logout }) {
 
   const sendMessage = async (msg) => {
     if (!msg || sending) return
-    // Auto-create chat if none selected
     let targetChatId = chatId
     const isFirstMessage = !messages.length
     if (!chatId) {
       targetChatId = Date.now().toString()
-      const newChats = [{ id: targetChatId, title: 'New chat', messages: [], created: new Date().toISOString() }, ...chatsRef.current]
-      persistChats(newChats)
+      persistChats([{ id: targetChatId, title: 'New chat', messages: [], created: new Date().toISOString() }, ...chatsRef.current])
       setChatId(targetChatId)
       setView('chat')
       localStorage.setItem('paula-current-chat', targetChatId)
     }
     setMessages(prev => [...prev, { role: 'user', content: msg }]); setInput(''); setSending(true)
     try {
-      const res = await f(API+'/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg}) })
-      const data = await res.json()
-      if (data.ok) {
-        setMessages(prev => [...prev, { role:'assistant', content:data.message, type:data.type, ticker:data.ticker||null, signal:data.trade_signal||null }])
+      const res = await f(API+'/api/chat/stream', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg}) })
+      const contentType = res.headers.get('content-type') || ''
 
-        // AI-generate title on first message of any chat
-        if (isFirstMessage && targetChatId) {
-          f(API+'/api/chat/title', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg}) })
-            .then(r=>r.json()).then(t=>{
-              if (t.ok && t.title) {
-                const updated = chatsRef.current.map(c => c.id === targetChatId ? { ...c, title: t.title } : c)
-                persistChats(updated)
+      if (contentType.includes('text/event-stream')) {
+        // Streaming response — show text as it comes
+        setMessages(prev => [...prev, { role:'assistant', content:'', type:'chat', streaming:true }])
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let fullText = ''
+        let meta = {}
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          const text = decoder.decode(value, { stream: true })
+          const lines = text.split('\n').filter(l => l.startsWith('data: '))
+          for (const line of lines) {
+            try {
+              const d = JSON.parse(line.slice(6))
+              if (d.chunk) {
+                fullText += d.chunk
+                setMessages(prev => {
+                  const msgs = [...prev]
+                  const last = msgs[msgs.length - 1]
+                  if (last && last.streaming) msgs[msgs.length - 1] = { ...last, content: fullText }
+                  return msgs
+                })
               }
-            }).catch(()=>{
-              // Fallback: use message text as title
-              const updated = chatsRef.current.map(c => c.id === targetChatId && c.title === 'New chat' ? { ...c, title: msg.slice(0, 35) } : c)
-              persistChats(updated)
-            })
+              if (d.done) meta = d
+            } catch {}
+          }
         }
 
-        if (data.type==='trade'&&data.message) {
-          if(data.message.includes('Bought')){snd(playBuy);addToast(data.message.slice(0,60),'buy')}
-          else if(data.message.includes('Sold')||data.message.includes('Shorted')){snd(playSell);addToast(data.message.slice(0,60),'sell')}
-          else if(data.message.includes('Covered')){snd(playProfit);addToast(data.message.slice(0,60),'buy')}
-          else if(data.message.includes('closed')){addToast(data.message.slice(0,60),'warn')}
-        } else snd(playTick)
-        if (data.autopilot!==undefined) setAutopilot(data.autopilot)
-      } else { snd(playAlert); setMessages(prev=>[...prev,{role:'assistant',content:'Error: '+(data.error||'Unknown')}]) }
+        // Finalize — remove streaming flag, add metadata
+        setMessages(prev => {
+          const msgs = [...prev]
+          const last = msgs[msgs.length - 1]
+          if (last) msgs[msgs.length - 1] = { ...last, streaming: false, type: meta.type||'chat', ticker: meta.ticker||null, signal: meta.trade_signal||null }
+          return msgs
+        })
+        snd(playTick)
+      } else {
+        // Non-streaming JSON response (trades, instant replies)
+        const data = await res.json()
+        if (data.ok) {
+          setMessages(prev => [...prev, { role:'assistant', content:data.message, type:data.type, ticker:data.ticker||null, signal:data.trade_signal||null }])
+          if (data.type==='trade'&&data.message) {
+            if(data.message.includes('Bought')){snd(playBuy);addToast(data.message.slice(0,60),'buy')}
+            else if(data.message.includes('Sold')||data.message.includes('Shorted')){snd(playSell);addToast(data.message.slice(0,60),'sell')}
+            else if(data.message.includes('Covered')){snd(playProfit);addToast(data.message.slice(0,60),'buy')}
+            else if(data.message.includes('closed')){addToast(data.message.slice(0,60),'warn')}
+          } else snd(playTick)
+          if (data.autopilot!==undefined) setAutopilot(data.autopilot)
+        } else { snd(playAlert); setMessages(prev=>[...prev,{role:'assistant',content:'Error: '+(data.error||'Unknown')}]) }
+      }
+
+      // Generate title for new chats
+      if (isFirstMessage && targetChatId) {
+        f(API+'/api/chat/title', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg}) })
+          .then(r=>r.json()).then(t=>{
+            if (t.ok && t.title) { persistChats(chatsRef.current.map(c => c.id === targetChatId ? { ...c, title: t.title } : c)) }
+          }).catch(()=>{ persistChats(chatsRef.current.map(c => c.id === targetChatId && c.title === 'New chat' ? { ...c, title: msg.slice(0, 35) } : c)) })
+      }
       refreshData()
     } catch { setMessages(prev=>[...prev,{role:'assistant',content:'Connection lost.'}]) }
     setSending(false); inputRef.current?.focus()
@@ -368,7 +401,7 @@ function MainApp({ user, token, logout }) {
           </nav>
           <div className="hdr-right">
             <button className={'hdr-ap'+(autopilot?' hap-on':'')} onClick={async ()=>{
-              try { await f(API+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:autopilot?'stop':'autopilot'})}); refreshData() } catch{}
+              try { await f(API+'/api/autopilot/'+(autopilot?'stop':'start'),{method:'POST'}); refreshData() } catch{}
             }}>
               <span className={'ap-dot'+(autopilot?' dot-on':'')}/>{autopilot?'On':'Off'}
             </button>
