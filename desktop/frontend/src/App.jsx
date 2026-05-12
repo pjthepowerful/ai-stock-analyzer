@@ -209,8 +209,8 @@ function MainApp({ user, token, logout }) {
           const { event, data } = JSON.parse(e.data)
           if (event === 'connected') setAutopilot(data.autopilot)
           if (event === 'autopilot') {
-            if (data.status === 'started') { setAutopilot(true); addToast('Autopilot activated', 'buy') }
-            if (data.status === 'stopped') { setAutopilot(false); addToast('Autopilot deactivated', 'sell') }
+            if (data.status === 'started') { setAutopilot(true) }
+            if (data.status === 'stopped') { setAutopilot(false) }
             if (data.log) {
               if (settingsRef.current.scanSound !== false) playNotify()
             }
