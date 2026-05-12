@@ -717,20 +717,25 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
 
     chat_history.append({"role": "user", "content": user_msg})
 
-    # Route first to get data
-    intent = engine.route(user_msg)
+    # Route and execute
+    result = None
+    try:
+        intent = engine.route(user_msg)
 
-    # Handle autopilot start/stop
-    if intent.get("type") == "autopilot":
-        if not autopilot_task or autopilot_task.done():
-            autopilot_task = asyncio.create_task(_autopilot_loop())
-    if intent.get("type") == "stop_autopilot":
-        if autopilot_task and not autopilot_task.done():
-            autopilot_task.cancel()
-            autopilot_task = None
+        # Handle autopilot start/stop
+        if intent.get("type") == "autopilot":
+            if not autopilot_task or autopilot_task.done():
+                autopilot_task = asyncio.create_task(_autopilot_loop())
+        if intent.get("type") == "stop_autopilot":
+            if autopilot_task and not autopilot_task.done():
+                autopilot_task.cancel()
+                autopilot_task = None
 
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, engine.execute, intent)
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, engine.execute, intent)
+    except Exception as e:
+        print(f"⚠️ Route/execute error: {e}")
+        return {"ok": False, "error": str(e)[:200]}
 
     # Determine if we need AI streaming
     stock_data = None

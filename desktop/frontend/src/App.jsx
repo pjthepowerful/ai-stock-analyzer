@@ -267,7 +267,33 @@ function MainApp({ user, token, logout }) {
     }
     setMessages(prev => [...prev, { role: 'user', content: msg }]); setInput(''); setSending(true)
     try {
-      const res = await f(API+'/api/chat/stream', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg}) })
+      let res
+      try {
+        res = await f(API+'/api/chat/stream', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg}) })
+      } catch {
+        // Stream endpoint failed — fall back to regular chat
+        res = await f(API+'/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg}) })
+      }
+
+      // If stream returned error, fall back
+      if (!res.ok) {
+        try {
+          const fallback = await f(API+'/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg}) })
+          const data = await fallback.json()
+          if (data.ok) {
+            setMessages(prev => [...prev, { role:'assistant', content:data.message, type:data.type, ticker:data.ticker||null, signal:data.trade_signal||null }])
+            snd(playTick)
+          }
+          if (isFirstMessage && targetChatId) {
+            f(API+'/api/chat/title', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg}) })
+              .then(r=>r.json()).then(t=>{ if (t.ok && t.title) { persistChats(chatsRef.current.map(c => c.id === targetChatId ? { ...c, title: t.title } : c)) } }).catch(()=>{})
+          }
+          refreshData()
+          setSending(false); inputRef.current?.focus()
+          return
+        } catch {}
+      }
+
       const contentType = res.headers.get('content-type') || ''
 
       if (contentType.includes('text/event-stream')) {
