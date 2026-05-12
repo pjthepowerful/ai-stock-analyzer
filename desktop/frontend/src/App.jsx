@@ -297,13 +297,14 @@ function MainApp({ user, token, logout }) {
       const contentType = res.headers.get('content-type') || ''
 
       if (contentType.includes('text/event-stream')) {
-        // Streaming response — show text as it comes
+        // Streaming response — collect then animate
         setMessages(prev => [...prev, { role:'assistant', content:'', type:'chat', streaming:true }])
         const reader = res.body.getReader()
         const decoder = new TextDecoder()
         let fullText = ''
         let meta = {}
 
+        // Read all chunks from stream
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
@@ -312,18 +313,26 @@ function MainApp({ user, token, logout }) {
           for (const line of lines) {
             try {
               const d = JSON.parse(line.slice(6))
-              if (d.chunk) {
-                fullText += d.chunk
-                setMessages(prev => {
-                  const msgs = [...prev]
-                  const last = msgs[msgs.length - 1]
-                  if (last && last.streaming) msgs[msgs.length - 1] = { ...last, content: fullText }
-                  return msgs
-                })
-              }
+              if (d.chunk) fullText += d.chunk
               if (d.done) meta = d
             } catch {}
           }
+        }
+
+        // Animate typing word by word
+        const words = fullText.split(/(\s+)/)
+        let shown = ''
+        const DELAY = 18 // ms per word
+        for (let i = 0; i < words.length; i++) {
+          shown += words[i]
+          const snap = shown
+          setMessages(prev => {
+            const msgs = [...prev]
+            const last = msgs[msgs.length - 1]
+            if (last && last.streaming) msgs[msgs.length - 1] = { ...last, content: snap }
+            return msgs
+          })
+          if (i % 3 === 0) await new Promise(r => setTimeout(r, DELAY))
         }
 
         // Finalize — remove streaming flag, add metadata
