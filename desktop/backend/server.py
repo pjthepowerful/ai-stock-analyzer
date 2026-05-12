@@ -705,6 +705,7 @@ async def chart_data(ticker: str, period: str = "1y"):
 async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
     """Stream AI response token by token via SSE."""
     from starlette.responses import StreamingResponse
+    global autopilot_task
 
     user_msg = msg.message.strip()
     if not user_msg:
