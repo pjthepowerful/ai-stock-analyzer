@@ -93,6 +93,7 @@ function LoginPage({ onAuth }) {
           <button className="login-toggle" onClick={() => { setIsSignup(!isSignup); setError('') }}>
             {isSignup ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
           </button>
+          <a href="/commercial.html" target="_blank" className="login-trailer">▶ Watch Trailer</a>
         </div>
       </div>
     </div>
@@ -212,7 +213,6 @@ function MainApp({ user, token, logout }) {
             if (data.status === 'stopped') { setAutopilot(false); addToast('Autopilot deactivated', 'sell') }
             if (data.log) {
               if (settingsRef.current.scanSound !== false) playNotify()
-              setMessages(prev => [...prev, { role: 'assistant', content: '**Autopilot Scan**\n\n' + data.log.join('\n\n'), type: 'autopilot' }])
             }
           }
           if (event === 'trade') {
@@ -444,13 +444,13 @@ function MainApp({ user, token, logout }) {
                     <div className="ai-av">P</div>
                     <div className="ai-body">
                       <div className="ai-name">Paula</div>
-                      <div className="ai-txt" dangerouslySetInnerHTML={{__html:fmt(m.content)}}/>
+                      <div className="ai-txt"><span dangerouslySetInnerHTML={{__html:fmt(m.content)}}/>{m.streaming&&<span className="stream-cursor">▌</span>}</div>
                       {m.ticker&&<div className="ai-chart"><Chart ticker={m.ticker} signal={m.signal} height={260}/></div>}
                     </div>
                   </div>
                 ):(<div className="user-bubble">{m.content}</div>)}
               </div>))}
-            {sending&&<div className="msg msg-assistant"><div className="ai"><div className="ai-av">P</div><div className="ai-body"><div className="ai-name">Paula</div><div className="dots"><span/><span/><span/></div></div></div></div>}
+            {sending&&!messages.some(m=>m.streaming)&&<div className="msg msg-assistant"><div className="ai"><div className="ai-av">P</div><div className="ai-body"><div className="ai-name">Paula</div><div className="dots"><span/><span/><span/></div></div></div></div>}
             <div ref={messagesEnd}/>
             </div>
           </div>

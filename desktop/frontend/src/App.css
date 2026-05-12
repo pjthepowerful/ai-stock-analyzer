@@ -169,6 +169,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .ai-txt { font-size: .88rem; color: var(--lt); line-height: 1.75 }
 .ai-txt strong { color: var(--wh); font-weight: 600 }
 .ai-txt code { font-size: .8rem }
+.stream-cursor { color: var(--grn); animation: blinkcur .5s step-end infinite; font-weight: 300 }
 .ai-chart { margin-top: 12px; padding: 12px; border: 1px solid var(--brd); border-radius: 12px; background: var(--c1) }
 
 /* Chart */
@@ -316,6 +317,8 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .login-btn:disabled { opacity: .4; transform: none }
 .login-toggle { background: none; border: none; color: var(--dim); font-size: .7rem; cursor: pointer; padding: 10px; font-family: var(--sans) }
 .login-toggle:hover { color: var(--grn) }
+.login-trailer { display: inline-block; color: var(--dim); font-size: .66rem; text-decoration: none; padding: 8px 16px; border: 1px solid var(--brd); border-radius: 100px; transition: .15s; font-family: var(--sans); letter-spacing: .02em }
+.login-trailer:hover { color: var(--grn); border-color: rgba(16,185,129,.2) }
 .logout-btn { background: none; border: none; color: var(--dim); font-size: .5rem; cursor: pointer; font-family: var(--mono); margin-left: auto; padding: 2px 4px; transition: .12s }
 .logout-btn:hover { color: var(--red) }
 
