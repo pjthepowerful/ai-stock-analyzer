@@ -23,8 +23,11 @@ import auth
 # Disable yfinance timezone cache (prevents SQLite lock errors)
 try:
     import yfinance as yf
-    import tempfile, os
-    yf.set_tz_cache_location(os.path.join(tempfile.gettempdir(), "yf_tz_cache"))
+    import tempfile
+    # Use unique temp dir to avoid lock conflicts with concurrent requests
+    _yf_cache = os.path.join(tempfile.gettempdir(), f"yf_tz_{os.getpid()}")
+    os.makedirs(_yf_cache, exist_ok=True)
+    yf.set_tz_cache_location(_yf_cache)
 except Exception:
     pass
 
@@ -671,32 +674,39 @@ async def spy_trend():
 @app.get("/api/chart/{ticker}")
 async def chart_data(ticker: str, period: str = "1y"):
     """Get chart OHLCV data."""
-    try:
-        import yfinance as yf
-        hist = yf.Ticker(ticker).history(period=period)
-        if hist is None or hist.empty:
-            return {"ok": False, "error": "No data"}
-        # Format dates as YYYY-MM-DD, deduplicate
-        raw_dates = [str(d)[:10] for d in hist.index]
-        seen = set()
-        indices = []
-        clean_dates = []
-        for i, d in enumerate(raw_dates):
-            if d not in seen:
-                seen.add(d)
-                indices.append(i)
-                clean_dates.append(d)
-        data = {
-            "dates": clean_dates,
-            "open": [round(float(hist["Open"].iloc[i]), 2) for i in indices],
-            "high": [round(float(hist["High"].iloc[i]), 2) for i in indices],
-            "low": [round(float(hist["Low"].iloc[i]), 2) for i in indices],
-            "close": [round(float(hist["Close"].iloc[i]), 2) for i in indices],
-            "volume": [int(hist["Volume"].iloc[i]) for i in indices],
-        }
-        return {"ok": True, "data": data}
-    except Exception as e:
-        return {"ok": False, "error": str(e)[:100]}
+    def _fetch():
+        try:
+            import yfinance as yf
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                hist = yf.Ticker(ticker.upper()).history(period=period)
+            if hist is None or hist.empty:
+                return {"ok": False, "error": "No data"}
+            raw_dates = [str(d)[:10] for d in hist.index]
+            seen = set()
+            indices = []
+            clean_dates = []
+            for i, d in enumerate(raw_dates):
+                if d not in seen:
+                    seen.add(d)
+                    indices.append(i)
+                    clean_dates.append(d)
+            return {
+                "ok": True, "data": {
+                    "dates": clean_dates,
+                    "open": [round(float(hist["Open"].iloc[i]), 2) for i in indices],
+                    "high": [round(float(hist["High"].iloc[i]), 2) for i in indices],
+                    "low": [round(float(hist["Low"].iloc[i]), 2) for i in indices],
+                    "close": [round(float(hist["Close"].iloc[i]), 2) for i in indices],
+                    "volume": [int(hist["Volume"].iloc[i]) for i in indices],
+                }
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)[:100]}
+
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _fetch)
 
 
 # ── Chat (AI response via Groq) ──
