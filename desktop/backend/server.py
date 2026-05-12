@@ -718,6 +718,16 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
 
     # Route first to get data
     intent = engine.route(user_msg)
+
+    # Handle autopilot start/stop
+    if intent.get("type") == "autopilot":
+        if not autopilot_task or autopilot_task.done():
+            autopilot_task = asyncio.create_task(_autopilot_loop())
+    if intent.get("type") == "stop_autopilot":
+        if autopilot_task and not autopilot_task.done():
+            autopilot_task.cancel()
+            autopilot_task = None
+
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(None, engine.execute, intent)
 
@@ -757,16 +767,35 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
             "autopilot": autopilot_task is not None and not autopilot_task.done(),
         }
 
-    # Stream AI response
+    # Stream AI response via thread (blocking Groq generator)
     async def generate():
+        import queue, threading
         full_response = ""
-        try:
-            gen = engine.ai_response_stream(user_msg, stock_data, chat_history, "US")
-            for chunk in gen:
-                full_response += chunk
-                yield f"data: {json.dumps({'chunk': chunk})}\n\n"
-        except Exception as e:
-            yield f"data: {json.dumps({'chunk': f'⚠️ {str(e)[:80]}'})}\n\n"
+        q = queue.Queue()
+
+        def _run_stream():
+            try:
+                for chunk in engine.ai_response_stream(user_msg, stock_data, chat_history, "US"):
+                    q.put(chunk)
+            except Exception as e:
+                q.put(f"⚠️ {str(e)[:80]}")
+            q.put(None)
+
+        t = threading.Thread(target=_run_stream, daemon=True)
+        t.start()
+
+        while True:
+            try:
+                chunk = q.get(timeout=0.05)
+            except queue.Empty:
+                await asyncio.sleep(0.01)
+                continue
+            if chunk is None:
+                break
+            full_response += chunk
+            yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+
+        t.join(timeout=5)
 
         # Save complete response
         chat_history.append({"role": "assistant", "content": full_response})

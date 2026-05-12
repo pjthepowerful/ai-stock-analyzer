@@ -48,13 +48,17 @@ function Stage({ children, width = 1920, height = 1080, duration = 20, backgroun
 
   const play = useCallback(() => {
     startRef.current = null;
-    setTime(0);
-    setPlaying(true);
-    rafRef.current = requestAnimationFrame(tick);
+    setTime(-0.001); // force re-render to 0
+    setTimeout(() => {
+      setTime(0);
+      setPlaying(true);
+      rafRef.current = requestAnimationFrame(tick);
+    }, 20);
   }, [tick]);
 
   const restart = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    setPlaying(false);
     play();
   }, [play]);
 
@@ -89,8 +93,7 @@ function Stage({ children, width = 1920, height = 1080, duration = 20, backgroun
         }}>
           <div style={{
             height: "100%", background: "var(--accent, #34d399)",
-            width: `${(time / duration) * 100}%`,
-            transition: "width 0.1s linear",
+            width: `${Math.max(0, (time / duration) * 100)}%`,
           }} />
         </div>
 
