@@ -459,9 +459,19 @@ function MainApp({ user, token, logout }) {
             {messages.length===0&&!sending&&(
               <div className="welcome">
                 <h1><span className="w-hi">Hey {name},</span> <Typewriter/></h1>
-                <div className="w-pills">
-                  {[['Market overview','market regime'],['Top movers','top gainers'],["Today's recap",'How did we do today?'],['Find trades','What should I buy?'],['Analyze a stock','Analyze ']].map(([l,c],i)=>(
-                    <button key={i} className="pill" disabled={sending} onClick={()=>{if(c==='Analyze '){setInput(c);inputRef.current?.focus()}else sendMessage(c)}}>{l}</button>))}</div>
+                <div className="w-prompts">
+                  {[
+                    {q:'Market overview', a:'Check the regime, SPY trend, and whether it\'s safe to trade', cmd:'market regime'},
+                    {q:'Top movers', a:'See what\'s running today — biggest gainers with momentum', cmd:'top gainers'},
+                    {q:'How did we do today?', a:'Daily P&L recap, trades, and what worked', cmd:'How did we do today?'},
+                    {q:'Find me a trade', a:'Scan for setups with the best risk/reward right now', cmd:'What should I buy?'},
+                    {q:'Analyze a stock', a:'Deep dive — technicals, score, entry/stop/target', cmd:'Analyze '},
+                  ].map((p,i)=>(
+                    <button key={i} className="w-prompt" disabled={sending} onClick={()=>{if(p.cmd==='Analyze '){setInput(p.cmd);inputRef.current?.focus()}else sendMessage(p.cmd)}}>
+                      <span className="wp-q">{p.q}</span>
+                      <span className="wp-a">{p.a}</span>
+                    </button>))}
+                </div>
               </div>)}
             {messages.map((m,i)=>(
               <div key={i} className={'msg msg-'+m.role}>

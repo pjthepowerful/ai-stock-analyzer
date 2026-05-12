@@ -717,63 +717,63 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
 
     chat_history.append({"role": "user", "content": user_msg})
 
-    # Route and execute
+    # Route the message
+    intent = engine.route(user_msg)
+    itype = intent.get("type", "chat")
+
+    # Autopilot start/stop — handle instantly, no execute needed
+    if itype == "autopilot":
+        if not autopilot_task or autopilot_task.done():
+            autopilot_task = asyncio.create_task(_autopilot_loop())
+        resp = "🟢 Autopilot activated. Scanning every 5 minutes."
+        chat_history.append({"role": "assistant", "content": resp})
+        return {"ok": True, "message": resp, "stream": False, "type": "trade", "autopilot": True}
+
+    if itype == "stop_autopilot":
+        if autopilot_task and not autopilot_task.done():
+            autopilot_task.cancel()
+            autopilot_task = None
+        resp = "🔴 Autopilot stopped."
+        chat_history.append({"role": "assistant", "content": resp})
+        return {"ok": True, "message": resp, "stream": False, "type": "trade", "autopilot": False}
+
+    # Execute intent (analysis, trade, list, etc)
     result = None
     try:
-        intent = engine.route(user_msg)
-
-        # Handle autopilot start/stop
-        if intent.get("type") == "autopilot":
-            if not autopilot_task or autopilot_task.done():
-                autopilot_task = asyncio.create_task(_autopilot_loop())
-        if intent.get("type") == "stop_autopilot":
-            if autopilot_task and not autopilot_task.done():
-                autopilot_task.cancel()
-                autopilot_task = None
-
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(None, engine.execute, intent)
     except Exception as e:
-        print(f"⚠️ Route/execute error: {e}")
-        return {"ok": False, "error": str(e)[:200]}
+        print(f"⚠️ Execute error: {e}")
 
-    # Determine if we need AI streaming
+    # Determine response strategy
     stock_data = None
-    need_ai = False
-    resp_prefix = ""
 
-    if result and result.get("ok"):
+    # If execute returned a ready message (trades, regime, etc) — return instantly
+    if result and result.get("ok") and result.get("msg"):
         rtype = result.get("type", "")
-        resp_prefix = result.get("msg", "")
-        if rtype == "analysis":
-            stock_data = result.get("data")
-            need_ai = True
-        elif rtype == "list":
-            stock_data = {"list_title": result.get("title", ""), "stocks": result.get("data", [])}
-            need_ai = True
-        elif not resp_prefix:
-            need_ai = True
+        if rtype in ("analysis", "list"):
+            # Has data — stream AI analysis
+            stock_data = result.get("data") if rtype == "analysis" else {"stocks": result.get("data", [])}
+        else:
+            # Complete response — return now
+            resp = result["msg"]
+            chat_history.append({"role": "assistant", "content": resp})
+            if user:
+                auth.save_chat(user["id"], "assistant", resp, msg_type=rtype, ticker=result.get("ticker"))
+            return {
+                "ok": True, "message": resp, "stream": False,
+                "type": rtype, "ticker": result.get("ticker"),
+                "trade_signal": result.get("trade_signal"),
+                "autopilot": autopilot_task is not None and not autopilot_task.done(),
+            }
+    elif result and result.get("ok") and result.get("type") == "analysis":
+        stock_data = result.get("data")
     elif result and result.get("error"):
-        resp_prefix = f"⚠️ {result['error']}"
-    else:
-        need_ai = True
+        resp = f"⚠️ {result['error']}"
+        chat_history.append({"role": "assistant", "content": resp})
+        return {"ok": True, "message": resp, "stream": False, "type": "chat"}
 
-    if not need_ai:
-        # Non-AI response — return instantly
-        chat_history.append({"role": "assistant", "content": resp_prefix})
-        if user:
-            auth.save_chat(user["id"], "assistant", resp_prefix,
-                          msg_type=result.get("type", "chat") if result else "chat",
-                          ticker=result.get("ticker") if result else None)
-        return {
-            "ok": True, "message": resp_prefix, "stream": False,
-            "type": result.get("type") if result else "chat",
-            "ticker": result.get("ticker") if result else None,
-            "trade_signal": result.get("trade_signal") if result else None,
-            "autopilot": autopilot_task is not None and not autopilot_task.done(),
-        }
-
-    # Stream AI response via thread (blocking Groq generator)
+    # Stream AI response
     async def generate():
         import queue, threading
         full_response = ""
@@ -803,14 +803,12 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
 
         t.join(timeout=5)
 
-        # Save complete response
         chat_history.append({"role": "assistant", "content": full_response})
         if user:
             auth.save_chat(user["id"], "assistant", full_response,
                           msg_type=result.get("type", "chat") if result else "chat",
                           ticker=result.get("ticker") if result else None)
 
-        # Final message with metadata
         yield f"data: {json.dumps({'done': True, 'type': result.get('type') if result else 'chat', 'ticker': result.get('ticker') if result else None, 'trade_signal': result.get('trade_signal') if result else None})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream",
