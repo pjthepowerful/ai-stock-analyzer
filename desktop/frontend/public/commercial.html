@@ -9,13 +9,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg:     oklch(0.16 0.005 230);
-      --bg-2:   oklch(0.20 0.006 230);
-      --fg:     oklch(0.97 0.005 230);
-      --muted:  oklch(0.60 0.010 230);
-      --accent: oklch(0.78 0.14 165);
-      --accent-on: oklch(0.18 0.04 165);
-      --down:   oklch(0.68 0.18 25);
+      --bg: #0a0a0f;
+      --bg-2: #141420;
+      --fg: #eaeaf2;
+      --muted: #7a7a96;
+      --accent: #10b981;
+      --accent-on: #050507;
+      --down: #ef4444;
     }
     * { box-sizing: border-box; }
     html, body, #root { height: 100%; margin: 0; }
@@ -26,12 +26,10 @@
     }
     .mono { font-family: "Geist Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
     .brand-mark {
-      display: inline-block; position: relative;
+      display: inline-flex; align-items: center; justify-content: center;
       background: var(--accent); border-radius: 22%;
-    }
-    .brand-mark::after {
-      content: ""; position: absolute; inset: 27%;
-      border-radius: 18%; background: var(--accent-on);
+      font-family: "Geist Mono", monospace; font-weight: 800;
+      color: var(--accent-on); font-size: inherit;
     }
   </style>
 </head>
@@ -48,12 +46,12 @@
 
   // Each prompt has a matching short Paula reply.
   const EXCHANGES = [
-    { q: "Hey Paula, can I hold NVDA?",      a: "Yes — momentum's intact. Trail your stop at 138." },
+    { q: "Hey Paula, can I hold NVDA?",      a: "Yes — momentum's intact. Trail your stop below the 20-EMA." },
     { q: "Hey Paula, what's the play today?", a: "Tech leading. SPY breadth improving — let winners run." },
-    { q: "Hey Paula, find me a breakout.",    a: "AMD at 98.40 looks ready. R/R 2.6×, conviction 72." },
-    { q: "Hey Paula, hedge my book.",         a: "Buy SPY 600 puts — 30bps premium covers your tech exposure." },
+    { q: "Hey Paula, find me a breakout.",    a: "AMD is setting up. R/R 2.6×, score 78. Entry on a VWAP reclaim." },
+    { q: "Hey Paula, hedge my book.",         a: "Reduce tech by 20%. Your sector concentration is 68%." },
     { q: "Hey Paula, recap my week.",         a: "Up +$1,284. 64% win rate. NVDA and PLTR carried." },
-    { q: "Hey Paula, size this trade.",       a: "Risk 0.5% — 142 shares with a stop at 94.80." },
+    { q: "Hey Paula, size this trade.",       a: "Risk 1% of equity — 45 shares with a 3× ATR stop." },
   ];
 
   // ── Background ─────────────────────────────────────────────────────────
@@ -64,8 +62,8 @@
       <div style={{
         position: "absolute", inset: 0,
         background:
-          `radial-gradient(900px 600px at ${60 + drift / 5}% ${30 - drift / 8}%, color-mix(in oklch, var(--accent) 18%, transparent) 0%, transparent 60%),` +
-          `radial-gradient(900px 600px at ${30 - drift / 6}% ${85 + drift / 10}%, color-mix(in oklch, var(--accent) 9%, transparent) 0%, transparent 60%),` +
+          `radial-gradient(900px 600px at ${60 + drift / 5}% ${30 - drift / 8}%, rgba(16,185,129,0.18) 0%, transparent 60%),` +
+          `radial-gradient(900px 600px at ${30 - drift / 6}% ${85 + drift / 10}%, rgba(16,185,129,0.09) 0%, transparent 60%),` +
           "var(--bg)",
       }} />
     );
@@ -89,11 +87,11 @@
       }}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 32 }}>
           <span className="brand-mark" style={{
-            width: 160, height: 160, borderRadius: 36,
+            width: 160, height: 160, borderRadius: 36, fontSize: 72,
             transform: `scale(${markScale * pulse})`,
             opacity: markOp,
-            boxShadow: "0 0 80px color-mix(in oklch, var(--accent) 45%, transparent)",
-          }} />
+            boxShadow: "0 0 80px rgba(16,185,129,0.45)",
+          }}>P</span>
           <div style={{
             fontSize: 156, fontWeight: 600, letterSpacing: "-0.05em", lineHeight: 1,
             opacity: wordOp, transform: `translateY(${wordY}px)`, color: "var(--fg)",
@@ -192,10 +190,10 @@
           {(avatarOp > 0) && (
             <div style={{ display: "grid", gridTemplateColumns: "56px 1fr", gap: 20, alignItems: "flex-start" }}>
               <span className="brand-mark" style={{
-                width: 48, height: 48, borderRadius: 13,
+                width: 48, height: 48, borderRadius: 13, fontSize: 22,
                 opacity: avatarOp,
-                boxShadow: "0 0 22px color-mix(in oklch, var(--accent) 40%, transparent)",
-              }} />
+                boxShadow: "0 0 22px rgba(16,185,129,0.4)",
+              }}>P</span>
               <div style={{
                 fontSize: 30, lineHeight: 1.5, color: "var(--fg)",
                 fontWeight: 400, letterSpacing: "-0.005em",
@@ -275,7 +273,7 @@
               fontSize: 156, fontWeight: 600, letterSpacing: "-0.05em", lineHeight: 1,
               color: "var(--accent)",
               opacity: paulaOp, transform: `translateY(${paulaY}px)`,
-              textShadow: "0 0 80px color-mix(in oklch, var(--accent) 35%, transparent)",
+              textShadow: "0 0 80px rgba(16,185,129,0.35)",
             }}>
               Paula
             </div>
@@ -305,10 +303,10 @@
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 28 }}>
           {/* Logo */}
           <span className="brand-mark" style={{
-            width: 124, height: 124, borderRadius: 28,
+            width: 124, height: 124, borderRadius: 28, fontSize: 56,
             transform: `scale(${markScale * pulse})`,
-            boxShadow: "0 0 70px color-mix(in oklch, var(--accent) 45%, transparent)",
-          }} />
+            boxShadow: "0 0 70px rgba(16,185,129,0.45)",
+          }}>P</span>
 
           {/* "Hey Paula." headline */}
           <div style={{
