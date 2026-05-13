@@ -286,7 +286,7 @@ function MainApp({ user, token, logout }) {
         // Typing animation — reveal words gradually
         const fullText = data.message || ''
         const words = fullText.split(/(\s+)/)
-        setMessages(prev => [...prev, { role: 'assistant', content: '', streaming: true, type: data.type, ticker: data.ticker || null, signal: data.trade_signal || null }])
+        setMessages(prev => [...prev, { role: 'assistant', content: '', streaming: true, type: data.type, ticker: data.ticker || null, tickers: data.tickers || [], signal: data.trade_signal || null }])
 
         let shown = ''
         for (let i = 0; i < words.length; i++) {
@@ -462,7 +462,11 @@ function MainApp({ user, token, logout }) {
                     <div className="ai-body">
                       <div className="ai-name">Paula</div>
                       <div className="ai-txt"><span dangerouslySetInnerHTML={{__html:fmt(m.content)}}/>{m.streaming&&<span className="stream-cursor">▌</span>}</div>
-                      {m.ticker&&<div className="ai-chart"><Chart ticker={m.ticker} signal={m.signal} height={260}/></div>}
+                      {m.tickers?.length>1?(
+                        <ChartTabs tickers={m.tickers} signal={m.signal}/>
+                      ):m.ticker||m.tickers?.[0]?(
+                        <div className="ai-chart"><Chart ticker={m.ticker||m.tickers[0]} signal={m.signal} height={260}/></div>
+                      ):null}
                     </div>
                   </div>
                 ):(<div className="user-bubble">{m.content}</div>)}
@@ -481,6 +485,21 @@ function MainApp({ user, token, logout }) {
 }
 
 const PHRASES = ["what's the play today?","ready to trade?","let's find some setups.","what are we watching?","let's get to work.","what's on your radar?","let's make some moves."]
+function ChartTabs({ tickers, signal }) {
+  const [active, setActive] = useState(0)
+  if (!tickers || !tickers.length) return null
+  return (
+    <div className="ai-chart">
+      <div className="ct-tabs">
+        {tickers.map((t, i) => (
+          <button key={t} className={'ct-tab' + (i === active ? ' ct-on' : '')} onClick={() => setActive(i)}>{t}</button>
+        ))}
+      </div>
+      <Chart ticker={tickers[active]} signal={active === 0 ? signal : null} height={240} />
+    </div>
+  )
+}
+
 function Typewriter() {
   const [display, setDisplay] = useState('')
   const state = useRef({ idx: 0, charIdx: 0, deleting: false, paused: false })

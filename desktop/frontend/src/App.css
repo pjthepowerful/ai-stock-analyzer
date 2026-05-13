@@ -171,6 +171,10 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .ai-txt code { font-size: .8rem }
 .stream-cursor { color: var(--grn); animation: blinkcur .5s step-end infinite; font-weight: 300 }
 .ai-chart { margin-top: 12px; padding: 12px; border: 1px solid var(--brd); border-radius: 12px; background: var(--c1) }
+.ct-tabs { display: flex; gap: 2px; margin-bottom: 10px; padding: 2px; background: var(--c2); border-radius: 6px; width: fit-content }
+.ct-tab { padding: 5px 12px; border: none; background: none; color: var(--dim); font-family: var(--mono); font-size: .62rem; font-weight: 600; cursor: pointer; border-radius: 4px; transition: .12s }
+.ct-tab:hover { color: var(--lt) }
+.ct-on { background: var(--c1); color: var(--grn) }
 
 /* Chart */
 .chart-container { width: 100% }

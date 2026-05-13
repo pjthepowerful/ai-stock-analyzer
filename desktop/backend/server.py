@@ -900,10 +900,33 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
         "message": resp,
         "type": result.get("type") if result else "chat",
         "ticker": result.get("ticker") if result else None,
+        "tickers": [],
         "trade_signal": result.get("trade_signal") if result else None,
         "table": result.get("data") if result and result.get("type") == "list" else None,
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
     }
+
+    # Extract tickers for charts
+    if result:
+        rtype = result.get("type", "")
+        if rtype == "list" and result.get("data"):
+            # Pull tickers from list results (top gainers, etc)
+            response["tickers"] = [r.get("Ticker", r.get("ticker", "")) for r in result["data"] if r.get("Ticker") or r.get("ticker")][:6]
+        elif result.get("ticker"):
+            response["tickers"] = [result["ticker"]]
+
+    # Also scan the AI response for mentioned tickers
+    if resp and not response["tickers"]:
+        import re
+        # Find uppercase 1-5 letter words that look like tickers
+        found = re.findall(r'\b([A-Z]{1,5})\b', resp)
+        known = set()
+        try:
+            known = set(engine.FULL_UNIVERSE)
+        except Exception:
+            pass
+        if known:
+            response["tickers"] = [t for t in dict.fromkeys(found) if t in known][:6]
 
     return response
 
