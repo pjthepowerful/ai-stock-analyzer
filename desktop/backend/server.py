@@ -125,7 +125,20 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+# Global exception handler — ensures CORS headers on 500 errors
+from fastapi.responses import JSONResponse
+from fastapi import Request
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    print(f"⚠️ Unhandled error on {request.url.path}: {exc}")
+    return JSONResponse(
+        status_code=200,
+        content={"ok": False, "error": str(exc)[:200]},
+    )
 
 
 # ── Models ──
@@ -674,8 +687,8 @@ async def spy_trend():
 @app.get("/api/chart/{ticker}")
 async def chart_data(ticker: str, period: str = "1y"):
     """Get chart OHLCV data."""
-    def _fetch():
-        try:
+    try:
+        def _fetch():
             import yfinance as yf
             import warnings
             with warnings.catch_warnings():
@@ -702,11 +715,12 @@ async def chart_data(ticker: str, period: str = "1y"):
                     "volume": [int(hist["Volume"].iloc[i]) for i in indices],
                 }
             }
-        except Exception as e:
-            return {"ok": False, "error": str(e)[:100]}
 
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _fetch)
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _fetch)
+    except Exception as e:
+        print(f"⚠️ Chart error for {ticker}: {e}")
+        return {"ok": False, "error": str(e)[:100]}
 
 
 # ── Chat (AI response via Groq) ──
