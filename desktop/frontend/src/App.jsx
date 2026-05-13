@@ -256,73 +256,39 @@ function MainApp({ user, token, logout }) {
 
   const sendMessage = async (msg) => {
     if (!msg || sending) return
-    let targetChatId = chatId
-    const isFirstMessage = !messages.length
+
+    // Create chat if needed
+    let targetId = chatId
+    const isFirst = !messages.length
     if (!chatId) {
-      targetChatId = Date.now().toString()
-      persistChats([{ id: targetChatId, title: 'New chat', messages: [], created: new Date().toISOString() }, ...chatsRef.current])
-      setChatId(targetChatId)
+      targetId = Date.now().toString()
+      persistChats([{ id: targetId, title: 'New chat', messages: [], created: new Date().toISOString() }, ...chatsRef.current])
+      setChatId(targetId)
       setView('chat')
-      localStorage.setItem('paula-current-chat', targetChatId)
+      localStorage.setItem('paula-current-chat', targetId)
     }
-    setMessages(prev => [...prev, { role: 'user', content: msg }]); setInput(''); setSending(true)
+
+    // Add user message, clear input
+    setMessages(prev => [...prev, { role: 'user', content: msg }])
+    setInput('')
+    setSending(true)
+
     try {
-      let res
-      try {
-        res = await f(API+'/api/chat/stream', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg}) })
-      } catch {
-        // Stream endpoint failed — fall back to regular chat
-        res = await f(API+'/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg}) })
-      }
+      // Call the reliable /api/chat endpoint
+      const res = await f(API + '/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg })
+      })
+      const data = await res.json()
 
-      // If stream returned error, fall back
-      if (!res.ok) {
-        try {
-          const fallback = await f(API+'/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg}) })
-          const data = await fallback.json()
-          if (data.ok) {
-            setMessages(prev => [...prev, { role:'assistant', content:data.message, type:data.type, ticker:data.ticker||null, signal:data.trade_signal||null }])
-            snd(playTick)
-          }
-          if (isFirstMessage && targetChatId) {
-            f(API+'/api/chat/title', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg}) })
-              .then(r=>r.json()).then(t=>{ if (t.ok && t.title) { persistChats(chatsRef.current.map(c => c.id === targetChatId ? { ...c, title: t.title } : c)) } }).catch(()=>{})
-          }
-          refreshData()
-          setSending(false); inputRef.current?.focus()
-          return
-        } catch {}
-      }
-
-      const contentType = res.headers.get('content-type') || ''
-
-      if (contentType.includes('text/event-stream')) {
-        // Streaming response — collect then animate
-        setMessages(prev => [...prev, { role:'assistant', content:'', type:'chat', streaming:true }])
-        const reader = res.body.getReader()
-        const decoder = new TextDecoder()
-        let fullText = ''
-        let meta = {}
-
-        // Read all chunks from stream
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          const text = decoder.decode(value, { stream: true })
-          const lines = text.split('\n').filter(l => l.startsWith('data: '))
-          for (const line of lines) {
-            try {
-              const d = JSON.parse(line.slice(6))
-              if (d.chunk) fullText += d.chunk
-              if (d.done) meta = d
-            } catch {}
-          }
-        }
-
-        // Animate typing word by word
+      if (data.ok) {
+        // Typing animation — reveal words gradually
+        const fullText = data.message || ''
         const words = fullText.split(/(\s+)/)
+        setMessages(prev => [...prev, { role: 'assistant', content: '', streaming: true, type: data.type, ticker: data.ticker || null, signal: data.trade_signal || null }])
+
         let shown = ''
-        const DELAY = 18 // ms per word
         for (let i = 0; i < words.length; i++) {
           shown += words[i]
           const snap = shown
@@ -332,42 +298,48 @@ function MainApp({ user, token, logout }) {
             if (last && last.streaming) msgs[msgs.length - 1] = { ...last, content: snap }
             return msgs
           })
-          if (i % 3 === 0) await new Promise(r => setTimeout(r, DELAY))
+          if (i % 3 === 0) await new Promise(r => setTimeout(r, 15))
         }
 
-        // Finalize — remove streaming flag, add metadata
+        // Done typing — remove cursor
         setMessages(prev => {
           const msgs = [...prev]
           const last = msgs[msgs.length - 1]
-          if (last) msgs[msgs.length - 1] = { ...last, streaming: false, type: meta.type||'chat', ticker: meta.ticker||null, signal: meta.trade_signal||null }
+          if (last) msgs[msgs.length - 1] = { ...last, streaming: false }
           return msgs
         })
-        snd(playTick)
+
+        // Sound + toast for trades
+        if (data.type === 'trade' && data.message) {
+          if (data.message.includes('Bought')) { snd(playBuy); addToast(data.message.slice(0, 60), 'buy') }
+          else if (data.message.includes('Sold') || data.message.includes('Shorted')) { snd(playSell); addToast(data.message.slice(0, 60), 'sell') }
+          else if (data.message.includes('Covered')) { snd(playProfit); addToast(data.message.slice(0, 60), 'buy') }
+          else if (data.message.includes('closed')) { addToast(data.message.slice(0, 60), 'warn') }
+        } else { snd(playTick) }
+
+        if (data.autopilot !== undefined) setAutopilot(data.autopilot)
       } else {
-        // Non-streaming JSON response (trades, instant replies)
-        const data = await res.json()
-        if (data.ok) {
-          setMessages(prev => [...prev, { role:'assistant', content:data.message, type:data.type, ticker:data.ticker||null, signal:data.trade_signal||null }])
-          if (data.type==='trade'&&data.message) {
-            if(data.message.includes('Bought')){snd(playBuy);addToast(data.message.slice(0,60),'buy')}
-            else if(data.message.includes('Sold')||data.message.includes('Shorted')){snd(playSell);addToast(data.message.slice(0,60),'sell')}
-            else if(data.message.includes('Covered')){snd(playProfit);addToast(data.message.slice(0,60),'buy')}
-            else if(data.message.includes('closed')){addToast(data.message.slice(0,60),'warn')}
-          } else snd(playTick)
-          if (data.autopilot!==undefined) setAutopilot(data.autopilot)
-        } else { snd(playAlert); setMessages(prev=>[...prev,{role:'assistant',content:'Error: '+(data.error||'Unknown')}]) }
+        snd(playAlert)
+        setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ ' + (data.error || 'Something went wrong') }])
       }
 
       // Generate title for new chats
-      if (isFirstMessage && targetChatId) {
-        f(API+'/api/chat/title', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg}) })
-          .then(r=>r.json()).then(t=>{
-            if (t.ok && t.title) { persistChats(chatsRef.current.map(c => c.id === targetChatId ? { ...c, title: t.title } : c)) }
-          }).catch(()=>{ persistChats(chatsRef.current.map(c => c.id === targetChatId && c.title === 'New chat' ? { ...c, title: msg.slice(0, 35) } : c)) })
+      if (isFirst && targetId) {
+        f(API + '/api/chat/title', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg }) })
+          .then(r => r.json()).then(t => {
+            if (t.ok && t.title) persistChats(chatsRef.current.map(c => c.id === targetId ? { ...c, title: t.title } : c))
+          }).catch(() => {
+            persistChats(chatsRef.current.map(c => c.id === targetId && c.title === 'New chat' ? { ...c, title: msg.slice(0, 35) } : c))
+          })
       }
+
       refreshData()
-    } catch { setMessages(prev=>[...prev,{role:'assistant',content:'Connection lost.'}]) }
-    setSending(false); inputRef.current?.focus()
+    } catch (e) {
+      setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Connection lost. Check that the backend is running.' }])
+    }
+
+    setSending(false)
+    inputRef.current?.focus()
   }
 
   const send = () => sendMessage(input.trim())
