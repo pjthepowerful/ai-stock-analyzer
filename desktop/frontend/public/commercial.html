@@ -157,7 +157,7 @@
     );
   }
 
-  // ── Scene 1c: stats burst (6.5 – 9.5) ──
+  // ── Scene: stats burst (6.5 – 9.5) ──
   function SceneStats() {
     const { time } = useTimeline();
     const op = animate({ from: 0, to: 1, start: 6.5, end: 7.0, ease: Easing.easeOutCubic })(time)
@@ -192,51 +192,82 @@
     );
   }
 
-  // ── Scene 1d: rapid prompt cycling (9.5 – 12.5) ──
-  function SceneCycle() {
+  // ── Scene: "fully automated AI trading" (9.5 – 11.5) ──
+  function SceneTagline() {
     const { time } = useTimeline();
-    const op = animate({ from: 0, to: 1, start: 9.5, end: 10.0, ease: Easing.easeOutCubic })(time)
-             * (1 - animate({ from: 0, to: 1, start: 12.0, end: 12.5 })(time));
+    const op = animate({ from: 0, to: 1, start: 9.5, end: 10.1, ease: Easing.easeOutCubic })(time)
+             * (1 - animate({ from: 0, to: 1, start: 11.0, end: 11.5 })(time));
 
-    const CYCLE_START = 9.8;
-    const DWELL = 0.45;
+    const words = ["fully", "automated", "AI", "trading."];
+
+    return (
+      <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op }}>
+        <div style={{
+          fontSize: 88, fontWeight: 600, letterSpacing: "-0.04em", lineHeight: 1.1,
+          display: "flex", flexWrap: "wrap", gap: "0.28em", justifyContent: "center",
+        }}>
+          {words.map((w, i) => {
+            const wOp = animate({ from: 0, to: 1, start: 9.7 + i * 0.2, end: 9.7 + i * 0.2 + 0.35, ease: Easing.easeOutCubic })(time);
+            const wY  = animate({ from: 24, to: 0, start: 9.7 + i * 0.2, end: 9.7 + i * 0.2 + 0.35, ease: Easing.easeOutCubic })(time);
+            const isAccent = w === "AI";
+            return (
+              <span key={i} style={{
+                opacity: wOp, transform: `translateY(${wY}px)`, display: "inline-block",
+                color: isAccent ? "var(--accent)" : "var(--fg)",
+                textShadow: isAccent ? "0 0 40px rgba(16,185,129,0.4)" : "none",
+              }}>{w}</span>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Scene: prompt showcase — slide transitions (11.5 – 14.8) ──
+  function SceneShowcase() {
+    const { time } = useTimeline();
+    const op = animate({ from: 0, to: 1, start: 11.5, end: 12.0, ease: Easing.easeOutCubic })(time)
+             * (1 - animate({ from: 0, to: 1, start: 14.3, end: 14.8 })(time));
+
+    const START = 11.8;
+    const DWELL = 0.55;
     let idx = 0;
-    let localT = 0;
-    if (time >= CYCLE_START) {
-      const t = time - CYCLE_START;
+    let progress = 0;
+    if (time >= START) {
+      const t = time - START;
       idx = Math.min(EXCHANGES.length - 1, Math.floor(t / DWELL));
-      localT = (t - idx * DWELL) / DWELL;
+      progress = (t - idx * DWELL) / DWELL;
     }
 
-    const flipIn = Math.min(1, localT / 0.2);
-    const flipOut = idx === EXCHANGES.length - 1 ? 0 : Math.min(1, Math.max(0, (localT - 0.8) / 0.2));
-    const rotX = -90 * (1 - Easing.easeOutCubic(flipIn)) + 90 * Easing.easeInCubic(flipOut);
-    const itemOp = flipIn * (1 - flipOut);
+    // Slide up: current slides up and fades, next slides up from below
+    const slideOut = idx < EXCHANGES.length - 1 ? Math.max(0, (progress - 0.7) / 0.3) : 0;
+    const slideIn = Math.min(1, progress / 0.25);
+    const currentY = -slideOut * 60;
+    const currentOp = 1 - slideOut;
 
     return (
-      <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op }}>
-        <div style={{ width: 1000, maxWidth: "90%", perspective: 1600 }}>
-          <div style={{
-            transform: `rotateX(${rotX}deg)`, opacity: itemOp,
-            transformOrigin: "center", transformStyle: "preserve-3d",
-          }}>
-            {/* User prompt */}
-            <div style={{ textAlign: "right", marginBottom: 24 }}>
-              <span style={{
-                display: "inline-block", background: "rgba(255,255,255,0.07)",
-                border: "1px solid rgba(255,255,255,0.06)",
-                padding: "14px 22px", borderRadius: 20, fontSize: 28, color: "var(--fg)",
-              }}>{EXCHANGES[idx].q}</span>
-            </div>
-            {/* Paula reply */}
-            <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-              <span className="brand-mark" style={{
-                width: 40, height: 40, borderRadius: 10, fontSize: 18, flexShrink: 0,
-                boxShadow: "0 0 16px rgba(16,185,129,0.3)",
-              }}>P</span>
-              <div style={{ fontSize: 28, lineHeight: 1.5, color: "var(--fg)" }}>
-                {EXCHANGES[idx].a}
-              </div>
+      <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op, overflow: "hidden" }}>
+        <div style={{
+          width: 960, maxWidth: "88%",
+          transform: `translateY(${currentY}px)`,
+          opacity: Easing.easeOutCubic(slideIn) * currentOp,
+        }}>
+          {/* User question — right aligned */}
+          <div style={{ textAlign: "right", marginBottom: 20 }}>
+            <span style={{
+              display: "inline-block", background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.05)",
+              padding: "12px 20px", borderRadius: 18, fontSize: 26, color: "var(--fg)",
+            }}>{EXCHANGES[idx].q}</span>
+          </div>
+          {/* Paula response */}
+          <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+            <span className="brand-mark" style={{
+              width: 38, height: 38, borderRadius: 9, fontSize: 16, flexShrink: 0,
+              boxShadow: "0 0 14px rgba(16,185,129,0.25)",
+            }}>P</span>
+            <div style={{ fontSize: 26, lineHeight: 1.5, color: "var(--muted)" }}>
+              {EXCHANGES[idx].a}
             </div>
           </div>
         </div>
@@ -244,49 +275,20 @@
     );
   }
 
-  // ── Scene 2: "your AI trading assistant" (12.5 – 15.2) ──
-  function Scene2() {
-    const { time } = useTimeline();
-    const op = animate({ from: 0, to: 1, start: 12.5, end: 13.1, ease: Easing.easeOutCubic })(time)
-             * (1 - animate({ from: 0, to: 1, start: 14.8, end: 15.2 })(time));
-
-    const words = ["your", "AI", "trading", "assistant."];
-    const startW = 12.7;
-    const stepW = 0.24;
-
-    return (
-      <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{
-            fontSize: 84, fontWeight: 500, letterSpacing: "-0.03em", lineHeight: 1.15,
-            display: "flex", flexWrap: "wrap", gap: "0.3em", justifyContent: "center",
-            color: "var(--muted)",
-          }}>
-            {words.map((w, i) => {
-              const wOp = animate({ from: 0, to: 1, start: startW + i * stepW, end: startW + i * stepW + 0.4, ease: Easing.easeOutCubic })(time);
-              const wY  = animate({ from: 18, to: 0, start: startW + i * stepW, end: startW + i * stepW + 0.4, ease: Easing.easeOutCubic })(time);
-              return <span key={i} style={{ opacity: wOp, transform: `translateY(${wY}px)`, display: "inline-block" }}>{w}</span>;
-            })}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Scene 3: outro — "Hey Paula. for everything trading." ──
+  // ── Scene 3: outro — "Hey Paula. for everything trading." (14.8 – 20) ──
   function Scene3() {
     const { time } = useTimeline();
-    const op = animate({ from: 0, to: 1, start: 15.2, end: 15.8, ease: Easing.easeOutCubic })(time);
-    const markScale = animate({ from: 0.82, to: 1, start: 15.2, end: 16.0, ease: Easing.easeOutBack })(time);
-    const pulse = 1 + 0.025 * Math.sin((time - 15.2) * 3.0);
+    const op = animate({ from: 0, to: 1, start: 14.8, end: 15.4, ease: Easing.easeOutCubic })(time);
+    const markScale = animate({ from: 0.82, to: 1, start: 14.8, end: 15.6, ease: Easing.easeOutBack })(time);
+    const pulse = 1 + 0.025 * Math.sin((time - 14.8) * 3.0);
 
-    const heyOp   = animate({ from: 0, to: 1, start: 15.7, end: 16.3, ease: Easing.easeOutCubic })(time);
-    const heyY    = animate({ from: 16, to: 0, start: 15.7, end: 16.3, ease: Easing.easeOutCubic })(time);
-    const paulaOp = animate({ from: 0, to: 1, start: 16.1, end: 16.7, ease: Easing.easeOutCubic })(time);
-    const paulaY  = animate({ from: 16, to: 0, start: 16.1, end: 16.7, ease: Easing.easeOutCubic })(time);
+    const heyOp   = animate({ from: 0, to: 1, start: 15.3, end: 15.9, ease: Easing.easeOutCubic })(time);
+    const heyY    = animate({ from: 16, to: 0, start: 15.3, end: 15.9, ease: Easing.easeOutCubic })(time);
+    const paulaOp = animate({ from: 0, to: 1, start: 15.7, end: 16.3, ease: Easing.easeOutCubic })(time);
+    const paulaY  = animate({ from: 16, to: 0, start: 15.7, end: 16.3, ease: Easing.easeOutCubic })(time);
 
-    const tagOp = animate({ from: 0, to: 1, start: 16.8, end: 17.5, ease: Easing.easeOutCubic })(time);
-    const tagY  = animate({ from: 12, to: 0, start: 16.8, end: 17.5, ease: Easing.easeOutCubic })(time);
+    const tagOp = animate({ from: 0, to: 1, start: 16.4, end: 17.1, ease: Easing.easeOutCubic })(time);
+    const tagY  = animate({ from: 12, to: 0, start: 16.4, end: 17.1, ease: Easing.easeOutCubic })(time);
 
     return (
       <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op }}>
@@ -349,8 +351,8 @@
         <Scene1a />
         <Scene1b />
         <SceneStats />
-        <SceneCycle />
-        <Scene2 />
+        <SceneTagline />
+        <SceneShowcase />
         <Scene3 />
         <Vignette />
         <FilmGrain />
