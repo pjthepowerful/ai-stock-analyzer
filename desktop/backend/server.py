@@ -678,48 +678,46 @@ async def market_regime():
 
 
 @app.get("/api/spy-trend")
-async def spy_trend():
-    """Get SPY intraday trend."""
-    trend = engine._get_spy_intraday_trend()
-    return {"ok": True, "data": trend}
+def spy_trend():
+    """Get SPY intraday trend — sync, auto-threaded."""
+    try:
+        trend = engine._get_spy_intraday_trend()
+        return {"ok": True, "data": trend}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:100]}
 
 
 @app.get("/api/chart/{ticker}")
-async def chart_data(ticker: str, period: str = "1y"):
-    """Get chart OHLCV data."""
+def chart_data(ticker: str, period: str = "1y"):
+    """Get chart OHLCV data — sync endpoint, auto-threaded by FastAPI."""
+    import yfinance as yf
+    import warnings
     try:
-        def _fetch():
-            import yfinance as yf
-            import warnings
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                hist = yf.Ticker(ticker.upper()).history(period=period)
-            if hist is None or hist.empty:
-                return {"ok": False, "error": "No data"}
-            raw_dates = [str(d)[:10] for d in hist.index]
-            seen = set()
-            indices = []
-            clean_dates = []
-            for i, d in enumerate(raw_dates):
-                if d not in seen:
-                    seen.add(d)
-                    indices.append(i)
-                    clean_dates.append(d)
-            return {
-                "ok": True, "data": {
-                    "dates": clean_dates,
-                    "open": [round(float(hist["Open"].iloc[i]), 2) for i in indices],
-                    "high": [round(float(hist["High"].iloc[i]), 2) for i in indices],
-                    "low": [round(float(hist["Low"].iloc[i]), 2) for i in indices],
-                    "close": [round(float(hist["Close"].iloc[i]), 2) for i in indices],
-                    "volume": [int(hist["Volume"].iloc[i]) for i in indices],
-                }
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            hist = yf.Ticker(ticker.upper()).history(period=period)
+        if hist is None or hist.empty:
+            return {"ok": False, "error": "No data"}
+        raw_dates = [str(d)[:10] for d in hist.index]
+        seen = set()
+        indices = []
+        clean_dates = []
+        for i, d in enumerate(raw_dates):
+            if d not in seen:
+                seen.add(d)
+                indices.append(i)
+                clean_dates.append(d)
+        return {
+            "ok": True, "data": {
+                "dates": clean_dates,
+                "open": [round(float(hist["Open"].iloc[i]), 2) for i in indices],
+                "high": [round(float(hist["High"].iloc[i]), 2) for i in indices],
+                "low": [round(float(hist["Low"].iloc[i]), 2) for i in indices],
+                "close": [round(float(hist["Close"].iloc[i]), 2) for i in indices],
+                "volume": [int(hist["Volume"].iloc[i]) for i in indices],
             }
-
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, _fetch)
+        }
     except Exception as e:
-        print(f"⚠️ Chart error for {ticker}: {e}")
         return {"ok": False, "error": str(e)[:100]}
 
 
