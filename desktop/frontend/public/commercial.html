@@ -6,149 +6,147 @@
   <title>Hey Paula</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #0a0a0f;
-      --bg-2: #141420;
+      --bg: #050507;
+      --bg2: #0c0c12;
       --fg: #eaeaf2;
-      --muted: #7a7a96;
-      --accent: #10b981;
-      --accent-on: #050507;
-      --down: #ef4444;
+      --dim: #7a7a96;
+      --grn: #10b981;
+      --grn2: #34d399;
+      --dark: #050507;
+      --red: #ef4444;
     }
-    * { box-sizing: border-box; }
-    html, body, #root { height: 100%; margin: 0; }
+    * { box-sizing: border-box; margin: 0; }
+    html, body, #root { height: 100%; }
     body {
       background: #000; color: var(--fg);
-      font: 16px/1.5 "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+      font: 16px/1.5 "Outfit", system-ui, sans-serif;
       -webkit-font-smoothing: antialiased; overflow: hidden;
     }
-    .mono { font-family: "Geist Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
-    .brand-mark {
+    .mono { font-family: "JetBrains Mono", monospace; }
+    .mark {
       display: inline-flex; align-items: center; justify-content: center;
-      background: var(--accent); border-radius: 22%;
-      font-family: "Geist Mono", monospace; font-weight: 800;
-      color: var(--accent-on); font-size: inherit;
+      background: var(--grn); border-radius: 22%;
+      font-family: "JetBrains Mono", monospace; font-weight: 800;
+      color: var(--dark);
     }
   </style>
 </head>
 <body>
   <div id="root"></div>
-
-  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
-
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin></script>
   <script type="text/babel" src="animations.jsx"></script>
   <script type="text/babel">
+
   const DUR = 20;
 
-  const EXCHANGES = [
+  const CHATS = [
     { q: "Hey Paula, what's the play today?", a: "Tech leading. SPY above VWAP — let winners run." },
-    { q: "Hey Paula, find me a breakout.",    a: "AMD setting up. R/R 2.6×, score 78." },
-    { q: "Hey Paula, can I hold NVDA?",       a: "Yes — trail your stop below the 20-EMA." },
-    { q: "Hey Paula, recap my week.",         a: "Up +$1,284. 64% win rate. NVDA carried." },
-    { q: "Hey Paula, size this trade.",       a: "Risk 1% — 45 shares, 3× ATR stop." },
-    { q: "Hey Paula, hedge my book.",         a: "Reduce tech 20%. Concentration at 68%." },
+    { q: "Find me a breakout",               a: "AMD setting up. R/R 2.6×, score 78." },
+    { q: "Can I hold NVDA?",                 a: "Yes — trail your stop below the 20-EMA." },
+    { q: "Recap my week",                    a: "+$1,284. 64% win rate. NVDA carried." },
+    { q: "Size this trade",                  a: "Risk 1% — 45 shares, 3× ATR stop." },
+    { q: "Hedge my book",                    a: "Cut tech 20%. Concentration at 68%." },
   ];
 
   const STATS = [
-    { n: "21", label: "signal factors", color: "var(--accent)" },
-    { n: "5min", label: "scan cycles", color: "var(--accent)" },
-    { n: "100+", label: "stocks tracked", color: "var(--accent)" },
-    { n: "24/7", label: "autopilot", color: "var(--accent)" },
+    { n: "21", label: "signal factors" },
+    { n: "5min", label: "scan cycles" },
+    { n: "100+", label: "stocks tracked" },
+    { n: "24/7", label: "autopilot" },
   ];
 
+  // ── Background ──
   function Bg() {
     const { time } = useTimeline();
-    const drift = Math.sin(time * 0.3) * 40;
-    const intensity = time > 6.5 && time < 9.5 ? 0.25 : 0.18;
-    return (
-      <div style={{
-        position: "absolute", inset: 0,
-        background:
-          `radial-gradient(900px 600px at ${60 + drift / 5}% ${30 - drift / 8}%, rgba(16,185,129,${intensity}) 0%, transparent 60%),` +
-          `radial-gradient(900px 600px at ${30 - drift / 6}% ${85 + drift / 10}%, rgba(16,185,129,0.09) 0%, transparent 60%),` +
-          "var(--bg)",
-        transition: "background 0.5s",
-      }} />
-    );
+    const d = Math.sin(time * 0.25) * 35;
+    return <div style={{
+      position: "absolute", inset: 0,
+      background:
+        `radial-gradient(800px 500px at ${55+d/5}% ${35-d/8}%, rgba(16,185,129,0.15) 0%, transparent 55%),` +
+        `radial-gradient(600px 400px at ${35-d/6}% ${80+d/10}%, rgba(16,185,129,0.07) 0%, transparent 55%),` +
+        "var(--bg)",
+    }} />;
   }
 
-  // ── Scene 1a: brand intro (0 – 2.8) ──
-  function Scene1a() {
+  // ── Scene 1: fast logo (0 – 1.5) ──
+  function SceneLogo() {
     const { time } = useTimeline();
-    const sceneOp = animate({ from: 0, to: 1, start: 0.0, end: 0.5 })(time)
-                  * (1 - animate({ from: 0, to: 1, start: 2.4, end: 2.8 })(time));
-    const markScale = animate({ from: 0.7, to: 1, start: 0.2, end: 1.0, ease: Easing.easeOutBack })(time);
-    const markOp    = animate({ from: 0, to: 1, start: 0.2, end: 0.8, ease: Easing.easeOutCubic })(time);
-    const wordOp    = animate({ from: 0, to: 1, start: 0.8, end: 1.6, ease: Easing.easeOutCubic })(time);
-    const wordY     = animate({ from: 22, to: 0, start: 0.8, end: 1.6, ease: Easing.easeOutCubic })(time);
-    const pulse     = 1 + 0.03 * Math.sin((time - 0.2) * 3.0);
+    const op = animate({ from: 0, to: 1, start: 0.1, end: 0.4 })(time)
+             * (1 - animate({ from: 0, to: 1, start: 1.2, end: 1.5 })(time));
+    const s = animate({ from: 0.5, to: 1, start: 0.1, end: 0.6, ease: Easing.easeOutBack })(time);
+    const pulse = 1 + 0.04 * Math.sin(time * 4);
     return (
-      <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: sceneOp }}>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 32 }}>
-          <span className="brand-mark" style={{
-            width: 160, height: 160, borderRadius: 36, fontSize: 72,
-            transform: `scale(${markScale * pulse})`, opacity: markOp,
-            boxShadow: "0 0 80px rgba(16,185,129,0.45)",
+      <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 24 }}>
+          <span className="mark" style={{
+            width: 120, height: 120, borderRadius: 28, fontSize: 54,
+            transform: `scale(${s * pulse})`,
+            boxShadow: "0 0 60px rgba(16,185,129,0.4)",
           }}>P</span>
           <div style={{
-            fontSize: 156, fontWeight: 600, letterSpacing: "-0.05em", lineHeight: 1,
-            opacity: wordOp, transform: `translateY(${wordY}px)`, color: "var(--fg)",
+            fontSize: 72, fontWeight: 700, letterSpacing: "-0.04em",
+            opacity: animate({ from: 0, to: 1, start: 0.4, end: 0.8 })(time),
+            transform: `translateY(${animate({ from: 14, to: 0, start: 0.4, end: 0.8, ease: Easing.easeOutCubic })(time)}px)`,
           }}>Paula</div>
         </div>
       </div>
     );
   }
 
-  // ── Scene 1b: first chat exchange with typing (2.8 – 6.5) ──
-  function Scene1b() {
+  // ── Scene 2: chat demo with typing (1.5 – 5.5) ──
+  function SceneChat() {
     const { time } = useTimeline();
-    const op = animate({ from: 0, to: 1, start: 2.8, end: 3.4, ease: Easing.easeOutCubic })(time)
-             * (1 - animate({ from: 0, to: 1, start: 6.0, end: 6.5 })(time));
-    const enterY = animate({ from: 30, to: 0, start: 2.8, end: 3.4, ease: Easing.easeOutCubic })(time);
+    const op = animate({ from: 0, to: 1, start: 1.5, end: 2.0, ease: Easing.easeOutCubic })(time)
+             * (1 - animate({ from: 0, to: 1, start: 5.0, end: 5.5 })(time));
+    const boxY = animate({ from: 24, to: 0, start: 1.5, end: 2.1, ease: Easing.easeOutCubic })(time);
 
-    const userOp = animate({ from: 0, to: 1, start: 3.2, end: 3.8, ease: Easing.easeOutCubic })(time);
-    const userY  = animate({ from: 18, to: 0, start: 3.2, end: 3.8, ease: Easing.easeOutCubic })(time);
-    const avatarOp = animate({ from: 0, to: 1, start: 4.0, end: 4.4 })(time);
-    const typingOp = animate({ from: 0, to: 1, start: 4.2, end: 4.5 })(time)
-                   * (1 - animate({ from: 0, to: 1, start: 4.7, end: 4.9 })(time));
-    const reply = EXCHANGES[0].a;
-    const streamT = animate({ from: 0, to: 1, start: 4.9, end: 5.8, ease: Easing.linear })(time);
-    const shown = reply.slice(0, Math.floor(streamT * reply.length));
-    const caret = time > 4.9 && streamT < 1 && (Math.floor(time * 2) % 2 === 0);
+    // User bubble
+    const uOp = animate({ from: 0, to: 1, start: 1.8, end: 2.3, ease: Easing.easeOutCubic })(time);
+    const uY = animate({ from: 12, to: 0, start: 1.8, end: 2.3, ease: Easing.easeOutCubic })(time);
+
+    // Avatar + dots
+    const avOp = animate({ from: 0, to: 1, start: 2.6, end: 2.9 })(time);
+    const dotsOp = animate({ from: 0, to: 1, start: 2.7, end: 2.9 })(time)
+                 * (1 - animate({ from: 0, to: 1, start: 3.2, end: 3.4 })(time));
+
+    // Stream reply
+    const reply = CHATS[0].a;
+    const stream = animate({ from: 0, to: 1, start: 3.4, end: 4.4, ease: Easing.linear })(time);
+    const shown = reply.slice(0, Math.floor(stream * reply.length));
+    const caret = time > 3.4 && stream < 1 && Math.floor(time * 2.5) % 2 === 0;
 
     return (
       <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op }}>
         <div style={{
-          width: 1000, maxWidth: "90%", background: "var(--bg-2)",
-          border: "1px solid rgba(255,255,255,0.08)", borderRadius: 24,
-          padding: "32px 36px", boxShadow: "0 40px 100px rgba(0,0,0,0.5)",
-          display: "flex", flexDirection: "column", gap: 28,
-          transform: `translateY(${enterY}px)`,
+          width: 900, maxWidth: "88%", background: "var(--bg2)",
+          border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20,
+          padding: "28px 32px", boxShadow: "0 30px 80px rgba(0,0,0,0.5)",
+          display: "flex", flexDirection: "column", gap: 24,
+          transform: `translateY(${boxY}px)`,
         }}>
-          <div style={{ alignSelf: "flex-end", opacity: userOp, transform: `translateY(${userY}px)` }}>
+          <div style={{ alignSelf: "flex-end", opacity: uOp, transform: `translateY(${uY}px)` }}>
             <div style={{
-              background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.06)",
-              padding: "14px 20px", borderRadius: 20, fontSize: 28, color: "var(--fg)",
-            }}>{EXCHANGES[0].q}</div>
+              background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.05)",
+              padding: "12px 18px", borderRadius: 16, fontSize: 24, color: "var(--fg)",
+            }}>{CHATS[0].q}</div>
           </div>
-          {avatarOp > 0 && (
-            <div style={{ display: "grid", gridTemplateColumns: "52px 1fr", gap: 18, alignItems: "flex-start" }}>
-              <span className="brand-mark" style={{
-                width: 44, height: 44, borderRadius: 12, fontSize: 20,
-                opacity: avatarOp, boxShadow: "0 0 20px rgba(16,185,129,0.3)",
+          {avOp > 0 && (
+            <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+              <span className="mark" style={{
+                width: 38, height: 38, borderRadius: 10, fontSize: 16, flexShrink: 0,
+                opacity: avOp, boxShadow: "0 0 16px rgba(16,185,129,0.25)",
               }}>P</span>
-              <div style={{ fontSize: 28, lineHeight: 1.5, color: "var(--fg)", minHeight: 44 }}>
-                {time < 4.9 ? (
-                  <div style={{ display: "inline-flex", gap: 7, padding: "10px 0", opacity: typingOp }}>
-                    {[0,1,2].map(i => <span key={i} style={{ width: 9, height: 9, borderRadius: 999, background: "var(--muted)", opacity: 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(time * 5 + i * 0.7)) }} />)}
+              <div style={{ fontSize: 24, lineHeight: 1.55, color: "var(--fg)", minHeight: 38 }}>
+                {time < 3.4 ? (
+                  <div style={{ display: "flex", gap: 6, padding: "8px 0", opacity: dotsOp }}>
+                    {[0,1,2].map(i => <span key={i} style={{ width: 7, height: 7, borderRadius: 99, background: "var(--dim)", opacity: 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(time * 5.5 + i * 0.8)) }} />)}
                   </div>
-                ) : (
-                  <>{shown}{caret && <span style={{ display: "inline-block", width: 9, height: "1em", background: "var(--accent)", verticalAlign: "-1px", marginLeft: 2 }} />}</>
-                )}
+                ) : <>{shown}{caret && <span style={{ display: "inline-block", width: 2, height: "1em", background: "var(--grn)", marginLeft: 2, verticalAlign: "-1px" }} />}</>}
               </div>
             </div>
           )}
@@ -157,33 +155,22 @@
     );
   }
 
-  // ── Scene: stats burst (6.5 – 9.5) ──
+  // ── Scene 3: stats burst (5.5 – 8.0) ──
   function SceneStats() {
     const { time } = useTimeline();
-    const op = animate({ from: 0, to: 1, start: 6.5, end: 7.0, ease: Easing.easeOutCubic })(time)
-             * (1 - animate({ from: 0, to: 1, start: 9.0, end: 9.5 })(time));
-
+    const op = animate({ from: 0, to: 1, start: 5.5, end: 6.0, ease: Easing.easeOutCubic })(time)
+             * (1 - animate({ from: 0, to: 1, start: 7.5, end: 8.0 })(time));
     return (
       <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 40, maxWidth: 900 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 36, maxWidth: 800 }}>
           {STATS.map((s, i) => {
-            const delay = i * 0.25;
-            const sOp = animate({ from: 0, to: 1, start: 6.8 + delay, end: 7.3 + delay, ease: Easing.easeOutCubic })(time);
-            const sY = animate({ from: 40, to: 0, start: 6.8 + delay, end: 7.3 + delay, ease: Easing.easeOutBack })(time);
-            const sScale = animate({ from: 0.8, to: 1, start: 6.8 + delay, end: 7.3 + delay, ease: Easing.easeOutBack })(time);
+            const d = i * 0.22;
+            const sOp = animate({ from: 0, to: 1, start: 5.7 + d, end: 6.2 + d, ease: Easing.easeOutCubic })(time);
+            const sY = animate({ from: 35, to: 0, start: 5.7 + d, end: 6.2 + d, ease: Easing.easeOutBack })(time);
             return (
-              <div key={i} style={{
-                textAlign: "center", opacity: sOp,
-                transform: `translateY(${sY}px) scale(${sScale})`,
-              }}>
-                <div className="mono" style={{
-                  fontSize: 96, fontWeight: 700, lineHeight: 1, color: s.color,
-                  textShadow: "0 0 60px rgba(16,185,129,0.3)",
-                }}>{s.n}</div>
-                <div style={{
-                  fontSize: 22, color: "var(--muted)", letterSpacing: "0.08em",
-                  textTransform: "uppercase", marginTop: 8,
-                }}>{s.label}</div>
+              <div key={i} style={{ textAlign: "center", opacity: sOp, transform: `translateY(${sY}px)` }}>
+                <div className="mono" style={{ fontSize: 80, fontWeight: 700, lineHeight: 1, color: "var(--grn)", textShadow: "0 0 50px rgba(16,185,129,0.3)" }}>{s.n}</div>
+                <div style={{ fontSize: 18, color: "var(--dim)", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: 6 }}>{s.label}</div>
               </div>
             );
           })}
@@ -192,180 +179,143 @@
     );
   }
 
-  // ── Scene: "fully automated AI trading" (9.5 – 11.5) ──
+  // ── Scene 4: "fully automated AI trading" (8.0 – 9.8) ──
   function SceneTagline() {
     const { time } = useTimeline();
-    const op = animate({ from: 0, to: 1, start: 9.5, end: 10.1, ease: Easing.easeOutCubic })(time)
-             * (1 - animate({ from: 0, to: 1, start: 11.0, end: 11.5 })(time));
-
+    const op = animate({ from: 0, to: 1, start: 8.0, end: 8.5, ease: Easing.easeOutCubic })(time)
+             * (1 - animate({ from: 0, to: 1, start: 9.3, end: 9.8 })(time));
     const words = ["fully", "automated", "AI", "trading."];
-
     return (
       <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op }}>
-        <div style={{
-          fontSize: 88, fontWeight: 600, letterSpacing: "-0.04em", lineHeight: 1.1,
-          display: "flex", flexWrap: "wrap", gap: "0.28em", justifyContent: "center",
-        }}>
+        <div style={{ fontSize: 76, fontWeight: 700, letterSpacing: "-0.04em", display: "flex", gap: "0.25em", justifyContent: "center", flexWrap: "wrap" }}>
           {words.map((w, i) => {
-            const wOp = animate({ from: 0, to: 1, start: 9.7 + i * 0.2, end: 9.7 + i * 0.2 + 0.35, ease: Easing.easeOutCubic })(time);
-            const wY  = animate({ from: 24, to: 0, start: 9.7 + i * 0.2, end: 9.7 + i * 0.2 + 0.35, ease: Easing.easeOutCubic })(time);
-            const isAccent = w === "AI";
-            return (
-              <span key={i} style={{
-                opacity: wOp, transform: `translateY(${wY}px)`, display: "inline-block",
-                color: isAccent ? "var(--accent)" : "var(--fg)",
-                textShadow: isAccent ? "0 0 40px rgba(16,185,129,0.4)" : "none",
-              }}>{w}</span>
-            );
+            const wOp = animate({ from: 0, to: 1, start: 8.2 + i * 0.18, end: 8.2 + i * 0.18 + 0.3, ease: Easing.easeOutCubic })(time);
+            const wY = animate({ from: 20, to: 0, start: 8.2 + i * 0.18, end: 8.2 + i * 0.18 + 0.3, ease: Easing.easeOutCubic })(time);
+            const accent = w === "AI";
+            return <span key={i} style={{
+              opacity: wOp, transform: `translateY(${wY}px)`, display: "inline-block",
+              color: accent ? "var(--grn)" : "var(--fg)",
+              textShadow: accent ? "0 0 40px rgba(16,185,129,0.4)" : "none",
+            }}>{w}</span>;
           })}
         </div>
       </div>
     );
   }
 
-  // ── Scene: prompt showcase — slide transitions (11.5 – 14.8) ──
-  function SceneShowcase() {
+  // ── Scene 5: chat feed — messages stack up like a real chat (9.8 – 14.5) ──
+  function SceneFeed() {
     const { time } = useTimeline();
-    const op = animate({ from: 0, to: 1, start: 11.5, end: 12.0, ease: Easing.easeOutCubic })(time)
-             * (1 - animate({ from: 0, to: 1, start: 14.3, end: 14.8 })(time));
+    const op = animate({ from: 0, to: 1, start: 9.8, end: 10.3, ease: Easing.easeOutCubic })(time)
+             * (1 - animate({ from: 0, to: 1, start: 14.0, end: 14.5 })(time));
 
-    const START = 11.8;
-    const DWELL = 0.55;
-    let idx = 0;
-    let progress = 0;
-    if (time >= START) {
-      const t = time - START;
-      idx = Math.min(EXCHANGES.length - 1, Math.floor(t / DWELL));
-      progress = (t - idx * DWELL) / DWELL;
+    // Each exchange appears at staggered times
+    const msgs = [];
+    const START = 10.0;
+    const GAP = 0.7; // time between each Q&A pair
+    for (let i = 0; i < CHATS.length; i++) {
+      const t = START + i * GAP;
+      const msgOp = animate({ from: 0, to: 1, start: t, end: t + 0.25, ease: Easing.easeOutCubic })(time);
+      const msgY = animate({ from: 20, to: 0, start: t, end: t + 0.3, ease: Easing.easeOutCubic })(time);
+      if (msgOp > 0) {
+        msgs.push({ ...CHATS[i], op: msgOp, y: msgY, idx: i });
+      }
     }
 
-    // Slide up: current slides up and fades, next slides up from below
-    const slideOut = idx < EXCHANGES.length - 1 ? Math.max(0, (progress - 0.7) / 0.3) : 0;
-    const slideIn = Math.min(1, progress / 0.25);
-    const currentY = -slideOut * 60;
-    const currentOp = 1 - slideOut;
+    // Scroll the feed up as more messages appear
+    const feedScroll = animate({ from: 0, to: -180, start: 11.0, end: 13.5, ease: Easing.easeOutCubic })(time);
 
     return (
       <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op, overflow: "hidden" }}>
         <div style={{
-          width: 960, maxWidth: "88%",
-          transform: `translateY(${currentY}px)`,
-          opacity: Easing.easeOutCubic(slideIn) * currentOp,
+          width: 800, maxWidth: "85%",
+          transform: `translateY(${feedScroll}px)`,
+          display: "flex", flexDirection: "column", gap: 14,
         }}>
-          {/* User question — right aligned */}
-          <div style={{ textAlign: "right", marginBottom: 20 }}>
-            <span style={{
-              display: "inline-block", background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.05)",
-              padding: "12px 20px", borderRadius: 18, fontSize: 26, color: "var(--fg)",
-            }}>{EXCHANGES[idx].q}</span>
-          </div>
-          {/* Paula response */}
-          <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-            <span className="brand-mark" style={{
-              width: 38, height: 38, borderRadius: 9, fontSize: 16, flexShrink: 0,
-              boxShadow: "0 0 14px rgba(16,185,129,0.25)",
-            }}>P</span>
-            <div style={{ fontSize: 26, lineHeight: 1.5, color: "var(--muted)" }}>
-              {EXCHANGES[idx].a}
+          {msgs.map(m => (
+            <div key={m.idx} style={{ opacity: m.op, transform: `translateY(${m.y}px)`, display: "flex", flexDirection: "column", gap: 8 }}>
+              {/* User */}
+              <div style={{ alignSelf: "flex-end" }}>
+                <span style={{
+                  display: "inline-block", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.04)",
+                  padding: "8px 16px", borderRadius: 14, fontSize: 18, color: "var(--fg)",
+                }}>{m.q}</span>
+              </div>
+              {/* Paula */}
+              <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                <span className="mark" style={{ width: 26, height: 26, borderRadius: 7, fontSize: 11, flexShrink: 0 }}>P</span>
+                <span style={{ fontSize: 18, color: "var(--dim)", lineHeight: 1.5 }}>{m.a}</span>
+              </div>
             </div>
-          </div>
+          ))}
         </div>
       </div>
     );
   }
 
-  // ── Scene 3: outro — "Hey Paula. for everything trading." (14.8 – 20) ──
-  function Scene3() {
+  // ── Scene 6: outro — "Hey Paula." (14.5 – 20) ──
+  function SceneOutro() {
     const { time } = useTimeline();
-    const op = animate({ from: 0, to: 1, start: 14.8, end: 15.4, ease: Easing.easeOutCubic })(time);
-    const markScale = animate({ from: 0.82, to: 1, start: 14.8, end: 15.6, ease: Easing.easeOutBack })(time);
-    const pulse = 1 + 0.025 * Math.sin((time - 14.8) * 3.0);
+    const op = animate({ from: 0, to: 1, start: 14.5, end: 15.1, ease: Easing.easeOutCubic })(time);
+    const markS = animate({ from: 0.75, to: 1, start: 14.5, end: 15.3, ease: Easing.easeOutBack })(time);
+    const pulse = 1 + 0.025 * Math.sin((time - 14.5) * 3);
 
-    const heyOp   = animate({ from: 0, to: 1, start: 15.3, end: 15.9, ease: Easing.easeOutCubic })(time);
-    const heyY    = animate({ from: 16, to: 0, start: 15.3, end: 15.9, ease: Easing.easeOutCubic })(time);
-    const paulaOp = animate({ from: 0, to: 1, start: 15.7, end: 16.3, ease: Easing.easeOutCubic })(time);
-    const paulaY  = animate({ from: 16, to: 0, start: 15.7, end: 16.3, ease: Easing.easeOutCubic })(time);
-
-    const tagOp = animate({ from: 0, to: 1, start: 16.4, end: 17.1, ease: Easing.easeOutCubic })(time);
-    const tagY  = animate({ from: 12, to: 0, start: 16.4, end: 17.1, ease: Easing.easeOutCubic })(time);
+    const heyOp = animate({ from: 0, to: 1, start: 15.0, end: 15.5, ease: Easing.easeOutCubic })(time);
+    const heyY = animate({ from: 14, to: 0, start: 15.0, end: 15.5, ease: Easing.easeOutCubic })(time);
+    const pOp = animate({ from: 0, to: 1, start: 15.3, end: 15.8, ease: Easing.easeOutCubic })(time);
+    const pY = animate({ from: 14, to: 0, start: 15.3, end: 15.8, ease: Easing.easeOutCubic })(time);
+    const tagOp = animate({ from: 0, to: 1, start: 16.0, end: 16.6, ease: Easing.easeOutCubic })(time);
+    const tagY = animate({ from: 10, to: 0, start: 16.0, end: 16.6, ease: Easing.easeOutCubic })(time);
 
     return (
       <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op }}>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 28 }}>
-          {/* Logo */}
-          <span className="brand-mark" style={{
-            width: 124, height: 124, borderRadius: 28, fontSize: 56,
-            transform: `scale(${markScale * pulse})`,
-            boxShadow: "0 0 70px rgba(16,185,129,0.45)",
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 24 }}>
+          <span className="mark" style={{
+            width: 100, height: 100, borderRadius: 24, fontSize: 46,
+            transform: `scale(${markS * pulse})`,
+            boxShadow: "0 0 60px rgba(16,185,129,0.4)",
           }}>P</span>
-
-          {/* "Hey Paula." headline */}
-          <div style={{
-            fontSize: 124, fontWeight: 600, letterSpacing: "-0.04em", lineHeight: 1,
-            display: "flex", gap: 28,
-          }}>
+          <div style={{ fontSize: 100, fontWeight: 700, letterSpacing: "-0.04em", lineHeight: 1, display: "flex", gap: 22 }}>
             <span style={{ opacity: heyOp, transform: `translateY(${heyY}px)` }}>Hey</span>
-            <span style={{
-              opacity: paulaOp, transform: `translateY(${paulaY}px)`, color: "var(--accent)",
-            }}>Paula.</span>
+            <span style={{ opacity: pOp, transform: `translateY(${pY}px)`, color: "var(--grn)" }}>Paula.</span>
           </div>
-
-          {/* Tagline */}
           <div style={{
-            fontSize: 30, color: "var(--muted)", letterSpacing: "-0.01em",
+            fontSize: 26, color: "var(--dim)", letterSpacing: "-0.01em",
             opacity: tagOp, transform: `translateY(${tagY}px)`,
-            textAlign: "center", maxWidth: 900,
-          }}>
-            for <span style={{ color: "var(--fg)" }}>everything</span> trading.
-          </div>
+          }}>for <span style={{ color: "var(--fg)" }}>everything</span> trading.</div>
         </div>
       </div>
     );
   }
 
-  function FilmGrain() {
+  function Grain() {
     const { time } = useTimeline();
-    const seed = Math.floor(time * 8) % 100;
-    return (
-      <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0.05, mixBlendMode: "overlay", pointerEvents: "none" }}>
-        <filter id="g"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed={seed} /></filter>
-        <rect width="100%" height="100%" filter="url(#g)" />
-      </svg>
-    );
+    return <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0.04, mixBlendMode: "overlay", pointerEvents: "none" }}>
+      <filter id="g"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed={Math.floor(time * 8) % 100} /></filter>
+      <rect width="100%" height="100%" filter="url(#g)" />
+    </svg>;
   }
 
   function Vignette() {
-    return (
-      <div style={{
-        position: "absolute", inset: 0, pointerEvents: "none",
-        background: "radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.65) 100%)",
-      }} />
-    );
+    return <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.6) 100%)" }} />;
   }
 
   function Commercial() {
-    return (
-      <>
-        <Bg />
-        <Scene1a />
-        <Scene1b />
-        <SceneStats />
-        <SceneTagline />
-        <SceneShowcase />
-        <Scene3 />
-        <Vignette />
-        <FilmGrain />
-      </>
-    );
+    return <>
+      <Bg />
+      <SceneLogo />
+      <SceneChat />
+      <SceneStats />
+      <SceneTagline />
+      <SceneFeed />
+      <SceneOutro />
+      <Vignette />
+      <Grain />
+    </>;
   }
 
   function Root() {
-    return (
-      <Stage width={1920} height={1080} duration={DUR} background="#000">
-        <Commercial />
-      </Stage>
-    );
+    return <Stage width={1920} height={1080} duration={DUR} background="#000"><Commercial /></Stage>;
   }
 
   ReactDOM.createRoot(document.getElementById("root")).render(<Root />);
