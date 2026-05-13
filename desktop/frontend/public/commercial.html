@@ -46,11 +46,11 @@
 
   const CHATS = [
     { q: "Hey Paula, what's the play today?", a: "Tech leading. SPY above VWAP — let winners run." },
-    { q: "Find me a breakout",               a: "AMD setting up. R/R 2.6×, score 78." },
-    { q: "Can I hold NVDA?",                 a: "Yes — trail your stop below the 20-EMA." },
-    { q: "Recap my week",                    a: "+$1,284. 64% win rate. NVDA carried." },
-    { q: "Size this trade",                  a: "Risk 1% — 45 shares, 3× ATR stop." },
-    { q: "Hedge my book",                    a: "Cut tech 20%. Concentration at 68%." },
+    { q: "Hey Paula, find me a breakout.",     a: "AMD setting up. R/R 2.6×, score 78." },
+    { q: "Hey Paula, can I hold NVDA?",        a: "Yes — trail your stop below the 20-EMA." },
+    { q: "Hey Paula, recap my week.",           a: "+$1,284. 64% win rate. NVDA carried." },
+    { q: "Hey Paula, size this trade.",         a: "Risk 1% — 45 shares, 3× ATR stop." },
+    { q: "Hey Paula, hedge my book.",           a: "Cut tech 20%. Concentration at 68%." },
   ];
 
   const STATS = [
@@ -77,8 +77,8 @@
   function SceneLogo() {
     const { time } = useTimeline();
     const op = animate({ from: 0, to: 1, start: 0.1, end: 0.4 })(time)
-             * (1 - animate({ from: 0, to: 1, start: 1.2, end: 1.5 })(time));
-    const s = animate({ from: 0.5, to: 1, start: 0.1, end: 0.6, ease: Easing.easeOutBack })(time);
+             * (1 - animate({ from: 0, to: 1, start: 1.1, end: 1.6, ease: Easing.easeInCubic })(time));
+    const s = animate({ from: 0.6, to: 1, start: 0.05, end: 0.7, ease: Easing.easeOutBack })(time);
     const pulse = 1 + 0.04 * Math.sin(time * 4);
     return (
       <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op }}>
@@ -102,7 +102,7 @@
   function SceneChat() {
     const { time } = useTimeline();
     const op = animate({ from: 0, to: 1, start: 1.5, end: 2.0, ease: Easing.easeOutCubic })(time)
-             * (1 - animate({ from: 0, to: 1, start: 5.0, end: 5.5 })(time));
+             * (1 - animate({ from: 0, to: 1, start: 4.9, end: 5.6, ease: Easing.easeInCubic })(time));
     const boxY = animate({ from: 24, to: 0, start: 1.5, end: 2.1, ease: Easing.easeOutCubic })(time);
 
     // User bubble
@@ -118,7 +118,7 @@
     const reply = CHATS[0].a;
     const stream = animate({ from: 0, to: 1, start: 3.4, end: 4.4, ease: Easing.linear })(time);
     const shown = reply.slice(0, Math.floor(stream * reply.length));
-    const caret = time > 3.4 && stream < 1 && Math.floor(time * 2.5) % 2 === 0;
+    const caret = time > 3.4 && stream < 1 && Math.sin(time * 3.5) > 0;
 
     return (
       <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op }}>
@@ -159,7 +159,7 @@
   function SceneStats() {
     const { time } = useTimeline();
     const op = animate({ from: 0, to: 1, start: 5.5, end: 6.0, ease: Easing.easeOutCubic })(time)
-             * (1 - animate({ from: 0, to: 1, start: 7.5, end: 8.0 })(time));
+             * (1 - animate({ from: 0, to: 1, start: 7.4, end: 8.1, ease: Easing.easeInCubic })(time));
     return (
       <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 36, maxWidth: 800 }}>
@@ -183,7 +183,7 @@
   function SceneTagline() {
     const { time } = useTimeline();
     const op = animate({ from: 0, to: 1, start: 8.0, end: 8.5, ease: Easing.easeOutCubic })(time)
-             * (1 - animate({ from: 0, to: 1, start: 9.3, end: 9.8 })(time));
+             * (1 - animate({ from: 0, to: 1, start: 9.2, end: 9.9, ease: Easing.easeInCubic })(time));
     const words = ["fully", "automated", "AI", "trading."];
     return (
       <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op }}>
@@ -207,7 +207,7 @@
   function SceneFeed() {
     const { time } = useTimeline();
     const op = animate({ from: 0, to: 1, start: 9.8, end: 10.3, ease: Easing.easeOutCubic })(time)
-             * (1 - animate({ from: 0, to: 1, start: 14.0, end: 14.5 })(time));
+             * (1 - animate({ from: 0, to: 1, start: 13.9, end: 14.6, ease: Easing.easeInCubic })(time));
 
     // Each exchange appears at staggered times
     const msgs = [];
@@ -215,15 +215,15 @@
     const GAP = 0.7; // time between each Q&A pair
     for (let i = 0; i < CHATS.length; i++) {
       const t = START + i * GAP;
-      const msgOp = animate({ from: 0, to: 1, start: t, end: t + 0.25, ease: Easing.easeOutCubic })(time);
-      const msgY = animate({ from: 20, to: 0, start: t, end: t + 0.3, ease: Easing.easeOutCubic })(time);
+      const msgOp = animate({ from: 0, to: 1, start: t, end: t + 0.35, ease: Easing.easeOutCubic })(time);
+      const msgY = animate({ from: 16, to: 0, start: t, end: t + 0.4, ease: Easing.easeOutCubic })(time);
       if (msgOp > 0) {
         msgs.push({ ...CHATS[i], op: msgOp, y: msgY, idx: i });
       }
     }
 
     // Scroll the feed up as more messages appear
-    const feedScroll = animate({ from: 0, to: -180, start: 11.0, end: 13.5, ease: Easing.easeOutCubic })(time);
+    const feedScroll = animate({ from: 0, to: -180, start: 10.8, end: 13.8, ease: Easing.easeInOutCubic })(time);
 
     return (
       <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op, overflow: "hidden" }}>
