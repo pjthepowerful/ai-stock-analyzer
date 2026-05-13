@@ -4577,7 +4577,9 @@ def execute(intent: dict) -> dict:
             lines.append("")
 
         lines.append("*These are based on my 21-factor signal engine — not financial advice.*")
-        return {"ok": True, "type": "analysis", "ticker": top[0]["ticker"], "msg": "\n".join(lines)}
+        return {"ok": True, "type": "analysis", "ticker": top[0]["ticker"],
+                "tickers": [p["ticker"] for p in top],
+                "msg": "\n".join(lines)}
 
     if t == "chart":
         tick = _ensure_suffix(intent["ticker"], market)

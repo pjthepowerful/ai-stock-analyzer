@@ -139,9 +139,15 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
       })
     }).catch(err => { console.error('Chart load error:', err) })
 
-    const handleResize = () => { if (containerRef.current && chartRef.current) chartRef.current.applyOptions({ width: containerRef.current.clientWidth }) }
+    const handleResize = () => { if (containerRef.current && chartRef.current) { try { chartRef.current.applyOptions({ width: containerRef.current.clientWidth }) } catch {} } }
     window.addEventListener('resize', handleResize)
-    return () => { window.removeEventListener('resize', handleResize); if (chartRef.current) { chartRef.current.remove(); chartRef.current = null } }
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      if (chartRef.current) {
+        try { chartRef.current.remove() } catch {}
+        chartRef.current = null
+      }
+    }
   }, [ticker, signal, height, period])
 
   const fmtVol = (v) => { if (!v) return '0'; if (v >= 1e9) return (v/1e9).toFixed(1)+'B'; if (v >= 1e6) return (v/1e6).toFixed(1)+'M'; if (v >= 1e3) return (v/1e3).toFixed(0)+'K'; return v.toString() }

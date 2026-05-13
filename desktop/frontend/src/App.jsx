@@ -488,6 +488,7 @@ const PHRASES = ["what's the play today?","ready to trade?","let's find some set
 function ChartTabs({ tickers, signal }) {
   const [active, setActive] = useState(0)
   if (!tickers || !tickers.length) return null
+  const safeTicker = tickers[Math.min(active, tickers.length - 1)]
   return (
     <div className="ai-chart">
       <div className="ct-tabs">
@@ -495,7 +496,7 @@ function ChartTabs({ tickers, signal }) {
           <button key={t} className={'ct-tab' + (i === active ? ' ct-on' : '')} onClick={() => setActive(i)}>{t}</button>
         ))}
       </div>
-      <Chart ticker={tickers[active]} signal={active === 0 ? signal : null} height={240} />
+      <Chart key={safeTicker} ticker={safeTicker} signal={active === 0 ? signal : null} height={240} />
     </div>
   )
 }

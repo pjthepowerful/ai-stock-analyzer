@@ -909,7 +909,10 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
     # Extract tickers for charts
     if result:
         rtype = result.get("type", "")
-        if rtype == "list" and result.get("data"):
+        if result.get("tickers"):
+            # Direct tickers array from stock_ideas, etc
+            response["tickers"] = result["tickers"][:6]
+        elif rtype == "list" and result.get("data"):
             # Pull tickers from list results (top gainers, etc)
             response["tickers"] = [r.get("Ticker", r.get("ticker", "")) for r in result["data"] if r.get("Ticker") or r.get("ticker")][:6]
         elif result.get("ticker"):
