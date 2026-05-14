@@ -123,68 +123,72 @@ function MainApp({ user, token, logout }) {
   
   const [sideOpen, setSideOpen] = useState(window.innerWidth > 768)
 
-  // ── Chat system (localStorage-backed) ──
+  // ── Chat system ──
   const chatsRef = useRef(JSON.parse(localStorage.getItem('paula-chats') || '[]'))
   const [chats, _setChats] = useState(chatsRef.current)
-  const [chatId, setChatId] = useState(localStorage.getItem('paula-current-chat') || null)
+  const chatIdRef = useRef(localStorage.getItem('paula-current-chat') || null)
+  const [chatId, _setChatId] = useState(chatIdRef.current)
 
-  const persistChats = (updated) => {
+  const persist = (updated) => {
     chatsRef.current = updated
     _setChats(updated)
     localStorage.setItem('paula-chats', JSON.stringify(updated))
   }
 
-  const newChat = () => {
-    // Save current messages first
-    if (chatId && messages.length > 0) {
-      const updated = chatsRef.current.map(c => c.id === chatId ? { ...c, messages } : c)
-      persistChats(updated)
+  const setActiveChatId = (id) => {
+    chatIdRef.current = id
+    _setChatId(id)
+    localStorage.setItem('paula-current-chat', id || '')
+  }
+
+  // Save current messages into the active chat
+  const saveCurrentChat = () => {
+    const id = chatIdRef.current
+    if (id && messages.length > 0) {
+      persist(chatsRef.current.map(c => c.id === id ? { ...c, messages } : c))
     }
+  }
+
+  const newChat = () => {
+    saveCurrentChat()
     const id = Date.now().toString()
-    persistChats([{ id, title: 'New chat', messages: [], created: new Date().toISOString() }, ...chatsRef.current])
-    setChatId(id)
+    persist([{ id, title: 'New chat', messages: [], created: new Date().toISOString() }, ...chatsRef.current])
+    setActiveChatId(id)
     setMessages([])
-    localStorage.setItem('paula-current-chat', id)
-    // Clear backend chat context
     f(API + '/api/chat/clear', { method: 'POST' }).catch(() => {})
   }
 
   const switchChat = (id) => {
-    if (id === chatId) return
-    // Save current
-    if (chatId && messages.length > 0) {
-      const updated = chatsRef.current.map(c => c.id === chatId ? { ...c, messages } : c)
-      persistChats(updated)
-    }
-    setChatId(id)
-    localStorage.setItem('paula-current-chat', id)
+    if (id === chatIdRef.current) return
+    saveCurrentChat()
+    setActiveChatId(id)
     const chat = chatsRef.current.find(c => c.id === id)
     setMessages(chat?.messages || [])
-    // Clear backend chat context so AI doesn't reference old chat
     f(API + '/api/chat/clear', { method: 'POST' }).catch(() => {})
   }
 
   const deleteChat = (id) => {
     const updated = chatsRef.current.filter(c => c.id !== id)
-    persistChats(updated)
-    if (chatId === id) {
-      if (updated.length > 0) { setChatId(updated[0].id); setMessages(updated[0].messages || []) }
-      else { setChatId(null); setMessages([]) }
+    persist(updated)
+    if (chatIdRef.current === id) {
+      if (updated.length > 0) { setActiveChatId(updated[0].id); setMessages(updated[0].messages || []) }
+      else { setActiveChatId(null); setMessages([]) }
     }
   }
 
-  // Save messages to current chat (debounced, no circular deps)
+  // Auto-save messages when they change (debounced)
   const saveTimer = useRef(null)
   useEffect(() => {
-    if (!chatId || messages.length === 0) return
+    const id = chatIdRef.current
+    if (!id || messages.length === 0) return
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
-      const updated = chatsRef.current.map(c => c.id === chatId ? { ...c, messages } : c)
+      const updated = chatsRef.current.map(c => c.id === id ? { ...c, messages } : c)
       chatsRef.current = updated
       _setChats(updated)
       localStorage.setItem('paula-chats', JSON.stringify(updated))
     }, 500)
-  }, [messages, chatId])
+  }, [messages])
   const [settings, setSettings] = useState(() => {
     try { return JSON.parse(localStorage.getItem('paula-settings')) || {} } catch { return {} }
   })
@@ -265,14 +269,14 @@ function MainApp({ user, token, logout }) {
     if (!msg || sending) return
 
     // Create chat if needed
-    let targetId = chatId
+    let targetId = chatIdRef.current
     const isFirst = !messages.length
-    if (!chatId) {
+    if (!targetId) {
       targetId = Date.now().toString()
-      persistChats([{ id: targetId, title: 'New chat', messages: [], created: new Date().toISOString() }, ...chatsRef.current])
-      setChatId(targetId)
+      persist([{ id: targetId, title: 'New chat', messages: [], created: new Date().toISOString() }, ...chatsRef.current])
+      setActiveChatId(targetId)
       setView('chat')
-      localStorage.setItem('paula-current-chat', targetId)
+      f(API + '/api/chat/clear', { method: 'POST' }).catch(() => {})
     }
 
     // Add user message, clear input
@@ -334,9 +338,9 @@ function MainApp({ user, token, logout }) {
       if (isFirst && targetId) {
         f(API + '/api/chat/title', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg }) })
           .then(r => r.json()).then(t => {
-            if (t.ok && t.title) persistChats(chatsRef.current.map(c => c.id === targetId ? { ...c, title: t.title } : c))
+            if (t.ok && t.title) persist(chatsRef.current.map(c => c.id === targetId ? { ...c, title: t.title } : c))
           }).catch(() => {
-            persistChats(chatsRef.current.map(c => c.id === targetId && c.title === 'New chat' ? { ...c, title: msg.slice(0, 35) } : c))
+            persist(chatsRef.current.map(c => c.id === targetId && c.title === 'New chat' ? { ...c, title: msg.slice(0, 35) } : c))
           })
       }
 
