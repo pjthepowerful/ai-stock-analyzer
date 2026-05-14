@@ -203,51 +203,60 @@
     );
   }
 
-  // ── Scene 5: chat feed — messages stack up like a real chat (9.8 – 14.5) ──
+  // ── Scene 5: chat feed — messages cascade in smoothly (9.8 – 14.5) ──
   function SceneFeed() {
     const { time } = useTimeline();
-    const op = animate({ from: 0, to: 1, start: 9.8, end: 10.3, ease: Easing.easeOutCubic })(time)
+    const op = animate({ from: 0, to: 1, start: 9.8, end: 10.4, ease: Easing.easeOutCubic })(time)
              * (1 - animate({ from: 0, to: 1, start: 13.9, end: 14.6, ease: Easing.easeInCubic })(time));
 
-    // Each exchange appears at staggered times
-    const msgs = [];
-    const START = 10.0;
-    const GAP = 0.7; // time between each Q&A pair
-    for (let i = 0; i < CHATS.length; i++) {
-      const t = START + i * GAP;
-      const msgOp = animate({ from: 0, to: 1, start: t, end: t + 0.35, ease: Easing.easeOutCubic })(time);
-      const msgY = animate({ from: 16, to: 0, start: t, end: t + 0.4, ease: Easing.easeOutCubic })(time);
-      if (msgOp > 0) {
-        msgs.push({ ...CHATS[i], op: msgOp, y: msgY, idx: i });
-      }
-    }
+    const START = 10.1;
+    const GAP = 0.65;
 
-    // Scroll the feed up as more messages appear
-    const feedScroll = animate({ from: 0, to: -180, start: 10.8, end: 13.8, ease: Easing.easeInOutCubic })(time);
+    // Calculate how many messages are visible and smooth scroll offset
+    const elapsed = Math.max(0, time - START);
+    const visibleCount = Math.min(CHATS.length, Math.floor(elapsed / GAP) + 1);
+    
+    // Smooth continuous scroll — easeInOutCubic for buttery feel
+    const maxScroll = Math.max(0, (visibleCount - 3)) * 78;
+    const scrollY = animate({ from: 0, to: -maxScroll, start: START + GAP * 2.5, end: START + GAP * (CHATS.length - 0.5), ease: Easing.easeInOutCubic })(time);
 
     return (
-      <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op, overflow: "hidden" }}>
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", opacity: op, overflow: "hidden" }}>
         <div style={{
-          width: 800, maxWidth: "85%",
-          transform: `translateY(${feedScroll}px)`,
-          display: "flex", flexDirection: "column", gap: 14,
+          width: 760, maxWidth: "82%",
+          transform: `translateY(${scrollY}px)`,
+          display: "flex", flexDirection: "column", gap: 16,
+          transition: "transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
         }}>
-          {msgs.map(m => (
-            <div key={m.idx} style={{ opacity: m.op, transform: `translateY(${m.y}px)`, display: "flex", flexDirection: "column", gap: 8 }}>
-              {/* User */}
-              <div style={{ alignSelf: "flex-end" }}>
-                <span style={{
-                  display: "inline-block", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.04)",
-                  padding: "8px 16px", borderRadius: 14, fontSize: 18, color: "var(--fg)",
-                }}>{m.q}</span>
+          {CHATS.map((m, i) => {
+            const t = START + i * GAP;
+            const mOp = animate({ from: 0, to: 1, start: t, end: t + 0.4, ease: Easing.easeOutCubic })(time);
+            const mY = animate({ from: 14, to: 0, start: t, end: t + 0.45, ease: Easing.easeOutCubic })(time);
+            const mScale = animate({ from: 0.97, to: 1, start: t, end: t + 0.4, ease: Easing.easeOutCubic })(time);
+            if (mOp <= 0) return null;
+            return (
+              <div key={i} style={{
+                opacity: mOp,
+                transform: `translateY(${mY}px) scale(${mScale})`,
+                display: "flex", flexDirection: "column", gap: 8,
+              }}>
+                <div style={{ alignSelf: "flex-end" }}>
+                  <span style={{
+                    display: "inline-block", background: "rgba(255,255,255,0.05)",
+                    border: "1px solid rgba(255,255,255,0.04)",
+                    padding: "8px 15px", borderRadius: 14, fontSize: 17, color: "var(--fg)",
+                  }}>{m.q}</span>
+                </div>
+                <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <span className="mark" style={{
+                    width: 24, height: 24, borderRadius: 6, fontSize: 10, flexShrink: 0,
+                    boxShadow: "0 0 10px rgba(16,185,129,0.2)",
+                  }}>P</span>
+                  <span style={{ fontSize: 17, color: "var(--dim)", lineHeight: 1.5 }}>{m.a}</span>
+                </div>
               </div>
-              {/* Paula */}
-              <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                <span className="mark" style={{ width: 26, height: 26, borderRadius: 7, fontSize: 11, flexShrink: 0 }}>P</span>
-                <span style={{ fontSize: 18, color: "var(--dim)", lineHeight: 1.5 }}>{m.a}</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );

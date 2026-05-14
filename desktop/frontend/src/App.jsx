@@ -113,6 +113,13 @@ function MainApp({ user, token, logout }) {
   const [toasts, setToasts] = useState([])
   const [view, setView] = useState('chat')
   const [perf, setPerf] = useState(null)
+  const [showChangelog, setShowChangelog] = useState(() => {
+    const v = '2.1'
+    const seen = localStorage.getItem('paula-changelog-seen')
+    if (seen !== v) return true
+    return false
+  })
+  const dismissChangelog = () => { setShowChangelog(false); localStorage.setItem('paula-changelog-seen', '2.1') }
   
   const [sideOpen, setSideOpen] = useState(window.innerWidth > 768)
 
@@ -356,6 +363,27 @@ function MainApp({ user, token, logout }) {
         <div key={t.id} className={'toast t-'+t.type}><span className="t-dot"/>{t.msg}
           <button className="t-x" onClick={()=>setToasts(p=>p.filter(x=>x.id!==t.id))}>×</button>
         </div>))}</div>
+
+      {/* What's New */}
+      {showChangelog&&<div className="cl-overlay" onClick={dismissChangelog}>
+        <div className="cl-modal" onClick={e=>e.stopPropagation()}>
+          <div className="cl-header">
+            <span className="cl-badge">v2.1</span>
+            <span className="cl-title">What's New</span>
+            <button className="cl-close" onClick={dismissChangelog}>×</button>
+          </div>
+          <div className="cl-body">
+            <div className="cl-item"><span className="cl-icon">⚡</span><div><b>Typing Animation</b><p>Paula's responses now appear word-by-word with a blinking cursor</p></div></div>
+            <div className="cl-item"><span className="cl-icon">📊</span><div><b>Multi-Chart Tabs</b><p>Ask about multiple stocks — click tabs to switch between charts</p></div></div>
+            <div className="cl-item"><span className="cl-icon">🔔</span><div><b>Detailed Notifications</b><p>Hourly status, P&L milestones, trade alerts with full details</p></div></div>
+            <div className="cl-item"><span className="cl-icon">🎨</span><div><b>Redesigned UI</b><p>Cleaner sidebar, header bar with account info, new welcome prompts</p></div></div>
+            <div className="cl-item"><span className="cl-icon">🔐</span><div><b>Login System</b><p>Your API keys and chats are saved — just sign in and trade</p></div></div>
+            <div className="cl-item"><span className="cl-icon">🤖</span><div><b>Instant Autopilot</b><p>Toggle on/off from the header — no more chat commands needed</p></div></div>
+          </div>
+          <button className="cl-dismiss" onClick={dismissChangelog}>Got it</button>
+        </div>
+      </div>}
+
       {/* Sidebar — chats + positions only */}
       <aside className={'sb'+(sideOpen?'':' sb-hide')}>
         <div className="sb-top">
