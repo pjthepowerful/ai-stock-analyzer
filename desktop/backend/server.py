@@ -855,15 +855,17 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
     # Route the message
     intent = engine.route(user_msg)
 
-    # If chat triggers autopilot, start/stop the real background task
+    # Autopilot — handle instantly, don't run through engine
     if intent.get("type") == "autopilot":
         if not autopilot_task or autopilot_task.done():
             autopilot_task = asyncio.create_task(_autopilot_loop())
+        return {"ok": True, "message": "🟢 Autopilot activated.", "type": "trade", "autopilot": True}
 
     if intent.get("type") == "stop_autopilot":
         if autopilot_task and not autopilot_task.done():
             autopilot_task.cancel()
             autopilot_task = None
+        return {"ok": True, "message": "🔴 Autopilot stopped.", "type": "trade", "autopilot": False}
 
     # Run in thread pool since engine functions are blocking
     loop = asyncio.get_event_loop()

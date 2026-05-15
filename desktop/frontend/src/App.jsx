@@ -267,36 +267,38 @@ function MainApp({ user, token, logout }) {
 
   const sendMessage = async (msg) => {
     if (!msg || sending) return
+    setSending(true)
+    setInput('')
+    setView('chat')
 
-    // Create chat if needed
+    // ALWAYS ensure we have an active chat
     let targetId = chatIdRef.current
-    const isFirst = !messages.length
-    if (!targetId) {
+    const needsNewChat = !targetId || !chatsRef.current.find(c => c.id === targetId)
+    if (needsNewChat) {
       targetId = Date.now().toString()
       persist([{ id: targetId, title: 'New chat', messages: [], created: new Date().toISOString() }, ...chatsRef.current])
       setActiveChatId(targetId)
-      setView('chat')
       f(API + '/api/chat/clear', { method: 'POST' }).catch(() => {})
     }
 
-    // Add user message, clear input
-    setMessages(prev => [...prev, { role: 'user', content: msg }])
-    setInput('')
-    setSending(true)
+    const isFirstMsg = messages.length === 0
+
+    // Add user message
+    const userMsg = { role: 'user', content: msg }
+    setMessages(prev => [...prev, userMsg])
 
     try {
-      // Call the reliable /api/chat endpoint
       const res = await f(API + '/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: msg })
       })
       const data = await res.json()
 
       if (data.ok) {
-        // Typing animation — reveal words gradually
         const fullText = data.message || ''
         const words = fullText.split(/(\s+)/)
+
+        // Add empty assistant message, then animate
         setMessages(prev => [...prev, { role: 'assistant', content: '', streaming: true, type: data.type, ticker: data.ticker || null, tickers: data.tickers || [], signal: data.trade_signal || null }])
 
         let shown = ''
@@ -306,13 +308,13 @@ function MainApp({ user, token, logout }) {
           setMessages(prev => {
             const msgs = [...prev]
             const last = msgs[msgs.length - 1]
-            if (last && last.streaming) msgs[msgs.length - 1] = { ...last, content: snap }
+            if (last?.streaming) msgs[msgs.length - 1] = { ...last, content: snap }
             return msgs
           })
           if (i % 3 === 0) await new Promise(r => setTimeout(r, 15))
         }
 
-        // Done typing — remove cursor
+        // Finalize
         setMessages(prev => {
           const msgs = [...prev]
           const last = msgs[msgs.length - 1]
@@ -320,22 +322,20 @@ function MainApp({ user, token, logout }) {
           return msgs
         })
 
-        // Sound + toast for trades
+        // Sounds
         if (data.type === 'trade' && data.message) {
           if (data.message.includes('Bought')) { snd(playBuy); addToast(data.message.slice(0, 60), 'buy') }
           else if (data.message.includes('Sold') || data.message.includes('Shorted')) { snd(playSell); addToast(data.message.slice(0, 60), 'sell') }
           else if (data.message.includes('Covered')) { snd(playProfit); addToast(data.message.slice(0, 60), 'buy') }
-          else if (data.message.includes('closed')) { addToast(data.message.slice(0, 60), 'warn') }
         } else { snd(playTick) }
 
         if (data.autopilot !== undefined) setAutopilot(data.autopilot)
       } else {
-        snd(playAlert)
         setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ ' + (data.error || 'Something went wrong') }])
       }
 
-      // Generate title for new chats
-      if (isFirst && targetId) {
+      // Title for first message
+      if (isFirstMsg) {
         f(API + '/api/chat/title', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg }) })
           .then(r => r.json()).then(t => {
             if (t.ok && t.title) persist(chatsRef.current.map(c => c.id === targetId ? { ...c, title: t.title } : c))
@@ -345,8 +345,8 @@ function MainApp({ user, token, logout }) {
       }
 
       refreshData()
-    } catch (e) {
-      setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Connection lost. Check that the backend is running.' }])
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Connection lost.' }])
     }
 
     setSending(false)
