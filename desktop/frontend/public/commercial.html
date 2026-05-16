@@ -8,30 +8,12 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    :root {
-      --bg: #050507;
-      --bg2: #0c0c12;
-      --fg: #eaeaf2;
-      --dim: #7a7a96;
-      --grn: #10b981;
-      --grn2: #34d399;
-      --dark: #050507;
-      --red: #ef4444;
-    }
-    * { box-sizing: border-box; margin: 0; }
-    html, body, #root { height: 100%; }
-    body {
-      background: #000; color: var(--fg);
-      font: 16px/1.5 "Outfit", system-ui, sans-serif;
-      -webkit-font-smoothing: antialiased; overflow: hidden;
-    }
-    .mono { font-family: "JetBrains Mono", monospace; }
-    .mark {
-      display: inline-flex; align-items: center; justify-content: center;
-      background: var(--grn); border-radius: 22%;
-      font-family: "JetBrains Mono", monospace; font-weight: 800;
-      color: var(--dark);
-    }
+    :root { --bg:#050507; --bg2:#0c0c12; --fg:#eaeaf2; --dim:#7a7a96; --grn:#10b981; --grn2:#34d399; --red:#ef4444 }
+    * { box-sizing: border-box; margin: 0 }
+    html, body, #root { height: 100% }
+    body { background: #000; color: var(--fg); font: 16px/1.5 "Outfit", system-ui, sans-serif; -webkit-font-smoothing: antialiased; overflow: hidden }
+    .mono { font-family: "JetBrains Mono", monospace }
+    .mark { display: inline-flex; align-items: center; justify-content: center; background: var(--grn); border-radius: 22%; font-family: "JetBrains Mono", monospace; font-weight: 800; color: var(--bg) }
   </style>
 </head>
 <body>
@@ -42,111 +24,77 @@
   <script type="text/babel" src="animations.jsx"></script>
   <script type="text/babel">
 
-  const DUR = 20;
+  const DUR = 22;
 
   const CHATS = [
-    { q: "Hey Paula, what's the play today?", a: "Tech leading. SPY above VWAP — let winners run." },
-    { q: "Hey Paula, find me a breakout.",     a: "AMD setting up. R/R 2.6×, score 78." },
-    { q: "Hey Paula, can I hold NVDA?",        a: "Yes — trail your stop below the 20-EMA." },
-    { q: "Hey Paula, recap my week.",           a: "+$1,284. 64% win rate. NVDA carried." },
-    { q: "Hey Paula, size this trade.",         a: "Risk 1% — 45 shares, 3× ATR stop." },
-    { q: "Hey Paula, hedge my book.",           a: "Cut tech 20%. Concentration at 68%." },
-  ];
-
-  const STATS = [
-    { n: "21", label: "signal factors" },
-    { n: "5min", label: "scan cycles" },
-    { n: "100+", label: "stocks tracked" },
-    { n: "24/7", label: "autopilot" },
+    { q: "Hey Paula, what's the play?",   a: "Tech leading. SPY above VWAP." },
+    { q: "Hey Paula, find a breakout.",    a: "AMD. R/R 2.6×, score 78." },
+    { q: "Hey Paula, can I hold NVDA?",    a: "Yes. Trail below the 20-EMA." },
+    { q: "Hey Paula, recap my week.",      a: "+$1,284. 64% win rate." },
+    { q: "Hey Paula, size this trade.",    a: "45 shares. 3× ATR stop." },
+    { q: "Hey Paula, what should I buy?",  a: "INTC breaking out. Score 82." },
   ];
 
   // ── Background ──
   function Bg() {
     const { time } = useTimeline();
-    const d = Math.sin(time * 0.25) * 35;
-    return <div style={{
-      position: "absolute", inset: 0,
-      background:
-        `radial-gradient(800px 500px at ${55+d/5}% ${35-d/8}%, rgba(16,185,129,0.15) 0%, transparent 55%),` +
-        `radial-gradient(600px 400px at ${35-d/6}% ${80+d/10}%, rgba(16,185,129,0.07) 0%, transparent 55%),` +
-        "var(--bg)",
-    }} />;
+    const d = Math.sin(time * 0.2) * 30;
+    const glow = time > 5 && time < 8 ? 0.22 : time > 14 ? 0.2 : 0.12;
+    return <div style={{ position: "absolute", inset: 0, background: `radial-gradient(700px 500px at ${52+d/5}% ${40-d/6}%, rgba(16,185,129,${glow}) 0%, transparent 55%), var(--bg)`, transition: "background 0.8s" }} />;
   }
 
-  // ── Scene 1: fast logo (0 – 1.5) ──
-  function SceneLogo() {
+  // ── Scene 1: "Hey Paula." opens big (0 – 3) ──
+  function SceneOpen() {
     const { time } = useTimeline();
-    const op = animate({ from: 0, to: 1, start: 0.1, end: 0.4 })(time)
-             * (1 - animate({ from: 0, to: 1, start: 1.1, end: 1.6, ease: Easing.easeInCubic })(time));
-    const s = animate({ from: 0.6, to: 1, start: 0.05, end: 0.7, ease: Easing.easeOutBack })(time);
-    const pulse = 1 + 0.04 * Math.sin(time * 4);
+    const op = animate({ from: 0, to: 1, start: 0.15, end: 0.6, ease: Easing.easeOutCubic })(time)
+             * (1 - animate({ from: 0, to: 1, start: 2.4, end: 3.0, ease: Easing.easeInCubic })(time));
+    const heyOp = animate({ from: 0, to: 1, start: 0.2, end: 0.7, ease: Easing.easeOutCubic })(time);
+    const heyY = animate({ from: 20, to: 0, start: 0.2, end: 0.7, ease: Easing.easeOutCubic })(time);
+    const paulaOp = animate({ from: 0, to: 1, start: 0.5, end: 1.0, ease: Easing.easeOutCubic })(time);
+    const paulaY = animate({ from: 20, to: 0, start: 0.5, end: 1.0, ease: Easing.easeOutCubic })(time);
+    const subOp = animate({ from: 0, to: 1, start: 1.2, end: 1.8, ease: Easing.easeOutCubic })(time);
+
     return (
       <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op }}>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 24 }}>
-          <span className="mark" style={{
-            width: 120, height: 120, borderRadius: 28, fontSize: 54,
-            transform: `scale(${s * pulse})`,
-            boxShadow: "0 0 60px rgba(16,185,129,0.4)",
-          }}>P</span>
-          <div style={{
-            fontSize: 72, fontWeight: 700, letterSpacing: "-0.04em",
-            opacity: animate({ from: 0, to: 1, start: 0.4, end: 0.8 })(time),
-            transform: `translateY(${animate({ from: 14, to: 0, start: 0.4, end: 0.8, ease: Easing.easeOutCubic })(time)}px)`,
-          }}>Paula</div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 120, fontWeight: 700, letterSpacing: "-0.04em", lineHeight: 1, display: "flex", gap: 20, justifyContent: "center" }}>
+            <span style={{ opacity: heyOp, transform: `translateY(${heyY}px)`, color: "var(--fg)" }}>Hey</span>
+            <span style={{ opacity: paulaOp, transform: `translateY(${paulaY}px)`, color: "var(--grn)" }}>Paula.</span>
+          </div>
+          <div style={{ fontSize: 22, color: "var(--dim)", marginTop: 20, opacity: subOp, letterSpacing: "0.02em" }}>
+            your AI trading assistant
+          </div>
         </div>
       </div>
     );
   }
 
-  // ── Scene 2: chat demo with typing (1.5 – 5.5) ──
+  // ── Scene 2: first chat with typing (3 – 7) ──
   function SceneChat() {
     const { time } = useTimeline();
-    const op = animate({ from: 0, to: 1, start: 1.5, end: 2.0, ease: Easing.easeOutCubic })(time)
-             * (1 - animate({ from: 0, to: 1, start: 4.9, end: 5.6, ease: Easing.easeInCubic })(time));
-    const boxY = animate({ from: 24, to: 0, start: 1.5, end: 2.1, ease: Easing.easeOutCubic })(time);
-
-    // User bubble
-    const uOp = animate({ from: 0, to: 1, start: 1.8, end: 2.3, ease: Easing.easeOutCubic })(time);
-    const uY = animate({ from: 12, to: 0, start: 1.8, end: 2.3, ease: Easing.easeOutCubic })(time);
-
-    // Avatar + dots
-    const avOp = animate({ from: 0, to: 1, start: 2.6, end: 2.9 })(time);
-    const dotsOp = animate({ from: 0, to: 1, start: 2.7, end: 2.9 })(time)
-                 * (1 - animate({ from: 0, to: 1, start: 3.2, end: 3.4 })(time));
-
-    // Stream reply
+    const op = animate({ from: 0, to: 1, start: 3.0, end: 3.5, ease: Easing.easeOutCubic })(time)
+             * (1 - animate({ from: 0, to: 1, start: 6.4, end: 7.0, ease: Easing.easeInCubic })(time));
+    const boxY = animate({ from: 20, to: 0, start: 3.0, end: 3.5, ease: Easing.easeOutCubic })(time);
+    const uOp = animate({ from: 0, to: 1, start: 3.3, end: 3.7, ease: Easing.easeOutCubic })(time);
+    const avOp = animate({ from: 0, to: 1, start: 4.0, end: 4.3 })(time);
+    const dotsOp = animate({ from: 0, to: 1, start: 4.1, end: 4.3 })(time) * (1 - animate({ from: 0, to: 1, start: 4.6, end: 4.8 })(time));
     const reply = CHATS[0].a;
-    const stream = animate({ from: 0, to: 1, start: 3.4, end: 4.4, ease: Easing.linear })(time);
+    const stream = animate({ from: 0, to: 1, start: 4.8, end: 5.8 })(time);
     const shown = reply.slice(0, Math.floor(stream * reply.length));
-    const caret = time > 3.4 && stream < 1 && Math.sin(time * 3.5) > 0;
+    const caret = time > 4.8 && stream < 1 && Math.sin(time * 3.5) > 0;
 
     return (
       <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op }}>
-        <div style={{
-          width: 900, maxWidth: "88%", background: "var(--bg2)",
-          border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20,
-          padding: "28px 32px", boxShadow: "0 30px 80px rgba(0,0,0,0.5)",
-          display: "flex", flexDirection: "column", gap: 24,
-          transform: `translateY(${boxY}px)`,
-        }}>
-          <div style={{ alignSelf: "flex-end", opacity: uOp, transform: `translateY(${uY}px)` }}>
-            <div style={{
-              background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.05)",
-              padding: "12px 18px", borderRadius: 16, fontSize: 24, color: "var(--fg)",
-            }}>{CHATS[0].q}</div>
+        <div style={{ width: 820, maxWidth: "85%", background: "var(--bg2)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 18, padding: "24px 28px", boxShadow: "0 24px 60px rgba(0,0,0,0.4)", display: "flex", flexDirection: "column", gap: 20, transform: `translateY(${boxY}px)` }}>
+          <div style={{ alignSelf: "flex-end", opacity: uOp }}>
+            <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.04)", padding: "10px 16px", borderRadius: 14, fontSize: 22, color: "var(--fg)" }}>{CHATS[0].q}</div>
           </div>
           {avOp > 0 && (
-            <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-              <span className="mark" style={{
-                width: 38, height: 38, borderRadius: 10, fontSize: 16, flexShrink: 0,
-                opacity: avOp, boxShadow: "0 0 16px rgba(16,185,129,0.25)",
-              }}>P</span>
-              <div style={{ fontSize: 24, lineHeight: 1.55, color: "var(--fg)", minHeight: 38 }}>
-                {time < 3.4 ? (
-                  <div style={{ display: "flex", gap: 6, padding: "8px 0", opacity: dotsOp }}>
-                    {[0,1,2].map(i => <span key={i} style={{ width: 7, height: 7, borderRadius: 99, background: "var(--dim)", opacity: 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(time * 5.5 + i * 0.8)) }} />)}
-                  </div>
-                ) : <>{shown}{caret && <span style={{ display: "inline-block", width: 2, height: "1em", background: "var(--grn)", marginLeft: 2, verticalAlign: "-1px" }} />}</>}
+            <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+              <span className="mark" style={{ width: 34, height: 34, borderRadius: 9, fontSize: 14, flexShrink: 0, opacity: avOp, boxShadow: "0 0 14px rgba(16,185,129,0.2)" }}>P</span>
+              <div style={{ fontSize: 22, lineHeight: 1.5, color: "var(--fg)", minHeight: 34 }}>
+                {time < 4.8 ? <div style={{ display: "flex", gap: 5, padding: "6px 0", opacity: dotsOp }}>{[0,1,2].map(i => <span key={i} style={{ width: 6, height: 6, borderRadius: 99, background: "var(--dim)", opacity: 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(time * 5.5 + i * 0.8)) }} />)}</div>
+                : <>{shown}{caret && <span style={{ display: "inline-block", width: 2, height: "1em", background: "var(--grn)", marginLeft: 2 }} />}</>}
               </div>
             </div>
           )}
@@ -155,104 +103,76 @@
     );
   }
 
-  // ── Scene 3: stats burst (5.5 – 8.0) ──
+  // ── Scene 3: stats (7 – 10) ──
   function SceneStats() {
     const { time } = useTimeline();
-    const op = animate({ from: 0, to: 1, start: 5.5, end: 6.0, ease: Easing.easeOutCubic })(time)
-             * (1 - animate({ from: 0, to: 1, start: 7.4, end: 8.1, ease: Easing.easeInCubic })(time));
+    const op = animate({ from: 0, to: 1, start: 7.0, end: 7.5, ease: Easing.easeOutCubic })(time)
+             * (1 - animate({ from: 0, to: 1, start: 9.4, end: 10.0, ease: Easing.easeInCubic })(time));
+    const stats = [{ n: "21", l: "signal factors" }, { n: "5min", l: "scan cycles" }, { n: "100+", l: "stocks" }, { n: "24/7", l: "autopilot" }];
     return (
       <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 36, maxWidth: 800 }}>
-          {STATS.map((s, i) => {
-            const d = i * 0.22;
-            const sOp = animate({ from: 0, to: 1, start: 5.7 + d, end: 6.2 + d, ease: Easing.easeOutCubic })(time);
-            const sY = animate({ from: 35, to: 0, start: 5.7 + d, end: 6.2 + d, ease: Easing.easeOutBack })(time);
-            return (
-              <div key={i} style={{ textAlign: "center", opacity: sOp, transform: `translateY(${sY}px)` }}>
-                <div className="mono" style={{ fontSize: 80, fontWeight: 700, lineHeight: 1, color: "var(--grn)", textShadow: "0 0 50px rgba(16,185,129,0.3)" }}>{s.n}</div>
-                <div style={{ fontSize: 18, color: "var(--dim)", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: 6 }}>{s.label}</div>
-              </div>
-            );
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32, maxWidth: 700 }}>
+          {stats.map((s, i) => {
+            const d = i * 0.2;
+            const sOp = animate({ from: 0, to: 1, start: 7.2 + d, end: 7.7 + d, ease: Easing.easeOutCubic })(time);
+            const sY = animate({ from: 28, to: 0, start: 7.2 + d, end: 7.7 + d, ease: Easing.easeOutBack })(time);
+            return <div key={i} style={{ textAlign: "center", opacity: sOp, transform: `translateY(${sY}px)` }}>
+              <div className="mono" style={{ fontSize: 72, fontWeight: 700, color: "var(--grn)", textShadow: "0 0 40px rgba(16,185,129,0.25)" }}>{s.n}</div>
+              <div style={{ fontSize: 16, color: "var(--dim)", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: 4 }}>{s.l}</div>
+            </div>;
           })}
         </div>
       </div>
     );
   }
 
-  // ── Scene 4: "fully automated AI trading" (8.0 – 9.8) ──
+  // ── Scene 4: tagline (10 – 12) ──
   function SceneTagline() {
     const { time } = useTimeline();
-    const op = animate({ from: 0, to: 1, start: 8.0, end: 8.5, ease: Easing.easeOutCubic })(time)
-             * (1 - animate({ from: 0, to: 1, start: 9.2, end: 9.9, ease: Easing.easeInCubic })(time));
+    const op = animate({ from: 0, to: 1, start: 10.0, end: 10.5, ease: Easing.easeOutCubic })(time)
+             * (1 - animate({ from: 0, to: 1, start: 11.4, end: 12.0, ease: Easing.easeInCubic })(time));
     const words = ["fully", "automated", "AI", "trading."];
     return (
       <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op }}>
-        <div style={{ fontSize: 76, fontWeight: 700, letterSpacing: "-0.04em", display: "flex", gap: "0.25em", justifyContent: "center", flexWrap: "wrap" }}>
+        <div style={{ fontSize: 68, fontWeight: 700, letterSpacing: "-0.03em", display: "flex", gap: "0.22em", justifyContent: "center", flexWrap: "wrap" }}>
           {words.map((w, i) => {
-            const wOp = animate({ from: 0, to: 1, start: 8.2 + i * 0.18, end: 8.2 + i * 0.18 + 0.3, ease: Easing.easeOutCubic })(time);
-            const wY = animate({ from: 20, to: 0, start: 8.2 + i * 0.18, end: 8.2 + i * 0.18 + 0.3, ease: Easing.easeOutCubic })(time);
+            const wOp = animate({ from: 0, to: 1, start: 10.2 + i * 0.16, end: 10.2 + i * 0.16 + 0.3, ease: Easing.easeOutCubic })(time);
+            const wY = animate({ from: 16, to: 0, start: 10.2 + i * 0.16, end: 10.2 + i * 0.16 + 0.3, ease: Easing.easeOutCubic })(time);
             const accent = w === "AI";
-            return <span key={i} style={{
-              opacity: wOp, transform: `translateY(${wY}px)`, display: "inline-block",
-              color: accent ? "var(--grn)" : "var(--fg)",
-              textShadow: accent ? "0 0 40px rgba(16,185,129,0.4)" : "none",
-            }}>{w}</span>;
+            return <span key={i} style={{ opacity: wOp, transform: `translateY(${wY}px)`, display: "inline-block", color: accent ? "var(--grn)" : "var(--fg)", textShadow: accent ? "0 0 30px rgba(16,185,129,0.35)" : "none" }}>{w}</span>;
           })}
         </div>
       </div>
     );
   }
 
-  // ── Scene 5: chat feed — messages cascade in smoothly (9.8 – 14.5) ──
-  function SceneFeed() {
+  // ── Scene 5: chat cascade (12 – 17) ──
+  function SceneCascade() {
     const { time } = useTimeline();
-    const op = animate({ from: 0, to: 1, start: 9.8, end: 10.4, ease: Easing.easeOutCubic })(time)
-             * (1 - animate({ from: 0, to: 1, start: 13.9, end: 14.6, ease: Easing.easeInCubic })(time));
-
-    const START = 10.1;
-    const GAP = 0.65;
-
-    // Calculate how many messages are visible and smooth scroll offset
-    const elapsed = Math.max(0, time - START);
-    const visibleCount = Math.min(CHATS.length, Math.floor(elapsed / GAP) + 1);
-    
-    // Smooth continuous scroll — easeInOutCubic for buttery feel
-    const maxScroll = Math.max(0, (visibleCount - 3)) * 78;
-    const scrollY = animate({ from: 0, to: -maxScroll, start: START + GAP * 2.5, end: START + GAP * (CHATS.length - 0.5), ease: Easing.easeInOutCubic })(time);
+    const op = animate({ from: 0, to: 1, start: 12.0, end: 12.5, ease: Easing.easeOutCubic })(time)
+             * (1 - animate({ from: 0, to: 1, start: 16.4, end: 17.0, ease: Easing.easeInCubic })(time));
+    const START = 12.3;
+    const GAP = 0.6;
+    const visCount = Math.min(CHATS.length, Math.floor(Math.max(0, time - START) / GAP) + 1);
+    const scrollPx = Math.max(0, (visCount - 3)) * 70;
+    const scrollY = animate({ from: 0, to: -scrollPx, start: START + GAP * 2.5, end: START + GAP * 5, ease: Easing.easeInOutCubic })(time);
 
     return (
       <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", opacity: op, overflow: "hidden" }}>
-        <div style={{
-          width: 760, maxWidth: "82%",
-          transform: `translateY(${scrollY}px)`,
-          display: "flex", flexDirection: "column", gap: 16,
-          transition: "transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
-        }}>
+        <div style={{ width: 680, maxWidth: "80%", transform: `translateY(${scrollY}px)`, display: "flex", flexDirection: "column", gap: 12 }}>
           {CHATS.map((m, i) => {
             const t = START + i * GAP;
-            const mOp = animate({ from: 0, to: 1, start: t, end: t + 0.4, ease: Easing.easeOutCubic })(time);
-            const mY = animate({ from: 14, to: 0, start: t, end: t + 0.45, ease: Easing.easeOutCubic })(time);
-            const mScale = animate({ from: 0.97, to: 1, start: t, end: t + 0.4, ease: Easing.easeOutCubic })(time);
+            const mOp = animate({ from: 0, to: 1, start: t, end: t + 0.35, ease: Easing.easeOutCubic })(time);
+            const mY = animate({ from: 12, to: 0, start: t, end: t + 0.4, ease: Easing.easeOutCubic })(time);
             if (mOp <= 0) return null;
             return (
-              <div key={i} style={{
-                opacity: mOp,
-                transform: `translateY(${mY}px) scale(${mScale})`,
-                display: "flex", flexDirection: "column", gap: 8,
-              }}>
+              <div key={i} style={{ opacity: mOp, transform: `translateY(${mY}px)`, display: "flex", flexDirection: "column", gap: 6 }}>
                 <div style={{ alignSelf: "flex-end" }}>
-                  <span style={{
-                    display: "inline-block", background: "rgba(255,255,255,0.05)",
-                    border: "1px solid rgba(255,255,255,0.04)",
-                    padding: "8px 15px", borderRadius: 14, fontSize: 17, color: "var(--fg)",
-                  }}>{m.q}</span>
+                  <span style={{ display: "inline-block", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.03)", padding: "6px 14px", borderRadius: 12, fontSize: 15, color: "var(--fg)" }}>{m.q}</span>
                 </div>
-                <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                  <span className="mark" style={{
-                    width: 24, height: 24, borderRadius: 6, fontSize: 10, flexShrink: 0,
-                    boxShadow: "0 0 10px rgba(16,185,129,0.2)",
-                  }}>P</span>
-                  <span style={{ fontSize: 17, color: "var(--dim)", lineHeight: 1.5 }}>{m.a}</span>
+                <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                  <span className="mark" style={{ width: 22, height: 22, borderRadius: 6, fontSize: 9, flexShrink: 0 }}>P</span>
+                  <span style={{ fontSize: 15, color: "var(--dim)", lineHeight: 1.45 }}>{m.a}</span>
                 </div>
               </div>
             );
@@ -262,72 +182,41 @@
     );
   }
 
-  // ── Scene 6: outro — "Hey Paula." (14.5 – 20) ──
+  // ── Scene 6: outro (17 – 22) ──
   function SceneOutro() {
     const { time } = useTimeline();
-    const op = animate({ from: 0, to: 1, start: 14.5, end: 15.1, ease: Easing.easeOutCubic })(time);
-    const markS = animate({ from: 0.75, to: 1, start: 14.5, end: 15.3, ease: Easing.easeOutBack })(time);
-    const pulse = 1 + 0.025 * Math.sin((time - 14.5) * 3);
-
-    const heyOp = animate({ from: 0, to: 1, start: 15.0, end: 15.5, ease: Easing.easeOutCubic })(time);
-    const heyY = animate({ from: 14, to: 0, start: 15.0, end: 15.5, ease: Easing.easeOutCubic })(time);
-    const pOp = animate({ from: 0, to: 1, start: 15.3, end: 15.8, ease: Easing.easeOutCubic })(time);
-    const pY = animate({ from: 14, to: 0, start: 15.3, end: 15.8, ease: Easing.easeOutCubic })(time);
-    const tagOp = animate({ from: 0, to: 1, start: 16.0, end: 16.6, ease: Easing.easeOutCubic })(time);
-    const tagY = animate({ from: 10, to: 0, start: 16.0, end: 16.6, ease: Easing.easeOutCubic })(time);
+    const op = animate({ from: 0, to: 1, start: 17.0, end: 17.6, ease: Easing.easeOutCubic })(time);
+    const markS = animate({ from: 0.7, to: 1, start: 17.0, end: 17.8, ease: Easing.easeOutBack })(time);
+    const pulse = 1 + 0.02 * Math.sin((time - 17) * 2.5);
+    const hOp = animate({ from: 0, to: 1, start: 17.4, end: 17.9, ease: Easing.easeOutCubic })(time);
+    const hY = animate({ from: 12, to: 0, start: 17.4, end: 17.9, ease: Easing.easeOutCubic })(time);
+    const pOp = animate({ from: 0, to: 1, start: 17.7, end: 18.2, ease: Easing.easeOutCubic })(time);
+    const pY = animate({ from: 12, to: 0, start: 17.7, end: 18.2, ease: Easing.easeOutCubic })(time);
+    const tOp = animate({ from: 0, to: 1, start: 18.4, end: 19.0, ease: Easing.easeOutCubic })(time);
+    const tY = animate({ from: 10, to: 0, start: 18.4, end: 19.0, ease: Easing.easeOutCubic })(time);
 
     return (
       <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op }}>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 24 }}>
-          <span className="mark" style={{
-            width: 100, height: 100, borderRadius: 24, fontSize: 46,
-            transform: `scale(${markS * pulse})`,
-            boxShadow: "0 0 60px rgba(16,185,129,0.4)",
-          }}>P</span>
-          <div style={{ fontSize: 100, fontWeight: 700, letterSpacing: "-0.04em", lineHeight: 1, display: "flex", gap: 22 }}>
-            <span style={{ opacity: heyOp, transform: `translateY(${heyY}px)` }}>Hey</span>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
+          <span className="mark" style={{ width: 88, height: 88, borderRadius: 22, fontSize: 40, transform: `scale(${markS * pulse})`, boxShadow: "0 0 50px rgba(16,185,129,0.35)" }}>P</span>
+          <div style={{ fontSize: 88, fontWeight: 700, letterSpacing: "-0.04em", lineHeight: 1, display: "flex", gap: 18 }}>
+            <span style={{ opacity: hOp, transform: `translateY(${hY}px)` }}>Hey</span>
             <span style={{ opacity: pOp, transform: `translateY(${pY}px)`, color: "var(--grn)" }}>Paula.</span>
           </div>
-          <div style={{
-            fontSize: 26, color: "var(--dim)", letterSpacing: "-0.01em",
-            opacity: tagOp, transform: `translateY(${tagY}px)`,
-          }}>for <span style={{ color: "var(--fg)" }}>everything</span> trading.</div>
+          <div style={{ fontSize: 22, color: "var(--dim)", opacity: tOp, transform: `translateY(${tY}px)` }}>
+            for <span style={{ color: "var(--fg)" }}>everything</span> trading.
+          </div>
         </div>
       </div>
     );
   }
 
-  function Grain() {
-    const { time } = useTimeline();
-    return <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0.04, mixBlendMode: "overlay", pointerEvents: "none" }}>
-      <filter id="g"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed={Math.floor(time * 8) % 100} /></filter>
-      <rect width="100%" height="100%" filter="url(#g)" />
-    </svg>;
-  }
+  function Grain() { const{time}=useTimeline(); return <svg style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0.035,mixBlendMode:"overlay",pointerEvents:"none"}}><filter id="g"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" seed={Math.floor(time*8)%100}/></filter><rect width="100%" height="100%" filter="url(#g)"/></svg> }
+  function Vignette() { return <div style={{position:"absolute",inset:0,pointerEvents:"none",background:"radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.55) 100%)"}}/> }
 
-  function Vignette() {
-    return <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.6) 100%)" }} />;
-  }
-
-  function Commercial() {
-    return <>
-      <Bg />
-      <SceneLogo />
-      <SceneChat />
-      <SceneStats />
-      <SceneTagline />
-      <SceneFeed />
-      <SceneOutro />
-      <Vignette />
-      <Grain />
-    </>;
-  }
-
-  function Root() {
-    return <Stage width={1920} height={1080} duration={DUR} background="#000"><Commercial /></Stage>;
-  }
-
-  ReactDOM.createRoot(document.getElementById("root")).render(<Root />);
+  function Commercial() { return <><Bg/><SceneOpen/><SceneChat/><SceneStats/><SceneTagline/><SceneCascade/><SceneOutro/><Vignette/><Grain/></> }
+  function Root() { return <Stage width={1920} height={1080} duration={DUR} background="#000"><Commercial/></Stage> }
+  ReactDOM.createRoot(document.getElementById("root")).render(<Root/>);
   </script>
 </body>
 </html>

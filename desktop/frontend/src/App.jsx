@@ -265,27 +265,33 @@ function MainApp({ user, token, logout }) {
   }, [refreshData])
   useEffect(() => { messagesEnd.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
+  // Ensure a chat exists and return its ID
+  const ensureChat = () => {
+    const currentId = chatIdRef.current
+    const exists = currentId && chatsRef.current.some(c => c.id === currentId)
+    if (exists) return currentId
+
+    // Create new chat
+    const id = Date.now().toString()
+    persist([{ id, title: 'New chat', messages: [], created: new Date().toISOString() }, ...chatsRef.current])
+    setActiveChatId(id)
+    setMessages([])
+    f(API + '/api/chat/clear', { method: 'POST' }).catch(() => {})
+    return id
+  }
+
   const sendMessage = async (msg) => {
     if (!msg || sending) return
     setSending(true)
     setInput('')
     setView('chat')
 
-    // ALWAYS ensure we have an active chat
-    let targetId = chatIdRef.current
-    const needsNewChat = !targetId || !chatsRef.current.find(c => c.id === targetId)
-    if (needsNewChat) {
-      targetId = Date.now().toString()
-      persist([{ id: targetId, title: 'New chat', messages: [], created: new Date().toISOString() }, ...chatsRef.current])
-      setActiveChatId(targetId)
-      f(API + '/api/chat/clear', { method: 'POST' }).catch(() => {})
-    }
-
+    // Always ensure chat exists
+    const targetId = ensureChat()
     const isFirstMsg = messages.length === 0
 
-    // Add user message
-    const userMsg = { role: 'user', content: msg }
-    setMessages(prev => [...prev, userMsg])
+    // Show user message immediately
+    setMessages(prev => [...prev, { role: 'user', content: msg }])
 
     try {
       const res = await f(API + '/api/chat', {
@@ -295,31 +301,34 @@ function MainApp({ user, token, logout }) {
       const data = await res.json()
 
       if (data.ok) {
-        const fullText = data.message || ''
-        const words = fullText.split(/(\s+)/)
+        const text = data.message || ''
+        const words = text.split(/(\s+)/)
 
-        // Add empty assistant message, then animate
-        setMessages(prev => [...prev, { role: 'assistant', content: '', streaming: true, type: data.type, ticker: data.ticker || null, tickers: data.tickers || [], signal: data.trade_signal || null }])
+        // Start typing animation
+        setMessages(prev => [...prev, {
+          role: 'assistant', content: '', streaming: true,
+          type: data.type, ticker: data.ticker || null,
+          tickers: data.tickers || [], signal: data.trade_signal || null
+        }])
 
+        // Reveal words
         let shown = ''
         for (let i = 0; i < words.length; i++) {
           shown += words[i]
           const snap = shown
           setMessages(prev => {
-            const msgs = [...prev]
-            const last = msgs[msgs.length - 1]
-            if (last?.streaming) msgs[msgs.length - 1] = { ...last, content: snap }
-            return msgs
+            const m = [...prev]; const last = m[m.length - 1]
+            if (last?.streaming) m[m.length - 1] = { ...last, content: snap }
+            return m
           })
           if (i % 3 === 0) await new Promise(r => setTimeout(r, 15))
         }
 
-        // Finalize
+        // Done
         setMessages(prev => {
-          const msgs = [...prev]
-          const last = msgs[msgs.length - 1]
-          if (last) msgs[msgs.length - 1] = { ...last, streaming: false }
-          return msgs
+          const m = [...prev]; const last = m[m.length - 1]
+          if (last) m[m.length - 1] = { ...last, streaming: false }
+          return m
         })
 
         // Sounds
@@ -334,7 +343,7 @@ function MainApp({ user, token, logout }) {
         setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ ' + (data.error || 'Something went wrong') }])
       }
 
-      // Title for first message
+      // AI title on first message
       if (isFirstMsg) {
         f(API + '/api/chat/title', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg }) })
           .then(r => r.json()).then(t => {
@@ -440,9 +449,16 @@ function MainApp({ user, token, logout }) {
           </nav>
           <div className="hdr-right">
             <button className={'hdr-ap'+(autopilot?' hap-on':'')} onClick={async ()=>{
-              try { await f(API+'/api/autopilot/'+(autopilot?'stop':'start'),{method:'POST'}); refreshData() } catch{}
+              const wasOn = autopilot
+              setAutopilot(!wasOn) // optimistic toggle
+              try {
+                const r = await f(API+'/api/autopilot/'+(wasOn?'stop':'start'),{method:'POST'}).then(r=>r.json())
+                if (!r.ok) setAutopilot(wasOn) // revert on failure
+                addToast(wasOn ? 'Autopilot off' : 'Autopilot scanning', wasOn ? 'warn' : 'buy')
+              } catch { setAutopilot(wasOn) }
+              refreshData()
             }}>
-              <span className={'ap-dot'+(autopilot?' dot-on':'')}/>{autopilot?'On':'Off'}
+              <span className={'ap-dot'+(autopilot?' dot-on':'')}/>{autopilot?'Scanning':'Off'}
             </button>
             <button className="hdr-logout" onClick={logout}>Sign out</button>
           </div>
