@@ -214,142 +214,161 @@
   function Grain() { const{time}=useTimeline(); return <svg style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0.035,mixBlendMode:"overlay",pointerEvents:"none"}}><filter id="g"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" seed={Math.floor(time*8)%100}/></filter><rect width="100%" height="100%" filter="url(#g)"/></svg> }
   function Vignette() { return <div style={{position:"absolute",inset:0,pointerEvents:"none",background:"radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.55) 100%)"}}/> }
 
-  // ── Audio Engine ──
-  let _ctx = null;
-  function ctx() { if (!_ctx) _ctx = new (window.AudioContext || window.webkitAudioContext)(); if (_ctx.state === 'suspended') _ctx.resume(); return _ctx }
+  // ── Cinematic Audio Engine ──
+  let _ctx = null, _reverb = null;
+  function ctx() {
+    if (!_ctx) {
+      _ctx = new (window.AudioContext || window.webkitAudioContext)()
+      // Create reverb convolver
+      const len = _ctx.sampleRate * 1.5, buf = _ctx.createBuffer(2, len, _ctx.sampleRate)
+      for (let ch = 0; ch < 2; ch++) {
+        const d = buf.getChannelData(ch)
+        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5)
+      }
+      _reverb = _ctx.createConvolver(); _reverb.buffer = buf
+      const wet = _ctx.createGain(); wet.gain.value = 0.15
+      _reverb.connect(wet); wet.connect(_ctx.destination)
+    }
+    if (_ctx.state === 'suspended') _ctx.resume()
+    return _ctx
+  }
+  function out(dry) { const c = ctx(); dry.connect(c.destination); dry.connect(_reverb); return c }
 
-  // Typing click — soft mechanical key
-  function sfxType() {
-    const c = ctx(), o = c.createOscillator(), g = c.createGain()
-    o.connect(g); g.connect(c.destination)
-    o.type = 'square'; o.frequency.setValueAtTime(800 + Math.random() * 400, c.currentTime)
-    g.gain.setValueAtTime(0.03, c.currentTime)
-    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.04)
-    o.start(c.currentTime); o.stop(c.currentTime + 0.04)
+  // Soft impact — opening/outro
+  function sfxImpact() {
+    const c = ctx()
+    // Sub layer
+    const o1 = c.createOscillator(), g1 = c.createGain()
+    o1.type = 'sine'; o1.frequency.setValueAtTime(60, c.currentTime)
+    o1.frequency.exponentialRampToValueAtTime(30, c.currentTime + 0.8)
+    g1.gain.setValueAtTime(0.15, c.currentTime)
+    g1.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.8)
+    o1.connect(g1); out(g1)
+    o1.start(c.currentTime); o1.stop(c.currentTime + 0.8)
+    // Click layer
+    const o2 = c.createOscillator(), g2 = c.createGain()
+    o2.type = 'triangle'; o2.frequency.setValueAtTime(2000, c.currentTime)
+    o2.frequency.exponentialRampToValueAtTime(200, c.currentTime + 0.05)
+    g2.gain.setValueAtTime(0.08, c.currentTime)
+    g2.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.08)
+    o2.connect(g2); out(g2)
+    o2.start(c.currentTime); o2.stop(c.currentTime + 0.1)
   }
 
-  // Whoosh — transition between scenes
+  // Soft whoosh
   function sfxWhoosh() {
-    const c = ctx(), o = c.createOscillator(), g = c.createGain(), f = c.createBiquadFilter()
-    o.connect(f); f.connect(g); g.connect(c.destination)
-    o.type = 'sawtooth'; f.type = 'lowpass'
-    o.frequency.setValueAtTime(100, c.currentTime)
-    o.frequency.exponentialRampToValueAtTime(2000, c.currentTime + 0.15)
-    o.frequency.exponentialRampToValueAtTime(100, c.currentTime + 0.4)
-    f.frequency.setValueAtTime(800, c.currentTime)
-    g.gain.setValueAtTime(0, c.currentTime)
-    g.gain.linearRampToValueAtTime(0.06, c.currentTime + 0.1)
-    g.gain.linearRampToValueAtTime(0, c.currentTime + 0.4)
-    o.start(c.currentTime); o.stop(c.currentTime + 0.5)
+    const c = ctx(), len = c.sampleRate * 0.3
+    const buf = c.createBuffer(1, len, c.sampleRate)
+    const d = buf.getChannelData(0)
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.sin(Math.PI * i / len)
+    const src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain()
+    src.buffer = buf; f.type = 'bandpass'; f.frequency.setValueAtTime(1200, c.currentTime)
+    f.Q.value = 2; g.gain.setValueAtTime(0.06, c.currentTime)
+    src.connect(f); f.connect(g); out(g)
+    src.start(c.currentTime)
   }
 
-  // Chime — stat reveal
-  function sfxChime(note = 0) {
-    const c = ctx(), freqs = [523, 659, 784, 880]
+  // Glass chime
+  function sfxChime(note) {
+    const c = ctx(), freqs = [880, 1108, 1318, 1568]
+    const freq = freqs[note % 4]
     const o = c.createOscillator(), g = c.createGain()
-    o.connect(g); g.connect(c.destination)
-    o.type = 'sine'; o.frequency.setValueAtTime(freqs[note % 4], c.currentTime)
-    g.gain.setValueAtTime(0.08, c.currentTime)
-    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.6)
-    o.start(c.currentTime); o.stop(c.currentTime + 0.6)
-  }
-
-  // Rise tone — tagline reveal
-  function sfxRise() {
-    const c = ctx(), o = c.createOscillator(), g = c.createGain()
-    o.connect(g); g.connect(c.destination)
-    o.type = 'sine'
-    o.frequency.setValueAtTime(300, c.currentTime)
-    o.frequency.exponentialRampToValueAtTime(900, c.currentTime + 0.6)
+    o.type = 'sine'; o.frequency.setValueAtTime(freq, c.currentTime)
     g.gain.setValueAtTime(0.05, c.currentTime)
-    g.gain.linearRampToValueAtTime(0.08, c.currentTime + 0.3)
-    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.8)
-    o.start(c.currentTime); o.stop(c.currentTime + 0.8)
+    g.gain.setValueAtTime(0.05, c.currentTime + 0.02)
+    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 1.2)
+    o.connect(g); out(g)
+    o.start(c.currentTime); o.stop(c.currentTime + 1.2)
+    // Harmonic
+    const o2 = c.createOscillator(), g2 = c.createGain()
+    o2.type = 'sine'; o2.frequency.setValueAtTime(freq * 2.01, c.currentTime)
+    g2.gain.setValueAtTime(0.015, c.currentTime)
+    g2.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.8)
+    o2.connect(g2); out(g2)
+    o2.start(c.currentTime); o2.stop(c.currentTime + 0.8)
   }
 
-  // Deep pulse — outro entrance
-  function sfxPulse() {
+  // Soft key tick
+  function sfxTick() {
     const c = ctx(), o = c.createOscillator(), g = c.createGain()
+    o.type = 'sine'; o.frequency.setValueAtTime(3000 + Math.random() * 1000, c.currentTime)
+    g.gain.setValueAtTime(0.015, c.currentTime)
+    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.025)
     o.connect(g); g.connect(c.destination)
-    o.type = 'sine'; o.frequency.setValueAtTime(80, c.currentTime)
-    g.gain.setValueAtTime(0.12, c.currentTime)
-    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 1.0)
-    o.start(c.currentTime); o.stop(c.currentTime + 1.0)
+    o.start(c.currentTime); o.stop(c.currentTime + 0.03)
   }
 
-  // Resolve chord — final
+  // Rising shimmer
+  function sfxShimmer() {
+    const c = ctx()
+    for (let i = 0; i < 5; i++) {
+      const o = c.createOscillator(), g = c.createGain()
+      o.type = 'sine'; o.frequency.setValueAtTime(400 + i * 200, c.currentTime + i * 0.06)
+      o.frequency.exponentialRampToValueAtTime(800 + i * 300, c.currentTime + i * 0.06 + 0.5)
+      g.gain.setValueAtTime(0.02, c.currentTime + i * 0.06)
+      g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + i * 0.06 + 0.7)
+      o.connect(g); out(g)
+      o.start(c.currentTime + i * 0.06); o.stop(c.currentTime + i * 0.06 + 0.7)
+    }
+  }
+
+  // Resolve — warm major chord with slow release
   function sfxResolve() {
     const c = ctx()
-    ;[261, 329, 392, 523].forEach((freq, i) => {
+    ;[261.6, 329.6, 392, 523.2].forEach((freq, i) => {
       const o = c.createOscillator(), g = c.createGain()
-      o.connect(g); g.connect(c.destination)
-      o.type = 'sine'; o.frequency.setValueAtTime(freq, c.currentTime + i * 0.08)
-      g.gain.setValueAtTime(0.06, c.currentTime + i * 0.08)
-      g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + i * 0.08 + 1.5)
-      o.start(c.currentTime + i * 0.08); o.stop(c.currentTime + i * 0.08 + 1.5)
+      o.type = 'sine'; o.frequency.setValueAtTime(freq, c.currentTime + i * 0.1)
+      g.gain.setValueAtTime(0, c.currentTime + i * 0.1)
+      g.gain.linearRampToValueAtTime(0.05, c.currentTime + i * 0.1 + 0.05)
+      g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + i * 0.1 + 2.5)
+      o.connect(g); out(g)
+      o.start(c.currentTime + i * 0.1); o.stop(c.currentTime + i * 0.1 + 2.5)
+      // Add octave
+      const o2 = c.createOscillator(), g2 = c.createGain()
+      o2.type = 'sine'; o2.frequency.setValueAtTime(freq * 2, c.currentTime + i * 0.1)
+      g2.gain.setValueAtTime(0, c.currentTime + i * 0.1)
+      g2.gain.linearRampToValueAtTime(0.015, c.currentTime + i * 0.1 + 0.05)
+      g2.gain.exponentialRampToValueAtTime(0.001, c.currentTime + i * 0.1 + 1.5)
+      o2.connect(g2); out(g2)
+      o2.start(c.currentTime + i * 0.1); o2.stop(c.currentTime + i * 0.1 + 1.5)
     })
   }
 
-  // AI Voice — uses Web Speech API
-  function speak(text, delay = 0) {
-    setTimeout(() => {
-      try {
-        const u = new SpeechSynthesisUtterance(text)
-        u.rate = 0.95; u.pitch = 0.9; u.volume = 0.7
-        // Prefer a smooth voice
-        const voices = speechSynthesis.getVoices()
-        const good = voices.find(v => /samantha|karen|daniel|google.*female|microsoft.*zira/i.test(v.name))
-        if (good) u.voice = good
-        speechSynthesis.speak(u)
-      } catch {}
-    }, delay)
-  }
-
-  // ── SFX Scheduler — triggers sounds at specific times ──
+  // ── SFX Timeline ──
   function SFXLayer() {
-    const { time, playing } = useTimeline();
+    const { time } = useTimeline();
     const fired = React.useRef(new Set());
     const lastTime = React.useRef(0);
-
-    // Reset on replay (time jumps back to 0)
-    if (time < lastTime.current - 1) { fired.current.clear(); speechSynthesis.cancel() }
+    if (time < lastTime.current - 1) fired.current.clear()
     lastTime.current = time;
 
-    const trigger = (id, t, fn) => {
-      if (time >= t && !fired.current.has(id)) { fired.current.add(id); fn() }
-    }
+    const at = (id, t, fn) => { if (time >= t && !fired.current.has(id)) { fired.current.add(id); fn() } }
 
-    // Scene transitions
-    trigger('open', 0.2, () => sfxPulse())
-    trigger('open-voice', 0.4, () => speak("Hey Paula"))
-    trigger('chat-whoosh', 3.0, sfxWhoosh)
+    // Opening
+    at('open', 0.15, sfxImpact)
 
-    // Typing sounds during stream (4.8 – 5.8)
-    for (let i = 0; i < 12; i++) {
-      trigger('type'+i, 4.85 + i * 0.08, sfxType)
-    }
+    // Chat transition
+    at('chat', 3.0, sfxWhoosh)
 
-    // Stats chimes
-    trigger('stat0', 7.3, () => sfxChime(0))
-    trigger('stat1', 7.5, () => sfxChime(1))
-    trigger('stat2', 7.7, () => sfxChime(2))
-    trigger('stat3', 7.9, () => sfxChime(3))
+    // Typing ticks during stream
+    for (let i = 0; i < 8; i++) at('t'+i, 4.85 + i * 0.1, sfxTick)
+
+    // Stats — glass chimes ascending
+    at('s0', 7.3, () => sfxChime(0))
+    at('s1', 7.5, () => sfxChime(1))
+    at('s2', 7.7, () => sfxChime(2))
+    at('s3', 7.9, () => sfxChime(3))
 
     // Tagline
-    trigger('tag-whoosh', 10.0, sfxWhoosh)
-    trigger('tag-rise', 10.3, sfxRise)
-    trigger('tag-voice', 10.5, () => speak("fully automated AI trading"))
+    at('tw', 10.0, sfxWhoosh)
+    at('ts', 10.3, sfxShimmer)
 
-    // Cascade — soft ticks
-    for (let i = 0; i < 6; i++) {
-      trigger('cascade'+i, 12.3 + i * 0.6, sfxType)
-    }
+    // Cascade — subtle ticks
+    for (let i = 0; i < 6; i++) at('c'+i, 12.3 + i * 0.6, sfxTick)
 
     // Outro
-    trigger('outro-pulse', 17.0, sfxPulse)
-    trigger('outro-voice', 17.5, () => speak("Hey Paula"))
-    trigger('outro-resolve', 18.5, sfxResolve)
-    trigger('outro-tag', 18.8, () => speak("for everything trading"))
+    at('oi', 17.0, sfxImpact)
+    at('or', 18.4, sfxResolve)
 
     return null
   }
