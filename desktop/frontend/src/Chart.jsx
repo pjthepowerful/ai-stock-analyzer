@@ -16,12 +16,12 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
 
     const chart = createChart(containerRef.current, {
       width: containerRef.current.clientWidth, height,
-      layout: { background: { color: 'transparent' }, textColor: '#555570', fontFamily: 'Outfit, sans-serif', fontSize: 10 },
+      layout: { background: { color: 'transparent' }, textColor: '#666680', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", fontSize: 11 },
       grid: { vertLines: { color: 'rgba(28,28,40,0.3)' }, horzLines: { color: 'rgba(28,28,40,0.3)' } },
       crosshair: { mode: CrosshairMode.Normal,
-        vertLine: { color: 'rgba(16,185,129,0.15)', width: 1, style: 2, labelBackgroundColor: '#0c0c12', labelFont: '10px Outfit' },
-        horzLine: { color: 'rgba(16,185,129,0.15)', width: 1, style: 2, labelBackgroundColor: '#0c0c12', labelFont: '10px Outfit' } },
-      rightPriceScale: { borderColor: '#1c1c28', scaleMargins: { top: 0.08, bottom: 0.22 } },
+        vertLine: { color: 'rgba(16,185,129,0.15)', width: 1, style: 2, labelBackgroundColor: '#111118', labelFont: "11px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" },
+        horzLine: { color: 'rgba(16,185,129,0.15)', width: 1, style: 2, labelBackgroundColor: '#111118', labelFont: "11px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" } },
+      rightPriceScale: { borderColor: '#1c1c28', scaleMargins: { top: 0.08, bottom: 0.22 }, textColor: '#666680' },
       timeScale: { borderColor: '#1c1c28', timeVisible: true, secondsVisible: false },
       handleScroll: true, handleScale: true,
     })
