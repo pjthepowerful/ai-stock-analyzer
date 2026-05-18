@@ -179,14 +179,14 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 /* Chart */
 .chart-container { width: 100% }
 .chart-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap }
-.chart-sym { font-family: var(--mono); font-size: .78rem; font-weight: 600; color: var(--lt) }
+.chart-sym { font-family: var(--sans); font-size: .8rem; font-weight: 600; color: var(--lt) }
 .chart-periods { display: flex; gap: 1px; margin-left: auto; background: var(--c1); border-radius: 6px; padding: 2px; border: 1px solid var(--brd) }
-.cp { background: none; border: none; color: var(--dim); font-family: var(--mono); font-size: .5rem; padding: 3px 7px; cursor: pointer; border-radius: 4px; transition: .1s }
+.cp { background: none; border: none; color: var(--dim); font-family: var(--sans); font-size: .52rem; padding: 3px 7px; cursor: pointer; border-radius: 4px; transition: .1s }
 .cp:hover { color: var(--lt) } .cp-on { background: var(--c3); color: var(--grn) }
-.chart-legend { display: flex; gap: 6px; font-family: var(--mono); font-size: .48rem }
-.chart-ohlc { display: flex; gap: 10px; padding: 2px 0 4px; font-family: var(--mono); font-size: .56rem; color: var(--dim) }
-.chart-ohlc b { color: var(--txt); font-weight: 500 }
-.chart-signal { font-family: var(--mono); font-size: .54rem; padding: 2px 8px; border-radius: 4px; font-weight: 500 }
+.chart-legend { display: flex; gap: 6px; font-family: var(--sans); font-size: .48rem }
+.chart-ohlc { display: flex; gap: 10px; padding: 3px 0 4px; font-family: var(--sans); font-size: .58rem; color: var(--dim); letter-spacing: 0.01em }
+.chart-ohlc b { color: var(--lt); font-weight: 500 }
+.chart-signal { font-family: var(--sans); font-size: .56rem; padding: 2px 8px; border-radius: 4px; font-weight: 600 }
 .signal-buy { background: rgba(16,185,129,.06); color: var(--grn); border: 1px solid rgba(16,185,129,.12) }
 .signal-sell { background: rgba(239,68,68,.06); color: var(--red); border: 1px solid rgba(239,68,68,.12) }
 .chart-canvas { width: 100%; border-radius: 4px; overflow: hidden }
