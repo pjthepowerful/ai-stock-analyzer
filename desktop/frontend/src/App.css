@@ -302,6 +302,19 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .eq-svg { width: 100%; height: auto; display: block }
 
 
+/* ═══ Changelog ═══ */
+
+/* ═══ Backtest ═══ */
+.bt-run { padding: 10px 20px; border: 1px solid var(--brd); border-radius: 10px; background: var(--c1); color: var(--grn); font-family: var(--sans); font-size: .78rem; font-weight: 600; cursor: pointer; transition: .15s }
+.bt-run:hover { background: var(--c2); border-color: rgba(16,185,129,.2) }
+.bt-run:disabled { opacity: .4; cursor: not-allowed }
+.bt-ml { color: var(--lt) }
+.bt-ml:hover { border-color: rgba(139,92,246,.2); color: var(--pur) }
+.bt-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px }
+.bt-stat { background: var(--c1); border: 1px solid var(--brd); border-radius: 8px; padding: 12px; text-align: center }
+.bt-n { display: block; font-family: var(--mono); font-size: 1.1rem; font-weight: 700; color: var(--wh) }
+.bt-l { display: block; font-size: .46rem; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); margin-top: 3px; font-weight: 600 }
+
 /* ═══ Login ═══ */
 .cl-overlay { position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,.6); backdrop-filter: blur(6px); display: grid; place-items: center; animation: clIn .2s ease }
 @keyframes clIn { from { opacity: 0 } to { opacity: 1 } }

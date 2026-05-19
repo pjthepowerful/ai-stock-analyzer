@@ -677,6 +677,106 @@ async def market_regime():
     return {"ok": True, "data": regime}
 
 
+@app.post("/api/backtest")
+async def run_backtest_endpoint(authorization: str = Header(None)):
+    """Run backtest with current strategy params."""
+    import backtest
+    try:
+        # Load current auto-tuner params
+        config = {}
+        config_path = pathlib.Path(__file__).parent / "autopilot_config.json"
+        if config_path.exists():
+            config = json.loads(config_path.read_text())
+
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, lambda: backtest.run_backtest(
+            days=90,
+            min_score=config.get("MIN_SCORE", 75),
+            max_positions=config.get("MAX_POSITIONS", 2),
+            stop_pct=config.get("STOP_FLOOR", 0.01),
+        ))
+        return result
+    except Exception as e:
+        print(f"⚠️ Backtest error: {e}")
+        return {"ok": False, "error": str(e)[:200]}
+
+
+@app.post("/api/ml/train")
+async def train_ml():
+    """Train ML model on trade history."""
+    try:
+        log_path = pathlib.Path(__file__).parent / "trade_log.json"
+        if not log_path.exists():
+            return {"ok": False, "error": "No trade history yet"}
+
+        trades = json.loads(log_path.read_text())
+        if len(trades) < 10:
+            return {"ok": False, "error": f"Need 10+ trades, have {len(trades)}"}
+
+        # Build feature matrix from trade log
+        features = []
+        labels = []
+        for t in trades:
+            if t.get("pnl") is None:
+                continue
+            feat = {
+                "score": t.get("score", 50),
+                "rr_ratio": t.get("rr_ratio", 2.0),
+                "confluence": t.get("confluence", 3),
+                "hour": int(t.get("time", "12:00")[:2]) if t.get("time") else 12,
+            }
+            features.append(feat)
+            labels.append(1 if t.get("pnl", 0) > 0 else 0)
+
+        if len(features) < 10:
+            return {"ok": False, "error": f"Need 10+ completed trades, have {len(features)}"}
+
+        # Simple logistic-style scoring (no sklearn needed)
+        wins = [f for f, l in zip(features, labels) if l == 1]
+        losses_f = [f for f, l in zip(features, labels) if l == 0]
+
+        insights = {
+            "total_trades": len(features),
+            "wins": sum(labels),
+            "losses": len(labels) - sum(labels),
+            "win_rate": round(sum(labels) / len(labels) * 100, 1),
+        }
+
+        # Find patterns
+        if wins and losses_f:
+            avg_win_score = sum(w["score"] for w in wins) / len(wins)
+            avg_loss_score = sum(w["score"] for w in losses_f) / len(losses_f)
+            insights["avg_winning_score"] = round(avg_win_score, 1)
+            insights["avg_losing_score"] = round(avg_loss_score, 1)
+            insights["recommended_min_score"] = round((avg_win_score + avg_loss_score) / 2 + 5, 0)
+
+            # Best/worst hours
+            hour_wins = {}
+            hour_total = {}
+            for f, l in zip(features, labels):
+                h = f["hour"]
+                hour_total[h] = hour_total.get(h, 0) + 1
+                if l: hour_wins[h] = hour_wins.get(h, 0) + 1
+            best_hours = sorted(hour_total.keys(), key=lambda h: hour_wins.get(h, 0) / hour_total[h], reverse=True)
+            insights["best_hours"] = best_hours[:3]
+            insights["worst_hours"] = best_hours[-2:]
+
+            # Recommendations
+            recs = []
+            if avg_win_score > avg_loss_score + 5:
+                recs.append(f"Raise MIN_SCORE to {int(insights['recommended_min_score'])} — winning trades average {avg_win_score:.0f}")
+            if insights["win_rate"] < 45:
+                recs.append("Win rate below 45% — tighten entry criteria or widen stops")
+            if insights["win_rate"] > 55:
+                recs.append("Win rate above 55% — strategy is working, consider increasing position size")
+            insights["recommendations"] = recs
+
+        return {"ok": True, "insights": insights}
+    except Exception as e:
+        print(f"⚠️ ML error: {e}")
+        return {"ok": False, "error": str(e)[:200]}
+
+
 @app.get("/api/spy-trend")
 def spy_trend():
     """Get SPY intraday trend — sync, auto-threaded."""

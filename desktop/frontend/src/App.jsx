@@ -443,7 +443,7 @@ function MainApp({ user, token, logout }) {
             </>}
           </div>
           <nav className="hdr-nav">
-            {[['chat','Chat'],['stats','Stats'],['settings','Settings']].map(([v,label])=>(
+            {[['chat','Chat'],['backtest','Backtest'],['stats','Stats'],['settings','Settings']].map(([v,label])=>(
               <button key={v} className={'hdr-tab'+(view===v?' ht-on':'')} onClick={()=>{setView(v);if(v==='stats')loadDashboard()}}>{label}</button>
             ))}
           </nav>
@@ -464,7 +464,8 @@ function MainApp({ user, token, logout }) {
           </div>
         </div>
 
-        {view==='stats'?<DashView perf={perf}/>
+        {view==='backtest'?<BacktestView/>
+        :view==='stats'?<DashView perf={perf}/>
         
         :view==='settings'?<SetView settings={settings} update={updateSetting} user={user} token={token} logout={logout}/>
         :(<>
@@ -533,6 +534,122 @@ function MainApp({ user, token, logout }) {
 }
 
 const PHRASES = ["what's the play today?","ready to trade?","let's find some setups.","what are we watching?","let's get to work.","what's on your radar?","let's make some moves."]
+function BacktestView() {
+  const [result, setResult] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [mlInsights, setMlInsights] = useState(null)
+  const [mlLoading, setMlLoading] = useState(false)
+
+  const runBacktest = async () => {
+    setLoading(true)
+    try {
+      const r = await f(API + '/api/backtest', { method: 'POST' }).then(r => r.json())
+      if (r.ok) setResult(r)
+    } catch {}
+    setLoading(false)
+  }
+
+  const runML = async () => {
+    setMlLoading(true)
+    try {
+      const r = await f(API + '/api/ml/train', { method: 'POST' }).then(r => r.json())
+      if (r.ok) setMlInsights(r.insights)
+    } catch {}
+    setMlLoading(false)
+  }
+
+  const s = result?.stats
+  return (
+    <div className="view-scroll">
+      <h2 className="view-h">Backtest</h2>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <button className="bt-run" onClick={runBacktest} disabled={loading}>
+          {loading ? 'Running...' : '▶ Run 90-Day Backtest'}
+        </button>
+        <button className="bt-run bt-ml" onClick={runML} disabled={mlLoading}>
+          {mlLoading ? 'Training...' : '🧠 Analyze Trades'}
+        </button>
+      </div>
+
+      {!result && !loading && <div className="view-msg">Run a backtest to see how the strategy would have performed on historical data.</div>}
+
+      {s && <>
+        {/* Stats grid */}
+        <div className="bt-stats">
+          <div className="bt-stat"><span className="bt-n">{s.total_trades}</span><span className="bt-l">Trades</span></div>
+          <div className="bt-stat"><span className={'bt-n '+(s.win_rate>=50?'up':'dn')}>{s.win_rate}%</span><span className="bt-l">Win Rate</span></div>
+          <div className="bt-stat"><span className={'bt-n '+(s.total_pnl>=0?'up':'dn')}>${Math.abs(s.total_pnl).toLocaleString()}</span><span className="bt-l">Total P&L</span></div>
+          <div className="bt-stat"><span className={'bt-n '+(s.total_pnl_pct>=0?'up':'dn')}>{s.total_pnl_pct>0?'+':''}{s.total_pnl_pct}%</span><span className="bt-l">Return</span></div>
+          <div className="bt-stat"><span className="bt-n">{s.profit_factor}</span><span className="bt-l">Profit Factor</span></div>
+          <div className="bt-stat"><span className="bt-n dn">{s.max_drawdown}%</span><span className="bt-l">Max Drawdown</span></div>
+          <div className="bt-stat"><span className="bt-n up">${s.avg_win}</span><span className="bt-l">Avg Win</span></div>
+          <div className="bt-stat"><span className="bt-n dn">${Math.abs(s.avg_loss)}</span><span className="bt-l">Avg Loss</span></div>
+        </div>
+
+        {/* Equity curve */}
+        {result.equity_curve?.length > 0 && (
+          <div className="card wide" style={{marginTop: 12}}>
+            <label>Equity Curve — {s.days} days</label>
+            <svg viewBox={`0 0 ${result.equity_curve.length} 100`} className="eq-svg" preserveAspectRatio="none">
+              {(() => {
+                const pts = result.equity_curve
+                const vals = pts.map(p => p.equity)
+                const min = Math.min(...vals) * 0.999
+                const max = Math.max(...vals) * 1.001
+                const range = max - min || 1
+                const path = pts.map((p, i) => `${i},${100 - ((p.equity - min) / range) * 90 - 5}`).join(' ')
+                const final = pts[pts.length - 1].equity
+                const color = final >= s.initial_capital ? '#10b981' : '#ef4444'
+                return <>
+                  <polyline points={path} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+                  <polyline points={`0,${100 - ((s.initial_capital - min) / range) * 90 - 5} ${pts.length},${100 - ((s.initial_capital - min) / range) * 90 - 5}`} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="1" strokeDasharray="4" vectorEffect="non-scaling-stroke" />
+                </>
+              })()}
+            </svg>
+          </div>
+        )}
+
+        {/* Trade log */}
+        <div className="card wide" style={{marginTop: 12}}>
+          <label>Recent Trades ({result.trades?.length})</label>
+          {result.trades?.slice().reverse().slice(0, 20).map((t, i) => (
+            <div key={i} className="tr-row">
+              <span className={'tr-act ' + (t.pnl >= 0 ? 'up' : 'dn')}>{t.result === 'target' ? 'TP' : 'SL'}</span>
+              <span className="tr-sym">{t.ticker}</span>
+              <span style={{ fontSize: '.56rem', color: 'var(--dim)', fontFamily: 'var(--mono)' }}>${t.entry}→${t.exit}</span>
+              <span className={'tr-time ' + (t.pnl >= 0 ? 'up' : 'dn')} style={{fontWeight: 600}}>{t.pnl >= 0 ? '+' : ''}{t.pnl}</span>
+            </div>
+          ))}
+        </div>
+      </>}
+
+      {/* ML Insights */}
+      {mlInsights && (
+        <div className="card wide" style={{marginTop: 12}}>
+          <label>🧠 ML Insights — {mlInsights.total_trades} trades analyzed</label>
+          <div className="bt-stats" style={{marginBottom: 12}}>
+            <div className="bt-stat"><span className="bt-n">{mlInsights.win_rate}%</span><span className="bt-l">Win Rate</span></div>
+            <div className="bt-stat"><span className="bt-n">{mlInsights.avg_winning_score || '—'}</span><span className="bt-l">Avg Win Score</span></div>
+            <div className="bt-stat"><span className="bt-n">{mlInsights.avg_losing_score || '—'}</span><span className="bt-l">Avg Loss Score</span></div>
+            <div className="bt-stat"><span className="bt-n up">{mlInsights.recommended_min_score || '—'}</span><span className="bt-l">Recommended Min</span></div>
+          </div>
+          {mlInsights.best_hours && <div style={{fontSize: '.68rem', color: 'var(--dim)', marginBottom: 6}}>Best trading hours: {mlInsights.best_hours.map(h => `${h}:00`).join(', ')}</div>}
+          {mlInsights.recommendations?.length > 0 && (
+            <div style={{display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8}}>
+              {mlInsights.recommendations.map((r, i) => (
+                <div key={i} style={{fontSize: '.72rem', color: 'var(--lt)', padding: '8px 12px', background: 'var(--c2)', borderRadius: 8, borderLeft: '3px solid var(--grn)'}}>
+                  {r}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ChartTabs({ tickers, signal }) {
   const [active, setActive] = useState(0)
   if (!tickers || !tickers.length) return null
