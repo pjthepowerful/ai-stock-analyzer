@@ -222,8 +222,25 @@ function MainApp({ user, token, logout }) {
           if (event === 'autopilot') {
             if (data.status === 'started') { setAutopilot(true) }
             if (data.status === 'stopped') { setAutopilot(false) }
-            if (data.log) {
+            if (data.status === 'scanned' && data.log && data.log.length > 0) {
               if (settingsRef.current.scanSound !== false) playNotify()
+              const summary = data.log.slice(0, 8).join('\n')
+              const extra = data.buys || data.sells || data.shorts
+                ? `\n\n**Trades:** ${data.buys||0} bought, ${data.sells||0} sold, ${data.shorts||0} shorted`
+                : ''
+              setMessages(prev => [...prev, {
+                role: 'assistant',
+                content: `📡 **Scan Complete** — ${data.scanned||'?'} stocks scanned\n\n${summary}${extra}`,
+                type: 'autopilot'
+              }])
+            }
+            if (data.status === 'paused' && data.reason) {
+              // Only show paused once
+              setMessages(prev => {
+                const lastAP = [...prev].reverse().find(m => m.type === 'autopilot')
+                if (lastAP && lastAP.content.includes('paused')) return prev
+                return [...prev, { role: 'assistant', content: `⏸ **Autopilot paused** — ${data.reason}`, type: 'autopilot' }]
+              })
             }
           }
           if (event === 'trade') {
@@ -285,6 +302,10 @@ function MainApp({ user, token, logout }) {
     setSending(true)
     setInput('')
     setView('chat')
+
+    // Force new chat for autopilot commands
+    const isAP = /^(autopilot|start|stop)\s*$/i.test(msg.trim()) || /autopilot/i.test(msg)
+    if (isAP) newChat()
 
     // Always ensure chat exists
     const targetId = ensureChat()
@@ -450,11 +471,22 @@ function MainApp({ user, token, logout }) {
           <div className="hdr-right">
             <button className={'hdr-ap'+(autopilot?' hap-on':'')} onClick={async ()=>{
               const wasOn = autopilot
-              setAutopilot(!wasOn) // optimistic toggle
+              // Always create a new chat for autopilot
+              newChat()
+              setAutopilot(!wasOn)
+              // Title the chat
+              const apId = chatIdRef.current
+              persist(chatsRef.current.map(c => c.id === apId ? { ...c, title: wasOn ? 'Autopilot Off' : 'Autopilot Session' } : c))
               try {
                 const r = await f(API+'/api/autopilot/'+(wasOn?'stop':'start'),{method:'POST'}).then(r=>r.json())
-                if (!r.ok) setAutopilot(wasOn) // revert on failure
-                addToast(wasOn ? 'Autopilot off' : 'Autopilot scanning', wasOn ? 'warn' : 'buy')
+                if (!r.ok) { setAutopilot(wasOn); return }
+                setMessages(prev => [...prev, {
+                  role: 'assistant',
+                  content: wasOn
+                    ? '🔴 **Autopilot stopped.** No longer scanning for trades.'
+                    : '🟢 **Autopilot started.** Scanning every 5 minutes.\n\nScan logs will appear here as Paula finds opportunities.',
+                  type: 'autopilot'
+                }])
               } catch { setAutopilot(wasOn) }
               refreshData()
             }}>
