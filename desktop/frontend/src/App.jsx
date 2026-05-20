@@ -582,7 +582,7 @@ function MainApp({ user, token, logout }) {
                       {m.time&&!m.streaming&&<div className="msg-time">{m.time}</div>}
                     </div>
                   </div>
-                ):(<div className="user-bubble">{m.content}</div>{m.time&&<div className="msg-time">{m.time}</div>})}
+                ):(<><div className="user-bubble">{m.content}</div>{m.time&&<div className="msg-time">{m.time}</div>}</>)}
               </div>))}
             {sending&&!messages.some(m=>m.streaming)&&<div className="msg msg-assistant"><div className="ai"><div className="ai-av">P</div><div className="ai-body"><div className="ai-name">Paula</div><div className="loading-state"><div className="dots"><span/><span/><span/></div><span className="loading-txt">{loadingText}</span></div></div></div></div>}
             <div ref={messagesEnd}/>
