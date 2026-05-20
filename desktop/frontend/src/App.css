@@ -8,6 +8,7 @@
   --c3: #17171f;
   --brd: #15151e;
   --dim: #33334a;
+  --chat-fs: 15px;
   --txt: #7a7a96;
   --lt: #b8b8cc;
   --wh: #eaeaf2;
@@ -158,7 +159,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 
 /* User messages */
 .msg-user { display: flex; justify-content: flex-end; padding: 4px 0 }
-.user-bubble { width: fit-content; background: var(--c2); border: 1px solid var(--brd); border-radius: 18px 18px 4px 18px; padding: 10px 18px; max-width: 85%; font-size: .88rem; color: var(--wh); line-height: 1.55 }
+.user-bubble { width: fit-content; background: var(--c2); border: 1px solid var(--brd); border-radius: 18px 18px 4px 18px; padding: 10px 18px; max-width: 85%; font-size: var(--chat-fs); color: var(--wh); line-height: 1.55 }
 
 /* AI messages */
 .msg-assistant { padding: 8px 0 }
@@ -166,7 +167,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .ai-av { width: 28px; height: 28px; border-radius: 50%; background: var(--grn); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 11px; color: var(--bg); flex-shrink: 0; margin-top: 2px; font-family: var(--mono) }
 .ai-body { flex: 1; min-width: 0 }
 .ai-name { font-size: .64rem; font-weight: 600; color: var(--dim); margin-bottom: 4px; letter-spacing: .02em }
-.ai-txt { font-size: .88rem; color: var(--lt); line-height: 1.75 }
+.ai-txt { font-size: var(--chat-fs); color: var(--lt); line-height: 1.75 }
 .ai-txt strong { color: var(--wh); font-weight: 600 }
 .ai-txt code { font-size: .8rem }
 .stream-cursor { color: var(--grn); animation: blinkcur .5s step-end infinite; font-weight: 300 }
@@ -303,6 +304,43 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 
 
 /* ═══ Changelog ═══ */
+
+/* ═══ New Features ═══ */
+.msg-time { font-size: .48rem; color: var(--dim); opacity: .5; margin-top: 3px; font-family: var(--sans) }
+.msg-user .msg-time { text-align: right }
+.loading-state { display: flex; align-items: center; gap: 10px }
+.loading-txt { font-size: .68rem; color: var(--dim); font-style: italic }
+.cl-section { font-size: .48rem; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); padding: 10px 14px 4px; font-weight: 700 }
+.ci-pinned { border-left: 2px solid var(--grn) }
+.ci-acts { display: flex; gap: 0; opacity: 0; transition: .1s }
+.chat-item:hover .ci-acts { opacity: 1 }
+.ci-pin { background: none; border: none; font-size: .5rem; cursor: pointer; padding: 2px 4px; opacity: .5 }
+.ci-pin:hover { opacity: 1 }
+.hdr-ver { background: none; border: 1px solid var(--brd); border-radius: 6px; padding: 2px 8px; font-family: var(--mono); font-size: .52rem; color: var(--dim); cursor: pointer; transition: .15s }
+.hdr-ver:hover { color: var(--grn); border-color: rgba(16,185,129,.2) }
+
+/* Welcome widgets */
+.w-widgets { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center }
+.ww { background: var(--c1); border: 1px solid var(--brd); border-radius: 10px; padding: 10px 16px; text-align: center; min-width: 80px }
+.ww-up { border-color: rgba(16,185,129,.15) }
+.ww-dn { border-color: rgba(239,68,68,.15) }
+.ww-n { display: block; font-family: var(--mono); font-size: .88rem; font-weight: 700; color: var(--wh) }
+.ww-l { display: block; font-size: .44rem; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); margin-top: 2px; font-weight: 600 }
+
+/* Settings overhaul */
+.color-picks { display: flex; gap: 6px }
+.color-dot { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; transition: .12s }
+.color-dot:hover { transform: scale(1.15) }
+.cd-on { border-color: var(--wh); box-shadow: 0 0 8px rgba(255,255,255,.15) }
+.font-picks { display: flex; gap: 3px; background: var(--c2); border-radius: 6px; padding: 2px }
+.fp-btn { background: none; border: none; color: var(--dim); font-family: var(--sans); font-size: .6rem; padding: 4px 10px; cursor: pointer; border-radius: 4px; transition: .1s }
+.fp-btn:hover { color: var(--lt) }
+.fp-on { background: var(--c1); color: var(--grn) }
+.s-status { font-family: var(--mono); font-size: .7rem; font-weight: 600 }
+.s-on { color: var(--grn) }
+.s-ver { font-family: var(--mono); font-size: .7rem; color: var(--dim) }
+.tog-danger { color: var(--rd) !important; border-color: rgba(239,68,68,.2) !important }
+.tog-danger:hover { background: rgba(239,68,68,.08) !important }
 
 /* ═══ Backtest ═══ */
 .bt-run { padding: 10px 20px; border: 1px solid var(--brd); border-radius: 10px; background: var(--c1); color: var(--grn); font-family: var(--sans); font-size: .78rem; font-weight: 600; cursor: pointer; transition: .15s }

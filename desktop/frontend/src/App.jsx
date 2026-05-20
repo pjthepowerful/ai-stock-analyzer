@@ -104,6 +104,7 @@ function MainApp({ user, token, logout }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [loadingText, setLoadingText] = useState('')
   const [account, setAccount] = useState(null)
   const [positions, setPositions] = useState([])
   const [autopilot, setAutopilot] = useState(false)
@@ -114,14 +115,22 @@ function MainApp({ user, token, logout }) {
   const [view, setView] = useState('chat')
   const [perf, setPerf] = useState(null)
   const [showChangelog, setShowChangelog] = useState(() => {
-    const v = '2.1'
+    const v = '2.2'
     const seen = localStorage.getItem('paula-changelog-seen')
     if (seen !== v) return true
     return false
   })
-  const dismissChangelog = () => { setShowChangelog(false); localStorage.setItem('paula-changelog-seen', '2.1') }
+  const dismissChangelog = () => { setShowChangelog(false); localStorage.setItem('paula-changelog-seen', '2.2') }
   
   const [sideOpen, setSideOpen] = useState(window.innerWidth > 768)
+  const [pinnedChats, setPinnedChats] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('paula-pinned') || '[]') } catch { return [] }
+  })
+  const togglePin = (id) => {
+    const next = pinnedChats.includes(id) ? pinnedChats.filter(x => x !== id) : [...pinnedChats, id]
+    setPinnedChats(next)
+    localStorage.setItem('paula-pinned', JSON.stringify(next))
+  }
 
   // ── Chat system ──
   const chatsRef = useRef(JSON.parse(localStorage.getItem('paula-chats') || '[]'))
@@ -193,7 +202,11 @@ function MainApp({ user, token, logout }) {
     try { return JSON.parse(localStorage.getItem('paula-settings')) || {} } catch { return {} }
   })
   const settingsRef = useRef(settings)
-  useEffect(() => { settingsRef.current = settings }, [settings])
+  useEffect(() => {
+    settingsRef.current = settings
+    if (settings.accent) document.documentElement.style.setProperty('--grn', settings.accent)
+    if (settings.fontSize) document.documentElement.style.setProperty('--chat-fs', settings.fontSize)
+  }, [settings])
   const updateSetting = (k, v) => { const n = { ...settings, [k]: v }; setSettings(n); localStorage.setItem('paula-settings', JSON.stringify(n)) }
   const snd = (fn) => { if (settingsRef.current.sounds !== false) fn() }
 
@@ -282,6 +295,16 @@ function MainApp({ user, token, logout }) {
   }, [refreshData])
   useEffect(() => { messagesEnd.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n') { e.preventDefault(); newChat(); setView('chat') }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); inputRef.current?.focus() }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
   // Ensure a chat exists and return its ID
   const ensureChat = () => {
     const currentId = chatIdRef.current
@@ -302,6 +325,14 @@ function MainApp({ user, token, logout }) {
     setSending(true)
     setInput('')
     setView('chat')
+    // Set loading text
+    const ml = msg.toLowerCase()
+    if (/^analyze |^check |tell me about/i.test(ml)) { const tk = msg.match(/[A-Z]{1,5}/); setLoadingText(tk ? 'Analyzing ' + tk[0] + '...' : 'Analyzing...') }
+    else if (/market|regime|spy/i.test(ml)) setLoadingText('Checking market conditions...')
+    else if (/buy|sell|short|cover/i.test(ml)) setLoadingText('Executing trade...')
+    else if (/gain|mover|top|scan/i.test(ml)) setLoadingText('Scanning market...')
+    else if (/recap|today|performance/i.test(ml)) setLoadingText('Loading recap...')
+    else setLoadingText('Thinking...')
 
     // Force new chat for autopilot commands
     const isAP = /^(autopilot|start|stop)\s*$/i.test(msg.trim()) || /autopilot/i.test(msg)
@@ -312,7 +343,7 @@ function MainApp({ user, token, logout }) {
     const isFirstMsg = messages.length === 0
 
     // Show user message immediately
-    setMessages(prev => [...prev, { role: 'user', content: msg }])
+    setMessages(prev => [...prev, { role: 'user', content: msg, time: new Date().toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'}) }])
 
     try {
       const res = await f(API + '/api/chat', {
@@ -329,7 +360,8 @@ function MainApp({ user, token, logout }) {
         setMessages(prev => [...prev, {
           role: 'assistant', content: '', streaming: true,
           type: data.type, ticker: data.ticker || null,
-          tickers: data.tickers || [], signal: data.trade_signal || null
+          tickers: data.tickers || [], signal: data.trade_signal || null,
+          time: new Date().toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'})
         }])
 
         // Reveal words
@@ -380,6 +412,7 @@ function MainApp({ user, token, logout }) {
     }
 
     setSending(false)
+    setLoadingText('')
     inputRef.current?.focus()
   }
 
@@ -402,17 +435,19 @@ function MainApp({ user, token, logout }) {
       {showChangelog&&<div className="cl-overlay" onClick={dismissChangelog}>
         <div className="cl-modal" onClick={e=>e.stopPropagation()}>
           <div className="cl-header">
-            <span className="cl-badge">v2.1</span>
+            <span className="cl-badge">v2.2</span>
             <span className="cl-title">What's New</span>
             <button className="cl-close" onClick={dismissChangelog}>×</button>
           </div>
           <div className="cl-body">
-            <div className="cl-item"><span className="cl-icon">⚡</span><div><b>Typing Animation</b><p>Paula's responses now appear word-by-word with a blinking cursor</p></div></div>
-            <div className="cl-item"><span className="cl-icon">📊</span><div><b>Multi-Chart Tabs</b><p>Ask about multiple stocks — click tabs to switch between charts</p></div></div>
-            <div className="cl-item"><span className="cl-icon">🔔</span><div><b>Detailed Notifications</b><p>Hourly status, P&L milestones, trade alerts with full details</p></div></div>
-            <div className="cl-item"><span className="cl-icon">🎨</span><div><b>Redesigned UI</b><p>Cleaner sidebar, header bar with account info, new welcome prompts</p></div></div>
-            <div className="cl-item"><span className="cl-icon">🔐</span><div><b>Login System</b><p>Your API keys and chats are saved — just sign in and trade</p></div></div>
-            <div className="cl-item"><span className="cl-icon">🤖</span><div><b>Instant Autopilot</b><p>Toggle on/off from the header — no more chat commands needed</p></div></div>
+            <div className="cl-item"><span className="cl-icon">📌</span><div><b>Pin Chats</b><p>Pin important conversations to the top of the sidebar</p></div></div>
+            <div className="cl-item"><span className="cl-icon">⏱️</span><div><b>Timestamps</b><p>See when each message was sent — small time under every bubble</p></div></div>
+            <div className="cl-item"><span className="cl-icon">⌨️</span><div><b>Keyboard Shortcuts</b><p>Cmd+N new chat, Cmd+K focus input — power user ready</p></div></div>
+            <div className="cl-item"><span className="cl-icon">🎨</span><div><b>Accent Colors</b><p>Pick your color — green, blue, purple, cyan, pink, or orange</p></div></div>
+            <div className="cl-item"><span className="cl-icon">📊</span><div><b>Welcome Widgets</b><p>See equity, P&L, positions, and autopilot status at a glance</p></div></div>
+            <div className="cl-item"><span className="cl-icon">⚡</span><div><b>Loading States</b><p>Paula tells you what she's doing — "Analyzing AAPL..." not just dots</p></div></div>
+            <div className="cl-item"><span className="cl-icon">🧪</span><div><b>Backtest Engine</b><p>Run 90-day historical backtests with equity curve and trade log</p></div></div>
+            <div className="cl-item"><span className="cl-icon">⚙️</span><div><b>Settings Overhaul</b><p>API keys, accent colors, font sizes, data export, autopilot control</p></div></div>
           </div>
           <button className="cl-dismiss" onClick={dismissChangelog}>Got it</button>
         </div>
@@ -426,11 +461,23 @@ function MainApp({ user, token, logout }) {
         </div>
         <button className="new-chat" onClick={newChat}>+ New Chat</button>
         <div className="chat-list">
-          {chats.slice(0, 20).map(c => (
+          {pinnedChats.length > 0 && <div className="cl-section">Pinned</div>}
+          {chats.filter(c => pinnedChats.includes(c.id)).map(c => (
+            <div key={c.id} className={'chat-item ci-pinned' + (chatId === c.id ? ' ci-active' : '')} onClick={() => {switchChat(c.id);setView('chat')}}>
+              <span className="ci-icon">📌</span>
+              <span className="ci-title">{c.title}</span>
+              <button className="ci-pin" onClick={(e) => { e.stopPropagation(); togglePin(c.id) }} title="Unpin">✕</button>
+            </div>
+          ))}
+          {pinnedChats.length > 0 && chats.filter(c => !pinnedChats.includes(c.id)).length > 0 && <div className="cl-section">Recent</div>}
+          {chats.filter(c => !pinnedChats.includes(c.id)).slice(0, 20).map(c => (
             <div key={c.id} className={'chat-item' + (chatId === c.id ? ' ci-active' : '')} onClick={() => {switchChat(c.id);setView('chat')}}>
               <span className="ci-icon">{chatEmoji(c.title)}</span>
               <span className="ci-title">{c.title}</span>
-              <button className="ci-del" onClick={(e) => { e.stopPropagation(); deleteChat(c.id) }}>×</button>
+              <div className="ci-acts">
+                <button className="ci-pin" onClick={(e) => { e.stopPropagation(); togglePin(c.id) }} title="Pin">📌</button>
+                <button className="ci-del" onClick={(e) => { e.stopPropagation(); deleteChat(c.id) }}>×</button>
+              </div>
             </div>
           ))}
         </div>
@@ -469,29 +516,7 @@ function MainApp({ user, token, logout }) {
             ))}
           </nav>
           <div className="hdr-right">
-            <button className={'hdr-ap'+(autopilot?' hap-on':'')} onClick={async ()=>{
-              const wasOn = autopilot
-              // Always create a new chat for autopilot
-              newChat()
-              setAutopilot(!wasOn)
-              // Title the chat
-              const apId = chatIdRef.current
-              persist(chatsRef.current.map(c => c.id === apId ? { ...c, title: wasOn ? 'Autopilot Off' : 'Autopilot Session' } : c))
-              try {
-                const r = await f(API+'/api/autopilot/'+(wasOn?'stop':'start'),{method:'POST'}).then(r=>r.json())
-                if (!r.ok) { setAutopilot(wasOn); return }
-                setMessages(prev => [...prev, {
-                  role: 'assistant',
-                  content: wasOn
-                    ? '🔴 **Autopilot stopped.** No longer scanning for trades.'
-                    : '🟢 **Autopilot started.** Scanning every 5 minutes.\n\nScan logs will appear here as Paula finds opportunities.',
-                  type: 'autopilot'
-                }])
-              } catch { setAutopilot(wasOn) }
-              refreshData()
-            }}>
-              <span className={'ap-dot'+(autopilot?' dot-on':'')}/>{autopilot?'Scanning':'Off'}
-            </button>
+            <button className="hdr-ver" onClick={()=>setShowChangelog(true)}>v2.2</button>
             <button className="hdr-logout" onClick={logout}>Sign out</button>
           </div>
         </div>
@@ -499,7 +524,7 @@ function MainApp({ user, token, logout }) {
         {view==='backtest'?<BacktestView/>
         :view==='stats'?<DashView perf={perf}/>
         
-        :view==='settings'?<SetView settings={settings} update={updateSetting} user={user} token={token} logout={logout}/>
+        :view==='settings'?<SetView settings={settings} update={updateSetting} user={user} token={token} logout={logout} autopilot={autopilot} setAutopilot={setAutopilot} persist={persist} setActiveChatId={setActiveChatId} setMessages={setMessages} setShowChangelog={setShowChangelog}/>
         :(<>
           {selectedPos&&(()=>{const p=positions.find(x=>x.ticker===selectedPos);if(!p)return null;return(
             <div className="detail-bar">
@@ -521,6 +546,12 @@ function MainApp({ user, token, logout }) {
             {messages.length===0&&!sending&&(
               <div className="welcome">
                 <h1><span className="w-hi">Hey {name},</span> <Typewriter/></h1>
+                {account&&<div className="w-widgets">
+                  <div className="ww"><span className="ww-n">${account.equity?.toLocaleString(undefined,{maximumFractionDigits:0})}</span><span className="ww-l">Equity</span></div>
+                  <div className={'ww'+((account.daily_pnl||0)>=0?' ww-up':' ww-dn')}><span className="ww-n">{(account.daily_pnl||0)>=0?'+':''}{(account.daily_pnl||0).toFixed(0)}</span><span className="ww-l">Today</span></div>
+                  <div className="ww"><span className="ww-n">{positions.length}</span><span className="ww-l">Positions</span></div>
+                  <div className="ww"><span className={'ww-n '+(autopilot?'up':'')}>{autopilot?'Active':'Off'}</span><span className="ww-l">Autopilot</span></div>
+                </div>}
                 <div className="w-prompts">
                   {[
                     {q:'Market overview', a:'Check the regime, SPY trend, and whether it\'s safe to trade', cmd:'market regime'},
@@ -548,11 +579,12 @@ function MainApp({ user, token, logout }) {
                       ):m.ticker||m.tickers?.[0]?(
                         <div className="ai-chart"><Chart ticker={m.ticker||m.tickers[0]} signal={m.signal} height={260}/></div>
                       ):null}
+                      {m.time&&!m.streaming&&<div className="msg-time">{m.time}</div>}
                     </div>
                   </div>
-                ):(<div className="user-bubble">{m.content}</div>)}
+                ):(<div className="user-bubble">{m.content}</div>{m.time&&<div className="msg-time">{m.time}</div>})}
               </div>))}
-            {sending&&!messages.some(m=>m.streaming)&&<div className="msg msg-assistant"><div className="ai"><div className="ai-av">P</div><div className="ai-body"><div className="ai-name">Paula</div><div className="dots"><span/><span/><span/></div></div></div></div>}
+            {sending&&!messages.some(m=>m.streaming)&&<div className="msg msg-assistant"><div className="ai"><div className="ai-av">P</div><div className="ai-body"><div className="ai-name">Paula</div><div className="loading-state"><div className="dots"><span/><span/><span/></div><span className="loading-txt">{loadingText}</span></div></div></div></div>}
             <div ref={messagesEnd}/>
             </div>
           </div>
@@ -812,12 +844,11 @@ function DashView({perf}){
   </div>)
 }
 
-function SetView({settings,update,user,token,logout}){
+function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persist,setActiveChatId,setMessages,setShowChangelog}){
   const [keys, setKeys] = useState({alpaca_key:'',alpaca_secret:'',groq_key:'',polygon_key:''})
   const [keySaved, setKeySaved] = useState(false)
   const [keyLoaded, setKeyLoaded] = useState(false)
 
-  // Load saved keys on mount
   useEffect(()=>{
     if(token&&!keyLoaded){
       f(API+'/api/auth/me').then(r=>r.json()).then(d=>{
@@ -842,30 +873,88 @@ function SetView({settings,update,user,token,logout}){
     if(res.ok){setKeySaved(true);setTimeout(()=>setKeySaved(false),2000)}
   }
 
+  const accentColors = [
+    {name:'Green',val:'#10b981'},{name:'Blue',val:'#3b82f6'},{name:'Purple',val:'#8b5cf6'},
+    {name:'Cyan',val:'#06b6d4'},{name:'Pink',val:'#ec4899'},{name:'Orange',val:'#f59e0b'},
+  ]
+
+  const fontSizes = [{name:'Small',val:'13px'},{name:'Default',val:'15px'},{name:'Large',val:'17px'}]
+
   return(<div className="view-scroll"><h2 className="view-h">Settings</h2>
+
     {/* Account */}
     {user&&<div className="card wide"><label>Account</label>
-      <div className="s-row"><span>Logged in as</span><span className="s-user">{user.username}</span></div>
-      <div className="s-row"><span>Sign out</span><button className="tog" onClick={logout}>Logout</button></div>
+      <div className="s-row"><span>Username</span><span className="s-user">{user.username}</span></div>
+      <div className="s-row"><span>Display name</span><input className="s-inp" value={settings.userName||user?.username||''} onChange={e=>update('userName',e.target.value)} placeholder="Your name"/></div>
     </div>}
 
     {/* API Keys */}
-    {user&&<div className="card wide"><label>Alpaca</label>
-      <div className="s-row"><span>Alpaca Key</span><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.alpaca_key} onChange={e=>setKeys({...keys,alpaca_key:e.target.value})} placeholder="••••••••"/></div>
-      <div className="s-row"><span>Alpaca Secret</span><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.alpaca_secret} onChange={e=>setKeys({...keys,alpaca_secret:e.target.value})} placeholder="••••••••"/></div>
+    {user&&<div className="card wide"><label>API Keys</label>
+      <div className="s-row"><span>Alpaca Key</span><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.alpaca_key} onChange={e=>setKeys({...keys,alpaca_key:e.target.value})} placeholder="PKSPW..."/></div>
+      <div className="s-row"><span>Alpaca Secret</span><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.alpaca_secret} onChange={e=>setKeys({...keys,alpaca_secret:e.target.value})} placeholder="AzMr..."/></div>
+      <div className="s-row"><span>Groq Key</span><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.groq_key} onChange={e=>setKeys({...keys,groq_key:e.target.value})} placeholder="gsk_..."/></div>
+      <div className="s-row"><span>Polygon Key</span><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.polygon_key} onChange={e=>setKeys({...keys,polygon_key:e.target.value})} placeholder="wzJ5..."/></div>
       <button className={'login-btn s-save'+(keySaved?' s-saved':'')} onClick={saveKeys}>{keySaved?'✓ Saved':'Save Keys'}</button>
     </div>}
 
+    {/* Appearance */}
+    <div className="card wide"><label>Appearance</label>
+      <div className="s-row"><span>Accent Color</span>
+        <div className="color-picks">
+          {accentColors.map(c=>(
+            <button key={c.val} className={'color-dot'+(settings.accent===c.val||(!settings.accent&&c.val==='#10b981')?' cd-on':'')}
+              style={{background:c.val}} onClick={()=>{update('accent',c.val);document.documentElement.style.setProperty('--grn',c.val)}} title={c.name}/>
+          ))}
+        </div>
+      </div>
+      <div className="s-row"><span>Font Size</span>
+        <div className="font-picks">
+          {fontSizes.map(s=>(
+            <button key={s.val} className={'fp-btn'+(settings.fontSize===s.val||(!settings.fontSize&&s.val==='15px')?' fp-on':'')}
+              onClick={()=>{update('fontSize',s.val);document.documentElement.style.setProperty('--chat-fs',s.val)}}>{s.name}</button>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    {/* Sounds */}
     <div className="card wide"><label>Sounds</label>
       <Tog l="Trade sounds" on={settings.sounds!==false} fn={()=>update('sounds',!(settings.sounds!==false))}/>
       <Tog l="Scan notification" on={settings.scanSound!==false} fn={()=>update('scanSound',!(settings.scanSound!==false))}/>
     </div>
+
+    {/* Notifications */}
     <div className="card wide"><label>Notifications</label>
       <Tog l="Toast popups" on={settings.toasts!==false} fn={()=>update('toasts',!(settings.toasts!==false))}/>
-      <Tog l="Phone push" on={settings.pushNotif!==false} fn={()=>update('pushNotif',!(settings.pushNotif!==false))}/>
+      <Tog l="Phone notifications" on={settings.pushNotif!==false} fn={()=>update('pushNotif',!(settings.pushNotif!==false))}/>
     </div>
-    <div className="card wide"><label>Display</label>
-      <div className="s-row"><span>Name</span><input className="s-inp" value={settings.userName||user?.username||''} onChange={e=>update('userName',e.target.value)} placeholder="Your name"/></div>
+
+    {/* Autopilot */}
+    <div className="card wide"><label>Autopilot</label>
+      <div className="s-row"><span>Status</span><span className={'s-status'+(autopilot?' s-on':'')}>{autopilot?'Active':'Off'}</span></div>
+      <div className="s-row"><span>Control</span>
+        <button className={'tog'+(autopilot?' tog-on':'')} onClick={async ()=>{
+          const wasOn = autopilot; setAutopilot(!wasOn)
+          try { await f(API+'/api/autopilot/'+(wasOn?'stop':'start'),{method:'POST'}) } catch { setAutopilot(wasOn) }
+        }}>{autopilot?'Stop':'Start'}</button>
+      </div>
+    </div>
+
+    {/* Data */}
+    <div className="card wide"><label>Data</label>
+      <div className="s-row"><span>Clear all chats</span><button className="tog tog-danger" onClick={()=>{
+        if(confirm('Delete all chats? This cannot be undone.')){persist([]);setActiveChatId(null);setMessages([])}
+      }}>Clear</button></div>
+      <div className="s-row"><span>Export trade log</span><button className="tog" onClick={async ()=>{
+        try{const r=await f(API+'/api/trades').then(r=>r.json());if(r.ok){const b=new Blob([JSON.stringify(r.data,null,2)],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='paula-trades.json';a.click()}}catch{}
+      }}>Export</button></div>
+    </div>
+
+    {/* About */}
+    <div className="card wide"><label>About</label>
+      <div className="s-row"><span>Version</span><span className="s-ver">v2.2</span></div>
+      <div className="s-row"><span>What's new</span><button className="tog" onClick={()=>setShowChangelog(true)}>View</button></div>
+      <div className="s-row"><span>Sign out</span><button className="tog tog-danger" onClick={logout}>Logout</button></div>
     </div>
   </div>)
 }
