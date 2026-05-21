@@ -948,12 +948,12 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
 
     {/* Autopilot */}
     <div className="card wide"><label>Autopilot</label>
-      <div className="s-row"><span>Status</span><span className={'s-status'+(autopilot?' s-on':'')}>{autopilot?'Active':'Off'}</span></div>
-      <div className="s-row"><span>Control</span>
-        <button className={'tog'+(autopilot?' tog-on':'')} onClick={async ()=>{
+      <div className="s-row"><span>Status</span><span className={'s-status'+(autopilot?' s-on':'')}>{autopilot?'Scanning':'Off'}</span></div>
+      <div className="s-row"><span>Auto-scan</span>
+        <button className={'toggle-sw'+(autopilot?' sw-on':'')} onClick={async ()=>{
           const wasOn = autopilot; setAutopilot(!wasOn)
           try { await f(API+'/api/autopilot/'+(wasOn?'stop':'start'),{method:'POST'}) } catch { setAutopilot(wasOn) }
-        }}>{autopilot?'Stop':'Start'}</button>
+        }} role="switch" aria-checked={autopilot}><span className="sw-thumb"/></button>
       </div>
     </div>
 
@@ -976,7 +976,7 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
   </div>)
 }
 
-function Tog({l,on,fn}){return <div className="s-row"><span>{l}</span><button className={'tog'+(on?' tog-on':'')} onClick={fn}>{on?'ON':'OFF'}</button></div>}
+function Tog({l,on,fn}){return <div className="s-row"><span>{l}</span><button className={'toggle-sw'+(on?' sw-on':'')} onClick={fn} role="switch" aria-checked={on}><span className="sw-thumb"/></button></div>}
 
 function EqChart({data}){
   const [hover, setHover] = useState(null)

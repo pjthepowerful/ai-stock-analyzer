@@ -290,6 +290,14 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .s-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--brd); font-size: .74rem }
 .s-row:last-child { border-bottom: none }
 .tog { padding: 3px 10px; border-radius: 100px; font-size: .6rem; font-weight: 600; cursor: pointer; border: 1px solid var(--brd); background: var(--c2); color: var(--dim); font-family: var(--mono); transition: .15s }
+
+/* Toggle switch */
+.toggle-sw { position: relative; width: 40px; height: 22px; border-radius: 11px; border: none; background: var(--c3); cursor: pointer; padding: 0; transition: background .25s cubic-bezier(.16,1,.3,1); flex-shrink: 0 }
+.toggle-sw:hover { background: #1e1e2a }
+.sw-thumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--dim); transition: all .25s cubic-bezier(.16,1,.3,1); box-shadow: 0 1px 3px rgba(0,0,0,.3) }
+.sw-on { background: var(--grn) }
+.sw-on:hover { background: var(--grn2) }
+.sw-on .sw-thumb { left: 21px; background: #fff; box-shadow: 0 1px 4px rgba(16,185,129,.4) }
 .tog-on { background: rgba(16,185,129,.08); color: var(--grn); border-color: rgba(16,185,129,.2) }
 .s-inp { background: var(--c2); border: 1px solid var(--brd); border-radius: 6px; padding: 5px 8px; color: var(--lt); font-size: .72rem; font-family: var(--sans); width: 110px; outline: none; transition: .2s }
 .s-inp:focus { border-color: rgba(16,185,129,.3) }
