@@ -108,6 +108,7 @@ function MainApp({ user, token, logout }) {
   const [account, setAccount] = useState(null)
   const [positions, setPositions] = useState([])
   const [autopilot, setAutopilot] = useState(false)
+  const apChatRef = useRef(null) // tracks which chat ID autopilot logs go to
   const [connected, setConnected] = useState(false)
   const [spyTrend, setSpyTrend] = useState(null)
   const [selectedPos, setSelectedPos] = useState(null)
@@ -234,26 +235,46 @@ function MainApp({ user, token, logout }) {
           if (event === 'connected') setAutopilot(data.autopilot)
           if (event === 'autopilot') {
             if (data.status === 'started') { setAutopilot(true) }
-            if (data.status === 'stopped') { setAutopilot(false) }
+            if (data.status === 'stopped') { setAutopilot(false); apChatRef.current = null }
+
+            // Build the message
+            let apMsg = null
             if (data.status === 'scanned' && data.log && data.log.length > 0) {
               if (settingsRef.current.scanSound !== false) playNotify()
               const summary = data.log.slice(0, 8).join('\n')
               const extra = data.buys || data.sells || data.shorts
                 ? `\n\n**Trades:** ${data.buys||0} bought, ${data.sells||0} sold, ${data.shorts||0} shorted`
                 : ''
-              setMessages(prev => [...prev, {
-                role: 'assistant',
-                content: `📡 **Scan Complete** — ${data.scanned||'?'} stocks scanned\n\n${summary}${extra}`,
-                type: 'autopilot'
-              }])
+              apMsg = { role: 'assistant', content: `📡 **Scan Complete** — ${data.scanned||'?'} stocks scanned\n\n${summary}${extra}`, type: 'autopilot' }
             }
             if (data.status === 'paused' && data.reason) {
-              // Only show paused once
-              setMessages(prev => {
-                const lastAP = [...prev].reverse().find(m => m.type === 'autopilot')
-                if (lastAP && lastAP.content.includes('paused')) return prev
-                return [...prev, { role: 'assistant', content: `⏸ **Autopilot paused** — ${data.reason}`, type: 'autopilot' }]
-              })
+              apMsg = { role: 'assistant', content: `⏸ **Autopilot paused** — ${data.reason}`, type: 'autopilot' }
+            }
+
+            // Route to the autopilot chat
+            if (apMsg && apChatRef.current) {
+              if (chatIdRef.current === apChatRef.current) {
+                // User is viewing the autopilot chat — add directly
+                if (apMsg.content.includes('paused')) {
+                  setMessages(prev => {
+                    const lastAP = [...prev].reverse().find(m => m.type === 'autopilot')
+                    if (lastAP && lastAP.content.includes('paused')) return prev
+                    return [...prev, apMsg]
+                  })
+                } else {
+                  setMessages(prev => [...prev, apMsg])
+                }
+              } else {
+                // User is in a different chat — save to autopilot chat in localStorage
+                const apId = apChatRef.current
+                const updated = chatsRef.current.map(c => {
+                  if (c.id !== apId) return c
+                  const msgs = c.messages || []
+                  if (apMsg.content.includes('paused') && msgs.some(m => m.content?.includes('paused'))) return c
+                  return { ...c, messages: [...msgs, apMsg] }
+                })
+                persist(updated)
+              }
             }
           }
           if (event === 'trade') {
@@ -530,10 +551,12 @@ function MainApp({ user, token, logout }) {
               setAutopilot(!wasOn)
               newChat()
               const apId = chatIdRef.current
+              if (!wasOn) apChatRef.current = apId  // starting: lock logs to this chat
+              else apChatRef.current = null          // stopping: clear lock
               persist(chatsRef.current.map(c => c.id === apId ? { ...c, title: wasOn ? 'Autopilot Off' : 'Autopilot Session' } : c))
               try {
                 const r = await f(API+'/api/autopilot/'+(wasOn?'stop':'start'),{method:'POST'}).then(r=>r.json())
-                if (!r.ok) { setAutopilot(wasOn); return }
+                if (!r.ok) { setAutopilot(wasOn); apChatRef.current = wasOn ? apChatRef.current : null; return }
                 setMessages(prev => [...prev, {
                   role: 'assistant',
                   content: wasOn
@@ -541,7 +564,7 @@ function MainApp({ user, token, logout }) {
                     : '🟢 **Autopilot started.** Scanning every 5 minutes.\n\nLogs will appear here.',
                   type: 'autopilot'
                 }])
-              } catch { setAutopilot(wasOn) }
+              } catch { setAutopilot(wasOn); apChatRef.current = wasOn ? apChatRef.current : null }
               refreshData()
             }}>
               <span className={'ap-dot'+(autopilot?' dot-on':'')}/>{autopilot?'Scanning':'Autopilot'}
