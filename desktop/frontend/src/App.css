@@ -133,6 +133,19 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 
 /* ═══ Main content ═══ */
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--bg) }
+
+/* Positions strip */
+.pos-strip { display: flex; gap: 6px; padding: 6px 16px; border-bottom: 1px solid var(--brd); overflow-x: auto; flex-shrink: 0 }
+.pos-strip::-webkit-scrollbar { height: 0 }
+.ps-item { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--brd); background: var(--c1); cursor: pointer; transition: .12s; flex-shrink: 0; font-family: var(--mono) }
+.ps-item:hover { background: var(--c2) }
+.ps-sym { font-size: .64rem; font-weight: 700; color: var(--lt) }
+.ps-qty { font-size: .48rem; color: var(--dim) }
+.ps-pnl { font-size: .58rem; font-weight: 700 }
+.ps-up .ps-pnl { color: var(--grn3) }
+.ps-dn .ps-pnl { color: var(--red2) }
+.ps-up { border-color: rgba(16,185,129,.12) }
+.ps-dn { border-color: rgba(239,68,68,.12) }
 .ham { position: fixed; top: 10px; left: 10px; z-index: 100; background: var(--c1); border: 1px solid var(--brd); border-radius: 8px; color: var(--lt); font-size: 15px; padding: 5px 9px; cursor: pointer; display: none }
 
 /* Header bar */

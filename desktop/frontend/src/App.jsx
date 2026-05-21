@@ -245,7 +245,8 @@ function MainApp({ user, token, logout }) {
               const extra = data.buys || data.sells || data.shorts
                 ? `\n\n**Trades:** ${data.buys||0} bought, ${data.sells||0} sold, ${data.shorts||0} shorted`
                 : ''
-              apMsg = { role: 'assistant', content: `📡 **Scan Complete** — ${data.scanned||'?'} stocks scanned\n\n${summary}${extra}`, type: 'autopilot' }
+              const scanTime = data.log[0]?.match(/\d+:\d+ [AP]M/)?.[0] || ''
+              apMsg = { role: 'assistant', content: `📡 **Scan Complete** — ${data.scanned||'?'} stocks scanned\n\n${summary}${extra}`, type: 'autopilot', scanTime }
             }
             if (data.status === 'paused' && data.reason) {
               apMsg = { role: 'assistant', content: `⏸ **Autopilot paused** — ${data.reason}`, type: 'autopilot' }
@@ -254,7 +255,7 @@ function MainApp({ user, token, logout }) {
             // Route to the autopilot chat
             if (apMsg && apChatRef.current) {
               if (chatIdRef.current === apChatRef.current) {
-                // User is viewing the autopilot chat — add directly
+                // User is viewing the autopilot chat — add directly (dedup by scanTime)
                 if (apMsg.content.includes('paused')) {
                   setMessages(prev => {
                     const lastAP = [...prev].reverse().find(m => m.type === 'autopilot')
@@ -262,7 +263,12 @@ function MainApp({ user, token, logout }) {
                     return [...prev, apMsg]
                   })
                 } else {
-                  setMessages(prev => [...prev, apMsg])
+                  setMessages(prev => {
+                    // Don't add if last scan message has same time
+                    const lastScan = [...prev].reverse().find(m => m.type === 'autopilot' && m.content?.includes('Scan Complete'))
+                    if (lastScan && apMsg.scanTime && lastScan.scanTime === apMsg.scanTime) return prev
+                    return [...prev, apMsg]
+                  })
                 }
               } else {
                 // User is in a different chat — save to autopilot chat in localStorage
@@ -573,6 +579,20 @@ function MainApp({ user, token, logout }) {
             <button className="hdr-logout" onClick={logout}>↗</button>
           </div>
         </div>
+
+        {/* Positions strip */}
+        {positions.length > 0 && view === 'chat' && (
+          <div className="pos-strip">
+            {positions.map((p, i) => (
+              <button key={i} className={'ps-item' + (p.unrealized_pnl >= 0 ? ' ps-up' : ' ps-dn')}
+                onClick={() => setSelectedPos(selectedPos === p.ticker ? null : p.ticker)}>
+                <span className="ps-sym">{p.ticker}</span>
+                <span className="ps-qty">{Math.abs(p.qty)}{p.side === 'short' ? 'S' : 'L'}</span>
+                <span className="ps-pnl">{p.unrealized_pnl >= 0 ? '+' : ''}{p.unrealized_pnl.toFixed(0)}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {view==='backtest'?<BacktestView/>
         :view==='stats'?<DashView perf={perf}/>

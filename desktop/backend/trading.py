@@ -2570,6 +2570,8 @@ def route(msg: str) -> dict:
         "tell me which", "help me find", "what to buy", "what to sell",
         "give me", "find me", "pick me", "any good", "what do you think",
         "is it a good", "worth buying", "worth selling", "opinion",
+        "how many shares", "how many do i", "do i own", "do i have",
+        "am i holding", "shares do i", "my shares",
     ])
     # Stock recommendation questions → smart scan
     wants_picks = any(q in m for q in [
@@ -2636,7 +2638,9 @@ def route(msg: str) -> dict:
         return {"type": "portfolio"}
     if any(w in m for w in ["my positions", "what do i own", "what am i holding", "open positions", "show positions",
                             "what positions", "current positions", "what do we have", "what are we holding",
-                            "positions do we", "what stocks", "our positions"]):
+                            "positions do we", "our positions",
+                            "how many shares", "shares do i", "shares of", "do i own", "do i have",
+                            "am i holding", "my shares", "what am i long", "what am i short"]):
         return {"type": "positions"}
     if any(w in m for w in ["my orders", "open orders", "order history", "recent orders", "pending orders"]):
         return {"type": "orders"}
