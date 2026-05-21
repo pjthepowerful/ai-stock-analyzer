@@ -334,10 +334,6 @@ function MainApp({ user, token, logout }) {
     else if (/recap|today|performance/i.test(ml)) setLoadingText('Loading recap...')
     else setLoadingText('Thinking...')
 
-    // Force new chat for autopilot commands
-    const isAP = /^(autopilot|start|stop)\s*$/i.test(msg.trim()) || /autopilot/i.test(msg)
-    if (isAP) newChat()
-
     // Always ensure chat exists
     const targetId = ensureChat()
     const isFirstMsg = messages.length === 0
@@ -516,8 +512,29 @@ function MainApp({ user, token, logout }) {
             ))}
           </nav>
           <div className="hdr-right">
+            <button className={'hdr-ap'+(autopilot?' hap-on':'')} onClick={async ()=>{
+              const wasOn = autopilot
+              setAutopilot(!wasOn)
+              newChat()
+              const apId = chatIdRef.current
+              persist(chatsRef.current.map(c => c.id === apId ? { ...c, title: wasOn ? 'Autopilot Off' : 'Autopilot Session' } : c))
+              try {
+                const r = await f(API+'/api/autopilot/'+(wasOn?'stop':'start'),{method:'POST'}).then(r=>r.json())
+                if (!r.ok) { setAutopilot(wasOn); return }
+                setMessages(prev => [...prev, {
+                  role: 'assistant',
+                  content: wasOn
+                    ? '🔴 **Autopilot stopped.**'
+                    : '🟢 **Autopilot started.** Scanning every 5 minutes.\n\nLogs will appear here.',
+                  type: 'autopilot'
+                }])
+              } catch { setAutopilot(wasOn) }
+              refreshData()
+            }}>
+              <span className={'ap-dot'+(autopilot?' dot-on':'')}/>{autopilot?'Scanning':'Autopilot'}
+            </button>
             <button className="hdr-ver" onClick={()=>setShowChangelog(true)}>v2.2</button>
-            <button className="hdr-logout" onClick={logout}>Sign out</button>
+            <button className="hdr-logout" onClick={logout}>↗</button>
           </div>
         </div>
 
