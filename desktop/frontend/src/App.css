@@ -86,10 +86,12 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .chat-item:hover .ci-acts { opacity: 1 }
 .ci-act { width: 22px; height: 22px; border-radius: 5px; background: none; border: none; color: var(--dim); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: .1s; font-size: .5rem }
 .ci-act:hover { background: var(--c2); color: var(--lt) }
+.ci-pin-btn { font-size: 10px !important }
+.ci-pin-btn:hover { background: rgba(16,185,129,.08) !important }
 .ci-x:hover { color: var(--red) !important; background: rgba(239,68,68,.06) }
-.ci-unpin { opacity: 0; width: 22px; height: 22px; border-radius: 5px; background: none; border: none; color: var(--dim); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: .5rem; transition: .1s }
-.chat-item:hover .ci-unpin { opacity: 1 }
-.ci-unpin:hover { color: var(--red); background: rgba(239,68,68,.06) }
+.ci-unpin-btn { width: 22px; height: 22px; border-radius: 5px; background: none; border: none; color: var(--dim); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: .1s; opacity: 0.4 }
+.chat-item:hover .ci-unpin-btn { opacity: 1 }
+.ci-unpin-btn:hover { color: var(--red); background: rgba(239,68,68,.06) }
 
 .sb-acct { display: none }
 .acct-main { display: none }

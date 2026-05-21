@@ -467,7 +467,9 @@ function MainApp({ user, token, logout }) {
             <div key={c.id} className={'chat-item ci-pinned' + (chatId === c.id ? ' ci-active' : '')} onClick={() => {switchChat(c.id);setView('chat')}}>
               <span className="ci-icon">{chatEmoji(c.title)}</span>
               <span className="ci-title">{c.title}</span>
-              <button className="ci-act ci-unpin" onClick={(e) => { e.stopPropagation(); togglePin(c.id) }} title="Unpin">✕</button>
+              <button className="ci-act ci-unpin-btn" onClick={(e) => { e.stopPropagation(); togglePin(c.id) }} title="Unpin">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </button>
             </div>
           ))}
           {chats.filter(c => !pinnedChats.includes(c.id)).length > 0 && <div className="cl-section">{pinnedChats.length > 0 ? 'Recent' : 'Chats'}</div>}
@@ -476,9 +478,7 @@ function MainApp({ user, token, logout }) {
               <span className="ci-icon">{chatEmoji(c.title)}</span>
               <span className="ci-title">{c.title}</span>
               <div className="ci-acts">
-                <button className="ci-act" onClick={(e) => { e.stopPropagation(); togglePin(c.id) }} title="Pin">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M16 2l-4 4-6-1-1 5 4 4-2 8 3-3 4 4 5-1-1-6 4-4-6-1z"/></svg>
-                </button>
+                <button className="ci-act ci-pin-btn" onClick={(e) => { e.stopPropagation(); togglePin(c.id) }} title="Pin">📌</button>
                 <button className="ci-act ci-x" onClick={(e) => { e.stopPropagation(); deleteChat(c.id) }}>
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
