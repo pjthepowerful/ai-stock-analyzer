@@ -951,7 +951,7 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
     {name:'Cyan',val:'#06b6d4'},{name:'Pink',val:'#ec4899'},{name:'Orange',val:'#f59e0b'},
   ]
 
-  const fontSizes = [{name:'Small',val:'13px'},{name:'Default',val:'15px'},{name:'Large',val:'17px'}]
+  const fontSizes = [{name:'Small',val:'13px',display:12},{name:'Default',val:'15px',display:15},{name:'Large',val:'17px',display:18}]
 
   return(<div className="view-scroll"><h2 className="view-h">Settings</h2>
 
@@ -984,7 +984,10 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
         <div className="font-picks">
           {fontSizes.map(s=>(
             <button key={s.val} className={'fp-btn'+(settings.fontSize===s.val||(!settings.fontSize&&s.val==='15px')?' fp-on':'')}
-              onClick={()=>{update('fontSize',s.val);document.documentElement.style.setProperty('--chat-fs',s.val)}}>{s.name}</button>
+              onClick={()=>{update('fontSize',s.val);document.documentElement.style.setProperty('--chat-fs',s.val)}}>
+              <span className="fp-aa" style={{fontSize:s.display+'px'}}>Aa</span>
+              <span className="fp-label">{s.name}</span>
+            </button>
           ))}
         </div>
       </div>

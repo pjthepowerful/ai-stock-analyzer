@@ -370,10 +370,12 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .color-dot { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; transition: .12s }
 .color-dot:hover { transform: scale(1.15) }
 .cd-on { border-color: var(--wh); box-shadow: 0 0 8px rgba(255,255,255,.15) }
-.font-picks { display: flex; gap: 3px; background: var(--c2); border-radius: 6px; padding: 2px }
-.fp-btn { background: none; border: none; color: var(--dim); font-family: var(--sans); font-size: .6rem; padding: 4px 10px; cursor: pointer; border-radius: 4px; transition: .1s }
-.fp-btn:hover { color: var(--lt) }
-.fp-on { background: var(--c1); color: var(--grn) }
+.font-picks { display: flex; gap: 6px }
+.fp-btn { display: flex; flex-direction: column; align-items: center; gap: 3px; background: var(--c1); border: 1px solid var(--brd); color: var(--dim); font-family: var(--sans); padding: 8px 14px; cursor: pointer; border-radius: 8px; transition: all .15s; min-width: 52px }
+.fp-btn:hover { background: var(--c2); color: var(--lt); border-color: rgba(255,255,255,.08) }
+.fp-on { background: var(--c2); color: var(--grn); border-color: rgba(16,185,129,.2) }
+.fp-aa { font-weight: 700; color: inherit; line-height: 1 }
+.fp-label { font-size: .42rem; text-transform: uppercase; letter-spacing: .08em; opacity: .6 }
 .s-status { font-family: var(--mono); font-size: .7rem; font-weight: 600 }
 .s-on { color: var(--grn) }
 .s-ver { font-family: var(--mono); font-size: .7rem; color: var(--dim) }
