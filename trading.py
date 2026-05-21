@@ -2596,6 +2596,17 @@ def route(msg: str) -> dict:
             cat = "tech"
         return {"type": "stock_ideas", "category": cat}
 
+    # ── Position queries — check before is_question short-circuits to analyze ──
+    is_position_query = any(w in m for w in [
+        "my positions", "what do i own", "what am i holding", "open positions", "show positions",
+        "what positions", "current positions", "what do we have", "what are we holding",
+        "positions do we", "our positions",
+        "how many shares", "shares do i", "shares of", "do i own", "do i have",
+        "am i holding", "my shares", "what am i long", "what am i short"])
+    if is_position_query:
+        ticker_p, market_p = _find_ticker(msg)
+        return {"type": "positions", "ticker": ticker_p}
+
     if is_question and not any(cmd in m for cmd in [
         "close all", "sell everything", "liquidate", "stop autopilot",
         "start autopilot", "activate autopilot",
@@ -4410,6 +4421,29 @@ def execute(intent: dict) -> dict:
         positions = alpaca_positions()
         if not positions:
             return {"ok": True, "type": "positions", "msg": "No open positions.", "data": []}
+
+        # Check if asking about a specific ticker
+        asked_ticker = intent.get("ticker") or None
+        if not asked_ticker:
+            # Try to find ticker in original message context
+            for p in positions:
+                if p["ticker"].lower() in str(intent).lower():
+                    asked_ticker = p["ticker"]
+                    break
+
+        # If asking about a specific stock
+        if asked_ticker:
+            match = [p for p in positions if p["ticker"].upper() == asked_ticker.upper()]
+            if match:
+                p = match[0]
+                arrow = "▲" if p["unrealized_pnl"] >= 0 else "▼"
+                msg = f"You own **{int(p['qty'])} shares** of **{p['ticker']}** ({p.get('side','long')}).\n\n"
+                msg += f"Entry: `${p['avg_entry']:.2f}` → Now: `${p['current_price']:.2f}`\n"
+                msg += f"P&L: `{arrow} ${p['unrealized_pnl']:+,.2f}` ({p['unrealized_pnl_pct']:+.1f}%)"
+                return {"ok": True, "type": "positions", "msg": msg, "ticker": p["ticker"], "data": []}
+            else:
+                return {"ok": True, "type": "positions", "msg": f"You don't own any shares of {asked_ticker.upper()}.", "data": []}
+
         table = []
         total_pnl = 0
         for p in positions:
