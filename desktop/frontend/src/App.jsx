@@ -449,47 +449,60 @@ function MainApp({ user, token, logout }) {
         </div>
       </div>}
 
-      {/* Sidebar — chats + positions only */}
+      {/* Sidebar */}
       <aside className={'sb'+(sideOpen?'':' sb-hide')}>
         <div className="sb-top">
           <div className="sb-logo"><span className="logo-p">P</span>Paula</div>
-          <button className="sb-close" onClick={()=>setSideOpen(false)}>×</button>
+          <div className="sb-top-r">
+            <button className="sb-new" onClick={newChat} title="New chat (⌘N)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+            <button className="sb-close" onClick={()=>setSideOpen(false)}>×</button>
+          </div>
         </div>
-        <button className="new-chat" onClick={newChat}>+ New Chat</button>
+
         <div className="chat-list">
-          {pinnedChats.length > 0 && <div className="cl-section">Pinned</div>}
+          {pinnedChats.length > 0 && <div className="cl-section">📌 Pinned</div>}
           {chats.filter(c => pinnedChats.includes(c.id)).map(c => (
             <div key={c.id} className={'chat-item ci-pinned' + (chatId === c.id ? ' ci-active' : '')} onClick={() => {switchChat(c.id);setView('chat')}}>
-              <span className="ci-icon">📌</span>
+              <span className="ci-icon">{chatEmoji(c.title)}</span>
               <span className="ci-title">{c.title}</span>
-              <button className="ci-pin" onClick={(e) => { e.stopPropagation(); togglePin(c.id) }} title="Unpin">✕</button>
+              <button className="ci-act ci-unpin" onClick={(e) => { e.stopPropagation(); togglePin(c.id) }} title="Unpin">✕</button>
             </div>
           ))}
-          {pinnedChats.length > 0 && chats.filter(c => !pinnedChats.includes(c.id)).length > 0 && <div className="cl-section">Recent</div>}
-          {chats.filter(c => !pinnedChats.includes(c.id)).slice(0, 20).map(c => (
+          {chats.filter(c => !pinnedChats.includes(c.id)).length > 0 && <div className="cl-section">{pinnedChats.length > 0 ? 'Recent' : 'Chats'}</div>}
+          {chats.filter(c => !pinnedChats.includes(c.id)).slice(0, 25).map(c => (
             <div key={c.id} className={'chat-item' + (chatId === c.id ? ' ci-active' : '')} onClick={() => {switchChat(c.id);setView('chat')}}>
               <span className="ci-icon">{chatEmoji(c.title)}</span>
               <span className="ci-title">{c.title}</span>
               <div className="ci-acts">
-                <button className="ci-pin" onClick={(e) => { e.stopPropagation(); togglePin(c.id) }} title="Pin">📌</button>
-                <button className="ci-del" onClick={(e) => { e.stopPropagation(); deleteChat(c.id) }}>×</button>
+                <button className="ci-act" onClick={(e) => { e.stopPropagation(); togglePin(c.id) }} title="Pin">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M16 2l-4 4-6-1-1 5 4 4-2 8 3-3 4 4 5-1-1-6 4-4-6-1z"/></svg>
+                </button>
+                <button className="ci-act ci-x" onClick={(e) => { e.stopPropagation(); deleteChat(c.id) }}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
               </div>
             </div>
           ))}
         </div>
+
+        <div className="sb-divider"/>
         <div className="sb-pos">
-          <div className="pos-head">Positions <span className="pos-n">{positions.length}</span>
-            {positions.length>0&&<span className={'pos-tot '+(totalUnrealized>=0?'up':'dn')}>{totalUnrealized>=0?'+':''}{totalUnrealized.toFixed(0)}</span>}
+          <div className="pos-head">
+            <span>Positions</span>
+            <span className="pos-n">{positions.length}</span>
+            {positions.length>0&&<span className={'pos-tot '+(totalUnrealized>=0?'up':'dn')}>{totalUnrealized>=0?'+':''}${Math.abs(totalUnrealized).toFixed(0)}</span>}
           </div>
           <div className="pos-list">{positions.length>0?positions.map((p,i)=>(
             <button key={i} className={'pi'+(selectedPos===p.ticker?' pi-sel':'')+(p.unrealized_pnl>=0?' pi-up':' pi-dn')}
               onClick={()=>setSelectedPos(selectedPos===p.ticker?null:p.ticker)}>
-              <div className="pi-l"><span className="pi-sym">{p.ticker}</span><span className="pi-meta">{Math.abs(p.qty)}·{p.side==='short'?'S':'L'}{p.stop_loss?' SL$'+p.stop_loss:''}</span></div>
+              <div className="pi-l"><span className="pi-sym">{p.ticker}</span><span className="pi-meta">{Math.abs(p.qty)}·{p.side==='short'?'S':'L'}</span></div>
               <span className="pi-pnl">{p.unrealized_pnl>=0?'+':''}{p.unrealized_pnl.toFixed(0)}</span>
-            </button>)):<span className="empty-txt">Flat</span>}</div>
+            </button>)):<span className="empty-txt">No open positions</span>}</div>
         </div>
         <div className="sb-bottom">
-          <span className={'conn'+(connected?' c-on':'')}>{connected?'● Connected':'○ Offline'}</span>
+          <span className={'conn'+(connected?' c-on':'')}><span className="conn-dot"/>{connected?'Connected':'Offline'}</span>
         </div>
       </aside>
 
