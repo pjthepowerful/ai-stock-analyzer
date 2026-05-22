@@ -672,10 +672,10 @@ function MainApp({ user, token, logout }) {
                 <h1><span className="w-hi">{(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' })()}, {name}.</span> <span className="w-sub">Ready when you are.</span></h1>
                 <div className="w-status">{settings.tradingStyle||'Day'} Trading · {settings.marketBias||'Bullish'} · Risk {settings.riskPct||'1.0%'} per trade</div>
                 {account&&<div className="w-widgets">
-                  <div className="ww"><span className="ww-n">${account.equity?.toLocaleString(undefined,{maximumFractionDigits:0})}</span><span className="ww-l">Equity</span></div>
-                  <div className={'ww'+((account.daily_pnl||0)>=0?' ww-up':' ww-dn')}><span className="ww-n">{(account.daily_pnl||0)>=0?'+':''}{(account.daily_pnl||0).toFixed(0)}</span><span className="ww-l">Today</span></div>
-                  <div className="ww"><span className="ww-n">{positions.length}</span><span className="ww-l">Positions</span></div>
-                  <div className="ww"><span className={'ww-n '+(autopilot?'up':'')}>{autopilot?'Active':'Off'}</span><span className="ww-l">Autopilot</span></div>
+                  <div className="ww"><span className="ww-l">EQUITY</span><span className="ww-n">${account.equity?.toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>
+                  <div className={'ww'+((account.daily_pnl||0)>=0?' ww-up':' ww-dn')}><span className="ww-l">TODAY</span><span className="ww-n">{(account.daily_pnl||0)>=0?'+':''}{(account.daily_pnl||0).toFixed(0)} <span className="ww-pct">{(account.daily_pnl_pct||0)>=0?'+':''}{(account.daily_pnl_pct||0).toFixed(2)}%</span></span></div>
+                  <div className="ww"><span className="ww-l">POSITIONS</span><span className="ww-n">{positions.length}{totalUnrealized!==0&&<span className={'ww-pct '+(totalUnrealized>=0?'up':'dn')}> {totalUnrealized>=0?'+':''}{totalUnrealized.toFixed(0)}</span>}</span></div>
+                  <div className="ww"><span className="ww-l">AUTOPILOT</span><span className={'ww-n '+(autopilot?'up':'')}>{autopilot?'Active':'Off'}</span></div>
                 </div>}
                 <div className="w-prompts">
                   {[
@@ -907,9 +907,10 @@ function DashView({perf}){
   const totalPct = startEq > 0 ? ((endEq/startEq - 1)*100) : 0
 
   return(<div className="view-scroll"><h2 className="view-h">Performance</h2>
+    <p className="view-sub">Trailing {period} · Updated {new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/New_York'})} ET</p>
     {/* Period selector */}
     <div className="period-bar">
-      {[['1D','Day'],['1W','Week'],['1M','Month'],['3M','3M'],['6M','6M'],['1A','YTD'],['all','All']].map(([k,label])=>(
+      {[['1D','1D'],['1W','1W'],['1M','1M'],['3M','3M'],['6M','6M'],['1A','YTD'],['all','ALL']].map(([k,label])=>(
         <button key={k} className={'per-btn'+(period===k?' per-on':'')} onClick={()=>loadPeriod(k)}>{label}</button>
       ))}
     </div>
@@ -918,22 +919,23 @@ function DashView({perf}){
     <div className="eq-card">
       <div className="eq-header">
         <div>
-          <span className="eq-title">Portfolio Value</span>
+          <span className="eq-title">PORTFOLIO VALUE</span>
           <span className="eq-value">${(d.equity||endEq||0).toLocaleString(undefined,{maximumFractionDigits:0})}</span>
         </div>
         <div className="eq-change">
-          <span className={(totalChg>=0?'up':'dn')+' eq-chg'}>{totalChg>=0?'+':''}{totalChg.toFixed(0)}</span>
-          <span className={(totalPct>=0?'up':'dn')+' eq-pct'}>{totalPct>=0?'+':''}{totalPct.toFixed(2)}%</span>
+          <span className={(totalChg>=0?'up':'dn')+' eq-chg'}>{totalChg>=0?'+':'−'}${Math.abs(totalChg).toFixed(0)}</span>
+          <span className={(totalPct>=0?'up':'dn')+' eq-pct'}>{totalPct>=0?'+':''}{totalPct.toFixed(2)}% · {period}</span>
         </div>
       </div>
       {d.pnl_history?.length>1 ? <EqChart data={d.pnl_history}/> : <div className="eq-empty">No data for this period</div>}
     </div>
 
-    {/* Stats row */}
+    {/* Stats row — matching reference */}
     <div className="stat-row">
-      <div className="stat-card"><span className="stat-n">{d.total_trades}</span><span className="stat-l">Trades</span></div>
-      <div className="stat-card"><span className={'stat-n '+(d.daily_pnl>=0?'up':'dn')}>{d.daily_pnl>=0?'+':''}{(d.daily_pnl||0).toFixed(0)}</span><span className="stat-l">Today</span></div>
-      <div className="stat-card"><span className={'stat-n '+(totalChg>=0?'up':'dn')}>{totalChg>=0?'+':''}{totalChg.toFixed(0)}</span><span className="stat-l">{period} P&L</span></div>
+      <div className="stat-card"><span className="stat-l">WIN RATE</span><span className="stat-n">{d.win_rate||'0'}%</span><span className="stat-sub">{d.wins||0} of {d.total_trades||0} trades</span></div>
+      <div className="stat-card"><span className="stat-l">AVG R</span><span className="stat-n">{d.avg_rr||'1.00'}</span><span className="stat-sub">target 1.5R+</span></div>
+      <div className="stat-card"><span className="stat-l">BEST DAY</span><span className="stat-n up">+${d.best_day_pnl||0}</span><span className="stat-sub">{d.best_day_date||'—'} · {d.best_day_ticker||''}</span></div>
+      <div className="stat-card"><span className="stat-l">WORST DAY</span><span className="stat-n dn">−${Math.abs(d.worst_day_pnl||0)}</span><span className="stat-sub">{d.worst_day_date||'—'} · {d.worst_day_ticker||''}</span></div>
     </div>
 
     {/* Recaps */}
