@@ -555,22 +555,32 @@ function MainApp({ user, token, logout }) {
             <button className={'hdr-ap'+(autopilot?' hap-on':'')} onClick={async ()=>{
               const wasOn = autopilot
               setAutopilot(!wasOn)
-              newChat()
-              const apId = chatIdRef.current
-              if (!wasOn) apChatRef.current = apId  // starting: lock logs to this chat
-              else apChatRef.current = null          // stopping: clear lock
-              persist(chatsRef.current.map(c => c.id === apId ? { ...c, title: wasOn ? 'Autopilot Off' : 'Autopilot Session' } : c))
+
+              if (wasOn) {
+                // STOPPING — stay in the autopilot chat, post stop message there
+                const apId = apChatRef.current
+                if (apId && chatIdRef.current !== apId) {
+                  // Switch to the autopilot chat
+                  switchChat(apId)
+                }
+                // Add stop message
+                setMessages(prev => [...prev, { role: 'assistant', content: '🔴 **Autopilot stopped.**', type: 'autopilot' }])
+                // Rename
+                if (apId) persist(chatsRef.current.map(c => c.id === apId ? { ...c, title: 'Autopilot Off' } : c))
+                apChatRef.current = null
+              } else {
+                // STARTING — create new chat
+                newChat()
+                const apId = chatIdRef.current
+                apChatRef.current = apId
+                persist(chatsRef.current.map(c => c.id === apId ? { ...c, title: 'Autopilot Session' } : c))
+                setMessages([{ role: 'assistant', content: '🟢 **Autopilot started.** Scanning every 5 minutes.\n\nLogs will appear here.', type: 'autopilot' }])
+              }
+
               try {
                 const r = await f(API+'/api/autopilot/'+(wasOn?'stop':'start'),{method:'POST'}).then(r=>r.json())
-                if (!r.ok) { setAutopilot(wasOn); apChatRef.current = wasOn ? apChatRef.current : null; return }
-                setMessages(prev => [...prev, {
-                  role: 'assistant',
-                  content: wasOn
-                    ? '🔴 **Autopilot stopped.**'
-                    : '🟢 **Autopilot started.** Scanning every 5 minutes.\n\nLogs will appear here.',
-                  type: 'autopilot'
-                }])
-              } catch { setAutopilot(wasOn); apChatRef.current = wasOn ? apChatRef.current : null }
+                if (!r.ok) { setAutopilot(wasOn); if (!wasOn) apChatRef.current = null }
+              } catch { setAutopilot(wasOn); if (!wasOn) apChatRef.current = null }
               refreshData()
             }}>
               <span className={'ap-dot'+(autopilot?' dot-on':'')}/>{autopilot?'Scanning':'Autopilot'}

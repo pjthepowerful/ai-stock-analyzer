@@ -2580,6 +2580,10 @@ def route(msg: str) -> dict:
         "what large cap", "large caps", "best stocks", "top stocks",
         "what should i invest", "what to invest", "find me stocks",
         "good buys", "what looks good", "any opportunities", "what do you like",
+        "tell me a stock", "give me a stock", "find me a stock",
+        "stock i should buy", "stock to buy", "stock should i buy",
+        "what can i buy", "interested in buying", "interested in invest",
+        "swing trading", "swing trade", "day trading", "day trade",
     ])
     if wants_picks and not any(cmd in m for cmd in [
         "close all", "sell everything", "liquidate",
@@ -4823,7 +4827,9 @@ RESPONSE STYLE:
         messages.append({"role": h["role"], "content": h["content"]})
     content = user_msg
     if stock_data:
-        content += f"\n\n---LIVE DATA (use these exact prices, do NOT make up numbers)---\n{json.dumps(stock_data, indent=2, default=str)}"
+        content += f"\n\n---LIVE DATA (use ONLY these exact prices, do NOT make up numbers)---\n{json.dumps(stock_data, indent=2, default=str)}"
+    else:
+        content += "\n\n---NO PRICE DATA AVAILABLE. Do NOT cite any specific dollar prices. Say you need to look it up.---"
     messages.append({"role": "user", "content": content})
 
     try:
@@ -4842,14 +4848,17 @@ def ai_response_stream(user_msg: str, stock_data: dict | None, history: list, ma
         return
 
     system = f"""You're Paula — a sharp, knowledgeable trading assistant. Today is {datetime.now(ZoneInfo("US/Eastern")).strftime("%Y-%m-%d")}. Market: {market}.
-RESPONSE STYLE: Keep responses SHORT — 2-4 paragraphs max. ALWAYS answer directly. NEVER say "I'm ready to help" or "What would you like". Just give the answer. Lead with the answer, then support with data."""
+RESPONSE STYLE: Keep responses SHORT — 2-4 paragraphs max. ALWAYS answer directly. NEVER say "I'm ready to help" or "What would you like". Just give the answer. Lead with the answer, then support with data.
+CRITICAL: ONLY use prices from the LIVE DATA section below. NEVER guess, estimate, or make up stock prices. If no price data is provided, say "I don't have the current price" instead of inventing one."""
 
     messages = [{"role": "system", "content": system}]
     for h in (history or [])[-8:]:
         messages.append({"role": h.get("role", "user"), "content": str(h.get("content", ""))[:600]})
     content = user_msg
     if stock_data:
-        content += f"\n\n---LIVE DATA---\n{json.dumps(stock_data, indent=2, default=str)}"
+        content += f"\n\n---LIVE DATA (use ONLY these exact prices, do NOT make up numbers)---\n{json.dumps(stock_data, indent=2, default=str)}"
+    else:
+        content += "\n\n---NO PRICE DATA AVAILABLE. Do NOT cite any specific dollar prices. Say you need to look it up.---"
     messages.append({"role": "user", "content": content})
 
     try:
