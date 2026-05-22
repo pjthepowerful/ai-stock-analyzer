@@ -75,7 +75,7 @@ function LoginPage({ onAuth }) {
       <div className="login-left">
         <div className="ll-top"><span className="logo-p">P</span><span className="ll-name">Paula</span></div>
         <div className="ll-mid">
-          <span className="ll-label">TRADING COPILOT · v2.2</span>
+          <span className="ll-label">TRADING COPILOT · v3.0</span>
           <h1 className="ll-hero">Your autopilot for the open, the close, and everything in between.</h1>
         </div>
         <div className="ll-bottom">
@@ -155,12 +155,12 @@ function MainApp({ user, token, logout }) {
   const [view, setView] = useState('chat')
   const [perf, setPerf] = useState(null)
   const [showChangelog, setShowChangelog] = useState(() => {
-    const v = '2.2'
+    const v = '3.0'
     const seen = localStorage.getItem('paula-changelog-seen')
     if (seen !== v) return true
     return false
   })
-  const dismissChangelog = () => { setShowChangelog(false); localStorage.setItem('paula-changelog-seen', '2.2') }
+  const dismissChangelog = () => { setShowChangelog(false); localStorage.setItem('paula-changelog-seen', '3.0') }
   
   const [sideOpen, setSideOpen] = useState(window.innerWidth > 768)
   const [pinnedChats, setPinnedChats] = useState(() => {
@@ -511,7 +511,7 @@ function MainApp({ user, token, logout }) {
             <div className="cl-top-l">
               <span className="logo-p cl-logo">P</span>
               <div>
-                <span className="cl-ver-title">Paula v2.2</span>
+                <span className="cl-ver-title">Paula v3.0</span>
                 <span className="cl-date">May 2026</span>
               </div>
             </div>
@@ -558,7 +558,7 @@ function MainApp({ user, token, logout }) {
       {/* Sidebar */}
       <aside className={'sb'+(sideOpen?'':' sb-hide')}>
         <div className="sb-top">
-          <div className="sb-logo"><span className="logo-p">P</span>Paula<span className="sb-ver">v2.2</span></div>
+          <div className="sb-logo"><span className="logo-p">P</span>Paula<span className="sb-ver">v3.0</span></div>
           <div className="sb-top-r">
             <button className="sb-new" onClick={newChat} title="New chat (⌘N)">+</button>
             <button className="sb-close" onClick={()=>setSideOpen(false)}>×</button>
@@ -681,7 +681,7 @@ function MainApp({ user, token, logout }) {
             }}>
               <span className={'ap-dot'+(autopilot?' dot-on':'')}/>{autopilot?'Scanning · 412 tickers':'Autopilot'}
             </button>
-            <button className="hdr-ver" onClick={()=>setShowChangelog(true)}>v2.2</button>
+            <button className="hdr-ver" onClick={()=>setShowChangelog(true)}>v3.0</button>
             <button className="hdr-logout" onClick={logout}>↗</button>
           </div>
         </div>
@@ -707,8 +707,7 @@ function MainApp({ user, token, logout }) {
                 <div className="qtb-r-meta">
                   <span className={'qtb-signal qtb-' + quickResult.signal.toLowerCase()}>{quickResult.signal}</span>
                   <span className="qtb-score">Score: {quickResult.score}</span>
-                  <button className="qtb-analyze" onClick={() => { sendMessage('Analyze ' + quickResult.ticker); setQuickTicker(''); setQuickResult(null) }}>Analyze →</button>
-                  <button className="qtb-buy" onClick={() => { sendMessage('Buy ' + quickResult.ticker); setQuickTicker(''); setQuickResult(null) }}>Buy →</button>
+                  <button className="qtb-analyze" onClick={() => { sendMessage('Analyze ' + quickResult.ticker); setQuickTicker(''); setQuickResult(null) }}>Deep dive →</button>
                 </div>
               </div>
             )}
@@ -1183,7 +1182,7 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
 
     {/* About */}
     <div className="card wide"><label>About</label>
-      <div className="s-row"><span>Version</span><span className="s-ver">v2.2</span></div>
+      <div className="s-row"><span>Version</span><span className="s-ver">v3.0</span></div>
       <div className="s-row"><span>What's new</span><button className="tog" onClick={()=>setShowChangelog(true)}>View</button></div>
       <div className="s-row"><span>Sign out</span><button className="tog tog-danger" onClick={logout}>Logout</button></div>
     </div>

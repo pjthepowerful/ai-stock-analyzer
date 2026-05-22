@@ -169,10 +169,8 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .qtb-buy { background: var(--grn); color: var(--bg); border: none } .qtb-sell { background: var(--red); color: var(--bg); border: none }
 .qtb-hold { background: var(--c3); color: var(--lt) } .qtb-avoid { background: rgba(239,68,68,.15); color: var(--red) }
 .qtb-score { font-family: var(--mono); font-size: .56rem; color: var(--dim) }
-.qtb-analyze, .qtb-buy { padding: 4px 12px; border-radius: 6px; font-family: var(--sans); font-size: .56rem; font-weight: 600; cursor: pointer; transition: .12s; border: 1px solid var(--brd); background: none; color: var(--lt) }
-.qtb-analyze:hover { border-color: rgba(16,185,129,.2); color: var(--grn) }
-.qtb-buy { background: var(--grn); color: var(--bg); border-color: var(--grn) }
-.qtb-buy:hover { background: var(--grn2) }
+.qtb-analyze { padding: 4px 12px; border-radius: 6px; font-family: var(--sans); font-size: .56rem; font-weight: 600; cursor: pointer; transition: .12s; border: 1px solid var(--brd); background: var(--c1); color: var(--lt) }
+.qtb-analyze:hover { border-color: rgba(16,185,129,.25); color: var(--grn); background: var(--c2) }
 
 /* Chat search */
 .sb-search-wrap { position: relative; padding: 0 12px 8px }
