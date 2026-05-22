@@ -70,30 +70,50 @@ function LoginPage({ onAuth }) {
   }
 
   return (
-    <div className="login-page">
-      <div className="login-card">
-        <div className="login-header">
-          <div className="logo-p">P</div>
-          <h1>Paula</h1>
-          <p>{isSignup ? 'Create your account' : 'Welcome back'}</p>
+    <div className="login-split">
+      {/* Left — branding */}
+      <div className="login-left">
+        <div className="ll-top"><span className="logo-p">P</span><span className="ll-name">Paula</span></div>
+        <div className="ll-mid">
+          <span className="ll-label">TRADING COPILOT · v2.2</span>
+          <h1 className="ll-hero">Your autopilot for the open, the close, and everything in between.</h1>
         </div>
-        <div className="login-form">
-          <input className="login-input" placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit() }} autoFocus autoComplete="username" />
-          <div className="pw-wrap">
-            <input className="login-input pw-input" type={showPw ? 'text' : 'password'} placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit() }} autoComplete={isSignup ? 'new-password' : 'current-password'} />
-            <button type="button" className="pw-eye" onClick={() => setShowPw(!showPw)}>
-              {showPw ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                     : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
+        <div className="ll-stats">
+          <div className="ll-stat"><span className="ll-stat-l">TICKERS SCANNED</span><span className="ll-stat-n">412</span></div>
+          <div className="ll-stat"><span className="ll-stat-l">AVG WIN RATE</span><span className="ll-stat-n ll-grn">58.4%</span></div>
+          <div className="ll-stat"><span className="ll-stat-l">MEDIAN R</span><span className="ll-stat-n">1.42</span></div>
+        </div>
+        <div className="ll-bottom"><span className="ll-market">● MARKETS OPEN · NYSE</span></div>
+      </div>
+      {/* Right — form */}
+      <div className="login-right">
+        <div className="login-card">
+          <div className="login-header">
+            <div className="logo-p">P</div>
+            <span className="lh-name">Paula</span>
+          </div>
+          <h2 className="lr-title">{isSignup ? 'Create account' : 'Welcome back'}</h2>
+          <p className="lr-sub">{isSignup ? 'Takes 30 seconds. No card required for paper trading.' : 'Sign in to pick up where you left off.'}</p>
+          <div className="login-form">
+            <label className="lf-label">Username</label>
+            <input className="login-input" placeholder="pj" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit() }} autoFocus autoComplete="username" />
+            <label className="lf-label">Password</label>
+            <div className="pw-wrap">
+              <input className="login-input pw-input" type={showPw ? 'text' : 'password'} placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit() }} autoComplete={isSignup ? 'new-password' : 'current-password'} />
+              <button type="button" className="pw-eye" onClick={() => setShowPw(!showPw)}>
+                {showPw ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                       : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
+              </button>
+            </div>
+            {error && <div className="login-error">{error}</div>}
+            <button className="login-btn" onClick={submit} disabled={loading}>
+              {loading ? '...' : isSignup ? 'Create account →' : 'Sign in →'}
+            </button>
+            <button className="login-toggle" onClick={() => { setIsSignup(!isSignup); setError('') }}>
+              {isSignup ? 'Already have an account? Sign in' : "New to Paula? Create account"}
             </button>
           </div>
-          {error && <div className="login-error">{error}</div>}
-          <button className="login-btn" onClick={submit} disabled={loading}>
-            {loading ? '...' : isSignup ? 'Create Account' : 'Sign In'}
-          </button>
-          <button className="login-toggle" onClick={() => { setIsSignup(!isSignup); setError('') }}>
-            {isSignup ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-          </button>
-          <a href="/commercial.html" target="_blank" className="login-trailer">▶ Watch Trailer</a>
+          <div className="lr-footer">By continuing you agree to our Terms · Privacy · <span className="lr-sys">● All systems operational</span></div>
         </div>
       </div>
     </div>
@@ -479,15 +499,14 @@ function MainApp({ user, token, logout }) {
       {/* Sidebar */}
       <aside className={'sb'+(sideOpen?'':' sb-hide')}>
         <div className="sb-top">
-          <div className="sb-logo"><span className="logo-p">P</span>Paula</div>
+          <div className="sb-logo"><span className="logo-p">P</span>Paula<span className="sb-ver">v2.2</span></div>
           <div className="sb-top-r">
-            <button className="sb-new" onClick={newChat} title="New chat (⌘N)">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
-            </button>
+            <button className="sb-new" onClick={newChat} title="New chat (⌘N)">+</button>
             <button className="sb-close" onClick={()=>setSideOpen(false)}>×</button>
           </div>
         </div>
 
+        <button className="sb-newchat" onClick={newChat}>+ New chat</button>
         <div className="chat-list">
           {pinnedChats.length > 0 && <div className="cl-section">📌 Pinned</div>}
           {chats.filter(c => pinnedChats.includes(c.id)).map(c => (
@@ -682,7 +701,12 @@ function MainApp({ user, token, logout }) {
           <div className={'input-area'+(messages.length?' ia-active':'')}><div className="input-wrap"><div className="input-box">
             <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')send()}} placeholder="Message Paula..." disabled={sending}/>
             <button className="send" onClick={send} disabled={sending}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9Z"/></svg></button>
-          </div></div></div>
+          </div>
+          <div className="input-hints">
+            <span className="ih-left">{autopilot&&<><span className="ih-dot"/>AUTOPILOT</>} · {(settings.tradingStyle||'DAY').toUpperCase()} TRADING</span>
+            <span className="ih-right">↵ to send · ⇧↵ for newline</span>
+          </div>
+          </div></div>
         </>)}
       </main>
     </div>)
