@@ -150,6 +150,37 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 
 /* Positions strip */
 .pos-strip { display: flex; gap: 6px; padding: 6px 16px; border-bottom: 1px solid var(--brd); overflow-x: auto; flex-shrink: 0 }
+
+/* Quick trade bar */
+.qtb { padding: 8px 16px; border-bottom: 1px solid var(--brd); flex-shrink: 0 }
+.qtb-input-wrap { display: flex; align-items: center; gap: 8px; background: var(--c1); border: 1px solid var(--brd); border-radius: 8px; padding: 6px 10px }
+.qtb-icon { color: var(--dim); flex-shrink: 0 }
+.qtb-input { flex: 1; background: none; border: none; outline: none; color: var(--lt); font-family: var(--mono); font-size: .72rem; font-weight: 600; letter-spacing: .04em }
+.qtb-input::placeholder { color: var(--dim); font-weight: 400; font-family: var(--sans); letter-spacing: 0 }
+.qtb-go { background: none; border: none; color: var(--grn); cursor: pointer; font-size: .8rem; font-weight: 700; padding: 2px 6px; transition: .12s }
+.qtb-go:hover { color: var(--grn2) }
+.qtb-result { display: flex; align-items: center; justify-content: space-between; padding: 8px 4px 2px; flex-wrap: wrap; gap: 8px }
+.qtb-r-main { display: flex; align-items: baseline; gap: 10px }
+.qtb-sym { font-family: var(--mono); font-size: .82rem; font-weight: 700; color: var(--wh) }
+.qtb-price { font-family: var(--mono); font-size: .82rem; font-weight: 600; color: var(--lt) }
+.qtb-chg { font-family: var(--mono); font-size: .62rem; font-weight: 600 }
+.qtb-r-meta { display: flex; align-items: center; gap: 8px }
+.qtb-signal { font-family: var(--mono); font-size: .5rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; letter-spacing: .06em }
+.qtb-buy { background: var(--grn); color: var(--bg); border: none } .qtb-sell { background: var(--red); color: var(--bg); border: none }
+.qtb-hold { background: var(--c3); color: var(--lt) } .qtb-avoid { background: rgba(239,68,68,.15); color: var(--red) }
+.qtb-score { font-family: var(--mono); font-size: .56rem; color: var(--dim) }
+.qtb-analyze, .qtb-buy { padding: 4px 12px; border-radius: 6px; font-family: var(--sans); font-size: .56rem; font-weight: 600; cursor: pointer; transition: .12s; border: 1px solid var(--brd); background: none; color: var(--lt) }
+.qtb-analyze:hover { border-color: rgba(16,185,129,.2); color: var(--grn) }
+.qtb-buy { background: var(--grn); color: var(--bg); border-color: var(--grn) }
+.qtb-buy:hover { background: var(--grn2) }
+
+/* Chat search */
+.sb-search-wrap { position: relative; padding: 0 12px 8px }
+.sb-search { width: 100%; background: var(--c1); border: 1px solid var(--brd); border-radius: 6px; padding: 7px 28px 7px 10px; color: var(--lt); font-family: var(--sans); font-size: .6rem; outline: none; transition: .15s }
+.sb-search:focus { border-color: rgba(16,185,129,.2) }
+.sb-search::placeholder { color: var(--dim) }
+.sb-search-x { position: absolute; right: 18px; top: 50%; transform: translateY(-60%); background: none; border: none; color: var(--dim); cursor: pointer; font-size: 12px }
+.sb-search-x:hover { color: var(--lt) }
 .pos-strip::-webkit-scrollbar { height: 0 }
 .ps-item { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--brd); background: var(--c1); cursor: pointer; transition: .12s; flex-shrink: 0; font-family: var(--mono) }
 .ps-item:hover { background: var(--c2) }

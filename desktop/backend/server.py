@@ -777,6 +777,68 @@ async def train_ml():
         return {"ok": False, "error": str(e)[:200]}
 
 
+@app.get("/api/trades")
+def get_trades():
+    """Export trade log."""
+    try:
+        log_path = pathlib.Path(__file__).parent / "trade_log.json"
+        if not log_path.exists():
+            return {"ok": True, "data": []}
+        trades = json.loads(log_path.read_text())
+        return {"ok": True, "data": trades}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:100]}
+
+
+@app.get("/api/quick/{ticker}")
+def quick_lookup(ticker: str):
+    """Quick ticker lookup — price, score, signal. Fast."""
+    import yfinance as yf
+    import warnings
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            t = yf.Ticker(ticker.upper())
+            info = t.fast_info if hasattr(t, 'fast_info') else {}
+            hist = t.history(period="5d")
+
+        if hist is None or hist.empty:
+            return {"ok": False, "error": "No data"}
+
+        price = float(hist["Close"].iloc[-1])
+        prev = float(hist["Close"].iloc[-2]) if len(hist) > 1 else price
+        change = price - prev
+        change_pct = (change / prev) * 100 if prev else 0
+
+        # Quick score
+        score = 50
+        if len(hist) >= 5:
+            closes = hist["Close"].values
+            # Simple momentum
+            ret5 = (closes[-1] - closes[0]) / closes[0]
+            if 0.01 < ret5 < 0.08: score += 15
+            elif ret5 > 0.08: score -= 5
+            # Volume
+            vols = hist["Volume"].values
+            if vols[-1] > sum(vols[:-1]) / max(len(vols)-1, 1) * 1.3: score += 10
+            # Trend
+            if closes[-1] > sum(closes) / len(closes): score += 10
+
+        signal = "BUY" if score >= 75 else "HOLD" if score >= 50 else "AVOID"
+
+        return {
+            "ok": True,
+            "ticker": ticker.upper(),
+            "price": round(price, 2),
+            "change": round(change, 2),
+            "change_pct": round(change_pct, 2),
+            "score": score,
+            "signal": signal,
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:100]}
+
+
 @app.get("/api/spy-trend")
 def spy_trend():
     """Get SPY intraday trend — sync, auto-threaded."""

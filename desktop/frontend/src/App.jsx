@@ -138,6 +138,10 @@ function LoginPage({ onAuth }) {
 function MainApp({ user, token, logout }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
+  const [quickTicker, setQuickTicker] = useState('')
+  const [quickResult, setQuickResult] = useState(null)
+  const [quickLoading, setQuickLoading] = useState(false)
+  const [chatSearch, setChatSearch] = useState('')
   const [sending, setSending] = useState(false)
   const [loadingText, setLoadingText] = useState('')
   const [account, setAccount] = useState(null)
@@ -475,6 +479,17 @@ function MainApp({ user, token, logout }) {
   }
 
   const send = () => sendMessage(input.trim())
+
+  const quickLookup = async (ticker) => {
+    if (!ticker || ticker.length > 5) return
+    setQuickLoading(true)
+    try {
+      const r = await f(API + '/api/quick/' + ticker.toUpperCase()).then(r => r.json())
+      if (r.ok) setQuickResult(r)
+      else setQuickResult(null)
+    } catch { setQuickResult(null) }
+    setQuickLoading(false)
+  }
   const loadDashboard = async () => { try { const r = await f(API+'/api/performance').then(r=>r.json()); if(r.ok)setPerf(r) } catch{} }
 
   const pnl = account?(account.daily_pnl||0):0, pnlPct = account?(account.daily_pnl_pct||0):0
@@ -551,19 +566,28 @@ function MainApp({ user, token, logout }) {
         </div>
 
         <button className="sb-newchat" onClick={newChat}>+ New chat</button>
+        <div className="sb-search-wrap">
+          <input className="sb-search" placeholder="Search chats..." value={chatSearch} onChange={e=>setChatSearch(e.target.value)}/>
+          {chatSearch&&<button className="sb-search-x" onClick={()=>setChatSearch('')}>×</button>}
+        </div>
         <div className="chat-list">
-          {pinnedChats.length > 0 && <div className="cl-section">📌 Pinned</div>}
-          {chats.filter(c => pinnedChats.includes(c.id)).map(c => (
+          {(()=>{
+            const q = chatSearch.toLowerCase()
+            const pinned = chats.filter(c => pinnedChats.includes(c.id) && (!q || c.title?.toLowerCase().includes(q)))
+            const unpinned = chats.filter(c => !pinnedChats.includes(c.id) && (!q || c.title?.toLowerCase().includes(q)))
+            return <>
+          {pinned.length > 0 && <div className="cl-section">📌 Pinned</div>}
+          {pinned.map(c => (
             <div key={c.id} className={'chat-item ci-pinned' + (chatId === c.id ? ' ci-active' : '')} onClick={() => {switchChat(c.id);setView('chat')}}>
-              <span className="ci-icon">{chatEmoji(c.title)}</span>
+              <span className="ci-dot"/>
               <span className="ci-title">{c.title}</span>
               <button className="ci-act ci-unpin-btn" onClick={(e) => { e.stopPropagation(); togglePin(c.id) }} title="Unpin">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
               </button>
             </div>
           ))}
-          {chats.filter(c => !pinnedChats.includes(c.id)).length > 0 && <div className="cl-section">{pinnedChats.length > 0 ? 'Recent' : 'Chats'}</div>}
-          {chats.filter(c => !pinnedChats.includes(c.id)).slice(0, 25).map(c => (
+          {unpinned.length > 0 && <div className="cl-section">{pinned.length > 0 ? 'Recent' : 'Chats'}</div>}
+          {unpinned.slice(0, 25).map(c => (
             <div key={c.id} className={'chat-item' + (chatId === c.id ? ' ci-active' : '')} onClick={() => {switchChat(c.id);setView('chat')}}>
               <span className="ci-dot"/>
               <span className="ci-title">{c.title}</span>
@@ -576,6 +600,8 @@ function MainApp({ user, token, logout }) {
               </div>
             </div>
           ))}
+          {q && pinned.length === 0 && unpinned.length === 0 && <div className="empty-txt">No chats match "{chatSearch}"</div>}
+          </>})()}
         </div>
 
         <div className="sb-divider"/>
@@ -659,6 +685,35 @@ function MainApp({ user, token, logout }) {
             <button className="hdr-logout" onClick={logout}>↗</button>
           </div>
         </div>
+
+        {/* Quick ticker lookup */}
+        {view === 'chat' && (
+          <div className="qtb">
+            <div className="qtb-input-wrap">
+              <svg className="qtb-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              <input className="qtb-input" placeholder="Quick lookup — type a ticker..." value={quickTicker}
+                onChange={e => { setQuickTicker(e.target.value.toUpperCase().replace(/[^A-Z]/g,'')); setQuickResult(null) }}
+                onKeyDown={e => { if (e.key === 'Enter' && quickTicker) quickLookup(quickTicker) }}
+              />
+              {quickTicker && <button className="qtb-go" onClick={() => quickLookup(quickTicker)}>{quickLoading ? '...' : '→'}</button>}
+            </div>
+            {quickResult && (
+              <div className="qtb-result">
+                <div className="qtb-r-main">
+                  <span className="qtb-sym">{quickResult.ticker}</span>
+                  <span className="qtb-price">${quickResult.price}</span>
+                  <span className={'qtb-chg ' + (quickResult.change >= 0 ? 'up' : 'dn')}>{quickResult.change >= 0 ? '+' : ''}{quickResult.change} ({quickResult.change_pct}%)</span>
+                </div>
+                <div className="qtb-r-meta">
+                  <span className={'qtb-signal qtb-' + quickResult.signal.toLowerCase()}>{quickResult.signal}</span>
+                  <span className="qtb-score">Score: {quickResult.score}</span>
+                  <button className="qtb-analyze" onClick={() => { sendMessage('Analyze ' + quickResult.ticker); setQuickTicker(''); setQuickResult(null) }}>Analyze →</button>
+                  <button className="qtb-buy" onClick={() => { sendMessage('Buy ' + quickResult.ticker); setQuickTicker(''); setQuickResult(null) }}>Buy →</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Positions strip */}
         {positions.length > 0 && view === 'chat' && (
