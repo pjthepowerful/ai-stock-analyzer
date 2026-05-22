@@ -1104,17 +1104,17 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
       <div className="s-row"><div className="s-col"><span>Display name</span><span className="s-desc">Used in greetings and recaps.</span></div><input className="s-inp" value={settings.userName||user?.username||''} onChange={e=>update('userName',e.target.value)} placeholder="Your name"/></div>
       <div className="s-row"><div className="s-col"><span>Trading style</span><span className="s-desc">Sets default timeframe and stop discipline.</span></div>
         <div className="font-picks">
-          {['Day','Swing'].map(s=>(<button key={s} className={'fp-btn'+(settings.tradingStyle===s||(!settings.tradingStyle&&s==='Day')?' fp-on':'')} onClick={()=>update('tradingStyle',s)}><span className="fp-aa" style={{fontSize:13}}>{s}</span></button>))}
+          {['Day','Swing'].map(s=>(<button key={s} className={'fp-btn'+(settings.tradingStyle===s||(!settings.tradingStyle&&s==='Day')?' fp-on':'')} onClick={()=>{update('tradingStyle',s);f(API+'/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tradingStyle:s,marketBias:settings.marketBias||'Bull',riskPct:settings.riskPct||'1.0%'})}).catch(()=>{})}}><span className="fp-aa" style={{fontSize:13}}>{s}</span></button>))}
         </div>
       </div>
       <div className="s-row"><div className="s-col"><span>Market bias</span><span className="s-desc">Long/short lean for autopilot scans.</span></div>
         <div className="font-picks">
-          {['Bull','Neutral','Bear'].map(s=>(<button key={s} className={'fp-btn'+(settings.marketBias===s||(!settings.marketBias&&s==='Bull')?' fp-on':'')} onClick={()=>update('marketBias',s)}><span className="fp-aa" style={{fontSize:13}}>{s}</span></button>))}
+          {['Bull','Neutral','Bear'].map(s=>(<button key={s} className={'fp-btn'+(settings.marketBias===s||(!settings.marketBias&&s==='Bull')?' fp-on':'')} onClick={()=>{update('marketBias',s);f(API+'/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tradingStyle:settings.tradingStyle||'Day',marketBias:s,riskPct:settings.riskPct||'1.0%'})}).catch(()=>{})}}><span className="fp-aa" style={{fontSize:13}}>{s}</span></button>))}
         </div>
       </div>
       <div className="s-row"><div className="s-col"><span>Risk per trade</span><span className="s-desc">Max % of equity at risk on any single position.</span></div>
         <div className="font-picks">
-          {['0.5%','1.0%','2.0%'].map(s=>(<button key={s} className={'fp-btn'+(settings.riskPct===s||(!settings.riskPct&&s==='1.0%')?' fp-on':'')} onClick={()=>update('riskPct',s)}><span className="fp-aa" style={{fontSize:13}}>{s}</span></button>))}
+          {['0.5%','1.0%','2.0%'].map(s=>(<button key={s} className={'fp-btn'+(settings.riskPct===s||(!settings.riskPct&&s==='1.0%')?' fp-on':'')} onClick={()=>{update('riskPct',s);f(API+'/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tradingStyle:settings.tradingStyle||'Day',marketBias:settings.marketBias||'Bull',riskPct:s})}).catch(()=>{})}}><span className="fp-aa" style={{fontSize:13}}>{s}</span></button>))}
         </div>
       </div>
     </div>

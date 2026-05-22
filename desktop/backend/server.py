@@ -790,6 +790,64 @@ def get_trades():
         return {"ok": False, "error": str(e)[:100]}
 
 
+@app.post("/api/profile")
+async def save_profile(request: Request):
+    """Save trader profile — updates autopilot config."""
+    try:
+        body = await request.json()
+        config_path = pathlib.Path(__file__).parent / "autopilot_config.json"
+        config = {}
+        if config_path.exists():
+            config = json.loads(config_path.read_text())
+
+        # Map profile settings to engine params
+        style = body.get("tradingStyle", "Day")
+        bias = body.get("marketBias", "Bull")
+        risk = body.get("riskPct", "1.0%")
+
+        # Trading style affects hold time and stop discipline
+        if style == "Swing":
+            config["MAX_HOLD_DAYS"] = 5
+            config["STOP_FLOOR"] = 0.015  # wider stops for swing
+        else:
+            config["MAX_HOLD_DAYS"] = 0  # intraday
+            config["STOP_FLOOR"] = 0.01
+
+        # Market bias affects LONG_ONLY mode
+        if bias == "Bull":
+            config["LONG_ONLY"] = True
+        elif bias == "Bear":
+            config["LONG_ONLY"] = False
+        else:
+            config["LONG_ONLY"] = True  # neutral defaults to long
+
+        # Risk per trade
+        risk_val = float(risk.replace("%", "")) / 100
+        config["RISK_PER_TRADE"] = risk_val
+
+        config_path.write_text(json.dumps(config, indent=2))
+        return {"ok": True, "message": f"Profile saved: {style} · {bias} · {risk}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:100]}
+
+
+@app.get("/api/profile")
+def get_profile():
+    """Get current trader profile from config."""
+    try:
+        config_path = pathlib.Path(__file__).parent / "autopilot_config.json"
+        if not config_path.exists():
+            return {"ok": True, "profile": {"tradingStyle": "Day", "marketBias": "Bull", "riskPct": "1.0%"}}
+        config = json.loads(config_path.read_text())
+        style = "Swing" if config.get("MAX_HOLD_DAYS", 0) > 0 else "Day"
+        bias = "Bull" if config.get("LONG_ONLY", True) else "Bear"
+        risk_val = config.get("RISK_PER_TRADE", 0.01) * 100
+        risk = f"{risk_val:.1f}%"
+        return {"ok": True, "profile": {"tradingStyle": style, "marketBias": bias, "riskPct": risk}}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:100]}
+
+
 @app.get("/api/quick/{ticker}")
 def quick_lookup(ticker: str):
     """Quick ticker lookup — price, score, signal. Fast."""
