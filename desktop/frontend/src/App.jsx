@@ -492,22 +492,51 @@ function MainApp({ user, token, logout }) {
       {/* What's New */}
       {showChangelog&&<div className="cl-overlay" onClick={dismissChangelog}>
         <div className="cl-modal" onClick={e=>e.stopPropagation()}>
-          <div className="cl-header">
-            <span className="cl-badge">v2.2</span>
-            <span className="cl-title">What's New</span>
-            <button className="cl-close" onClick={dismissChangelog}>×</button>
+          <div className="cl-top">
+            <div className="cl-top-l">
+              <span className="logo-p cl-logo">P</span>
+              <div>
+                <span className="cl-ver-title">Paula v2.2</span>
+                <span className="cl-date">May 2026</span>
+              </div>
+            </div>
+            <button className="cl-close" onClick={dismissChangelog}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
           </div>
+
+          <div className="cl-hero">
+            <h2>What's new</h2>
+            <p>A smarter, more personal trading experience.</p>
+          </div>
+
           <div className="cl-body">
-            <div className="cl-item"><span className="cl-icon">📌</span><div><b>Pin Chats</b><p>Pin important conversations to the top of the sidebar</p></div></div>
-            <div className="cl-item"><span className="cl-icon">⏱️</span><div><b>Timestamps</b><p>See when each message was sent — small time under every bubble</p></div></div>
-            <div className="cl-item"><span className="cl-icon">⌨️</span><div><b>Keyboard Shortcuts</b><p>Cmd+N new chat, Cmd+K focus input — power user ready</p></div></div>
-            <div className="cl-item"><span className="cl-icon">🎨</span><div><b>Accent Colors</b><p>Pick your color — green, blue, purple, cyan, pink, or orange</p></div></div>
-            <div className="cl-item"><span className="cl-icon">📊</span><div><b>Welcome Widgets</b><p>See equity, P&L, positions, and autopilot status at a glance</p></div></div>
-            <div className="cl-item"><span className="cl-icon">⚡</span><div><b>Loading States</b><p>Paula tells you what she's doing — "Analyzing AAPL..." not just dots</p></div></div>
-            <div className="cl-item"><span className="cl-icon">🧪</span><div><b>Backtest Engine</b><p>Run 90-day historical backtests with equity curve and trade log</p></div></div>
-            <div className="cl-item"><span className="cl-icon">⚙️</span><div><b>Settings Overhaul</b><p>API keys, accent colors, font sizes, data export, autopilot control</p></div></div>
+            <div className="cl-group">
+              <span className="cl-group-title">Trading</span>
+              <div className="cl-item"><span className="cl-dot cl-dot-grn"/><div><b>Backtest Engine</b><p>Run 90-day historical simulations with equity curve, trade log, and profit factor analysis.</p></div></div>
+              <div className="cl-item"><span className="cl-dot cl-dot-grn"/><div><b>ML Insights</b><p>Analyze your trade history for patterns — best hours, winning scores, and auto-tuner recommendations.</p></div></div>
+              <div className="cl-item"><span className="cl-dot cl-dot-grn"/><div><b>Multi-Chart Tabs</b><p>Ask about multiple stocks — click ticker tabs to switch between charts instantly.</p></div></div>
+            </div>
+
+            <div className="cl-group">
+              <span className="cl-group-title">Interface</span>
+              <div className="cl-item"><span className="cl-dot cl-dot-blu"/><div><b>Redesigned UI</b><p>New split login, welcome widgets, prompt cards with icons, positions strip, and refined sidebar.</p></div></div>
+              <div className="cl-item"><span className="cl-dot cl-dot-blu"/><div><b>Typing Animation</b><p>Responses appear word-by-word with a blinking cursor. Loading states show what Paula is doing.</p></div></div>
+              <div className="cl-item"><span className="cl-dot cl-dot-blu"/><div><b>Accent Colors & Font Sizes</b><p>Pick from 6 accent colors and 3 font sizes in Settings → Appearance.</p></div></div>
+            </div>
+
+            <div className="cl-group">
+              <span className="cl-group-title">Quality of Life</span>
+              <div className="cl-item"><span className="cl-dot cl-dot-pur"/><div><b>Pin Chats</b><p>Pin important conversations to the top of the sidebar.</p></div></div>
+              <div className="cl-item"><span className="cl-dot cl-dot-pur"/><div><b>Keyboard Shortcuts</b><p>⌘N new chat · ⌘K focus input · ↵ send</p></div></div>
+              <div className="cl-item"><span className="cl-dot cl-dot-pur"/><div><b>Message Timestamps</b><p>See when each message was sent.</p></div></div>
+              <div className="cl-item"><span className="cl-dot cl-dot-pur"/><div><b>Settings Overhaul</b><p>Trader Profile, Connections, toggle switches, data export, and more.</p></div></div>
+            </div>
           </div>
-          <button className="cl-dismiss" onClick={dismissChangelog}>Got it</button>
+
+          <div className="cl-footer">
+            <button className="cl-dismiss" onClick={dismissChangelog}>Continue to Paula</button>
+          </div>
         </div>
       </div>}
 
@@ -714,7 +743,7 @@ function MainApp({ user, token, logout }) {
             </div>
           </div>
           <div className={'input-area'+(messages.length?' ia-active':'')}><div className="input-wrap"><div className="input-box">
-            <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')send()}} placeholder="Message Paula..." disabled={sending}/>
+            <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')send()}} placeholder="Message Paula — ask for a setup, scan, or recap..." disabled={sending}/>
             <button className="send" onClick={send} disabled={sending}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9Z"/></svg></button>
           </div>
           <div className="input-hints">
