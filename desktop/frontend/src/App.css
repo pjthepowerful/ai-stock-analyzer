@@ -79,6 +79,9 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .ci-active { background: var(--c2) !important }
 .ci-active::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px; background: var(--grn); border-radius: 1px }
 .ci-pinned { opacity: .85 }
+.ci-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--grn); flex-shrink: 0; opacity: .6 }
+.ci-time { font-size: .42rem; color: var(--dim); font-family: var(--mono); flex-shrink: 0; opacity: 0; transition: .12s }
+.chat-item:hover .ci-time { opacity: 0 }
 .ci-icon { width: 18px; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0 }
 .ci-title { font-size: .64rem; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; transition: .12s }
 .ci-active .ci-title { color: var(--lt); font-weight: 500 }
@@ -122,10 +125,18 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .pi-sym { font-family: var(--mono); font-size: .72rem; font-weight: 700 }
 .pi-up .pi-sym { color: var(--grn3) } .pi-dn .pi-sym { color: var(--red2) }
 .pi-meta { font-size: .44rem; color: var(--dim); font-family: var(--mono) }
+.pi-r { display: flex; flex-direction: column; align-items: flex-end; gap: 0 }
 .pi-pnl { font-family: var(--mono); font-size: .66rem; font-weight: 700 }
+.pi-pct { font-family: var(--mono); font-size: .42rem; color: var(--dim) }
+.pi-up .pi-pct { color: var(--grn3) } .pi-dn .pi-pct { color: var(--red2) }
 .pi-up .pi-pnl { color: var(--grn3) } .pi-dn .pi-pnl { color: var(--red2) }
 .empty-txt { font-size: .58rem; color: var(--dim); padding: 6px 10px; display: block; font-style: italic }
 .sb-bottom { padding: 10px 14px; border-top: 1px solid var(--brd) }
+.sb-user { display: flex; align-items: center; gap: 10px }
+.su-avatar { width: 30px; height: 30px; border-radius: 8px; background: var(--c3); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .62rem; color: var(--lt); font-family: var(--mono); flex-shrink: 0 }
+.su-info { display: flex; flex-direction: column; gap: 1px }
+.su-name { font-size: .62rem; font-weight: 600; color: var(--lt) }
+.su-conn { font-size: .42rem; color: var(--dim); display: flex; align-items: center; gap: 4px }
 .conn { font-size: .52rem; color: var(--dim); display: flex; align-items: center; gap: 6px; font-weight: 500; font-family: var(--sans) }
 .conn-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dim); flex-shrink: 0 }
 .c-on { color: var(--grn3) }
@@ -151,7 +162,8 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 /* Header bar */
 .hdr { display: flex; align-items: center; padding: 0 16px; border-bottom: 1px solid var(--brd); gap: 10px; flex-shrink: 0; height: 48px; background: var(--bg) }
 .hdr-left { display: flex; align-items: center; gap: 10px }
-.hdr-eq { font-family: var(--mono); font-size: .78rem; font-weight: 700; color: var(--wh) }
+.hdr-label { font-size: .42rem; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); font-weight: 600; margin-right: -4px }
+.hdr-eq { font-family: var(--mono); font-size: .82rem; font-weight: 700; color: var(--wh) }
 .hdr-pnl { font-family: var(--mono); font-size: .64rem; font-weight: 600 }
 .hdr-spy { font-family: var(--mono); font-size: .54rem; opacity: .7 }
 .hdr-nav { display: flex; gap: 1px; margin: 0 auto; background: var(--c1); border-radius: 8px; padding: 3px; border: 1px solid var(--brd) }
@@ -259,11 +271,13 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 
 /* ═══ Dashboard / Stats ═══ */
 .view-scroll { flex: 1; overflow-y: auto; padding: 28px 32px }
-.view-h { font-size: 1.1rem; font-weight: 700; color: var(--wh); margin-bottom: 20px; letter-spacing: -.02em }
+.view-h { font-size: 1.3rem; font-weight: 700; color: var(--wh); margin-bottom: 2px; letter-spacing: -.02em }
+.view-sub { font-size: .68rem; color: var(--dim); margin-bottom: 16px; font-family: var(--mono) }
 .view-msg { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--dim); font-size: .8rem }
 
 .card { background: var(--c1); border: 1px solid var(--brd); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px }
-.card label { display: block; font-size: .5rem; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin-bottom: 8px; font-weight: 600 }
+.card label { display: block; font-size: .78rem; font-weight: 700; color: var(--wh); margin-bottom: 8px }
+.card-sub { font-size: .56rem; color: var(--dim); display: block; margin-top: -4px; margin-bottom: 10px }
 .wide { grid-column: 1 / -1 }
 .big { font-family: var(--mono); font-size: 1.3rem; font-weight: 700; color: var(--wh) }
 .params { display: grid; grid-template-columns: 1fr 1fr; gap: 2px }
@@ -320,7 +334,9 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .tr-time { margin-left: auto; font-family: var(--mono); color: var(--dim) }
 
 /* ═══ Settings ═══ */
-.s-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--brd); font-size: .74rem }
+.s-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.03); gap: 12px; font-size: .72rem; color: var(--txt) }
+.s-col { display: flex; flex-direction: column; gap: 2px }
+.s-desc { font-size: .52rem; color: var(--dim) }
 .s-row:last-child { border-bottom: none }
 .tog { padding: 3px 10px; border-radius: 100px; font-size: .6rem; font-weight: 600; cursor: pointer; border: 1px solid var(--brd); background: var(--c2); color: var(--dim); font-family: var(--mono); transition: .15s }
 

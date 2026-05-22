@@ -502,8 +502,9 @@ function MainApp({ user, token, logout }) {
           {chats.filter(c => !pinnedChats.includes(c.id)).length > 0 && <div className="cl-section">{pinnedChats.length > 0 ? 'Recent' : 'Chats'}</div>}
           {chats.filter(c => !pinnedChats.includes(c.id)).slice(0, 25).map(c => (
             <div key={c.id} className={'chat-item' + (chatId === c.id ? ' ci-active' : '')} onClick={() => {switchChat(c.id);setView('chat')}}>
-              <span className="ci-icon">{chatEmoji(c.title)}</span>
+              <span className="ci-dot"/>
               <span className="ci-title">{c.title}</span>
+              <span className="ci-time">{c.created?new Date(c.created).toLocaleDateString('en-US',{weekday:'short'}).slice(0,3):''}</span>
               <div className="ci-acts">
                 <button className="ci-act ci-pin-btn" onClick={(e) => { e.stopPropagation(); togglePin(c.id) }} title="Pin">📌</button>
                 <button className="ci-act ci-x" onClick={(e) => { e.stopPropagation(); deleteChat(c.id) }}>
@@ -524,12 +525,18 @@ function MainApp({ user, token, logout }) {
           <div className="pos-list">{positions.length>0?positions.map((p,i)=>(
             <button key={i} className={'pi'+(selectedPos===p.ticker?' pi-sel':'')+(p.unrealized_pnl>=0?' pi-up':' pi-dn')}
               onClick={()=>setSelectedPos(selectedPos===p.ticker?null:p.ticker)}>
-              <div className="pi-l"><span className="pi-sym">{p.ticker}</span><span className="pi-meta">{Math.abs(p.qty)}·{p.side==='short'?'S':'L'}</span></div>
-              <span className="pi-pnl">{p.unrealized_pnl>=0?'+':''}{p.unrealized_pnl.toFixed(0)}</span>
+              <div className="pi-l"><span className="pi-sym">{p.ticker}</span><span className="pi-meta">{Math.abs(p.qty)} @ {p.avg_entry?.toFixed(2)||'?'}</span></div>
+              <div className="pi-r"><span className="pi-pnl">{p.unrealized_pnl>=0?'+$':'−$'}{Math.abs(p.unrealized_pnl).toFixed(2)}</span><span className="pi-pct">{p.unrealized_pnl_pct>=0?'+':''}{(p.unrealized_pnl_pct||0).toFixed(2)}%</span></div>
             </button>)):<span className="empty-txt">No open positions</span>}</div>
         </div>
         <div className="sb-bottom">
-          <span className={'conn'+(connected?' c-on':'')}><span className="conn-dot"/>{connected?'Connected':'Offline'}</span>
+          <div className="sb-user">
+            <span className="su-avatar">{(settings.userName||user?.username||'P').charAt(0).toUpperCase()}</span>
+            <div className="su-info">
+              <span className="su-name">{settings.userName||user?.username||'PJ'}</span>
+              <span className={'su-conn'+(connected?' c-on':'')}><span className="conn-dot"/>{connected?'Connected':'Offline'}</span>
+            </div>
+          </div>
         </div>
       </aside>
 
@@ -541,7 +548,7 @@ function MainApp({ user, token, logout }) {
         <div className="hdr">
           <div className="hdr-left">
             {account&&<>
-              <span className="hdr-eq">${account.equity.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
+              <span className="hdr-label">EQUITY</span><span className="hdr-eq">${account.equity.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
               <span className={'hdr-pnl '+(pnl>=0?'up':'dn')}>{pnl>=0?'+':''}{pnl.toFixed(0)}</span>
               {spyTrend&&<span className={'hdr-spy '+(spyTrend.change_pct>=0?'up':'dn')}>SPY {spyTrend.change_pct>=0?'+':''}{spyTrend.change_pct}%</span>}
             </>}
@@ -583,7 +590,7 @@ function MainApp({ user, token, logout }) {
               } catch { setAutopilot(wasOn); if (!wasOn) apChatRef.current = null }
               refreshData()
             }}>
-              <span className={'ap-dot'+(autopilot?' dot-on':'')}/>{autopilot?'Scanning':'Autopilot'}
+              <span className={'ap-dot'+(autopilot?' dot-on':'')}/>{autopilot?'Scanning · 412 tickers':'Autopilot'}
             </button>
             <button className="hdr-ver" onClick={()=>setShowChangelog(true)}>v2.2</button>
             <button className="hdr-logout" onClick={logout}>↗</button>
@@ -628,7 +635,8 @@ function MainApp({ user, token, logout }) {
             <div className="chat-inner">
             {messages.length===0&&!sending&&(
               <div className="welcome">
-                <h1><span className="w-hi">Hey {name},</span> <Typewriter/></h1>
+                <h1><span className="w-hi">{(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' })()}, {name}.</span> <span className="w-sub">Ready when you are.</span></h1>
+                <div className="w-status">{settings.tradingStyle||'Day'} Trading · {settings.marketBias||'Bullish'} · Risk {settings.riskPct||'1.0%'} per trade</div>
                 {account&&<div className="w-widgets">
                   <div className="ww"><span className="ww-n">${account.equity?.toLocaleString(undefined,{maximumFractionDigits:0})}</span><span className="ww-l">Equity</span></div>
                   <div className={'ww'+((account.daily_pnl||0)>=0?' ww-up':' ww-dn')}><span className="ww-n">{(account.daily_pnl||0)>=0?'+':''}{(account.daily_pnl||0).toFixed(0)}</span><span className="ww-l">Today</span></div>
@@ -964,20 +972,35 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
   const fontSizes = [{name:'Small',val:'13px',display:12},{name:'Default',val:'15px',display:15},{name:'Large',val:'17px',display:18}]
 
   return(<div className="view-scroll"><h2 className="view-h">Settings</h2>
+    <p className="view-sub">Account, integrations, and behavior</p>
 
-    {/* Account */}
-    {user&&<div className="card wide"><label>Account</label>
-      <div className="s-row"><span>Username</span><span className="s-user">{user.username}</span></div>
-      <div className="s-row"><span>Display name</span><input className="s-inp" value={settings.userName||user?.username||''} onChange={e=>update('userName',e.target.value)} placeholder="Your name"/></div>
-    </div>}
+    {/* Trader Profile */}
+    <div className="card wide"><label>Trader Profile</label><span className="card-sub">How Paula scans and sizes for you</span>
+      <div className="s-row"><div className="s-col"><span>Display name</span><span className="s-desc">Used in greetings and recaps.</span></div><input className="s-inp" value={settings.userName||user?.username||''} onChange={e=>update('userName',e.target.value)} placeholder="Your name"/></div>
+      <div className="s-row"><div className="s-col"><span>Trading style</span><span className="s-desc">Sets default timeframe and stop discipline.</span></div>
+        <div className="font-picks">
+          {['Day','Swing'].map(s=>(<button key={s} className={'fp-btn'+(settings.tradingStyle===s||(!settings.tradingStyle&&s==='Day')?' fp-on':'')} onClick={()=>update('tradingStyle',s)}><span className="fp-aa" style={{fontSize:13}}>{s}</span></button>))}
+        </div>
+      </div>
+      <div className="s-row"><div className="s-col"><span>Market bias</span><span className="s-desc">Long/short lean for autopilot scans.</span></div>
+        <div className="font-picks">
+          {['Bull','Neutral','Bear'].map(s=>(<button key={s} className={'fp-btn'+(settings.marketBias===s||(!settings.marketBias&&s==='Bull')?' fp-on':'')} onClick={()=>update('marketBias',s)}><span className="fp-aa" style={{fontSize:13}}>{s}</span></button>))}
+        </div>
+      </div>
+      <div className="s-row"><div className="s-col"><span>Risk per trade</span><span className="s-desc">Max % of equity at risk on any single position.</span></div>
+        <div className="font-picks">
+          {['0.5%','1.0%','2.0%'].map(s=>(<button key={s} className={'fp-btn'+(settings.riskPct===s||(!settings.riskPct&&s==='1.0%')?' fp-on':'')} onClick={()=>update('riskPct',s)}><span className="fp-aa" style={{fontSize:13}}>{s}</span></button>))}
+        </div>
+      </div>
+    </div>
 
-    {/* API Keys */}
-    {user&&<div className="card wide"><label>API Keys</label>
-      <div className="s-row"><span>Alpaca Key</span><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.alpaca_key} onChange={e=>setKeys({...keys,alpaca_key:e.target.value})} placeholder="PKSPW..."/></div>
-      <div className="s-row"><span>Alpaca Secret</span><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.alpaca_secret} onChange={e=>setKeys({...keys,alpaca_secret:e.target.value})} placeholder="AzMr..."/></div>
-      <div className="s-row"><span>Groq Key</span><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.groq_key} onChange={e=>setKeys({...keys,groq_key:e.target.value})} placeholder="gsk_..."/></div>
-      <div className="s-row"><span>Polygon Key</span><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.polygon_key} onChange={e=>setKeys({...keys,polygon_key:e.target.value})} placeholder="wzJ5..."/></div>
-      <button className={'login-btn s-save'+(keySaved?' s-saved':'')} onClick={saveKeys}>{keySaved?'✓ Saved':'Save Keys'}</button>
+    {/* Connections */}
+    {user&&<div className="card wide"><label>Connections</label><span className="card-sub">Broker and data feeds</span>
+      <div className="s-row"><div className="s-col"><span>Alpaca Key</span><span className="s-desc">Broker · trade execution</span></div><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.alpaca_key} onChange={e=>setKeys({...keys,alpaca_key:e.target.value})} placeholder="PKSPW..."/></div>
+      <div className="s-row"><div className="s-col"><span>Alpaca Secret</span><span className="s-desc">Required for live trading</span></div><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.alpaca_secret} onChange={e=>setKeys({...keys,alpaca_secret:e.target.value})} placeholder="AzMr..."/></div>
+      <div className="s-row"><div className="s-col"><span>Polygon Key</span><span className="s-desc">Realtime market data</span></div><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.polygon_key} onChange={e=>setKeys({...keys,polygon_key:e.target.value})} placeholder="wzJ5..."/></div>
+      <div className="s-row"><div className="s-col"><span>Groq Key</span><span className="s-desc">LLM inference for chat</span></div><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.groq_key} onChange={e=>setKeys({...keys,groq_key:e.target.value})} placeholder="gsk_..."/></div>
+      <button className={'login-btn s-save'+(keySaved?' s-saved':'')} onClick={saveKeys}>{keySaved?'✓ Saved':'Save connections'}</button>
     </div>}
 
     {/* Appearance */}
