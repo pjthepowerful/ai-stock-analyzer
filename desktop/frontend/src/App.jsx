@@ -1179,9 +1179,6 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
       <div className="s-row"><span>Clear all chats</span><button className="tog tog-danger" onClick={()=>{
         if(confirm('Delete all chats? This cannot be undone.')){persist([]);setActiveChatId(null);setMessages([])}
       }}>Clear</button></div>
-      <div className="s-row"><span>Export trade log</span><button className="tog" onClick={async ()=>{
-        try{const r=await f(API+'/api/trades').then(r=>r.json());if(r.ok){const b=new Blob([JSON.stringify(r.data,null,2)],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='paula-trades.json';a.click()}}catch{}
-      }}>Export</button></div>
     </div>
 
     {/* About */}
