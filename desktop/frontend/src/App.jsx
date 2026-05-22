@@ -416,35 +416,62 @@ function MainApp({ user, token, logout }) {
 
       if (data.ok) {
         const text = data.message || ''
-        const words = text.split(/(\s+)/)
-
-        // Start typing animation
-        setMessages(prev => [...prev, {
-          role: 'assistant', content: '', streaming: true,
+        const assistantMsg = {
+          role: 'assistant', content: text, streaming: false,
           type: data.type, ticker: data.ticker || null,
           tickers: data.tickers || [], signal: data.trade_signal || null,
           time: new Date().toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'})
-        }])
-
-        // Reveal words
-        let shown = ''
-        for (let i = 0; i < words.length; i++) {
-          shown += words[i]
-          const snap = shown
-          setMessages(prev => {
-            const m = [...prev]; const last = m[m.length - 1]
-            if (last?.streaming) m[m.length - 1] = { ...last, content: snap }
-            return m
-          })
-          if (i % 3 === 0) await new Promise(r => setTimeout(r, 15))
         }
 
-        // Done
-        setMessages(prev => {
-          const m = [...prev]; const last = m[m.length - 1]
-          if (last) m[m.length - 1] = { ...last, streaming: false }
-          return m
-        })
+        // Check if user is still in the same chat
+        if (chatIdRef.current === targetId) {
+          // Still here — animate typing
+          const words = text.split(/(\s+)/)
+          setMessages(prev => [...prev, { ...assistantMsg, content: '', streaming: true }])
+
+          let shown = ''
+          for (let i = 0; i < words.length; i++) {
+            // Bail if user switched away during animation
+            if (chatIdRef.current !== targetId) {
+              // Save complete response to original chat in localStorage
+              const updated = chatsRef.current.map(c => {
+                if (c.id !== targetId) return c
+                const msgs = c.messages || []
+                // Replace the streaming message with final
+                const fixed = msgs.map(m => m.streaming ? { ...assistantMsg } : m)
+                // If no streaming msg was saved yet, append
+                if (!msgs.some(m => m.streaming)) fixed.push(assistantMsg)
+                return { ...c, messages: fixed }
+              })
+              persist(updated)
+              break
+            }
+            shown += words[i]
+            const snap = shown
+            setMessages(prev => {
+              const m = [...prev]; const last = m[m.length - 1]
+              if (last?.streaming) m[m.length - 1] = { ...last, content: snap }
+              return m
+            })
+            if (i % 3 === 0) await new Promise(r => setTimeout(r, 15))
+          }
+
+          // Finalize if still in same chat
+          if (chatIdRef.current === targetId) {
+            setMessages(prev => {
+              const m = [...prev]; const last = m[m.length - 1]
+              if (last) m[m.length - 1] = { ...last, streaming: false, content: text }
+              return m
+            })
+          }
+        } else {
+          // User already switched — save directly to original chat
+          const updated = chatsRef.current.map(c => {
+            if (c.id !== targetId) return c
+            return { ...c, messages: [...(c.messages || []), assistantMsg] }
+          })
+          persist(updated)
+        }
 
         // Sounds
         if (data.type === 'trade' && data.message) {
@@ -455,7 +482,12 @@ function MainApp({ user, token, logout }) {
 
         if (data.autopilot !== undefined) setAutopilot(data.autopilot)
       } else {
-        setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ ' + (data.error || 'Something went wrong') }])
+        if (chatIdRef.current === targetId) {
+          setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ ' + (data.error || 'Something went wrong') }])
+        } else {
+          // Save error to original chat
+          persist(chatsRef.current.map(c => c.id === targetId ? { ...c, messages: [...(c.messages||[]), { role: 'assistant', content: '⚠️ ' + (data.error || 'Something went wrong') }] } : c))
+        }
       }
 
       // AI title on first message
