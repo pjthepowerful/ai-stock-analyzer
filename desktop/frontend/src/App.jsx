@@ -76,7 +76,7 @@ function LoginPage({ onAuth }) {
         <div className="ll-top"><span className="logo-p">P</span><span className="ll-name">Paula</span></div>
         <div className="ll-mid">
           <span className="ll-label">TRADING COPILOT · v3.0</span>
-          <h1 className="ll-hero">Trade smarter. Sleep better. Let Paula handle the markets.</h1>
+          <h1 className="ll-hero">Hey Paula. <span className="ll-hero-sub">Trade smarter. Sleep better. Let her handle the markets.</span></h1>
 
           {/* Live tape card */}
           <div className="ll-tape">
@@ -160,6 +160,7 @@ function MainApp({ user, token, logout }) {
   const [chatSearch, setChatSearch] = useState('')
   const [sending, setSending] = useState(false)
   const [loadingText, setLoadingText] = useState('')
+  const sendingChatRef = useRef(null) // which chat the current send is for
   const [account, setAccount] = useState(null)
   const [positions, setPositions] = useState([])
   const [autopilot, setAutopilot] = useState(false)
@@ -418,6 +419,7 @@ function MainApp({ user, token, logout }) {
 
     // Always ensure chat exists
     const targetId = ensureChat()
+    sendingChatRef.current = targetId
     const isFirstMsg = messages.length === 0
 
     // Show user message immediately
@@ -523,6 +525,7 @@ function MainApp({ user, token, logout }) {
 
     setSending(false)
     setLoadingText('')
+    sendingChatRef.current = null
     inputRef.current?.focus()
   }
 
@@ -791,7 +794,7 @@ function MainApp({ user, token, logout }) {
                   </div>
                 ):(<><div className="user-bubble">{m.content}</div>{m.time&&<div className="msg-time">{m.time}</div>}</>)}
               </div>))}
-            {sending&&!messages.some(m=>m.streaming)&&<div className="msg msg-assistant"><div className="ai"><div className="ai-av">P</div><div className="ai-body"><div className="ai-name">Paula</div><div className="loading-state"><div className="dots"><span/><span/><span/></div><span className="loading-txt">{loadingText}</span></div></div></div></div>}
+            {sending&&sendingChatRef.current===chatIdRef.current&&!messages.some(m=>m.streaming)&&<div className="msg msg-assistant"><div className="ai"><div className="ai-av">P</div><div className="ai-body"><div className="ai-name">Paula</div><div className="loading-state"><div className="dots"><span/><span/><span/></div><span className="loading-txt">{loadingText}</span></div></div></div></div>}
             <div ref={messagesEnd}/>
             </div>
           </div>

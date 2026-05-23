@@ -1362,6 +1362,19 @@ async def _autopilot_loop():
 
             # Send detailed phone notification if trades were made
             if buys > 0 or sells > 0 or shorts > 0:
+                # Log trades from autopilot
+                for line in result.get("log", []):
+                    if "BOUGHT" in line or "SHORTED" in line or "SOLD" in line or "COVERED" in line:
+                        parts_l = line.split()
+                        ticker_l = parts_l[1] if len(parts_l) > 1 else "?"
+                        action_l = "buy" if "BOUGHT" in line else "sell" if "SOLD" in line else "short" if "SHORTED" in line else "cover"
+                        # Extract price if present
+                        price_l = 0
+                        for p in parts_l:
+                            if p.startswith("$"):
+                                try: price_l = float(p.replace("$","").replace(",",""))
+                                except: pass
+                        log_trade(action_l, ticker_l, price=price_l, extra={"source": "autopilot", "score": result.get("score", 0)})
                 parts = []
                 if buys: parts.append(f"📈 {buys} bought")
                 if shorts: parts.append(f"📉 {shorts} shorted")

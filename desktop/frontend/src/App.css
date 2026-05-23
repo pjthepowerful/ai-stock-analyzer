@@ -531,6 +531,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .ll-mid { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; padding-bottom: 48px }
 .ll-label { font-family: var(--mono); font-size: .46rem; text-transform: uppercase; letter-spacing: .2em; color: var(--dim); display: block; margin-bottom: 18px }
 .ll-hero { font-size: 2.4rem; font-weight: 400; color: var(--wh); line-height: 1.28; letter-spacing: -.02em; max-width: 520px }
+.ll-hero-sub { color: var(--dim); font-weight: 300 }
 
 /* Live tape card */
 .ll-tape { margin-top: 32px; background: var(--c1); border: 1px solid var(--brd); border-radius: 12px; overflow: hidden }
