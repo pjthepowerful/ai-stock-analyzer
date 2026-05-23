@@ -280,7 +280,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 
 .wp-icon { font-size: 1.1rem; color: var(--dim); flex-shrink: 0; margin-top: 2px }
 .wp-q { font-size: .78rem; font-weight: 600; color: var(--wh); display: block; margin-bottom: 3px }
-.wp-a { font-size: .66rem; color: var(--dim); line-height: 1.4 }
+.wp-a { font-size: .62rem; color: var(--dim); line-height: 1.4; display: block }
 
 /* Typing */
 .dots { display: flex; gap: 5px; padding: 6px 0 }
@@ -583,7 +583,6 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
   .input-area { padding: 0 16px 14px }
   .welcome h1 { font-size: 1.4rem }
   .w-prompts { grid-template-columns: 1fr }
-  .w-prompt:last-child { grid-column: 1 }
   .view-scroll { padding: 16px }
   .user-bubble, .ai-body { max-width: 88vw }
   .db-info { flex-direction: column; align-items: flex-start; gap: 6px }
