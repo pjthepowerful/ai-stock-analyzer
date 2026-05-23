@@ -799,14 +799,7 @@ function MainApp({ user, token, logout }) {
             <div className="chat-inner">
             {messages.length===0&&!sending&&(
               <div className="welcome">
-                <h1><span className="w-hi">{(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' })()}, {name}.</span> <span className="w-sub">Ready when you are.</span></h1>
-                <div className="w-status">{settings.tradingStyle||'Day'} Trading · {settings.marketBias||'Bullish'} · Risk {settings.riskPct||'1.0%'} per trade</div>
-                {account&&<div className="w-widgets">
-                  <div className="ww"><span className="ww-l">EQUITY</span><span className="ww-n">${account.equity?.toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>
-                  <div className={'ww'+((account.daily_pnl||0)>=0?' ww-up':' ww-dn')}><span className="ww-l">TODAY</span><span className="ww-n">{(account.daily_pnl||0)>=0?'+':''}{(account.daily_pnl||0).toFixed(0)} <span className="ww-pct">{(account.daily_pnl_pct||0)>=0?'+':''}{(account.daily_pnl_pct||0).toFixed(2)}%</span></span></div>
-                  <div className="ww"><span className="ww-l">POSITIONS</span><span className="ww-n">{positions.length}{totalUnrealized!==0&&<span className={'ww-pct '+(totalUnrealized>=0?'up':'dn')}> {totalUnrealized>=0?'+':''}{totalUnrealized.toFixed(0)}</span>}</span></div>
-                  <div className="ww"><span className="ww-l">AUTOPILOT</span><span className={'ww-n '+(autopilot?'up':'')}>{autopilot?'Active':'Off'}</span></div>
-                </div>}
+                <h1><span className="w-hi">{(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' })()}, {name}.</span> <Typewriter/></h1>
                 <div className="w-prompts">
                   {[
                     {q:'Market overview', a:'Regime, SPY trend, VIX, and whether it\'s safe to trade right now.', cmd:'market regime', icon:'✦'},
