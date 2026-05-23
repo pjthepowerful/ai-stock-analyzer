@@ -76,7 +76,7 @@ function LoginPage({ onAuth }) {
         <div className="ll-top"><span className="logo-p">P</span><span className="ll-name">Paula</span></div>
         <div className="ll-mid">
           <span className="ll-label">TRADING COPILOT · v3.0</span>
-          <h1 className="ll-hero">Your autopilot for the open, the close, and everything in between.</h1>
+          <h1 className="ll-hero">Trade smarter. Sleep better. Let Paula handle the markets.</h1>
 
           {/* Live tape card */}
           <div className="ll-tape">
@@ -144,6 +144,7 @@ function LoginPage({ onAuth }) {
             </button>
           </div>
           <div className="lr-footer">By continuing you agree to our Terms · Privacy <span className="lr-sys">● All systems operational</span></div>
+          <a href="/commercial.html" target="_blank" className="lr-trailer">▶ Watch the trailer</a>
         </div>
       </div>
     </div>
@@ -690,7 +691,7 @@ function MainApp({ user, token, logout }) {
             </>}
           </div>
           <nav className="hdr-nav">
-            {[['chat','Chat'],['backtest','Backtest'],['stats','Stats'],['settings','Settings']].map(([v,label])=>(
+            {[['chat','Chat'],['analyze','Analyze'],['backtest','Backtest'],['stats','Stats'],['settings','Settings']].map(([v,label])=>(
               <button key={v} className={'hdr-tab'+(view===v?' ht-on':'')} onClick={()=>{setView(v);if(v==='stats')loadDashboard()}}>{label}</button>
             ))}
           </nav>
@@ -733,49 +734,8 @@ function MainApp({ user, token, logout }) {
           </div>
         </div>
 
-        {/* Quick ticker lookup */}
-        {view === 'chat' && (
-          <div className="qtb">
-            <div className="qtb-input-wrap">
-              <svg className="qtb-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-              <input className="qtb-input" placeholder="Quick lookup — type a ticker..." value={quickTicker}
-                onChange={e => { setQuickTicker(e.target.value.toUpperCase().replace(/[^A-Z]/g,'')); setQuickResult(null) }}
-                onKeyDown={e => { if (e.key === 'Enter' && quickTicker) quickLookup(quickTicker) }}
-              />
-              {quickTicker && <button className="qtb-go" onClick={() => quickLookup(quickTicker)}>{quickLoading ? '...' : '→'}</button>}
-            </div>
-            {quickResult && (
-              <div className="qtb-result">
-                <div className="qtb-r-main">
-                  <span className="qtb-sym">{quickResult.ticker}</span>
-                  <span className="qtb-price">${quickResult.price}</span>
-                  <span className={'qtb-chg ' + (quickResult.change >= 0 ? 'up' : 'dn')}>{quickResult.change >= 0 ? '+' : ''}{quickResult.change} ({quickResult.change_pct}%)</span>
-                </div>
-                <div className="qtb-r-meta">
-                  <span className={'qtb-signal qtb-' + quickResult.signal.toLowerCase()}>{quickResult.signal}</span>
-                  <span className="qtb-score">Score: {quickResult.score}</span>
-                  <button className="qtb-analyze" onClick={() => { sendMessage('Analyze ' + quickResult.ticker); setQuickTicker(''); setQuickResult(null) }}>Deep dive →</button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Positions strip */}
-        {positions.length > 0 && view === 'chat' && (
-          <div className="pos-strip">
-            {positions.map((p, i) => (
-              <button key={i} className={'ps-item' + (p.unrealized_pnl >= 0 ? ' ps-up' : ' ps-dn')}
-                onClick={() => setSelectedPos(selectedPos === p.ticker ? null : p.ticker)}>
-                <span className="ps-sym">{p.ticker}</span>
-                <span className="ps-qty">{Math.abs(p.qty)}{p.side === 'short' ? 'S' : 'L'}</span>
-                <span className="ps-pnl">{p.unrealized_pnl >= 0 ? '+' : ''}{p.unrealized_pnl.toFixed(0)}</span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {view==='backtest'?<BacktestView/>
+        {view==='analyze'?<AnalyzeView sendMessage={sendMessage} setView={setView}/>
+        :view==='backtest'?<BacktestView/>
         :view==='stats'?<DashView perf={perf}/>
         
         :view==='settings'?<SetView settings={settings} update={updateSetting} user={user} token={token} logout={logout} autopilot={autopilot} setAutopilot={setAutopilot} persist={persist} setActiveChatId={setActiveChatId} setMessages={setMessages} setShowChangelog={setShowChangelog}/>
@@ -850,6 +810,66 @@ function MainApp({ user, token, logout }) {
 }
 
 const PHRASES = ["what's the play today?","ready to trade?","let's find some setups.","what are we watching?","let's get to work.","what's on your radar?","let's make some moves."]
+function AnalyzeView({ sendMessage, setView }) {
+  const [ticker, setTicker] = useState('')
+  const [result, setResult] = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  const lookup = async (t) => {
+    if (!t) return
+    setLoading(true)
+    try {
+      const r = await f(API + '/api/quick/' + t.toUpperCase()).then(r => r.json())
+      if (r.ok) setResult(r)
+      else setResult(null)
+    } catch { setResult(null) }
+    setLoading(false)
+  }
+
+  return (
+    <div className="view-scroll">
+      <h2 className="view-h">Analyze</h2>
+      <p className="view-sub">Look up any stock — price, score, signal, and chart.</p>
+
+      <div className="az-input-wrap">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{color:'var(--dim)',flexShrink:0}}><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input className="az-input" placeholder="Enter a ticker — AAPL, NVDA, TSLA..." value={ticker}
+          onChange={e => setTicker(e.target.value.toUpperCase().replace(/[^A-Z]/g,''))}
+          onKeyDown={e => { if (e.key === 'Enter' && ticker) lookup(ticker) }}
+          autoFocus
+        />
+        <button className="az-go" onClick={() => lookup(ticker)} disabled={!ticker || loading}>{loading ? '...' : 'Look up'}</button>
+      </div>
+
+      {result && (
+        <div className="az-result">
+          <div className="az-header">
+            <div>
+              <span className="az-sym">{result.ticker}</span>
+              <span className={'az-signal az-' + result.signal.toLowerCase()}>{result.signal} · {result.score}</span>
+            </div>
+            <div className="az-price-wrap">
+              <span className="az-price">${result.price}</span>
+              <span className={'az-chg ' + (result.change >= 0 ? 'up' : 'dn')}>{result.change >= 0 ? '+' : ''}{result.change} ({result.change_pct}%)</span>
+            </div>
+          </div>
+
+          <div className="az-chart">
+            <Chart ticker={result.ticker} height={320}/>
+          </div>
+
+          <div className="az-actions">
+            <button className="az-btn az-deep" onClick={() => { sendMessage('Analyze ' + result.ticker); setView('chat') }}>Deep dive in chat →</button>
+            <button className="az-btn az-buy" onClick={() => { sendMessage('Buy ' + result.ticker); setView('chat') }}>Buy {result.ticker}</button>
+          </div>
+        </div>
+      )}
+
+      {!result && !loading && <div className="az-empty">Type a ticker above and press Enter to see price, score, and chart.</div>}
+    </div>
+  )
+}
+
 function BacktestView() {
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -870,7 +890,8 @@ function BacktestView() {
     try {
       const r = await f(API + '/api/ml/train', { method: 'POST' }).then(r => r.json())
       if (r.ok) setMlInsights(r.insights)
-    } catch {}
+      else setMlInsights({ error: r.error || 'No data available' })
+    } catch { setMlInsights({ error: 'Failed to connect' }) }
     setMlLoading(false)
   }
 
@@ -943,6 +964,9 @@ function BacktestView() {
       {/* ML Insights */}
       {mlInsights && (
         <div className="card wide" style={{marginTop: 12}}>
+          {mlInsights.error ? (
+            <div className="view-msg" style={{padding:'20px 0'}}>{mlInsights.error}</div>
+          ) : (<>
           <label>🧠 ML Insights — {mlInsights.total_trades} trades analyzed</label>
           <div className="bt-stats" style={{marginBottom: 12}}>
             <div className="bt-stat"><span className="bt-n">{mlInsights.win_rate}%</span><span className="bt-l">Win Rate</span></div>
@@ -960,6 +984,7 @@ function BacktestView() {
               ))}
             </div>
           )}
+          </>)}
         </div>
       )}
     </div>

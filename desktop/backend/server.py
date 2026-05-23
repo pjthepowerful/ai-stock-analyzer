@@ -710,8 +710,8 @@ async def train_ml():
             return {"ok": False, "error": "No trade history yet"}
 
         trades = json.loads(log_path.read_text())
-        if len(trades) < 10:
-            return {"ok": False, "error": f"Need 10+ trades, have {len(trades)}"}
+        if len(trades) < 3:
+            return {"ok": False, "error": f"Need at least 3 trades to analyze. You have {len(trades)}."}
 
         # Build feature matrix from trade log
         features = []
@@ -728,8 +728,8 @@ async def train_ml():
             features.append(feat)
             labels.append(1 if t.get("pnl", 0) > 0 else 0)
 
-        if len(features) < 10:
-            return {"ok": False, "error": f"Need 10+ completed trades, have {len(features)}"}
+        if len(features) < 3:
+            return {"ok": False, "error": f"Need at least 3 completed trades with P&L data. Found {len(features)}."}
 
         # Simple logistic-style scoring (no sklearn needed)
         wins = [f for f, l in zip(features, labels) if l == 1]
