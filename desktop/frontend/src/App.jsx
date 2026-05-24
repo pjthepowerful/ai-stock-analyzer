@@ -95,11 +95,11 @@ function LoginPage({ onAuth }) {
         </div>
         <div className="ll-bottom">
           <div className="ll-stats">
-            <div className="ll-stat"><span className="ll-stat-l">TICKERS SCANNED</span><span className="ll-stat-n">412</span></div>
+            <div className="ll-stat"><span className="ll-stat-l">WIN RATE</span><span className="ll-stat-n ll-grn">33.3%</span></div>
             <div className="ll-stat-div"/>
-            <div className="ll-stat"><span className="ll-stat-l">AVG WIN RATE</span><span className="ll-stat-n ll-grn">58.4%</span></div>
+            <div className="ll-stat"><span className="ll-stat-l">PROFIT FACTOR</span><span className="ll-stat-n">1.24</span></div>
             <div className="ll-stat-div"/>
-            <div className="ll-stat"><span className="ll-stat-l">MEDIAN R</span><span className="ll-stat-n">1.42</span></div>
+            <div className="ll-stat"><span className="ll-stat-l">AVG R:R</span><span className="ll-stat-n">2.47</span></div>
           </div>
           <div className="ll-market-row"><span className="ll-market">● MARKETS OPEN · NYSE</span></div>
         </div>
@@ -164,13 +164,14 @@ function MainApp({ user, token, logout }) {
   const toggleVoice = () => {
     if (listening) {
       recognitionRef.current?.stop()
+      recognitionRef.current = null
       setListening(false)
       return
     }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SR) return
     const recognition = new SR()
-    recognition.continuous = false
+    recognition.continuous = true
     recognition.interimResults = true
     recognition.lang = 'en-US'
     recognitionRef.current = recognition
@@ -178,8 +179,17 @@ function MainApp({ user, token, logout }) {
       const transcript = Array.from(e.results).map(r => r[0].transcript).join('')
       setInput(transcript)
     }
-    recognition.onend = () => setListening(false)
-    recognition.onerror = () => setListening(false)
+    recognition.onend = () => {
+      // Restart if still supposed to be listening (browser auto-stops after silence)
+      if (recognitionRef.current) {
+        try { recognitionRef.current.start() } catch {}
+      }
+    }
+    recognition.onerror = (e) => {
+      if (e.error === 'no-speech') return // ignore silence, keep listening
+      setListening(false)
+      recognitionRef.current = null
+    }
     recognition.start()
     setListening(true)
   }
@@ -812,7 +822,7 @@ function MainApp({ user, token, logout }) {
             </div>
           </div>
           <div className={'input-area'+(messages.length?' ia-active':'')}><div className="input-wrap"><div className="input-box">
-            <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')send()}} placeholder="Message Paula — ask for a setup, scan, or recap..." disabled={sending}/>
+            <textarea ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}} placeholder="Message Paula — ask for a setup, scan, or recap..." disabled={sending} rows={1} className="chat-textarea"/>
             <button className={'mic'+(listening?' mic-on':'')} onClick={toggleVoice} title="Voice input">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0014 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
             </button>
