@@ -1124,6 +1124,7 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
         "ticker": result.get("ticker") if result else None,
         "tickers": [],
         "trade_signal": result.get("trade_signal") if result else None,
+        "signal_data": result.get("signal_data") if result else None,
         "table": result.get("data") if result and result.get("type") == "list" else None,
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
     }

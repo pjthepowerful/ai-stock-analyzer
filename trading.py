@@ -2121,6 +2121,24 @@ def generate_trade_signal(data: dict) -> dict:
     rr = round((target_1 - entry) / risk, 2) if risk > 0 and target_1 > entry else (
          round((entry - target_1) / risk, 2) if risk > 0 and entry > target_1 else 0)
     
+    # Sub-scores for visual cards (0-100 scale)
+    trend_sub = min(100, max(0, 50 + (15 if is_uptrend else -15) + (10 if adx > 25 else 0) + (10 if price > sma_50 else -10) + (10 if price > sma_20 else -5)))
+    momentum_sub = min(100, max(0, int(rsi) if 30 < rsi < 70 else (30 if rsi <= 30 else 80)))
+    mr_sub = min(100, max(0, 50 + (20 if has_pullback else 0) + (-15 if rsi > 75 else 10 if rsi < 40 else 0)))
+    news_sub = min(100, max(0, 50 + news_score * 10))
+
+    trend_lbl = "strong uptrend" if trend_sub >= 70 else "uptrend" if trend_sub >= 55 else "sideways" if trend_sub >= 40 else "downtrend"
+    momentum_lbl = f"RSI {int(rsi)}, {'overbought' if rsi > 70 else 'oversold' if rsi < 30 else 'trending up' if macd_h > 0 else 'trending down'}"
+    mr_lbl = "low — not overstretched" if mr_sub >= 50 else "extended — pullback likely"
+    news_lbl = f"{'bullish' if news_sub >= 60 else 'neutral' if news_sub >= 40 else 'bearish'} coverage last 3d"
+
+    # Earnings warning
+    earn_warn = ""
+    for w in warnings:
+        if "earning" in w.lower():
+            earn_warn = w
+            break
+
     return {
         "action": action,
         "score": score,
@@ -2134,6 +2152,11 @@ def generate_trade_signal(data: dict) -> dict:
             "rsi": 1 if 30 <= rsi <= 55 else (-1 if rsi > 75 else 0),
             "news": 1 if news_score >= 2 else (-1 if news_score <= -2 else 0),
         },
+        "trend_score": trend_sub, "trend_label": trend_lbl,
+        "momentum_score": momentum_sub, "momentum_label": momentum_lbl,
+        "mean_reversion_score": mr_sub, "mean_reversion_label": mr_lbl,
+        "news_score": news_sub, "news_label": news_lbl,
+        "earnings_warning": earn_warn,
         "signals": signals,
         "warnings": warnings,
         "trade": {
@@ -4689,7 +4712,30 @@ def execute(intent: dict) -> dict:
         if not data:
             return {"ok": False, "error": f"No data for {intent['ticker']}."}
         signal = generate_trade_signal(data)
-        return {"ok": True, "type": "analysis", "ticker": tick, "market": market, "data": {**data, **signal}, "trade_signal": signal}
+        # Build structured signal data for visual cards
+        trade = signal.get("trade", {})
+        sig_data = {
+            "ticker": tick,
+            "name": data.get("name", tick),
+            "price": data.get("price", 0),
+            "action": signal.get("action", "HOLD"),
+            "score": signal.get("score", 0),
+            "scores": {
+                "trend": {"value": signal.get("trend_score", 0), "label": signal.get("trend_label", "")},
+                "momentum": {"value": signal.get("momentum_score", 0), "label": signal.get("momentum_label", "")},
+                "mean_reversion": {"value": signal.get("mean_reversion_score", 0), "label": signal.get("mean_reversion_label", "")},
+                "news": {"value": signal.get("news_score", 0), "label": signal.get("news_label", "")},
+            },
+            "trade": {
+                "side": "LONG" if signal.get("action") in ("BUY", "STRONG_BUY") else "SHORT" if signal.get("action") in ("SELL", "STRONG_SELL") else "NEUTRAL",
+                "entry": trade.get("entry", 0),
+                "stop": trade.get("stop_loss", 0),
+                "target": trade.get("target_1", 0),
+                "rr": trade.get("risk_reward", 0),
+            },
+            "earnings_warning": signal.get("earnings_warning", ""),
+        }
+        return {"ok": True, "type": "analysis", "ticker": tick, "market": market, "data": {**data, **signal}, "trade_signal": signal, "signal_data": sig_data}
 
     if t in ("gainers", "losers", "hot"):
         results = None

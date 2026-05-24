@@ -473,6 +473,7 @@ function MainApp({ user, token, logout }) {
           role: 'assistant', content: text, streaming: false,
           type: data.type, ticker: data.ticker || null,
           tickers: data.tickers || [], signal: data.trade_signal || null,
+          signalData: data.signal_data || null,
           time: new Date().toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'})
         }
 
@@ -812,6 +813,7 @@ function MainApp({ user, token, logout }) {
                       ):m.ticker||m.tickers?.[0]?(
                         <div className="ai-chart"><Chart ticker={m.ticker||m.tickers[0]} signal={m.signal} height={260}/></div>
                       ):null}
+                      {m.signalData && <SignalCard data={m.signalData} onExecute={(ticker) => sendMessage('Buy ' + ticker)}/>}
                       {m.time&&!m.streaming&&<div className="msg-time">{m.time}</div>}
                     </div>
                   </div>
@@ -1032,6 +1034,62 @@ function ChartTabs({ tickers, signal }) {
         ))}
       </div>
       <Chart key={safeTicker} ticker={safeTicker} signal={active === 0 ? signal : null} height={240} />
+    </div>
+  )
+}
+
+function SignalCard({ data, onExecute }) {
+  if (!data) return null
+  const scores = data.scores || {}
+  const trade = data.trade || {}
+  const isBuy = trade.side === 'LONG'
+  const isSell = trade.side === 'SHORT'
+
+  const ScoreBar = ({ name, sub, value }) => {
+    const color = value >= 70 ? 'var(--grn)' : value >= 50 ? 'var(--amb)' : 'var(--red)'
+    return (
+      <div className="sc-row">
+        <div className="sc-label"><span className="sc-name">{name}</span><span className="sc-sub">{sub}</span></div>
+        <div className="sc-bar-wrap">
+          <div className="sc-bar" style={{ width: value + '%', background: color }}/>
+        </div>
+        <span className="sc-val" style={{ color }}>{value}</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="signal-card">
+      {/* Score bars */}
+      <div className="sc-scores">
+        <div className="sc-header">SETUP SCORES</div>
+        {scores.trend && <ScoreBar name="Trend" sub={scores.trend.label} value={scores.trend.value}/>}
+        {scores.momentum && <ScoreBar name="Momentum" sub={scores.momentum.label} value={scores.momentum.value}/>}
+        {scores.mean_reversion && <ScoreBar name="Mean-reversion" sub={scores.mean_reversion.label} value={scores.mean_reversion.value}/>}
+        {scores.news && <ScoreBar name="News sentiment" sub={scores.news.label} value={scores.news.value}/>}
+      </div>
+
+      {/* Trade card */}
+      {trade.entry > 0 && (
+        <div className={'sc-trade' + (isBuy ? ' sc-buy' : isSell ? ' sc-sell' : '')}>
+          <div className="sc-trade-head">
+            <div className="sc-trade-left">
+              <span className={'sc-side ' + (isBuy ? 'sc-side-buy' : 'sc-side-sell')}>{trade.side}</span>
+              <span className="sc-ticker">{data.ticker}</span>
+            </div>
+            <span className="sc-rr">R:R · <b>{trade.rr?.toFixed(1)}</b></span>
+          </div>
+          <div className="sc-levels">
+            <div className="sc-level"><span className="sc-level-l">ENTRY</span><span className="sc-level-v">${trade.entry?.toFixed(2)}</span></div>
+            <div className="sc-level"><span className="sc-level-l">STOP</span><span className="sc-level-v sc-stop">${trade.stop?.toFixed(2)}</span></div>
+            <div className="sc-level"><span className="sc-level-l">TARGET</span><span className="sc-level-v sc-target">${trade.target?.toFixed(2)}</span></div>
+          </div>
+          {data.earnings_warning && <div className="sc-warn">⚠ {data.earnings_warning}</div>}
+          <div className="sc-actions">
+            <button className="sc-btn sc-exec" onClick={() => onExecute(data.ticker)}>Execute</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

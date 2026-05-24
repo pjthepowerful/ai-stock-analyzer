@@ -484,6 +484,47 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 /* ═══ Backtest ═══ */
 
 /* ═══ Analyze ═══ */
+
+/* ═══ Signal Card ═══ */
+.signal-card { margin-top: 16px; display: flex; flex-direction: column; gap: 12px }
+
+.sc-scores { background: var(--c1); border: 1px solid var(--brd); border-radius: 14px; padding: 18px 20px }
+.sc-header { font-family: var(--mono); font-size: .46rem; text-transform: uppercase; letter-spacing: .14em; color: var(--dim); font-weight: 700; margin-bottom: 16px }
+.sc-row { display: flex; align-items: center; gap: 14px; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.03) }
+.sc-row:last-child { border-bottom: none }
+.sc-label { min-width: 140px }
+.sc-name { display: block; font-size: .78rem; font-weight: 600; color: var(--wh) }
+.sc-sub { display: block; font-size: .52rem; color: var(--dim); margin-top: 2px }
+.sc-bar-wrap { flex: 1; height: 8px; background: var(--c3); border-radius: 4px; overflow: hidden }
+.sc-bar { height: 100%; border-radius: 4px; transition: width .6s cubic-bezier(.16,1,.3,1) }
+.sc-val { font-family: var(--mono); font-size: .82rem; font-weight: 700; min-width: 32px; text-align: right }
+
+.sc-trade { background: var(--c1); border: 1px solid var(--brd); border-radius: 14px; overflow: hidden }
+.sc-buy { border-top: 3px solid var(--grn) }
+.sc-sell { border-top: 3px solid var(--red) }
+.sc-trade-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--brd) }
+.sc-trade-left { display: flex; align-items: center; gap: 10px }
+.sc-side { font-family: var(--mono); font-size: .52rem; font-weight: 700; padding: 3px 10px; border-radius: 5px; letter-spacing: .08em }
+.sc-side-buy { background: rgba(16,185,129,.15); color: var(--grn) }
+.sc-side-sell { background: rgba(239,68,68,.15); color: var(--red) }
+.sc-ticker { font-family: var(--mono); font-size: 1rem; font-weight: 700; color: var(--wh) }
+.sc-rr { font-family: var(--mono); font-size: .62rem; color: var(--dim) }
+.sc-rr b { color: var(--wh); font-size: .82rem }
+
+.sc-levels { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+.sc-level { padding: 16px 20px; border-right: 1px solid var(--brd) }
+.sc-level:last-child { border-right: none }
+.sc-level-l { display: block; font-family: var(--mono); font-size: .42rem; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); font-weight: 600; margin-bottom: 6px }
+.sc-level-v { font-family: var(--mono); font-size: 1.1rem; font-weight: 700; color: var(--wh) }
+.sc-stop { color: var(--red2) }
+.sc-target { color: var(--grn3) }
+
+.sc-warn { padding: 10px 20px; font-family: var(--mono); font-size: .56rem; color: var(--amb); border-top: 1px solid var(--brd) }
+
+.sc-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--brd) }
+.sc-btn { padding: 8px 20px; border-radius: 8px; font-family: var(--sans); font-size: .68rem; font-weight: 600; cursor: pointer; transition: all .15s }
+.sc-exec { background: var(--grn); color: var(--bg); border: none }
+.sc-exec:hover { background: var(--grn2); transform: translateY(-1px) }
 .az-input-wrap { display: flex; align-items: center; gap: 10px; background: var(--c1); border: 1px solid var(--brd); border-radius: 10px; padding: 10px 12px; margin-bottom: 20px }
 .az-input { flex: 1; background: none; border: none; outline: none; color: var(--wh); font-family: var(--mono); font-size: .84rem; font-weight: 600; letter-spacing: .04em }
 .az-input::placeholder { color: var(--dim); font-weight: 400; font-family: var(--sans); letter-spacing: 0 }
