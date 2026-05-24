@@ -785,7 +785,7 @@ function MainApp({ user, token, logout }) {
             <div className="chat-inner">
             {messages.length===0&&!sending&&(
               <div className="welcome">
-                <h1><span className="w-hi">{(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' })()}, {name}.</span> <Typewriter/></h1>
+                <h1><span className="w-hi">{(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' })()}, {name},</span> <Typewriter/></h1>
                 <div className="w-prompts">
                   {[
                     {q:'Market overview', a:'Regime, SPY trend, VIX, and whether it\'s safe to trade right now.', cmd:'market regime', icon:'✦'},

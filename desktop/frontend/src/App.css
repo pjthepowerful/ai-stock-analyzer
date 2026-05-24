@@ -232,7 +232,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 
 /* User messages */
 .msg-user { display: flex; justify-content: flex-end; padding: 6px 0 }
-.user-bubble { width: fit-content; background: var(--c2); border: 1px solid var(--brd); border-radius: 20px 20px 4px 20px; padding: 14px 22px; max-width: 65%; font-size: var(--chat-fs); color: var(--wh); line-height: 1.65 }
+.user-bubble { width: fit-content; background: var(--c2); border: 1px solid var(--brd); border-radius: 20px 20px 4px 20px; padding: 14px 22px; max-width: 65%; font-size: var(--chat-fs); color: var(--wh); line-height: 1.65; white-space: pre-wrap; word-wrap: break-word }
 
 /* AI messages */
 .msg-assistant { padding: 12px 0 }
