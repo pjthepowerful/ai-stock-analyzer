@@ -5,12 +5,18 @@
   "MIN_SCORE": 82,
   "MIN_CONFLUENCE": 5,
   "MIN_RR": 2.0,
+  "SELL_BELOW": 35,
   "LONG_ONLY": true,
   "MAX_DAILY_ENTRIES": 4,
   "MAX_HOLD_DAYS": 0,
+  "PARTIAL_PROFIT_PCT": 0.025,
+  "STALE_MINUTES": 120,
+  "DAILY_LOSS_LIMIT": 0.01,
   "TRADING_HOURS_START": "09:45",
   "TRADING_HOURS_END": "15:00",
   "AVOID_MIDDAY": true,
   "MIDDAY_START": "11:30",
-  "MIDDAY_END": "13:30"
+  "MIDDAY_END": "13:30",
+  "last_tuned": "",
+  "tune_history": []
 }

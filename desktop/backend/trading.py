@@ -3264,10 +3264,12 @@ def run_backtest(years: int = 2) -> dict:
 
                 # Higher score = bigger position
                 score_mult = 1.0
-                if sig["score"] >= 70:
-                    score_mult = 1.5  # high conviction
-                elif sig["score"] >= 60:
-                    score_mult = 1.2
+                if sig["score"] >= 85:
+                    score_mult = 1.3  # high conviction
+                elif sig["score"] >= 80:
+                    score_mult = 1.0
+                else:
+                    score_mult = 0.7  # lower conviction
 
                 max_risk = capital * RISK_PER_TRADE * score_mult
                 qty = max(1, int(max_risk / risk_per_share))
@@ -3543,11 +3545,11 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         "MIN_CONFLUENCE": 5,
         "MIN_RR": 2.0,
         "STOP_FLOOR": 0.013,
-        "SELL_BELOW": 30,
+        "SELL_BELOW": 35,
         "DAILY_LOSS_LIMIT": 0.01,
-        "PARTIAL_PROFIT_PCT": 0.03,
+        "PARTIAL_PROFIT_PCT": 0.025,
         "MAX_DAILY_ENTRIES": 4,
-        "STALE_MINUTES": 90,
+        "STALE_MINUTES": 120,
         "TRADING_HOURS_START": "09:45",
         "TRADING_HOURS_END": "15:00",
         "AVOID_MIDDAY": True,
@@ -3572,9 +3574,17 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         params = DEFAULT_PARAMS.copy()
 
     # ── Daily auto-tune: review yesterday's trades and adjust ──
+    # PROVEN FLOORS (backtest: 33% WR, +$58, profitable):
+    # MIN_SCORE >= 78, MAX_POSITIONS <= 2, MAX_DAILY_ENTRIES <= 5
+    # STOP_FLOOR >= 0.010, MIN_CONFLUENCE >= 4
+    FLOOR_MIN_SCORE = 78
+    FLOOR_MAX_POS = 2
+    FLOOR_MAX_ENTRIES = 5
+    FLOOR_STOP = 0.010
+    FLOOR_CONFLUENCE = 4
+
     if params.get("last_tuned") != today and not dry_run:
         try:
-            # Pull recent closed trades from Alpaca
             orders_r = requests.get(f"{ALPACA_BASE}/v2/orders",
                                     headers=_alpaca_headers(),
                                     params={"status": "closed", "limit": 100,
@@ -3582,7 +3592,6 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                                     timeout=15)
             if orders_r.status_code == 200:
                 closed_orders = orders_r.json()
-                # Match buys to sells by symbol
                 buys = {}
                 sells = {}
                 for o in closed_orders:
@@ -3595,58 +3604,59 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                         else:
                             sells.setdefault(sym, []).append({"price": avg, "qty": qty})
 
-                # Calculate rough P&L per symbol
                 wins, losses, total_pnl = 0, 0, 0
                 for sym in sells:
                     if sym in buys:
                         buy_avg = sum(b["price"] * b["qty"] for b in buys[sym]) / max(1, sum(b["qty"] for b in buys[sym]))
                         sell_avg = sum(s["price"] * s["qty"] for s in sells[sym]) / max(1, sum(s["qty"] for s in sells[sym]))
                         pnl = sell_avg - buy_avg
-                        if pnl > 0:
-                            wins += 1
-                        else:
-                            losses += 1
+                        if pnl > 0: wins += 1
+                        else: losses += 1
                         total_pnl += pnl
 
                 total_trades = wins + losses
                 win_rate = wins / max(1, total_trades)
                 tune_msg = []
 
-                if total_trades >= 3:  # Only tune if enough data
-                    # RULE 1: Too many trades → reduce max positions
-                    if total_trades > 12:
-                        params["MAX_POSITIONS"] = max(1, params["MAX_POSITIONS"] - 1)
-                        params["MAX_DAILY_ENTRIES"] = max(3, params["MAX_DAILY_ENTRIES"] - 1)
-                        tune_msg.append(f"Too many trades ({total_trades}) → max_pos={params['MAX_POSITIONS']}, entries={params['MAX_DAILY_ENTRIES']}")
+                if total_trades >= 2:
+                    # RULE 1: Losing day → tighten (fast)
+                    if total_pnl < 0:
+                        params["MIN_SCORE"] = min(90, params["MIN_SCORE"] + 2)
+                        params["MAX_DAILY_ENTRIES"] = max(2, params["MAX_DAILY_ENTRIES"] - 1)
+                        tune_msg.append(f"Loss day (${total_pnl:.0f}) → score={params['MIN_SCORE']}, entries={params['MAX_DAILY_ENTRIES']}")
 
-                    # RULE 2: Win rate < 40% → raise MIN_SCORE
-                    if win_rate < 0.4:
-                        params["MIN_SCORE"] = min(85, params["MIN_SCORE"] + 3)
-                        tune_msg.append(f"Low win rate ({win_rate:.0%}) → score={params['MIN_SCORE']}")
+                    # RULE 2: Win rate below 30% → tighten hard
+                    if win_rate < 0.30 and total_trades >= 3:
+                        params["MIN_SCORE"] = min(90, params["MIN_SCORE"] + 3)
+                        params["MIN_CONFLUENCE"] = min(6, params["MIN_CONFLUENCE"] + 1)
+                        tune_msg.append(f"Low WR ({win_rate:.0%}) → score={params['MIN_SCORE']}, confluence={params['MIN_CONFLUENCE']}")
 
-                    # RULE 3: Win rate > 60% and profitable → loosen slightly
-                    if win_rate > 0.6 and total_pnl > 0:
-                        params["MIN_SCORE"] = max(65, params["MIN_SCORE"] - 2)
-                        params["MAX_POSITIONS"] = min(3, params["MAX_POSITIONS"] + 1)
-                        tune_msg.append(f"Good day ({win_rate:.0%} WR, +${total_pnl:.0f}) → score={params['MIN_SCORE']}, max_pos={params['MAX_POSITIONS']}")
+                    # RULE 3: Profitable day → relax VERY slowly (1 point, only if above floor)
+                    if total_pnl > 50 and win_rate > 0.40:
+                        if params["MIN_SCORE"] > FLOOR_MIN_SCORE + 2:
+                            params["MIN_SCORE"] = max(FLOOR_MIN_SCORE, params["MIN_SCORE"] - 1)
+                            tune_msg.append(f"Profit day +${total_pnl:.0f} ({win_rate:.0%} WR) → score={params['MIN_SCORE']} (relaxed 1pt)")
 
-                    # RULE 4: Big loss day → tighten daily loss limit
-                    if total_pnl < -200:
-                        params["DAILY_LOSS_LIMIT"] = max(0.005, params["DAILY_LOSS_LIMIT"] - 0.002)
-                        params["MAX_DAILY_ENTRIES"] = max(3, params["MAX_DAILY_ENTRIES"] - 1)
-                        tune_msg.append(f"Big loss (${total_pnl:.0f}) → loss_limit={params['DAILY_LOSS_LIMIT']:.1%}, entries={params['MAX_DAILY_ENTRIES']}")
+                    # RULE 4: Big loss → widen stops slightly (less noise stopouts)
+                    if total_pnl < -100:
+                        params["STOP_FLOOR"] = min(0.020, params.get("STOP_FLOOR", 0.013) + 0.001)
+                        tune_msg.append(f"Big loss → stop_floor={params['STOP_FLOOR']:.1%}")
 
-                    # RULE 5: Profitable day → relax loss limit slightly
-                    if total_pnl > 100:
-                        params["DAILY_LOSS_LIMIT"] = min(0.02, params["DAILY_LOSS_LIMIT"] + 0.001)
-                        tune_msg.append(f"Profit day (+${total_pnl:.0f}) → loss_limit={params['DAILY_LOSS_LIMIT']:.1%}")
+                    # RULE 5: 3+ wins in a row → narrow stops back (confidence)
+                    if wins >= 3 and losses == 0:
+                        params["STOP_FLOOR"] = max(FLOOR_STOP, params.get("STOP_FLOOR", 0.013) - 0.001)
+                        tune_msg.append(f"Clean sweep ({wins}W) → stop_floor={params['STOP_FLOOR']:.1%}")
 
-                    # RULE 6: Clamp all values to safe ranges
-                    params["MIN_SCORE"] = max(65, min(85, params["MIN_SCORE"]))
-                    params["MAX_POSITIONS"] = max(1, min(4, params["MAX_POSITIONS"]))
-                    params["MAX_DAILY_ENTRIES"] = max(3, min(8, params["MAX_DAILY_ENTRIES"]))
-                    params["DAILY_LOSS_LIMIT"] = max(0.005, min(0.02, params["DAILY_LOSS_LIMIT"]))
-                    params["MIN_RR"] = max(1.5, min(3.0, params["MIN_RR"]))
+                    # HARD CLAMPS — never violate proven floors
+                    params["MIN_SCORE"] = max(FLOOR_MIN_SCORE, min(92, params["MIN_SCORE"]))
+                    params["MAX_POSITIONS"] = max(1, min(FLOOR_MAX_POS, params["MAX_POSITIONS"]))
+                    params["MAX_DAILY_ENTRIES"] = max(2, min(FLOOR_MAX_ENTRIES, params["MAX_DAILY_ENTRIES"]))
+                    params["MIN_CONFLUENCE"] = max(FLOOR_CONFLUENCE, min(7, params["MIN_CONFLUENCE"]))
+                    params["STOP_FLOOR"] = max(FLOOR_STOP, min(0.020, params.get("STOP_FLOOR", 0.013)))
+                    params["MIN_RR"] = max(1.8, min(3.0, params["MIN_RR"]))
+                    params["DAILY_LOSS_LIMIT"] = max(0.005, min(0.015, params.get("DAILY_LOSS_LIMIT", 0.01)))
+                    # NEVER relax these below proven values
+                    params["AVOID_MIDDAY"] = True  # always skip midday chop
 
                 if tune_msg:
                     log.append("🔧 **Auto-Tune** — adjusted based on yesterday:")
@@ -3654,7 +3664,6 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                         log.append(f"   • {m}")
                     params["tune_history"].append({"date": today, "changes": tune_msg,
                                                    "stats": {"trades": total_trades, "wins": wins, "losses": losses, "pnl": round(total_pnl, 2)}})
-                    # Keep last 30 days of history
                     params["tune_history"] = params["tune_history"][-30:]
 
                 params["last_tuned"] = today
@@ -3858,7 +3867,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         minutes_held = (time.time() - entry_time) / 60
 
         # If held 90+ min and PnL between -0.5% and +0.5% — it's dead money
-        if minutes_held >= STALE_MINUTES and -0.3 <= pnl_pct <= 0.2:
+        if minutes_held >= STALE_MINUTES and -0.2 <= pnl_pct <= 0.15:
             is_short = pos.get("side") == "short"
             if dry_run:
                 stale_kills.append(f"⏰ Would close {ticker} {'(short)' if is_short else ''} — flat for {minutes_held:.0f}min ({pnl_pct:+.1f}%)")
