@@ -158,6 +158,31 @@ function MainApp({ user, token, logout }) {
   const [quickResult, setQuickResult] = useState(null)
   const [quickLoading, setQuickLoading] = useState(false)
   const [chatSearch, setChatSearch] = useState('')
+  const [listening, setListening] = useState(false)
+  const recognitionRef = useRef(null)
+
+  const toggleVoice = () => {
+    if (listening) {
+      recognitionRef.current?.stop()
+      setListening(false)
+      return
+    }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SR) return
+    const recognition = new SR()
+    recognition.continuous = false
+    recognition.interimResults = true
+    recognition.lang = 'en-US'
+    recognitionRef.current = recognition
+    recognition.onresult = (e) => {
+      const transcript = Array.from(e.results).map(r => r[0].transcript).join('')
+      setInput(transcript)
+    }
+    recognition.onend = () => setListening(false)
+    recognition.onerror = () => setListening(false)
+    recognition.start()
+    setListening(true)
+  }
   const [sending, setSending] = useState(false)
   const [loadingText, setLoadingText] = useState('')
   const sendingChatRef = useRef(null) // which chat the current send is for
@@ -624,34 +649,22 @@ function MainApp({ user, token, logout }) {
         <div className="chat-list">
           {(()=>{
             const q = chatSearch.toLowerCase()
-            const pinned = chats.filter(c => pinnedChats.includes(c.id) && (!q || c.title?.toLowerCase().includes(q)))
-            const unpinned = chats.filter(c => !pinnedChats.includes(c.id) && (!q || c.title?.toLowerCase().includes(q)))
+            const filtered = chats.filter(c => !q || c.title?.toLowerCase().includes(q))
             return <>
-          {pinned.length > 0 && <div className="cl-section">📌 Pinned</div>}
-          {pinned.map(c => (
-            <div key={c.id} className={'chat-item ci-pinned' + (chatId === c.id ? ' ci-active' : '')} onClick={() => {switchChat(c.id);setView('chat')}}>
-              <span className="ci-dot"/>
-              <span className="ci-title">{c.title}</span>
-              <button className="ci-act ci-unpin-btn" onClick={(e) => { e.stopPropagation(); togglePin(c.id) }} title="Unpin">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-              </button>
-            </div>
-          ))}
-          {unpinned.length > 0 && <div className="cl-section">{pinned.length > 0 ? 'Recent' : 'Chats'}</div>}
-          {unpinned.slice(0, 25).map(c => (
+          {filtered.length > 0 && <div className="cl-section">Chats</div>}
+          {filtered.slice(0, 25).map(c => (
             <div key={c.id} className={'chat-item' + (chatId === c.id ? ' ci-active' : '')} onClick={() => {switchChat(c.id);setView('chat')}}>
               <span className="ci-dot"/>
               <span className="ci-title">{c.title}</span>
               <span className="ci-time">{c.created?new Date(c.created).toLocaleDateString('en-US',{weekday:'short'}).slice(0,3):''}</span>
               <div className="ci-acts">
-                <button className="ci-act ci-pin-btn" onClick={(e) => { e.stopPropagation(); togglePin(c.id) }} title="Pin">📌</button>
                 <button className="ci-act ci-x" onClick={(e) => { e.stopPropagation(); deleteChat(c.id) }}>
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
               </div>
             </div>
           ))}
-          {q && pinned.length === 0 && unpinned.length === 0 && <div className="empty-txt">No chats match "{chatSearch}"</div>}
+          {q && filtered.length === 0 && <div className="empty-txt">No chats match "{chatSearch}"</div>}
           </>})()}
         </div>
 
@@ -800,6 +813,9 @@ function MainApp({ user, token, logout }) {
           </div>
           <div className={'input-area'+(messages.length?' ia-active':'')}><div className="input-wrap"><div className="input-box">
             <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')send()}} placeholder="Message Paula — ask for a setup, scan, or recap..." disabled={sending}/>
+            <button className={'mic'+(listening?' mic-on':'')} onClick={toggleVoice} title="Voice input">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0014 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+            </button>
             <button className="send" onClick={send} disabled={sending}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9Z"/></svg></button>
           </div>
           <div className="input-hints">

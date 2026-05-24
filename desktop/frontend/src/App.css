@@ -81,7 +81,6 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .chat-item:hover { background: var(--c1) }
 .ci-active { background: var(--c2) !important }
 .ci-active::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px; background: var(--grn); border-radius: 1px }
-.ci-pinned { opacity: .85 }
 .ci-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--grn); flex-shrink: 0; opacity: .6 }
 .ci-time { font-size: .42rem; color: var(--dim); font-family: var(--mono); flex-shrink: 0; opacity: 0; transition: .12s }
 .chat-item:hover .ci-time { opacity: 0 }
@@ -232,13 +231,13 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 @keyframes msgIn { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
 
 /* User messages */
-.msg-user { display: flex; justify-content: flex-end; padding: 4px 0 }
-.user-bubble { width: fit-content; background: var(--c2); border: 1px solid var(--brd); border-radius: 20px 20px 4px 20px; padding: 12px 20px; max-width: 70%; font-size: var(--chat-fs); color: var(--wh); line-height: 1.6 }
+.msg-user { display: flex; justify-content: flex-end; padding: 6px 0 }
+.user-bubble { width: fit-content; background: var(--c2); border: 1px solid var(--brd); border-radius: 20px 20px 4px 20px; padding: 14px 22px; max-width: 65%; font-size: var(--chat-fs); color: var(--wh); line-height: 1.65 }
 
 /* AI messages */
-.msg-assistant { padding: 10px 0 }
+.msg-assistant { padding: 12px 0 }
 .ai { display: flex; gap: 12px; align-items: flex-start }
-.ai-av { width: 30px; height: 30px; border-radius: 8px; background: var(--grn); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px; color: var(--bg); flex-shrink: 0; margin-top: 2px; font-family: var(--mono) }
+.ai-av { width: 32px; height: 32px; border-radius: 9px; background: var(--grn); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: var(--bg); flex-shrink: 0; margin-top: 2px; font-family: var(--mono) }
 .ai-body { flex: 1; min-width: 0 }
 .ai-name { font-size: .64rem; font-weight: 600; color: var(--dim); margin-bottom: 4px; letter-spacing: .02em }
 .ai-txt { font-size: var(--chat-fs); color: var(--lt); line-height: 1.8 }
@@ -295,10 +294,10 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .ia-active .input-wrap { max-width: 760px }
 .input-box { display: flex; align-items: center; background: var(--c1); border: 1px solid var(--brd); border-radius: 16px; padding: 4px 5px 4px 20px; transition: all .25s cubic-bezier(.16,1,.3,1); box-shadow: 0 2px 12px rgba(0,0,0,.15) }
 .input-box:focus-within { border-color: rgba(16,185,129,.2); box-shadow: 0 0 0 3px rgba(16,185,129,.03); background: var(--c2) }
-.input-box input { flex: 1; background: none; border: none; outline: none; color: var(--lt); font-family: var(--sans); font-size: .88rem; padding: 10px 0 }
+.input-box input { flex: 1; background: none; border: none; outline: none; color: var(--lt); font-family: var(--sans); font-size: .92rem; padding: 12px 0 }
 .input-box input::placeholder { color: var(--dim) }
 .input-box input:disabled { opacity: .3 }
-.send { width: 38px; height: 38px; border-radius: 12px; background: var(--grn); border: none; color: var(--bg); display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: all .15s }
+.send { width: 40px; height: 40px; border-radius: 12px; background: var(--grn); border: none; color: var(--bg); display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: all .15s }
 .send:hover { background: var(--grn3); transform: translateY(-1px) }
 .send:disabled { opacity: .15; cursor: not-allowed; transform: none }
 
@@ -428,6 +427,13 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .cl-dismiss { width: 100%; padding: 12px; border: none; border-radius: 10px; background: var(--grn); color: #050507; font-family: var(--sans); font-size: .82rem; font-weight: 600; cursor: pointer; transition: all .15s }
 .cl-dismiss:hover { background: var(--grn2); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16,185,129,.2) }
 
+
+
+/* Mic button */
+.mic { width: 36px; height: 36px; border-radius: 10px; background: none; border: 1px solid var(--brd); color: var(--dim); display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: all .15s }
+.mic:hover { color: var(--lt); border-color: rgba(255,255,255,.1) }
+.mic-on { color: var(--red); border-color: rgba(239,68,68,.3); background: rgba(239,68,68,.06); animation: micPulse 1.5s ease infinite }
+@keyframes micPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,.2) } 50% { box-shadow: 0 0 0 6px rgba(239,68,68,0) } }
 
 /* Input hints */
 .input-hints { display: flex; justify-content: space-between; padding: 6px 4px 0; font-family: var(--mono); font-size: .44rem; text-transform: uppercase; letter-spacing: .1em; color: var(--dim) }
