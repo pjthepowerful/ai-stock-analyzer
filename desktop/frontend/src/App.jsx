@@ -817,7 +817,7 @@ function MainApp({ user, token, logout }) {
                       {m.time&&!m.streaming&&<div className="msg-time">{m.time}</div>}
                     </div>
                   </div>
-                ):(<><div className="user-bubble">{m.content}</div>{m.time&&<div className="msg-time">{m.time}</div>}</>)}
+                ):(<><div className="user-bubble">{m.content.split(/(@[A-Z]{1,5})/g).map((part,i) => part.match(/^@[A-Z]{1,5}$/) ? <span key={i} className="mention">{part}</span> : part)}</div>{m.time&&<div className="msg-time">{m.time}</div>}</>)}
               </div>))}
             {sending&&sendingChatRef.current===chatIdRef.current&&!messages.some(m=>m.streaming)&&<div className="msg msg-assistant"><div className="ai"><div className="ai-av">P</div><div className="ai-body"><div className="ai-name">Paula</div><div className="loading-state"><div className="dots"><span/><span/><span/></div><span className="loading-txt">{loadingText}</span></div></div></div></div>}
             <div ref={messagesEnd}/>
@@ -841,62 +841,92 @@ function MainApp({ user, token, logout }) {
 }
 
 const PHRASES = ["what's the play today?","ready to trade?","let's find some setups.","what are we watching?","let's get to work.","what's on your radar?","let's make some moves."]
+const TICKER_DB = [
+  {t:'AAPL',n:'Apple'},{t:'MSFT',n:'Microsoft'},{t:'NVDA',n:'Nvidia'},{t:'GOOGL',n:'Alphabet'},{t:'AMZN',n:'Amazon'},
+  {t:'META',n:'Meta Platforms'},{t:'TSLA',n:'Tesla'},{t:'AMD',n:'Advanced Micro Devices'},{t:'NFLX',n:'Netflix'},
+  {t:'JPM',n:'JPMorgan Chase'},{t:'V',n:'Visa'},{t:'UNH',n:'UnitedHealth'},{t:'HD',n:'Home Depot'},
+  {t:'CRM',n:'Salesforce'},{t:'AVGO',n:'Broadcom'},{t:'ORCL',n:'Oracle'},{t:'BAC',n:'Bank of America'},
+  {t:'GS',n:'Goldman Sachs'},{t:'CAT',n:'Caterpillar'},{t:'LLY',n:'Eli Lilly'},{t:'MRK',n:'Merck'},
+  {t:'XOM',n:'ExxonMobil'},{t:'CVX',n:'Chevron'},{t:'PG',n:'Procter & Gamble'},{t:'COST',n:'Costco'},
+  {t:'WMT',n:'Walmart'},{t:'DIS',n:'Disney'},{t:'INTC',n:'Intel'},{t:'PYPL',n:'PayPal'},
+  {t:'SQ',n:'Block'},{t:'COIN',n:'Coinbase'},{t:'SNAP',n:'Snap'},{t:'UBER',n:'Uber'},
+  {t:'ABNB',n:'Airbnb'},{t:'SHOP',n:'Shopify'},{t:'PLTR',n:'Palantir'},{t:'SOFI',n:'SoFi'},
+  {t:'RIVN',n:'Rivian'},{t:'NIO',n:'NIO'},{t:'MARA',n:'Marathon Digital'},{t:'CELH',n:'Celsius'},
+  {t:'SPY',n:'S&P 500 ETF'},{t:'QQQ',n:'Nasdaq 100 ETF'},{t:'IWM',n:'Russell 2000 ETF'},
+  {t:'BA',n:'Boeing'},{t:'F',n:'Ford'},{t:'GM',n:'General Motors'},{t:'KO',n:'Coca-Cola'},
+]
+
 function AnalyzeView({ sendMessage, setView }) {
   const [ticker, setTicker] = useState('')
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [suggestions, setSuggestions] = useState([])
+  const [cachedPrices, setCachedPrices] = useState({})
 
   const lookup = async (t) => {
     if (!t) return
-    setLoading(true)
+    setLoading(true); setSuggestions([])
     try {
       const r = await f(API + '/api/quick/' + t.toUpperCase()).then(r => r.json())
-      if (r.ok) setResult(r)
+      if (r.ok) { setResult(r); setCachedPrices(prev => ({...prev, [r.ticker]: r})) }
       else setResult(null)
     } catch { setResult(null) }
     setLoading(false)
   }
+
+  const onType = (val) => {
+    const v = val.toUpperCase().replace(/[^A-Z]/g, '')
+    setTicker(v); setResult(null)
+    if (v.length >= 1) {
+      setSuggestions(TICKER_DB.filter(s => s.t.startsWith(v) || s.n.toLowerCase().startsWith(val.toLowerCase())).slice(0, 6))
+    } else setSuggestions([])
+  }
+
+  const pick = (t) => { setTicker(t); setSuggestions([]); lookup(t) }
 
   return (
     <div className="view-scroll">
       <h2 className="view-h">Analyze</h2>
       <p className="view-sub">Look up any stock — price, score, signal, and chart.</p>
 
-      <div className="az-input-wrap">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{color:'var(--dim)',flexShrink:0}}><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-        <input className="az-input" placeholder="Enter a ticker — AAPL, NVDA, TSLA..." value={ticker}
-          onChange={e => setTicker(e.target.value.toUpperCase().replace(/[^A-Z]/g,''))}
-          onKeyDown={e => { if (e.key === 'Enter' && ticker) lookup(ticker) }}
-          autoFocus
-        />
-        <button className="az-go" onClick={() => lookup(ticker)} disabled={!ticker || loading}>{loading ? '...' : 'Look up'}</button>
+      <div className="az-search">
+        <div className="az-input-wrap">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{color:'var(--dim)',flexShrink:0}}><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input className="az-input" placeholder="Search a stock..." value={ticker}
+            onChange={e => onType(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && ticker) { setSuggestions([]); lookup(ticker) }}}
+            autoFocus/>
+          {loading && <span className="az-spin">...</span>}
+        </div>
+        {suggestions.length > 0 && <div className="az-suggest">
+          {suggestions.map(s => {
+            const c = cachedPrices[s.t]
+            return <button key={s.t} className="az-sug" onClick={() => pick(s.t)}>
+              <span className="az-sug-t">{s.t}</span>
+              <span className="az-sug-n">{s.n}</span>
+              <span className="az-sug-fill"/>
+              {c ? <><span className="az-sug-p">${c.price}</span><span className={'az-sug-c '+(c.change>=0?'up':'dn')}>{c.change>=0?'+':''}{c.change_pct}%</span></> : null}
+            </button>
+          })}
+        </div>}
       </div>
 
-      {result && (
-        <div className="az-result">
-          <div className="az-header">
-            <div>
-              <span className="az-sym">{result.ticker}</span>
-              <span className={'az-signal az-' + result.signal.toLowerCase()}>{result.signal} · {result.score}</span>
-            </div>
-            <div className="az-price-wrap">
-              <span className="az-price">${result.price}</span>
-              <span className={'az-chg ' + (result.change >= 0 ? 'up' : 'dn')}>{result.change >= 0 ? '+' : ''}{result.change} ({result.change_pct}%)</span>
-            </div>
-          </div>
-
-          <div className="az-chart">
-            <Chart ticker={result.ticker} height={320}/>
-          </div>
-
-          <div className="az-actions">
-            <button className="az-btn az-deep" onClick={() => { sendMessage('Analyze ' + result.ticker); setView('chat') }}>Deep dive in chat →</button>
-            <button className="az-btn az-buy" onClick={() => { sendMessage('Buy ' + result.ticker); setView('chat') }}>Buy {result.ticker}</button>
-          </div>
+      {result && <div className="az-result">
+        <div className="az-header">
+          <div><span className="az-sym">{result.ticker}</span><span className={'az-signal az-'+result.signal.toLowerCase()}>{result.signal} · {result.score}</span></div>
+          <div className="az-price-wrap"><span className="az-price">${result.price}</span><span className={'az-chg '+(result.change>=0?'up':'dn')}>{result.change>=0?'+':''}{result.change} ({result.change_pct}%)</span></div>
         </div>
-      )}
+        <div className="az-chart"><Chart ticker={result.ticker} height={320}/></div>
+        <div className="az-actions"><button className="az-btn az-deep" onClick={()=>{sendMessage('Analyze '+result.ticker);setView('chat')}}>Deep dive in chat →</button></div>
+      </div>}
 
-      {!result && !loading && <div className="az-empty">Type a ticker above and press Enter to see price, score, and chart.</div>}
+      {!result && !loading && suggestions.length === 0 && ticker.length === 0 && <div className="az-popular">
+        <div className="az-pop-h">Popular</div>
+        {['AAPL','NVDA','TSLA','MSFT','AMD','META','GOOGL','AMZN'].map(t => {
+          const info = TICKER_DB.find(s => s.t === t)
+          return <button key={t} className="az-sug" onClick={() => pick(t)}><span className="az-sug-t">{t}</span><span className="az-sug-n">{info?.n||t}</span></button>
+        })}
+      </div>}
     </div>
   )
 }
