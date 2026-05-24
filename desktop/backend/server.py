@@ -691,9 +691,9 @@ async def run_backtest_endpoint(authorization: str = Header(None)):
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(None, lambda: backtest.run_backtest(
             days=90,
-            min_score=config.get("MIN_SCORE", 75),
-            max_positions=config.get("MAX_POSITIONS", 2),
-            stop_pct=config.get("STOP_FLOOR", 0.01),
+            min_score=config.get("MIN_SCORE", 82),
+            max_positions=config.get("MAX_POSITIONS", 1),
+            stop_pct=config.get("STOP_FLOOR", 0.013),
         ))
         return result
     except Exception as e:

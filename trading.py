@@ -1654,14 +1654,24 @@ def generate_intraday_signal(data: dict) -> dict:
         confidence = max(40, 100 - abs(score - 50) * 2)
 
     # ── RISK MANAGEMENT (Intraday — uses 5min ATR) ──
+    # Load stop floor from config
+    _stop_floor = 0.013  # default 1.3%
+    try:
+        _cfg_path = pathlib.Path(__file__).parent / "autopilot_config.json"
+        if _cfg_path.exists():
+            _cfg = json.loads(_cfg_path.read_text())
+            _stop_floor = _cfg.get("STOP_FLOOR", 0.013)
+    except Exception:
+        pass
+
     if action in ("BUY", "STRONG_BUY"):
         entry = price
         # Stop: 3x intraday ATR — give room to breathe
         stop_atr = round(entry - 3.0 * atr, 2)
         stop_vwap = round(vwap - 1.0 * atr, 2) if above_vwap and dist_to_vwap < 0.5 else stop_atr
         stop_loss = max(stop_atr, stop_vwap)
-        # Floor: at least 1.0% stop distance
-        min_stop = round(entry * 0.99, 2)
+        # Floor: at least STOP_FLOOR% stop distance
+        min_stop = round(entry * (1.0 - _stop_floor), 2)
         if stop_loss > min_stop:
             stop_loss = min_stop
 
@@ -1672,7 +1682,7 @@ def generate_intraday_signal(data: dict) -> dict:
     elif action in ("SELL", "STRONG_SELL"):
         entry = price
         stop_loss = round(price + 3.0 * atr, 2)
-        max_stop = round(entry * 1.01, 2)
+        max_stop = round(entry * (1.0 + _stop_floor), 2)
         if stop_loss < max_stop:
             stop_loss = max_stop
         risk = max(stop_loss - entry, 0.01)
@@ -3526,17 +3536,23 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
 
     # Default params
     DEFAULT_PARAMS = {
-        "MAX_POSITIONS": 2,
+        "MAX_POSITIONS": 1,
         "RISK_PER_TRADE": 0.01,
         "MAX_POS_PCT": 0.15,
-        "MIN_SCORE": 75,
-        "MIN_CONFLUENCE": 4,
+        "MIN_SCORE": 82,
+        "MIN_CONFLUENCE": 5,
         "MIN_RR": 2.0,
+        "STOP_FLOOR": 0.013,
         "SELL_BELOW": 30,
         "DAILY_LOSS_LIMIT": 0.01,
         "PARTIAL_PROFIT_PCT": 0.03,
-        "MAX_DAILY_ENTRIES": 6,
+        "MAX_DAILY_ENTRIES": 4,
         "STALE_MINUTES": 90,
+        "TRADING_HOURS_START": "09:45",
+        "TRADING_HOURS_END": "15:00",
+        "AVOID_MIDDAY": True,
+        "MIDDAY_START": "11:30",
+        "MIDDAY_END": "13:30",
         "last_tuned": "",
         "tune_history": [],
     }
@@ -3749,15 +3765,31 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     no_new_buys_eod = now_et >= last_buy_cutoff
 
     # ── 1b2. Avoid the open — first 15min is pure chop ──
-    market_open_safe = now_et.replace(hour=9, minute=45, second=0, microsecond=0)
+    start_h, start_m = [int(x) for x in params.get("TRADING_HOURS_START", "09:45").split(":")]
+    end_h, end_m = [int(x) for x in params.get("TRADING_HOURS_END", "15:00").split(":")]
+    market_open_safe = now_et.replace(hour=start_h, minute=start_m, second=0, microsecond=0)
     market_open_actual = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+    trading_end = now_et.replace(hour=end_h, minute=end_m, second=0, microsecond=0)
     too_early = market_open_actual <= now_et < market_open_safe
+    too_late = now_et >= trading_end
     if too_early:
-        log.append("⏳ Waiting until 9:45 AM — first 15min is chop, letting VWAP establish")
-        # Still manage existing positions but don't scan for new entries
+        log.append(f"⏳ Waiting until {start_h}:{start_m:02d} AM — first 15min is chop, letting VWAP establish")
+        no_new_buys_eod = True
+    if too_late:
+        log.append(f"⏳ Past {end_h}:{end_m:02d} — no new entries, managing exits only")
         no_new_buys_eod = True
 
-    # ── 1b3. SPY correlation filter — don't go long into a dump ──
+    # ── 1b3. Midday chop filter ──
+    if params.get("AVOID_MIDDAY", False):
+        mid_start_h, mid_start_m = [int(x) for x in params.get("MIDDAY_START", "11:30").split(":")]
+        mid_end_h, mid_end_m = [int(x) for x in params.get("MIDDAY_END", "13:30").split(":")]
+        midday_start = now_et.replace(hour=mid_start_h, minute=mid_start_m, second=0, microsecond=0)
+        midday_end = now_et.replace(hour=mid_end_h, minute=mid_end_m, second=0, microsecond=0)
+        if midday_start <= now_et < midday_end:
+            log.append(f"⏳ Midday ({mid_start_h}:{mid_start_m:02d}-{mid_end_h}:{mid_end_m:02d}) — low volume chop, skipping entries")
+            no_new_buys_eod = True
+
+    # ── 1b4. SPY correlation filter — don't go long into a dump ──
     spy_trend = _get_spy_intraday_trend()
     if spy_trend:
         log.append(f"📈 SPY: {spy_trend['direction']} ({spy_trend['change_pct']:+.2f}%) · VWAP {'above' if spy_trend['above_vwap'] else 'below'}")
