@@ -439,7 +439,7 @@ function MainApp({ user, token, logout }) {
   }
 
   const sendMessage = async (msg) => {
-    if (!msg || sending) return
+    if (!msg || (sending && sendingChatRef.current === chatIdRef.current)) return
     setSending(true)
     setInput('')
     setView('chat')
@@ -812,7 +812,7 @@ function MainApp({ user, token, logout }) {
             </div>)})()}
           <div className="chat">
             <div className="chat-inner">
-            {messages.length===0&&!sending&&(
+            {messages.length===0&&!(sending && sendingChatRef.current === chatIdRef.current)&&(
               <div className="welcome">
                 <h1><span className="w-hi">{(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' })()}, {name},</span> <Typewriter/></h1>
                 <div className="w-prompts">
@@ -822,7 +822,7 @@ function MainApp({ user, token, logout }) {
                     {q:'How did we do today?', a:'Daily P&L recap, trades closed, and what actually worked.', cmd:'How did we do today?', icon:'☰'},
                     {q:'Find me a trade', a:'Scan for setups with the cleanest risk/reward right now.', cmd:'What should I buy?', icon:'◎'},
                   ].map((p,i)=>(
-                    <button key={i} className="w-prompt" disabled={sending} onClick={()=>sendMessage(p.cmd)}>
+                    <button key={i} className="w-prompt" disabled={sending && sendingChatRef.current === chatIdRef.current} onClick={()=>sendMessage(p.cmd)}>
                       <span className="wp-icon">{p.icon}</span>
                       <div><span className="wp-q">{p.q}</span><span className="wp-a">{p.a}</span></div>
                     </button>))}
@@ -852,11 +852,11 @@ function MainApp({ user, token, logout }) {
             </div>
           </div>
           <div className={'input-area'+(messages.length?' ia-active':'')}><div className="input-wrap"><div className="input-box">
-            <textarea ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}} placeholder="Message Paula — ask for a setup, scan, or recap..." disabled={sending} rows={1} className="chat-textarea"/>
+            <textarea ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}} placeholder="Message Paula — ask for a setup, scan, or recap..." disabled={sending && sendingChatRef.current === chatIdRef.current} rows={1} className="chat-textarea"/>
             <button className={'mic'+(listening?' mic-on':'')} onClick={toggleVoice} title="Voice input">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0014 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
             </button>
-            <button className="send" onClick={send} disabled={sending}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9Z"/></svg></button>
+            <button className="send" onClick={send} disabled={sending && sendingChatRef.current === chatIdRef.current}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9Z"/></svg></button>
           </div>
           <div className="input-hints">
             <span className="ih-left">{autopilot&&<><span className="ih-dot"/>AUTOPILOT</>} · {(settings.tradingStyle||'DAY').toUpperCase()} TRADING</span>
