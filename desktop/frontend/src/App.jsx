@@ -565,7 +565,35 @@ function MainApp({ user, token, logout }) {
     inputRef.current?.focus()
   }
 
-  const send = () => sendMessage(input.trim())
+  const send = () => {
+    const msg = input.trim()
+    if (!msg) return
+    // If voice is on, restart recognition to clear buffer (keeps listening)
+    if (listening && recognitionRef.current) {
+      recognitionRef.current.onend = () => {} // prevent auto-restart during reset
+      recognitionRef.current.stop()
+      setTimeout(() => {
+        if (listening) {
+          const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+          if (SR) {
+            const r = new SR()
+            r.continuous = true
+            r.interimResults = true
+            r.lang = 'en-US'
+            recognitionRef.current = r
+            r.onresult = (e) => {
+              const t = Array.from(e.results).map(x => x[0].transcript).join('')
+              setInput(t)
+            }
+            r.onend = () => { if (recognitionRef.current === r) { try { r.start() } catch {} } }
+            r.onerror = (e) => { if (e.error !== 'no-speech') { setListening(false); recognitionRef.current = null } }
+            r.start()
+          }
+        }
+      }, 100)
+    }
+    sendMessage(msg)
+  }
 
   const quickLookup = async (ticker) => {
     if (!ticker || ticker.length > 5) return
