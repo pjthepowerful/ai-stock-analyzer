@@ -870,18 +870,44 @@ function MainApp({ user, token, logout }) {
 
 const PHRASES = ["what's the play today?","ready to trade?","let's find some setups.","what are we watching?","let's get to work.","what's on your radar?","let's make some moves."]
 const TICKER_DB = [
-  {t:'AAPL',n:'Apple'},{t:'MSFT',n:'Microsoft'},{t:'NVDA',n:'Nvidia'},{t:'GOOGL',n:'Alphabet'},{t:'AMZN',n:'Amazon'},
-  {t:'META',n:'Meta Platforms'},{t:'TSLA',n:'Tesla'},{t:'AMD',n:'Advanced Micro Devices'},{t:'NFLX',n:'Netflix'},
-  {t:'JPM',n:'JPMorgan Chase'},{t:'V',n:'Visa'},{t:'UNH',n:'UnitedHealth'},{t:'HD',n:'Home Depot'},
-  {t:'CRM',n:'Salesforce'},{t:'AVGO',n:'Broadcom'},{t:'ORCL',n:'Oracle'},{t:'BAC',n:'Bank of America'},
-  {t:'GS',n:'Goldman Sachs'},{t:'CAT',n:'Caterpillar'},{t:'LLY',n:'Eli Lilly'},{t:'MRK',n:'Merck'},
-  {t:'XOM',n:'ExxonMobil'},{t:'CVX',n:'Chevron'},{t:'PG',n:'Procter & Gamble'},{t:'COST',n:'Costco'},
-  {t:'WMT',n:'Walmart'},{t:'DIS',n:'Disney'},{t:'INTC',n:'Intel'},{t:'PYPL',n:'PayPal'},
-  {t:'SQ',n:'Block'},{t:'COIN',n:'Coinbase'},{t:'SNAP',n:'Snap'},{t:'UBER',n:'Uber'},
-  {t:'ABNB',n:'Airbnb'},{t:'SHOP',n:'Shopify'},{t:'PLTR',n:'Palantir'},{t:'SOFI',n:'SoFi'},
-  {t:'RIVN',n:'Rivian'},{t:'NIO',n:'NIO'},{t:'MARA',n:'Marathon Digital'},{t:'CELH',n:'Celsius'},
+  // Mega cap
+  {t:'AAPL',n:'Apple Inc.'},{t:'MSFT',n:'Microsoft'},{t:'NVDA',n:'Nvidia'},{t:'GOOGL',n:'Alphabet'},{t:'AMZN',n:'Amazon'},
+  {t:'META',n:'Meta Platforms'},{t:'TSLA',n:'Tesla'},{t:'BRK.B',n:'Berkshire Hathaway'},{t:'TSM',n:'Taiwan Semiconductor'},
+  // Large cap tech
+  {t:'AMD',n:'Advanced Micro Devices'},{t:'NFLX',n:'Netflix'},{t:'CRM',n:'Salesforce'},{t:'AVGO',n:'Broadcom'},
+  {t:'ORCL',n:'Oracle'},{t:'ADBE',n:'Adobe'},{t:'INTC',n:'Intel'},{t:'CSCO',n:'Cisco'},
+  {t:'IBM',n:'IBM'},{t:'QCOM',n:'Qualcomm'},{t:'TXN',n:'Texas Instruments'},{t:'MU',n:'Micron'},
+  {t:'AMAT',n:'Applied Materials'},{t:'LRCX',n:'Lam Research'},{t:'KLAC',n:'KLA Corp'},
+  // Fintech / payments
+  {t:'V',n:'Visa'},{t:'MA',n:'Mastercard'},{t:'PYPL',n:'PayPal'},{t:'SQ',n:'Block (Square)'},
+  {t:'COIN',n:'Coinbase'},{t:'SOFI',n:'SoFi'},{t:'HOOD',n:'Robinhood'},
+  // Finance
+  {t:'JPM',n:'JPMorgan Chase'},{t:'BAC',n:'Bank of America'},{t:'GS',n:'Goldman Sachs'},
+  {t:'MS',n:'Morgan Stanley'},{t:'C',n:'Citigroup'},{t:'WFC',n:'Wells Fargo'},{t:'SCHW',n:'Charles Schwab'},
+  // Healthcare
+  {t:'UNH',n:'UnitedHealth'},{t:'LLY',n:'Eli Lilly'},{t:'JNJ',n:'Johnson & Johnson'},
+  {t:'MRK',n:'Merck'},{t:'PFE',n:'Pfizer'},{t:'ABBV',n:'AbbVie'},{t:'TMO',n:'Thermo Fisher'},
+  // Consumer
+  {t:'HD',n:'Home Depot'},{t:'COST',n:'Costco'},{t:'WMT',n:'Walmart'},{t:'TGT',n:'Target'},
+  {t:'NKE',n:'Nike'},{t:'SBUX',n:'Starbucks'},{t:'MCD',n:'McDonald\'s'},{t:'KO',n:'Coca-Cola'},
+  {t:'PEP',n:'PepsiCo'},{t:'PG',n:'Procter & Gamble'},{t:'DIS',n:'Disney'},
+  // Energy
+  {t:'XOM',n:'ExxonMobil'},{t:'CVX',n:'Chevron'},{t:'COP',n:'ConocoPhillips'},
+  // Industrial
+  {t:'CAT',n:'Caterpillar'},{t:'BA',n:'Boeing'},{t:'GE',n:'GE Aerospace'},{t:'HON',n:'Honeywell'},
+  {t:'DE',n:'John Deere'},{t:'UPS',n:'UPS'},{t:'RTX',n:'RTX (Raytheon)'},
+  // Auto / EV
+  {t:'F',n:'Ford'},{t:'GM',n:'General Motors'},{t:'RIVN',n:'Rivian'},{t:'NIO',n:'NIO'},{t:'LCID',n:'Lucid'},
+  // Growth / meme
+  {t:'SHOP',n:'Shopify'},{t:'PLTR',n:'Palantir'},{t:'SNAP',n:'Snap'},{t:'UBER',n:'Uber'},
+  {t:'ABNB',n:'Airbnb'},{t:'RBLX',n:'Roblox'},{t:'U',n:'Unity'},{t:'DKNG',n:'DraftKings'},
+  {t:'MARA',n:'Marathon Digital'},{t:'CELH',n:'Celsius'},{t:'SMCI',n:'Super Micro'},
+  // Crypto-adjacent
+  {t:'MSTR',n:'MicroStrategy'},{t:'RIOT',n:'Riot Platforms'},
+  // ETFs
   {t:'SPY',n:'S&P 500 ETF'},{t:'QQQ',n:'Nasdaq 100 ETF'},{t:'IWM',n:'Russell 2000 ETF'},
-  {t:'BA',n:'Boeing'},{t:'F',n:'Ford'},{t:'GM',n:'General Motors'},{t:'KO',n:'Coca-Cola'},
+  {t:'DIA',n:'Dow Jones ETF'},{t:'ARKK',n:'ARK Innovation ETF'},{t:'XLF',n:'Financial ETF'},
+  {t:'XLE',n:'Energy ETF'},{t:'SOXX',n:'Semiconductor ETF'},
 ]
 
 function AnalyzeView({ sendMessage, setView }) {
@@ -903,10 +929,19 @@ function AnalyzeView({ sendMessage, setView }) {
   }
 
   const onType = (val) => {
-    const v = val.toUpperCase().replace(/[^A-Z]/g, '')
+    const v = val.toUpperCase().replace(/[^A-Z.]/g, '')
     setTicker(v); setResult(null)
-    if (v.length >= 1) {
-      setSuggestions(TICKER_DB.filter(s => s.t.startsWith(v) || s.n.toLowerCase().startsWith(val.toLowerCase())).slice(0, 6))
+    if (v.length >= 2) {
+      const matches = TICKER_DB.filter(s => s.t.startsWith(v) || s.n.toLowerCase().includes(val.toLowerCase())).slice(0, 8)
+      setSuggestions(matches)
+      // Fetch prices for visible suggestions
+      matches.forEach(s => {
+        if (!cachedPrices[s.t]) {
+          f(API + '/api/quick/' + s.t).then(r => r.json()).then(r => {
+            if (r.ok) setCachedPrices(prev => ({...prev, [r.ticker]: r}))
+          }).catch(() => {})
+        }
+      })
     } else setSuggestions([])
   }
 
@@ -932,8 +967,11 @@ function AnalyzeView({ sendMessage, setView }) {
             return <button key={s.t} className="az-sug" onClick={() => pick(s.t)}>
               <span className="az-sug-t">{s.t}</span>
               <span className="az-sug-n">{s.n}</span>
-              <span className="az-sug-fill"/>
-              {c ? <><span className="az-sug-p">${c.price}</span><span className={'az-sug-c '+(c.change>=0?'up':'dn')}>{c.change>=0?'+':''}{c.change_pct}%</span></> : null}
+              <span className="az-sug-line"/>
+              {c ? <>
+                <span className={'az-sug-p '+(c.change>=0?'up':'dn')}>${c.price}</span>
+                <span className={'az-sug-c '+(c.change>=0?'up':'dn')}>{c.change>=0?'+':''}{c.change_pct}%</span>
+              </> : <span className="az-sug-loading">···</span>}
             </button>
           })}
         </div>}
@@ -950,9 +988,18 @@ function AnalyzeView({ sendMessage, setView }) {
 
       {!result && !loading && suggestions.length === 0 && ticker.length === 0 && <div className="az-popular">
         <div className="az-pop-h">Popular</div>
-        {['AAPL','NVDA','TSLA','MSFT','AMD','META','GOOGL','AMZN'].map(t => {
+        {['AAPL','NVDA','TSLA','MSFT','AMD','META','GOOGL','AMZN','NFLX','JPM'].map(t => {
           const info = TICKER_DB.find(s => s.t === t)
-          return <button key={t} className="az-sug" onClick={() => pick(t)}><span className="az-sug-t">{t}</span><span className="az-sug-n">{info?.n||t}</span></button>
+          const c = cachedPrices[t]
+          return <button key={t} className="az-sug" onClick={() => pick(t)}>
+            <span className="az-sug-t">{t}</span>
+            <span className="az-sug-n">{info?.n||t}</span>
+            <span className="az-sug-line"/>
+            {c ? <>
+              <span className={'az-sug-p '+(c.change>=0?'up':'dn')}>${c.price}</span>
+              <span className={'az-sug-c '+(c.change>=0?'up':'dn')}>{c.change>=0?'+':''}{c.change_pct}%</span>
+            </> : null}
+          </button>
         })}
       </div>}
     </div>
