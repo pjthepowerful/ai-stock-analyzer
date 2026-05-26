@@ -1365,7 +1365,7 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
     {name:'Cyan',val:'#06b6d4'},{name:'Pink',val:'#ec4899'},{name:'Orange',val:'#f59e0b'},
   ]
 
-  const fontSizes = [{name:'Small',val:'13px',display:12},{name:'Default',val:'15px',display:15},{name:'Large',val:'17px',display:18}]
+  const fontSizes = [{name:'Small',val:'13px',display:11},{name:'Default',val:'15px',display:15},{name:'Large',val:'18px',display:19}]
 
   return(<div className="view-scroll"><h2 className="view-h">Settings</h2>
     <p className="view-sub">Account, integrations, and behavior</p>

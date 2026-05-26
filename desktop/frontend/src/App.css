@@ -241,8 +241,9 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .ai-body { flex: 1; min-width: 0 }
 .ai-name { font-size: .64rem; font-weight: 600; color: var(--dim); margin-bottom: 4px; letter-spacing: .02em }
 .ai-txt { font-size: var(--chat-fs); color: var(--lt); line-height: 1.8 }
+.ai-txt p, .ai-txt span, .ai-txt li, .ai-txt div { font-size: inherit }
 .ai-txt strong { color: var(--wh); font-weight: 600 }
-.ai-txt code { font-size: .8rem }
+.ai-txt code { font-size: .85em }
 .stream-cursor { color: var(--grn); animation: blinkcur .5s step-end infinite; font-weight: 300 }
 .ai-chart { margin-top: 14px; padding: 14px; border: 1px solid var(--brd); border-radius: 14px; background: var(--c1) }
 .ct-tabs { display: flex; gap: 2px; margin-bottom: 10px; padding: 2px; background: var(--c2); border-radius: 6px; width: fit-content }
@@ -294,7 +295,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .ia-active .input-wrap { max-width: 760px }
 .input-box { display: flex; align-items: center; background: var(--c1); border: 1px solid var(--brd); border-radius: 16px; padding: 4px 5px 4px 20px; transition: all .25s cubic-bezier(.16,1,.3,1); box-shadow: 0 2px 10px rgba(0,0,0,.12) }
 .input-box:focus-within { border-color: rgba(16,185,129,.3); box-shadow: 0 0 0 3px rgba(16,185,129,.06), 0 2px 16px rgba(0,0,0,.2); background: var(--c2) }
-.input-box input, .chat-textarea { flex: 1; background: none; border: none; outline: none; color: var(--lt); font-family: var(--sans); font-size: .92rem; padding: 12px 0; resize: none; max-height: 120px; line-height: 1.5 }
+.input-box input, .chat-textarea { flex: 1; background: none; border: none; outline: none; color: var(--lt); font-family: var(--sans); font-size: var(--chat-fs); padding: 12px 0; resize: none; max-height: 120px; line-height: 1.5 }
 .input-box input::placeholder, .chat-textarea::placeholder { color: var(--dim) }
 .input-box input:disabled { opacity: .3 }
 .send { width: 40px; height: 40px; border-radius: 12px; background: var(--grn); border: none; color: var(--bg); display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: all .15s }
