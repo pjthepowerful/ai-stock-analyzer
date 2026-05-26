@@ -4115,10 +4115,28 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             # ── Mid-cap growth (liquid, established) ──
             "AXON","HIMS","CAVA","DUOL","CELH","ELF","ONON","TOST","BROS","DDOG",
             "HUBS","FROG","MANH","TTD","DASH","CVNA",
+            # ── Additional large/mid caps ──
+            "SHOP","PLTR","COIN","SOFI","HOOD","MSTR","RIOT","MARA","NIO","RIVN",
+            "LCID","SNAP","RBLX","U","DKNG","SQ","NET","ZS","PANW","OKTA",
+            "MDB","SNOW","ROKU","PINS","TWLO","ZM","DOCU","BILL","PAYC","PCOR",
+            "WIX","ETSY","CHWY","W","BURL","TJX","ROST","DG","DLTR","FIVE",
+            "ULTA","LULU","TPR","CPRI","RL","PVH","VFC","HBI","GILD","BIIB",
+            "REGN","ILMN","DXCM","VEEV","ZTS","WDAY","SPLK","TEAM","ATLZ",
+            "ANET","FFIV","JNPR","AKAM","GDDY","MTCH","IAC","ANSS","EPAM",
+            "GLOB","INFY","WIT","SAP","ASML","LRCX","KLAC","ONTO","CRUS",
+            "WOLF","GFS","STM","SSNC","FIS","FISV","GPN","WU","NVST","TFX",
+            "BAX","BDX","CI","CVS","HCA","THC","TEVA","MYL","VTRS","ZBH",
+            "SYY","USFD","US","KDP","STZ","TAP","BF-B","SAM","MNST","COKE",
+            "CLX","CHD","SJM","GIS","K","CPB","MKC","HRL","TSN","CAG",
+            "BG","ADM","CTLT","LW","INGR","DAR","BERY","SEE","AMCR","IP",
+            "WRK","PKG","CE","CC","LYB","EMN","APD","ECL","SHW","PPG",
+            "NEM","GOLD","FNV","WPM","AEM","KGC","RGLD","PAAS","AG","HL",
+            "FCX","RIO","BHP","VALE","CLF","X","NUE","STLD","RS","CMC",
+            "BLDR","VMC","MLM","CX","SRCL","WCN","RSG","WM","CLH","ECOL",
         ]
         fallback = [t for t in FULL_UNIVERSE if t not in held_tickers and t not in set(candidates)]
         random.shuffle(fallback)
-        candidates.extend(fallback[:60])
+        candidates.extend(fallback[:150])
         log.append(f"Large-cap universe → {len(candidates)} candidates")
 
     # ── SECTOR ROTATION FILTER — prioritize hot sectors ──
@@ -4151,7 +4169,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     all_scores = []
     analyzed = 0
     errors = 0
-    MAX_ANALYZE = 40
+    MAX_ANALYZE = 80
     for ticker in scan_list[:MAX_ANALYZE]:
         try:
             data = fetch_scan_intraday(ticker)
