@@ -968,22 +968,6 @@ function AnalyzeView({ sendMessage, setView }) {
         <div className="az-actions"><button className="az-btn az-deep" onClick={()=>{sendMessage('Analyze '+result.ticker);setView('chat')}}>Deep dive in chat →</button></div>
       </div>}
 
-      {!result && !loading && suggestions.length === 0 && ticker.length === 0 && <div className="az-popular">
-        <div className="az-pop-h">Popular</div>
-        {['AAPL','NVDA','TSLA','MSFT','AMD','META','GOOGL','AMZN','NFLX','JPM'].map(t => {
-          const info = TICKER_DB.find(s => s.t === t)
-          const c = cachedPrices[t]
-          return <button key={t} className="az-sug" onClick={() => pick(t)}>
-            <span className="az-sug-t">{t}</span>
-            <span className="az-sug-n">{info?.n||t}</span>
-            <span className="az-sug-line"/>
-            {c ? <>
-              <span className={'az-sug-p '+(c.change>=0?'up':'dn')}>${c.price}</span>
-              <span className={'az-sug-c '+(c.change>=0?'up':'dn')}>{c.change>=0?'+':''}{c.change_pct}%</span>
-            </> : null}
-          </button>
-        })}
-      </div>}
     </div>
   )
 }
