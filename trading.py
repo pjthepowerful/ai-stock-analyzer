@@ -2122,7 +2122,7 @@ def generate_trade_signal(data: dict) -> dict:
          round((entry - target_1) / risk, 2) if risk > 0 and entry > target_1 else 0)
     
     # Sub-scores for visual cards (0-100 scale)
-    trend_sub = min(100, max(0, 50 + (15 if is_uptrend else -15) + (10 if adx > 25 else 0) + (10 if price > sma_50 else -10) + (10 if price > sma_20 else -5)))
+    trend_sub = min(100, max(0, 50 + (15 if is_uptrend else -15) + (10 if adx > 25 else 0) + (10 if sma50 and price > sma50 else -10) + (10 if sma20 and price > sma20 else -5)))
     momentum_sub = min(100, max(0, int(rsi) if 30 < rsi < 70 else (30 if rsi <= 30 else 80)))
     mr_sub = min(100, max(0, 50 + (20 if has_pullback else 0) + (-15 if rsi > 75 else 10 if rsi < 40 else 0)))
     news_sub = min(100, max(0, 50 + news_score * 10))

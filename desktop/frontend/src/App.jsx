@@ -568,29 +568,11 @@ function MainApp({ user, token, logout }) {
   const send = () => {
     const msg = input.trim()
     if (!msg) return
-    // If voice is on, restart recognition to clear buffer (keeps listening)
-    if (listening && recognitionRef.current) {
-      recognitionRef.current.onend = () => {} // prevent auto-restart during reset
-      recognitionRef.current.stop()
-      setTimeout(() => {
-        if (listening) {
-          const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-          if (SR) {
-            const r = new SR()
-            r.continuous = true
-            r.interimResults = true
-            r.lang = 'en-US'
-            recognitionRef.current = r
-            r.onresult = (e) => {
-              const t = Array.from(e.results).map(x => x[0].transcript).join('')
-              setInput(t)
-            }
-            r.onend = () => { if (recognitionRef.current === r) { try { r.start() } catch {} } }
-            r.onerror = (e) => { if (e.error !== 'no-speech') { setListening(false); recognitionRef.current = null } }
-            r.start()
-          }
-        }
-      }, 100)
+    // Stop mic on send
+    if (listening) {
+      recognitionRef.current?.stop()
+      recognitionRef.current = null
+      setListening(false)
     }
     sendMessage(msg)
   }
@@ -852,7 +834,7 @@ function MainApp({ user, token, logout }) {
             </div>
           </div>
           <div className={'input-area'+(messages.length?' ia-active':'')}><div className="input-wrap"><div className="input-box">
-            <textarea ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}} placeholder="Message Paula — ask for a setup, scan, or recap..." disabled={sending && sendingChatRef.current === chatIdRef.current} rows={1} className="chat-textarea"/>
+            <textarea ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();if(!(sending && sendingChatRef.current === chatIdRef.current))send()}}} placeholder="Message Paula — ask for a setup, scan, or recap..." rows={1} className="chat-textarea"/>
             <button className={'mic'+(listening?' mic-on':'')} onClick={toggleVoice} title="Voice input">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0014 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
             </button>
