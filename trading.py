@@ -2642,7 +2642,7 @@ def route(msg: str) -> dict:
             cat = "small"
         elif any(w in m for w in ["tech", "technology", "software", "ai ", "semiconductor"]):
             cat = "tech"
-        return {"type": "stock_ideas", "category": cat}
+        return {"type": "stock_ideas", "category": cat, "_original_msg": msg}
 
     # ── Position queries — check before is_question short-circuits to analyze ──
     is_position_query = any(w in m for w in [
@@ -4665,6 +4665,9 @@ def execute(intent: dict) -> dict:
     # ── Standard commands ──
     if t == "stock_ideas":
         cat = intent.get("category", "all")
+        user_msg_lower = intent.get("_original_msg", "").lower()
+        wants_single = any(w in user_msg_lower for w in ["1 stock", "one stock", "a stock", "single stock", "just one", "best one", "top pick"])
+
         if cat == "large":
             universe = SP500_TOP[:30]
         elif cat == "mid":
@@ -4702,6 +4705,41 @@ def execute(intent: dict) -> dict:
         if not top:
             return {"ok": True, "type": "analysis", "msg": "I scanned " + str(len(universe)) + " stocks but nothing scored high enough right now. The market might be choppy — try again later or ask me to analyze a specific ticker."}
 
+        # Single stock request — written response with the best pick
+        if wants_single and top:
+            p = top[0]
+            entry = p["trade"].get("entry", p["price"])
+            stop = p["trade"].get("stop_loss", 0)
+            t1 = p["trade"].get("target_1", 0)
+            rr = p["trade"].get("risk_reward", 0)
+            arrow = "▲" if p["change_pct"] >= 0 else "▼"
+            sigs = " · ".join(p["signals"][:2]) if p["signals"] else ""
+
+            # Calculate shares based on user's budget if mentioned
+            budget_match = re.search(r'(\d[\d,]*\.?\d*)\s*(dollars|bucks|\$|k\b)', user_msg_lower)
+            shares_info = ""
+            if budget_match:
+                budget = float(budget_match.group(1).replace(",", ""))
+                if "k" in budget_match.group(2):
+                    budget *= 1000
+                shares = int(budget / p["price"])
+                shares_info = f" With ${budget:,.0f}, that's about **{shares} shares**."
+
+            msg = (
+                f"I'd go with **{p['ticker']}** right now.\n\n"
+                f"It's at **${p['price']:.2f}** ({arrow}{p['change_pct']:+.1f}% today) with a signal score of **{p['score']}** ({p['action']}). "
+                f"{sigs}.\n\n"
+            )
+            if stop and t1:
+                msg += f"**The setup:** Entry around `${entry:.2f}`, stop at `${stop:.2f}`, target `${t1:.2f}` — that's a `{rr:.1f}:1` risk-reward."
+            msg += shares_info
+
+            return {"ok": True, "type": "analysis", "ticker": p["ticker"],
+                    "tickers": [p["ticker"]],
+                    "msg": msg, "data": {"price": p["price"]},
+                    "signal_data": None}
+
+        # Multiple picks — structured list
         lines = [f"**Top {len(top)} Picks** — scanned {len(universe)} stocks:\n"]
         for i, p in enumerate(top, 1):
             entry = p["trade"].get("entry", p["price"])

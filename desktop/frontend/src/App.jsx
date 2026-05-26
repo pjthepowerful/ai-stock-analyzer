@@ -799,15 +799,17 @@ function MainApp({ user, token, logout }) {
                 <h1><span className="w-hi">{(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' })()}, {name},</span> <Typewriter/></h1>
                 <div className="w-prompts">
                   {[
-                    {q:'Market overview', a:'Regime, SPY trend, VIX, and whether it\'s safe to trade right now.', cmd:'market regime', icon:'✦'},
-                    {q:'Top movers', a:'Biggest gainers with real momentum — filtered by your style.', cmd:'top gainers', icon:'∿'},
-                    {q:'How did we do today?', a:'Daily P&L recap, trades closed, and what actually worked.', cmd:'How did we do today?', icon:'☰'},
-                    {q:'Find me a trade', a:'Scan for setups with the cleanest risk/reward right now.', cmd:'What should I buy?', icon:'◎'},
+                    {q:'Market overview', a:'SPY trend, VIX, and whether it\'s safe to trade.', cmd:'market regime', icon:'✦'},
+                    {q:'Find me a trade', a:'Scan for the best setup right now — one stock, written analysis.', cmd:'Find me 1 stock to trade today', icon:'◎'},
                   ].map((p,i)=>(
                     <button key={i} className="w-prompt" disabled={sending && sendingChatRef.current === chatIdRef.current} onClick={()=>sendMessage(p.cmd)}>
                       <span className="wp-icon">{p.icon}</span>
                       <div><span className="wp-q">{p.q}</span><span className="wp-a">{p.a}</span></div>
                     </button>))}
+                  <button className="w-prompt" onClick={()=>setView('analyze')}>
+                    <span className="wp-icon">🔍</span>
+                    <div><span className="wp-q">Analyze a stock</span><span className="wp-a">Look up any ticker — price, chart, score, and signal.</span></div>
+                  </button>
                 </div>
               </div>)}
             {messages.map((m,i)=>(
