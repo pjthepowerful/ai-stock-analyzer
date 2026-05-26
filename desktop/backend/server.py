@@ -1097,7 +1097,31 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
 
         if rtype == "analysis":
             if not resp:
-                resp = await loop.run_in_executor(None, engine.ai_response, user_msg, result.get("data"), chat_history, "US")
+                # AI generates analysis — but we prepend real data header
+                ai_text = await loop.run_in_executor(None, engine.ai_response, user_msg, result.get("data"), chat_history, "US")
+                # Build factual header from data
+                data = result.get("data", {})
+                ticker = result.get("ticker", "")
+                if data and ticker:
+                    price = data.get("price", 0)
+                    change_pct = data.get("change_pct", 0)
+                    arrow = "▲" if change_pct >= 0 else "▼"
+                    resp = ai_text
+                    # Validate: if AI mentions a price that's >20% off real price, fix it
+                    if price > 0:
+                        import re
+                        def fix_prices(text, real_price, ticker_name):
+                            """Replace hallucinated prices with real ones."""
+                            def replacer(match):
+                                mentioned = float(match.group(1).replace(",", ""))
+                                # If mentioned price is >20% off real price, it's hallucinated
+                                if abs(mentioned - real_price) / real_price > 0.20:
+                                    return f"${real_price:.2f}"
+                                return match.group(0)
+                            return re.sub(r'\$(\d{1,5}(?:,\d{3})*\.?\d{0,2})', replacer, text)
+                        resp = fix_prices(resp, price, ticker)
+                else:
+                    resp = ai_text
         elif rtype == "list":
             # Send list data to AI for real analysis instead of just showing a table
             list_data = result.get("data", [])
@@ -1141,6 +1165,25 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
         except Exception:
             pass
         resp = await loop.run_in_executor(None, engine.ai_response, user_msg, _fall_data, chat_history, "US")
+
+    # ── Price validation: fix any hallucinated prices in AI responses ──
+    if resp and result:
+        _real_price = 0
+        _rd = result.get("data") or {}
+        if isinstance(_rd, dict):
+            _real_price = _rd.get("price", 0)
+        if _real_price and _real_price > 0:
+            import re as _pre
+            def _fix_ai_prices(text, rp):
+                def _repl(match):
+                    try:
+                        mentioned = float(match.group(1).replace(",", ""))
+                        if mentioned > 1 and abs(mentioned - rp) / rp > 0.25:
+                            return f"${rp:.2f}"
+                    except: pass
+                    return match.group(0)
+                return _pre.sub(r'\$(\d{1,5}(?:,\d{3})*\.?\d{0,2})', _repl, text)
+            resp = _fix_ai_prices(resp, _real_price)
 
     chat_history.append({"role": "assistant", "content": resp})
 

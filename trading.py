@@ -2609,7 +2609,8 @@ def route(msg: str) -> dict:
     # Stock recommendation questions → smart scan
     wants_picks = any(q in m for q in [
         "what should i buy", "what to buy", "give me trade ideas", "trade ideas",
-        "what stocks", "which stocks", "recommend", "suggest", "pick me",
+        "what stocks", "what stock", "which stocks", "which stock",
+        "recommend", "suggest", "pick me",
         "what large cap", "large caps", "best stocks", "top stocks",
         "what should i invest", "what to invest", "find me stocks",
         "good buys", "what looks good", "any opportunities", "what do you like",
@@ -2622,6 +2623,11 @@ def route(msg: str) -> dict:
         "with $", "with 5k", "with 10k", "with 1k", "with 500",
         "i have $", "i have 5k", "i have 10k", "i have 1k",
         "budget of", "invest $", "trade with",
+        "turn that into", "turn into more", "make more money",
+        "put it in", "should i put", "where should i put",
+        "what should i do with", "what do i do with",
+        "dollars", "want to invest", "want to trade", "want to buy",
+        "money into", "into the market", "into stocks",
     ])
     if wants_picks and not any(cmd in m for cmd in [
         "close all", "sell everything", "liquidate",
@@ -2687,7 +2693,11 @@ def route(msg: str) -> dict:
         return {"type": "market_regime"}
     if any(w in m for w in ["sector strength", "sector rotation", "sectors", "hot sectors", "strong sectors"]):
         return {"type": "sector_strength"}
-    if any(w in m for w in ["portfolio", "my account", "buying power", "my equity", "account info", "how much do i have"]):
+    if any(w in m for w in ["portfolio", "my account", "my equity", "account info", "how much do i have"]):
+        # Don't route to portfolio if user is asking about trading WITH their money
+        if not any(t in m for t in ["buy", "invest", "trade", "put it in", "turn that", "what stock", "should i", "recommend"]):
+            return {"type": "portfolio"}
+    if "buying power" in m and not any(t in m for t in ["buy", "invest", "trade", "put it in", "turn", "what stock", "should i", "recommend", "want to"]):
         return {"type": "portfolio"}
     if any(w in m for w in ["my positions", "what do i own", "what am i holding", "open positions", "show positions",
                             "what positions", "current positions", "what do we have", "what are we holding",
@@ -4860,6 +4870,15 @@ CHAT HISTORY:
 - If the user says "what about that one?" — refer to the last stock discussed.
 - If they say "buy it" — they mean the last ticker mentioned.
 - Remember what you've already told them and don't repeat yourself.
+- If a price was mentioned earlier in the conversation, you CAN reference it.
+- If the user says "rewrite" or "above you said" — look at previous messages.
+
+BANNED PHRASES (NEVER say these — they make you sound broken):
+- "I need to look up" / "I don't have access" / "Let me check on that"
+- "I'm ready to help" / "What would you like" / "How can I assist"
+- "I don't have real-time data" — you DO get real data attached
+- "I don't see a response" — read the conversation history, it's there
+- Never show portfolio/account data when the user is asking for trade ideas
 
 IMPORTANT: Autopilot runs a dedicated INTRADAY engine combining 9 proven day trading strategies on 5-minute bars:
 
