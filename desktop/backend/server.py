@@ -1103,11 +1103,44 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
             list_data = result.get("data", [])
             resp = await loop.run_in_executor(None, engine.ai_response, user_msg, {"list_title": result.get("title", ""), "stocks": list_data}, chat_history, "US")
         elif not resp:
-            resp = await loop.run_in_executor(None, engine.ai_response, user_msg, None, chat_history, "US")
+            # Try to extract a ticker from the message to provide context
+            _chat_data = None
+            try:
+                _chat_ticker = intent.get("ticker")
+                if not _chat_ticker:
+                    # Look for tickers in recent history
+                    for h in reversed(chat_history[-6:]):
+                        import re as _re
+                        _found = _re.findall(r'\b([A-Z]{1,5})\b', h.get("content", ""))
+                        for _ft in _found:
+                            if _ft in ["AAPL","MSFT","NVDA","GOOGL","AMZN","META","TSLA","AMD","NFLX","SPY","QQQ","JPM","V","BA","HD","CRM","AVGO","LLY","COST","WMT","DIS","XOM","CVX","GS","BAC","INTC","PYPL","COIN","PLTR","UBER","SHOP","SOFI","MARA","CELH","NIO","RIVN","F","GM","KO","PEP","NKE"]:
+                                _chat_ticker = _ft
+                                break
+                        if _chat_ticker:
+                            break
+                if _chat_ticker:
+                    _chat_data = engine.fetch_full(_chat_ticker)
+            except Exception:
+                pass
+            resp = await loop.run_in_executor(None, engine.ai_response, user_msg, _chat_data, chat_history, "US")
     elif result and result.get("error"):
         resp = f"⚠️ {result['error']}"
     else:
-        resp = await loop.run_in_executor(None, engine.ai_response, user_msg, None, chat_history, "US")
+        # Final fallthrough — try to find context from history
+        _fall_data = None
+        try:
+            for h in reversed(chat_history[-6:]):
+                import re as _re
+                _found = _re.findall(r'\b([A-Z]{1,5})\b', h.get("content", ""))
+                for _ft in _found:
+                    if _ft in ["AAPL","MSFT","NVDA","GOOGL","AMZN","META","TSLA","AMD","NFLX","SPY","QQQ","JPM","V","BA","HD","CRM","AVGO","LLY","COST","WMT","DIS","XOM","CVX","GS","BAC","INTC","PYPL","COIN","PLTR","UBER","SHOP","SOFI","MARA","CELH","NIO","RIVN","F","GM","KO","PEP","NKE"]:
+                        _fall_data = engine.fetch_full(_ft)
+                        break
+                if _fall_data:
+                    break
+        except Exception:
+            pass
+        resp = await loop.run_in_executor(None, engine.ai_response, user_msg, _fall_data, chat_history, "US")
 
     chat_history.append({"role": "assistant", "content": resp})
 

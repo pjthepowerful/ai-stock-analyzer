@@ -2617,6 +2617,11 @@ def route(msg: str) -> dict:
         "stock i should buy", "stock to buy", "stock should i buy",
         "what can i buy", "interested in buying", "interested in invest",
         "swing trading", "swing trade", "day trading", "day trade",
+        "find me a trade", "find a trade", "trade for tomorrow", "trade for tmr",
+        "trade for today", "what to trade", "trade idea", "setup for",
+        "with $", "with 5k", "with 10k", "with 1k", "with 500",
+        "i have $", "i have 5k", "i have 10k", "i have 1k",
+        "budget of", "invest $", "trade with",
     ])
     if wants_picks and not any(cmd in m for cmd in [
         "close all", "sell everything", "liquidate",
@@ -4894,7 +4899,9 @@ What to avoid:
 - No robotic headers like "VERDICT:" or "RISK ASSESSMENT:"
 - Don't disclaim you're an AI or say "not financial advice" — the app has that
 - If data is attached to the message, USE IT. Reference specific numbers, trades, P&L amounts
-- If no data is attached, say so honestly — "I don't have today's trade data in front of me right now, let me check" 
+- If no data is attached, use info from the conversation history — prices mentioned earlier are REAL
+- NEVER say "I need to look it up", "I don't have access", "Let me check" — these are BANNED
+- If you truly don't know something, say "Ask me to analyze [ticker] and I'll pull the data"
 - NEVER fabricate trades, P&L numbers, or performance data. Only reference what's in the attached data
 - NEVER say "I don't have real-time access" — you DO get real data attached to your messages
 - Don't pad with filler or repeat points in different words
@@ -4915,8 +4922,6 @@ RESPONSE STYLE:
     content = user_msg
     if stock_data:
         content += f"\n\n---LIVE DATA (use ONLY these exact prices, do NOT make up numbers)---\n{json.dumps(stock_data, indent=2, default=str)}"
-    else:
-        content += "\n\n---NO PRICE DATA AVAILABLE. Do NOT cite any specific dollar prices. Say you need to look it up.---"
     messages.append({"role": "user", "content": content})
 
     try:
@@ -4935,17 +4940,22 @@ def ai_response_stream(user_msg: str, stock_data: dict | None, history: list, ma
         return
 
     system = f"""You're Paula — a sharp, knowledgeable trading assistant. Today is {datetime.now(ZoneInfo("US/Eastern")).strftime("%Y-%m-%d")}. Market: {market}.
-RESPONSE STYLE: Keep responses SHORT — 2-4 paragraphs max. ALWAYS answer directly. NEVER say "I'm ready to help" or "What would you like". Just give the answer. Lead with the answer, then support with data.
-CRITICAL: ONLY use prices from the LIVE DATA section below. NEVER guess, estimate, or make up stock prices. If no price data is provided, say "I don't have the current price" instead of inventing one."""
+
+RULES:
+1. Keep responses SHORT — 2-4 paragraphs max. Lead with the answer.
+2. NEVER say "I'm ready to help", "What would you like", "Let me check", "I need to look up", or "I don't have access". These are BANNED phrases.
+3. If LIVE DATA is attached below, use those exact prices. Never invent prices.
+4. If NO live data is attached, use information from the conversation history. The user may have already discussed prices or stocks earlier — reference those.
+5. If you truly have zero information about a stock, say "Ask me to analyze [ticker] and I'll pull up the full picture" — do NOT say you "need to look it up" or "don't have access".
+6. ALWAYS be useful. Give a real answer. Suggest a ticker. Give an opinion. Never punt back to the user with empty responses.
+7. You CAN reference prices, scores, or analysis from earlier messages in the conversation — they are real data."""
 
     messages = [{"role": "system", "content": system}]
-    for h in (history or [])[-8:]:
-        messages.append({"role": h.get("role", "user"), "content": str(h.get("content", ""))[:600]})
+    for h in (history or [])[-12:]:
+        messages.append({"role": h.get("role", "user"), "content": str(h.get("content", ""))[:800]})
     content = user_msg
     if stock_data:
         content += f"\n\n---LIVE DATA (use ONLY these exact prices, do NOT make up numbers)---\n{json.dumps(stock_data, indent=2, default=str)}"
-    else:
-        content += "\n\n---NO PRICE DATA AVAILABLE. Do NOT cite any specific dollar prices. Say you need to look it up.---"
     messages.append({"role": "user", "content": content})
 
     try:
