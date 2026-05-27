@@ -28,9 +28,8 @@ function App() {
         .then(async data => {
           if (data.ok) {
             setUser(data.user)
-            // Check onboarding from localStorage
-            const _ob = JSON.parse(localStorage.getItem('paula-settings') || '{}')
-            setOnboarded(_ob.onboarded === true)
+            // Check onboarding — keyed per user
+            setOnboarded(localStorage.getItem('paula-onboarded-' + data.user.id) === 'true')
           } else { setToken(null); localStorage.removeItem('paula-token') }
         })
         .catch(() => {})
@@ -49,8 +48,7 @@ function App() {
       if (!s.userName) { s.userName = res.user.username; localStorage.setItem('paula-settings', JSON.stringify(s)) }
       // Show onboarding only for brand new signups
       if (isSignup) { setOnboarded(false) } else {
-        const _ob2 = JSON.parse(localStorage.getItem('paula-settings') || '{}')
-        setOnboarded(_ob2.onboarded === true)
+        setOnboarded(localStorage.getItem('paula-onboarded-' + res.user.id) === 'true')
       }
     }
     return res
@@ -58,7 +56,7 @@ function App() {
 
   const completeOnboarding = async (style, bias, risk, alpacaKey, alpacaSecret) => {
     const s = JSON.parse(localStorage.getItem('paula-settings') || '{}')
-    s.tradingStyle = style; s.marketBias = bias; s.riskPct = risk; s.onboarded = true
+    s.tradingStyle = style; s.marketBias = bias; s.riskPct = risk
     localStorage.setItem('paula-settings', JSON.stringify(s))
     // Save profile
     await f(API + '/api/profile', {
@@ -72,6 +70,7 @@ function App() {
         body: JSON.stringify({ alpaca_key: alpacaKey, alpaca_secret: alpacaSecret })
       }).catch(() => {})
     }
+    localStorage.setItem('paula-onboarded-' + (user?.id || 0), 'true')
     setOnboarded(true)
   }
 
@@ -81,7 +80,7 @@ function App() {
   if (!user) return <LoginPage onAuth={doAuth} />
 
 
-  return <>{!onboarded && <OnboardingPage user={user} onComplete={completeOnboarding} onSkip={() => setOnboarded(true)} />}<MainApp user={user} token={token} logout={logout} /></>
+  return <>{!onboarded && <OnboardingPage user={user} onComplete={completeOnboarding} onSkip={() => { localStorage.setItem('paula-onboarded-' + (user?.id || 0), 'true'); setOnboarded(true) }} />}<MainApp user={user} token={token} logout={logout} /></>
 }
 
 function LoginPage({ onAuth }) {
@@ -926,7 +925,6 @@ function MainApp({ user, token, logout }) {
                 <h1><span className="w-hi">{(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' })()}, {name},</span> <Typewriter/></h1>
                 <div className="w-prompts">
                   {[
-                    {q:'Market overview', a:'SPY trend, VIX, and whether it\'s safe to trade.', cmd:'market regime', icon:''},
                     {q:'Find me a trade', a:'Scan for the best setup right now — one stock, written analysis.', cmd:'Find me 1 stock to trade today', icon:''},
                   ].map((p,i)=>(
                     <button key={i} className="w-prompt" disabled={sending && sendingChatRef.current === chatIdRef.current} onClick={()=>sendMessage(p.cmd)}>
@@ -1366,6 +1364,12 @@ function AdminPanel({ token, onClose }) {
     if (r.ok) setUsers(prev => prev.filter(u => u.id !== id))
   }
 
+  const clearAll = async () => {
+    if (!confirm('DELETE all users except you? This cannot be undone.')) return
+    const r = await f(API + '/api/admin/clear-all', { method: 'POST', headers: { Authorization: 'Bearer ' + token } }).then(r => r.json())
+    if (r.ok) { setUsers(prev => prev.filter(u => u.email === 'parjan.d@icloud.com')); alert('Cleared. ' + r.remaining + ' user(s) remaining.') }
+  }
+
   return (
     <div className="cl-overlay" onClick={onClose}>
       <div className="cl-modal" onClick={e => e.stopPropagation()} style={{width: 600, maxHeight: '80vh'}}>
@@ -1378,7 +1382,10 @@ function AdminPanel({ token, onClose }) {
             <div className="card"><div className="stat-sub">Autopilot</div><div className="stat-n">{stats.autopilot_active ? 'ON' : 'OFF'}</div></div>
           </div>}
 
-          <div style={{fontSize:'.52rem',textTransform:'uppercase',letterSpacing:'.12em',color:'var(--dim)',fontWeight:700,marginBottom:8}}>Accounts</div>
+          <div style={{display:'flex',alignItems:'center',marginBottom:8}}>
+            <span style={{fontSize:'.52rem',textTransform:'uppercase',letterSpacing:'.12em',color:'var(--dim)',fontWeight:700}}>Accounts</span>
+            <button onClick={clearAll} style={{marginLeft:'auto',background:'none',border:'1px solid var(--red)',borderRadius:6,padding:'4px 12px',color:'var(--red)',fontSize:'.5rem',fontWeight:600,cursor:'pointer'}}>Clear all users</button>
+          </div>
           {loading ? <div style={{color:'var(--dim)',padding:20}}>Loading...</div> :
           <div style={{display:'flex',flexDirection:'column',gap:4}}>
             {users.map(u => (
@@ -1605,7 +1612,7 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
     {/* About */}
     <div className="card wide"><label>About</label>
       <div className="s-row"><span>Version</span><span className="s-ver">v3.1</span></div>
-      {user.email === 'parjan.d@icloud.com' && <div className="s-row"><span>Admin</span><button className="tog" onClick={() => setShowAdmin(true)}>Open panel</button></div>}
+      {(user.email||'').toLowerCase() === 'parjan.d@icloud.com' && <div className="s-row"><span>Admin</span><button className="tog" onClick={() => setShowAdmin(true)}>Open panel</button></div>}
       {showAdmin && <AdminPanel token={token} onClose={() => setShowAdmin(false)}/>}
       <div className="s-row"><span>What's new</span><button className="tog" onClick={()=>setShowChangelog(true)}>View</button></div>
       <div className="s-row"><span>Sign out</span><button className="tog tog-danger" onClick={logout}>Logout</button></div>

@@ -298,7 +298,18 @@ def _get_user(authorization: str = Header(None)):
 
 @app.post("/api/auth/signup")
 async def signup(req: AuthRequest):
-    result = auth.signup(req.username, req.password, req.email)
+    # Validate email format
+    if req.email:
+        import re as _re
+        if not _re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', req.email):
+            return {"ok": False, "error": "Invalid email format"}
+    else:
+        return {"ok": False, "error": "Email is required"}
+    if not req.username or len(req.username.strip()) < 2:
+        return {"ok": False, "error": "Name must be at least 2 characters"}
+    if not req.password or len(req.password) < 6:
+        return {"ok": False, "error": "Password must be at least 6 characters"}
+    result = auth.signup(req.username.strip(), req.password, req.email.strip().lower())
     return result
 
 @app.post("/api/auth/login")
@@ -1629,9 +1640,30 @@ async def admin_delete_user(user_id: int, authorization: str = Header(None)):
         db.execute("DELETE FROM user_settings WHERE user_id = ?", (user_id,))
         db.execute("DELETE FROM users WHERE id = ?", (user_id,))
         db.commit()
-        # Clear their session
         _user_sessions.pop(user_id, None)
         return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.post("/api/admin/clear-all")
+async def admin_clear_all(authorization: str = Header(None)):
+    """Clear ALL users except admin. Nuclear option."""
+    user = _get_user(authorization)
+    if not user or user.get("email", "").lower() != ADMIN_EMAIL:
+        return {"ok": False, "error": "Unauthorized"}
+    db = auth._get_db()
+    try:
+        db.execute("DELETE FROM chat_history WHERE user_id != ?", (user["id"],))
+        db.execute("DELETE FROM user_settings WHERE user_id != ?", (user["id"],))
+        db.execute("DELETE FROM users WHERE id != ?", (user["id"],))
+        db.commit()
+        # Clear all sessions except admin
+        for uid in list(_user_sessions.keys()):
+            if uid != user["id"]:
+                _user_sessions.pop(uid, None)
+        remaining = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        return {"ok": True, "remaining": remaining}
     finally:
         db.close()
 

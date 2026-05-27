@@ -117,8 +117,8 @@ def signup(username: str, password: str, email: str = None) -> dict:
         db.execute("INSERT INTO user_settings (user_id, display_name) VALUES (?, ?)",
                    (user_id, username))
         db.commit()
-        token = _make_jwt({"user_id": user_id, "username": username})
-        return {"ok": True, "token": token, "user": {"id": user_id, "username": username}}
+        token = _make_jwt({"user_id": user_id, "username": username, "email": email or ""})
+        return {"ok": True, "token": token, "user": {"id": user_id, "username": username, "email": email or ""}}
     except sqlite3.IntegrityError:
         return {"ok": False, "error": "Username already taken"}
     finally:
@@ -129,7 +129,7 @@ def login(username: str, password: str) -> dict:
     """Authenticate a user."""
     db = _get_db()
     try:
-        row = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        row = db.execute("SELECT * FROM users WHERE username = ? OR email = ?", (username, username)).fetchone()
         if not row:
             return {"ok": False, "error": "Invalid username or password"}
         pw_hash, _ = _hash_password(password, row["salt"])
@@ -138,8 +138,8 @@ def login(username: str, password: str) -> dict:
         db.execute("UPDATE users SET last_login = ? WHERE id = ?",
                    (datetime.utcnow().isoformat(), row["id"]))
         db.commit()
-        token = _make_jwt({"user_id": row["id"], "username": row["username"]})
-        return {"ok": True, "token": token, "user": {"id": row["id"], "username": row["username"]}}
+        token = _make_jwt({"user_id": row["id"], "username": row["username"], "email": row["email"] or ""})
+        return {"ok": True, "token": token, "user": {"id": row["id"], "username": row["username"], "email": row["email"] or ""}}
     finally:
         db.close()
 
@@ -149,7 +149,7 @@ def get_user(token: str) -> dict | None:
     payload = _verify_jwt(token)
     if not payload:
         return None
-    return {"id": payload["user_id"], "username": payload["username"]}
+    return {"id": payload["user_id"], "username": payload["username"], "email": payload.get("email", "")}
 
 
 def get_settings(user_id: int) -> dict:
