@@ -258,7 +258,7 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.send_text(json.dumps({
             "event": "connected",
             "data": {
-                "autopilot": autopilot_task is not None and not autopilot_task.done() and autopilot_owner_id == (user.get("id") if user else None),
+                "autopilot": autopilot_task is not None and not autopilot_task.done(),
             }
         }))
         while True:
@@ -360,7 +360,7 @@ async def health():
     return {
         "status": "ok",
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
-        "autopilot": autopilot_task is not None and not autopilot_task.done() and autopilot_owner_id == (user.get("id") if user else None),
+        "autopilot": autopilot_task is not None and not autopilot_task.done(),
     }
 
 
@@ -1036,7 +1036,7 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
                 "ok": True, "message": resp, "stream": False,
                 "type": rtype, "ticker": result.get("ticker"),
                 "trade_signal": result.get("trade_signal"),
-                "autopilot": autopilot_task is not None and not autopilot_task.done() and autopilot_owner_id == (user.get("id") if user else None),
+                "autopilot": autopilot_task is not None and not autopilot_task.done(),
             }
     elif result and result.get("ok") and result.get("type") == "analysis":
         stock_data = result.get("data")
@@ -1241,7 +1241,7 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
         "trade_signal": result.get("trade_signal") if result else None,
         "signal_data": result.get("signal_data") if result else None,
         "table": result.get("data") if result and result.get("type") == "list" else None,
-        "autopilot": autopilot_task is not None and not autopilot_task.done() and autopilot_owner_id == (user.get("id") if user else None),
+        "autopilot": autopilot_task is not None and not autopilot_task.done(),
     }
 
     # Extract tickers for charts

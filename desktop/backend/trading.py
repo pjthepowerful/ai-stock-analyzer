@@ -4668,6 +4668,13 @@ def execute(intent: dict) -> dict:
         user_msg_lower = intent.get("_original_msg", "").lower()
         wants_single = any(w in user_msg_lower for w in ["1 stock", "one stock", "a stock", "single stock", "just one", "best one", "top pick"])
 
+        # Extract price filter (e.g., "under $50", "below 100", "less than $30")
+        max_price = None
+        import re as _pre
+        _price_match = _pre.search(r'(?:under|below|less than|cheaper than|max|up to)\s*\$?(\d+)', user_msg_lower)
+        if _price_match:
+            max_price = float(_price_match.group(1))
+
         if cat == "large":
             universe = SP500_TOP[:30]
         elif cat == "mid":
@@ -4678,6 +4685,10 @@ def execute(intent: dict) -> dict:
             universe = ["AAPL","MSFT","NVDA","GOOGL","META","AMZN","AVGO","CRM","ADBE","AMD","INTC","ORCL","PLTR","SNOW","NET","ZS","FTNT","PANW","CRWD","NOW"]
         else:
             universe = SP500_TOP[:15] + MIDCAP_GROWTH[:5] + TRENDING[:5]
+
+        # If user wants cheap stocks, expand universe to include more small/mid caps
+        if max_price and max_price <= 100:
+            universe = list(set(universe + MIDCAP_GROWTH + SMALLCAP + TRENDING))
 
         picks = []
         for ticker in universe:
@@ -4700,9 +4711,14 @@ def execute(intent: dict) -> dict:
                 continue
 
         picks.sort(key=lambda x: x["score"], reverse=True)
+        # Apply price filter if user specified one
+        if max_price:
+            picks = [p for p in picks if p.get("price", 0) <= max_price]
         top = picks[:5]
 
         if not top:
+            if max_price:
+                return {"ok": True, "type": "analysis", "msg": f"I scanned {len(universe)} stocks but couldn't find any under ${max_price:.0f} that score high enough right now. Try a higher price range or ask me to analyze a specific cheap ticker."}
             return {"ok": True, "type": "analysis", "msg": "I scanned " + str(len(universe)) + " stocks but nothing scored high enough right now. The market might be choppy — try again later or ask me to analyze a specific ticker."}
 
         # Single stock request — written response with the best pick
