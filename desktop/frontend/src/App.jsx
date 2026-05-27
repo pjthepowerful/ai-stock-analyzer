@@ -38,18 +38,20 @@ function App() {
     } else { setAuthLoading(false) }
   }, [token])
 
-  const doAuth = async (username, password, isSignup) => {
+  const doAuth = async (username, password, isSignup, email) => {
     const res = await f(API + '/api/auth/' + (isSignup ? 'signup' : 'login'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({ username, password, email: isSignup ? email : undefined })
     }).then(r => r.json())
     if (res.ok) {
       setToken(res.token); setUser(res.user); localStorage.setItem('paula-token', res.token)
       const s = JSON.parse(localStorage.getItem('paula-settings') || '{}')
       if (!s.userName) { s.userName = res.user.username; localStorage.setItem('paula-settings', JSON.stringify(s)) }
-      // Check onboarding from localStorage
-      const _ob2 = JSON.parse(localStorage.getItem('paula-settings') || '{}')
-      setOnboarded(_ob2.onboarded === true)
+      // Show onboarding only for brand new signups
+      if (isSignup) { setOnboarded(false) } else {
+        const _ob2 = JSON.parse(localStorage.getItem('paula-settings') || '{}')
+        setOnboarded(_ob2.onboarded === true)
+      }
     }
     return res
   }
@@ -84,6 +86,7 @@ function App() {
 
 function LoginPage({ onAuth }) {
   const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
   const [isSignup, setIsSignup] = useState(false)
@@ -92,9 +95,15 @@ function LoginPage({ onAuth }) {
 
   const submit = async (e) => {
     e?.preventDefault()
-    if (!username || !password) return
+    if (isSignup) {
+      if (!username || !email || !password) { setError('All fields required'); return }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('Enter a valid email address'); return }
+      if (password.length < 6) { setError('Password must be at least 6 characters'); return }
+    } else {
+      if (!username || !password) return
+    }
     setLoading(true); setError('')
-    const res = await onAuth(username, password, isSignup)
+    const res = await onAuth(username, password, isSignup, email)
     if (!res.ok) setError(res.error)
     setLoading(false)
   }
@@ -144,8 +153,12 @@ function LoginPage({ onAuth }) {
           <h2 className="lr-title">{isSignup ? 'Create account' : 'Welcome back'}</h2>
           <p className="lr-sub">{isSignup ? 'Takes 30 seconds. No card required for paper trading.' : 'Sign in to pick up where you left off.'}</p>
           <div className="login-form">
-            <label className="lf-label">{isSignup ? 'Email' : 'Email'}</label>
-            <input className="login-input" placeholder="pj@trader.io" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') document.querySelector('.pw-input')?.focus() }} autoFocus autoComplete="username" />
+            {isSignup && <><label className="lf-label">Name</label>
+            <input className="login-input" placeholder="PJ" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') document.querySelector('.email-input')?.focus() }} autoFocus autoComplete="name" />
+            <label className="lf-label">Email</label>
+            <input className="login-input email-input" placeholder="pj@trader.io" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') document.querySelector('.pw-input')?.focus() }} autoComplete="email" type="email" /></>}
+            {!isSignup && <><label className="lf-label">Username</label>
+            <input className="login-input" placeholder="PJ" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') document.querySelector('.pw-input')?.focus() }} autoFocus autoComplete="username" /></>}
             <div className="lf-pw-row">
               <label className="lf-label">Password</label>
 
@@ -587,6 +600,7 @@ function MainApp({ user, token, logout }) {
           type: data.type, ticker: data.ticker || null,
           tickers: data.tickers || [], signal: data.trade_signal || null,
           signalData: data.signal_data || null,
+          showChart: ['analysis','price','stock_ideas'].includes(data.type),
           time: new Date().toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'})
         }
 
@@ -931,9 +945,9 @@ function MainApp({ user, token, logout }) {
                     <div className="ai-body">
                       <div className="ai-name">Paula</div>
                       <div className="ai-txt"><span dangerouslySetInnerHTML={{__html:fmt(m.content)}}/>{m.streaming&&<span className="stream-cursor">▌</span>}</div>
-                      {m.tickers?.length>1?(
+                      {m.showChart && m.tickers?.length>1?(
                         <ChartTabs tickers={m.tickers} signal={m.signal}/>
-                      ):m.ticker||m.tickers?.[0]?(
+                      ):m.showChart && (m.ticker||m.tickers?.[0])?(
                         <div className="ai-chart"><Chart ticker={m.ticker||m.tickers[0]} signal={m.signal} height={260}/></div>
                       ):null}
                       {m.signalData && <SignalCard data={m.signalData} onExecute={(ticker) => sendMessage('Buy ' + ticker)}/>}
@@ -1584,28 +1598,14 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
 
     
 
-    {/* Autopilot */}
-    <div className="card wide"><label>Autopilot</label>
-      <div className="s-row"><span>Status</span><span className={'s-status'+(autopilot?' s-on':'')}>{autopilot?'Scanning':'Off'}</span></div>
-      <div className="s-row"><span>Auto-scan</span>
-        <button className={'toggle-sw'+(autopilot?' sw-on':'')} onClick={async ()=>{
-          const wasOn = autopilot; setAutopilot(!wasOn)
-          try { await f(API+'/api/autopilot/'+(wasOn?'stop':'start'),{method:'POST'}) } catch { setAutopilot(wasOn) }
-        }} role="switch" aria-checked={autopilot}><span className="sw-thumb"/></button>
-      </div>
-    </div>
+    
 
-    {/* Data */}
-    <div className="card wide"><label>Data</label>
-      <div className="s-row"><span>Clear all chats</span><button className="tog tog-danger" onClick={()=>{
-        if(confirm('Delete all chats? This cannot be undone.')){persist([]);setActiveChatId(null);setMessages([])}
-      }}>Clear</button></div>
-    </div>
+    
 
     {/* About */}
     <div className="card wide"><label>About</label>
       <div className="s-row"><span>Version</span><span className="s-ver">v3.1</span></div>
-      {user.username.toUpperCase() === 'PJ' && <div className="s-row"><span>Admin</span><button className="tog" onClick={() => setShowAdmin(true)}>Open panel</button></div>}
+      {user.email === 'parjan.d@icloud.com' && <div className="s-row"><span>Admin</span><button className="tog" onClick={() => setShowAdmin(true)}>Open panel</button></div>}
       {showAdmin && <AdminPanel token={token} onClose={() => setShowAdmin(false)}/>}
       <div className="s-row"><span>What's new</span><button className="tog" onClick={()=>setShowChangelog(true)}>View</button></div>
       <div className="s-row"><span>Sign out</span><button className="tog tog-danger" onClick={logout}>Logout</button></div>

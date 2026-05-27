@@ -476,7 +476,9 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .font-picks { display: flex; gap: 6px }
 .fp-btn { display: flex; flex-direction: column; align-items: center; gap: 3px; background: var(--c1); border: 1px solid var(--brd); color: var(--dim); font-family: var(--sans); padding: 8px 14px; cursor: pointer; border-radius: 8px; transition: all .15s; min-width: 52px }
 .fp-btn:hover { background: var(--c2); color: var(--lt); border-color: rgba(255,255,255,.08) }
-.fp-on { background: var(--c2); color: var(--grn); border-color: rgba(16,185,129,.2) }
+.fp-on { background: rgba(16,185,129,.1); color: var(--grn) !important; border: 2px solid var(--grn); box-shadow: 0 0 0 3px rgba(16,185,129,.1) }
+.fp-on .ob-opt-title { color: var(--wh) !important }
+.fp-on .ob-opt-desc { color: var(--grn) !important }
 .fp-aa { font-weight: 700; color: inherit; line-height: 1 }
 .fp-label { font-size: .42rem; text-transform: uppercase; letter-spacing: .08em; opacity: .6 }
 .s-status { font-family: var(--mono); font-size: .7rem; font-weight: 600 }

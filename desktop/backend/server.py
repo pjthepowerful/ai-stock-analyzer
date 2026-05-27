@@ -1160,26 +1160,31 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
             list_data = result.get("data", [])
             resp = await loop.run_in_executor(None, engine.ai_response, user_msg, {"list_title": result.get("title", ""), "stocks": list_data}, chat_history, "US")
         elif not resp:
-            # Try to extract a ticker from the message to provide context
-            _chat_data = None
+            # Try to extract tickers from message AND history to provide context
+            _chat_data = {}
             try:
-                _chat_ticker = intent.get("ticker")
-                if not _chat_ticker:
-                    # Look for tickers in recent history
-                    for h in reversed(chat_history[-6:]):
-                        import re as _re
-                        _found = _re.findall(r'\b([A-Z]{1,5})\b', h.get("content", ""))
-                        for _ft in _found:
-                            if _ft in ["AAPL","MSFT","NVDA","GOOGL","AMZN","META","TSLA","AMD","NFLX","SPY","QQQ","JPM","V","BA","HD","CRM","AVGO","LLY","COST","WMT","DIS","XOM","CVX","GS","BAC","INTC","PYPL","COIN","PLTR","UBER","SHOP","SOFI","MARA","CELH","NIO","RIVN","F","GM","KO","PEP","NKE"]:
-                                _chat_ticker = _ft
-                                break
-                        if _chat_ticker:
-                            break
-                if _chat_ticker:
-                    _chat_data = engine.fetch_full(_chat_ticker)
+                import re as _re
+                # Scan current message + last 6 history items for tickers
+                _all_text = user_msg + " " + " ".join(h.get("content", "") for h in chat_history[-6:])
+                _found_tickers = list(set(_re.findall(r'\b([A-Z]{1,5})\b', _all_text)))
+                # Filter to known tickers (avoid matching random words like "THE", "AND")
+                _known = set(["AAPL","MSFT","NVDA","GOOGL","AMZN","META","TSLA","AMD","NFLX","SPY","QQQ","JPM","V","BA","HD","CRM","AVGO","LLY","COST","WMT","DIS","XOM","CVX","GS","BAC","INTC","PYPL","COIN","PLTR","UBER","SHOP","SOFI","MARA","CELH","NIO","RIVN","F","GM","KO","PEP","NKE","ADBE","CSCO","IBM","QCOM","TXN","MU","MA","SQ","HOOD","MS","C","WFC","UNH","JNJ","MRK","PFE","ABBV","TGT","SBUX","MCD","CMG","DASH","BKNG","ABNB","LULU","SLB","COP","CAT","GE","HON","DE","UPS","FDX","LMT","SNAP","RBLX","DKNG","MSTR","RIOT","NET","DDOG","SNOW","PANW","CRWD","TTD","SMCI","ARM","IONQ","TMDX","DUOL","FCEL","ONON","HIMS","CAVA","TOST","ELF","LCID","DELL","ROKU","NOW","INTU","PINS","CVNA","MRNA","BRK-B","RKLB","AXON"])
+                _valid = [t for t in _found_tickers if t in _known][:5]  # max 5 lookups
+                if _valid:
+                    _multi = {}
+                    for _vt in _valid:
+                        try:
+                            _vd = engine.fetch_full(_vt)
+                            if _vd and _vd.get("price"):
+                                _multi[_vt] = {"price": _vd["price"], "change_pct": _vd.get("change_pct", 0), "name": _vd.get("name", _vt)}
+                        except: pass
+                    if _multi:
+                        _chat_data = {"stocks": _multi, "note": "Use ONLY these exact prices"}
+                    elif len(_valid) == 1:
+                        _chat_data = engine.fetch_full(_valid[0]) or {}
             except Exception:
                 pass
-            resp = await loop.run_in_executor(None, engine.ai_response, user_msg, _chat_data, chat_history, "US")
+            resp = await loop.run_in_executor(None, engine.ai_response, user_msg, _chat_data if _chat_data else None, chat_history, "US")
     elif result and result.get("error"):
         resp = f"⚠️ {result['error']}"
     else:
@@ -1190,7 +1195,7 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                 import re as _re
                 _found = _re.findall(r'\b([A-Z]{1,5})\b', h.get("content", ""))
                 for _ft in _found:
-                    if _ft in ["AAPL","MSFT","NVDA","GOOGL","AMZN","META","TSLA","AMD","NFLX","SPY","QQQ","JPM","V","BA","HD","CRM","AVGO","LLY","COST","WMT","DIS","XOM","CVX","GS","BAC","INTC","PYPL","COIN","PLTR","UBER","SHOP","SOFI","MARA","CELH","NIO","RIVN","F","GM","KO","PEP","NKE"]:
+                    if _ft in ["AAPL","MSFT","NVDA","GOOGL","AMZN","META","TSLA","AMD","NFLX","SPY","QQQ","JPM","V","BA","HD","CRM","AVGO","LLY","COST","WMT","DIS","XOM","CVX","GS","BAC","INTC","PYPL","COIN","PLTR","UBER","SHOP","SOFI","MARA","CELH","NIO","RIVN","F","GM","KO","PEP","NKE","ADBE","CSCO","IBM","QCOM","TXN","MU","AMAT","LRCX","KLAC","MA","SQ","HOOD","AFRM","MS","C","WFC","SCHW","BLK","UNH","JNJ","MRK","PFE","ABBV","TMO","TGT","NKE","SBUX","MCD","CMG","DASH","BKNG","ABNB","LULU","ETSY","SLB","COP","CAT","GE","HON","DE","UPS","FDX","LMT","SNAP","RBLX","DKNG","MSTR","RIOT","NET","DDOG","SNOW","MDB","PANW","CRWD","ZS","TTD","HUBS","SMCI","ARM","IONQ","TMDX","DUOL","FCEL","ONON","HIMS","CAVA","TOST","BROS","ELF","LCID","LI","DELL","ROKU","ZM","DOCU","NOW","INTU","WDAY","PINS","MTCH","CVNA","AMT","PLD","O","T","VZ","TMUS","NEE","NEM","GOLD","FCX","NUE","MRNA","BIIB","BRK-B","RKLB","AXON","SOXX","DIA","ARKK","IWM","XLF","XLE"]:
                         _fall_data = engine.fetch_full(_ft)
                         break
                 if _fall_data:
@@ -1532,11 +1537,16 @@ async def _autopilot_loop():
 
         except asyncio.CancelledError:
             break
+        except asyncio.CancelledError:
+            raise  # Let cancellation work
         except Exception as e:
             await broadcast("autopilot", {"status": "error", "error": str(e)[:200]})
             await send_phone_notification("⚠️ Paula Error", str(e)[:80], priority="high")
 
-        await asyncio.sleep(5 * 60)  # 5 minutes
+        try:
+            await asyncio.sleep(5 * 60)  # 5 minutes
+        except asyncio.CancelledError:
+            break  # Clean exit on stop
 
 
 @app.post("/api/autopilot/start")
@@ -1585,12 +1595,12 @@ if __name__ == "__main__":
 
 
 # ═══ Admin Panel ═══
-ADMIN_USERNAME = "PJ"  # Only this user can access admin
+ADMIN_EMAIL = "parjan.d@icloud.com"  # Only this email can access admin
 
 @app.get("/api/admin/users")
 async def admin_list_users(authorization: str = Header(None)):
     user = _get_user(authorization)
-    if not user or user.get("username", "").upper() != ADMIN_USERNAME.upper():
+    if not user or user.get("email", "").lower() != ADMIN_EMAIL:
         return {"ok": False, "error": "Unauthorized"}
     db = auth._get_db()
     try:
@@ -1609,7 +1619,7 @@ async def admin_list_users(authorization: str = Header(None)):
 @app.delete("/api/admin/users/{user_id}")
 async def admin_delete_user(user_id: int, authorization: str = Header(None)):
     user = _get_user(authorization)
-    if not user or user.get("username", "").upper() != ADMIN_USERNAME.upper():
+    if not user or user.get("email", "").lower() != ADMIN_EMAIL:
         return {"ok": False, "error": "Unauthorized"}
     if user_id == user["id"]:
         return {"ok": False, "error": "Cannot delete yourself"}
@@ -1629,7 +1639,7 @@ async def admin_delete_user(user_id: int, authorization: str = Header(None)):
 @app.get("/api/admin/stats")
 async def admin_stats(authorization: str = Header(None)):
     user = _get_user(authorization)
-    if not user or user.get("username", "").upper() != ADMIN_USERNAME.upper():
+    if not user or user.get("email", "").lower() != ADMIN_EMAIL:
         return {"ok": False, "error": "Unauthorized"}
     db = auth._get_db()
     try:
