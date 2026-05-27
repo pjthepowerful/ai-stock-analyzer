@@ -152,7 +152,10 @@ function LoginPage({ onAuth }) {
               {loading ? '...' : isSignup ? 'Create account  →' : 'Sign in  →'}
             </button>
 
-            
+            <button className="login-toggle" onClick={() => { setIsSignup(!isSignup); setError('') }}>
+              {isSignup ? 'Already have an account? ' : 'New to Paula? '}<span className="lt-link">{isSignup ? 'Sign in' : 'Create account'}</span>
+            </button>
+          </div>
           <div className="lr-footer">By continuing you agree to our Terms · Privacy <span className="lr-sys">● All systems operational</span></div>
           <a href="/commercial.html" target="_blank" className="lr-trailer">▶ Watch the trailer</a>
         </div>
