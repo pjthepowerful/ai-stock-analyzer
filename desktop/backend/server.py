@@ -1582,3 +1582,63 @@ async def autopilot_status():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=3141, log_level="info")
+
+
+# ═══ Admin Panel ═══
+ADMIN_USERNAME = "PJ"  # Only this user can access admin
+
+@app.get("/api/admin/users")
+async def admin_list_users(authorization: str = Header(None)):
+    user = _get_user(authorization)
+    if not user or user.get("username", "").upper() != ADMIN_USERNAME.upper():
+        return {"ok": False, "error": "Unauthorized"}
+    db = auth._get_db()
+    try:
+        rows = db.execute("SELECT id, username, email, created_at, last_login FROM users ORDER BY id DESC").fetchall()
+        users = [{"id": r["id"], "username": r["username"], "email": r["email"],
+                  "created_at": r["created_at"], "last_login": r["last_login"]} for r in rows]
+        # Get session counts
+        for u in users:
+            u["messages"] = db.execute("SELECT COUNT(*) FROM chat_history WHERE user_id = ?", (u["id"],)).fetchone()[0]
+        return {"ok": True, "users": users, "total": len(users),
+                "autopilot_owner": autopilot_owner_id}
+    finally:
+        db.close()
+
+
+@app.delete("/api/admin/users/{user_id}")
+async def admin_delete_user(user_id: int, authorization: str = Header(None)):
+    user = _get_user(authorization)
+    if not user or user.get("username", "").upper() != ADMIN_USERNAME.upper():
+        return {"ok": False, "error": "Unauthorized"}
+    if user_id == user["id"]:
+        return {"ok": False, "error": "Cannot delete yourself"}
+    db = auth._get_db()
+    try:
+        db.execute("DELETE FROM chat_history WHERE user_id = ?", (user_id,))
+        db.execute("DELETE FROM user_settings WHERE user_id = ?", (user_id,))
+        db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        db.commit()
+        # Clear their session
+        _user_sessions.pop(user_id, None)
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.get("/api/admin/stats")
+async def admin_stats(authorization: str = Header(None)):
+    user = _get_user(authorization)
+    if not user or user.get("username", "").upper() != ADMIN_USERNAME.upper():
+        return {"ok": False, "error": "Unauthorized"}
+    db = auth._get_db()
+    try:
+        total_users = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        total_messages = db.execute("SELECT COUNT(*) FROM chat_history").fetchone()[0]
+        active_sessions = len(_user_sessions)
+        return {"ok": True, "total_users": total_users, "total_messages": total_messages,
+                "active_sessions": active_sessions,
+                "autopilot_active": autopilot_task is not None and not autopilot_task.done(),
+                "autopilot_owner": autopilot_owner_id}
+    finally:
+        db.close()

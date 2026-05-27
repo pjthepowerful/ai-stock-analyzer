@@ -28,9 +28,9 @@ function App() {
         .then(async data => {
           if (data.ok) {
             setUser(data.user)
-            // Check onboarding
-            const ob = await f(API + '/api/auth/onboarding', { headers: { Authorization: 'Bearer ' + token } }).then(r => r.json()).catch(() => ({ onboarded: true }))
-            setOnboarded(ob.onboarded !== false)
+            // Check onboarding from localStorage
+            const _ob = JSON.parse(localStorage.getItem('paula-settings') || '{}')
+            setOnboarded(_ob.onboarded === true)
           } else { setToken(null); localStorage.removeItem('paula-token') }
         })
         .catch(() => {})
@@ -47,29 +47,39 @@ function App() {
       setToken(res.token); setUser(res.user); localStorage.setItem('paula-token', res.token)
       const s = JSON.parse(localStorage.getItem('paula-settings') || '{}')
       if (!s.userName) { s.userName = res.user.username; localStorage.setItem('paula-settings', JSON.stringify(s)) }
-      // Check onboarding
-      const ob = await f(API + '/api/auth/onboarding', { headers: { Authorization: 'Bearer ' + res.token } }).then(r => r.json()).catch(() => ({ onboarded: true }))
-      setOnboarded(ob.onboarded !== false)
+      // Check onboarding from localStorage
+      const _ob2 = JSON.parse(localStorage.getItem('paula-settings') || '{}')
+      setOnboarded(_ob2.onboarded === true)
     }
     return res
   }
 
-  const completeOnboarding = async (alpacaKey, alpacaSecret) => {
-    const r = await f(API + '/api/auth/settings', {
+  const completeOnboarding = async (style, bias, risk, alpacaKey, alpacaSecret) => {
+    const s = JSON.parse(localStorage.getItem('paula-settings') || '{}')
+    s.tradingStyle = style; s.marketBias = bias; s.riskPct = risk; s.onboarded = true
+    localStorage.setItem('paula-settings', JSON.stringify(s))
+    // Save profile
+    await f(API + '/api/profile', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ alpaca_key: alpacaKey, alpaca_secret: alpacaSecret })
-    }).then(r => r.json())
-    if (r.ok) setOnboarded(true)
-    return r
+      body: JSON.stringify({ tradingStyle: style, marketBias: bias, riskPct: risk })
+    }).catch(() => {})
+    // Save Alpaca keys if provided
+    if (alpacaKey && alpacaSecret) {
+      await f(API + '/api/auth/settings', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ alpaca_key: alpacaKey, alpaca_secret: alpacaSecret })
+      }).catch(() => {})
+    }
+    setOnboarded(true)
   }
 
   const logout = () => { setUser(null); setToken(null); setOnboarded(true); localStorage.removeItem('paula-token') }
 
   if (authLoading) return <div className="auth-loading"><div className="logo-p">P</div></div>
   if (!user) return <LoginPage onAuth={doAuth} />
-  if (!onboarded) return <OnboardingPage user={user} onComplete={completeOnboarding} onSkip={() => setOnboarded(true)} />
 
-  return <MainApp user={user} token={token} logout={logout} />
+
+  return <>{!onboarded && <OnboardingPage user={user} onComplete={completeOnboarding} onSkip={() => setOnboarded(true)} />}<MainApp user={user} token={token} logout={logout} /></>
 }
 
 function LoginPage({ onAuth }) {
@@ -165,45 +175,91 @@ function LoginPage({ onAuth }) {
 }
 
 function OnboardingPage({ user, onComplete, onSkip }) {
+  const [step, setStep] = useState(0)
+  const [style, setStyle] = useState('Day')
+  const [bias, setBias] = useState('Bull')
+  const [risk, setRisk] = useState('1.0%')
   const [alpacaKey, setAlpacaKey] = useState('')
   const [alpacaSecret, setAlpacaSecret] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
+  const totalSteps = 4
 
-  const handleSubmit = async () => {
-    if (!alpacaKey.trim() || !alpacaSecret.trim()) { setError('Both keys are required'); return }
-    setSaving(true); setError('')
-    const r = await onComplete(alpacaKey.trim(), alpacaSecret.trim())
-    if (!r.ok) setError(r.error || 'Failed to save')
-    setSaving(false)
-  }
+  const finish = () => onComplete(style, bias, risk, alpacaKey, alpacaSecret)
 
   return (
-    <div className="onboard-page">
-      <div className="onboard-card">
-        <div className="onboard-top"><span className="logo-p">P</span><span className="ll-name">Paula</span></div>
-        <h1 className="onboard-h">Welcome, {user.username}.</h1>
-        <p className="onboard-sub">Connect your Alpaca brokerage account to start trading. Paula will use these keys to execute trades directly on your account.</p>
-
-        <div className="onboard-form">
-          <div className="onboard-field">
-            <label>Alpaca API Key</label>
-            <input type="text" value={alpacaKey} onChange={e => setAlpacaKey(e.target.value)} placeholder="PKSPW6O3..." autoComplete="off"/>
-          </div>
-          <div className="onboard-field">
-            <label>Alpaca Secret Key</label>
-            <input type="password" value={alpacaSecret} onChange={e => setAlpacaSecret(e.target.value)} placeholder="AzMrJhgV..." autoComplete="off"/>
-          </div>
-          {error && <div className="onboard-err">{error}</div>}
-          <button className="login-btn" onClick={handleSubmit} disabled={saving}>{saving ? 'Connecting...' : 'Connect account'}</button>
+    <div className="cl-overlay">
+      <div className="cl-modal" onClick={e => e.stopPropagation()} style={{width: 460}}>
+        <div className="ob-progress-track">
+          <div className="ob-progress-fill" style={{width: ((step + 1) / totalSteps * 100) + '%'}}/>
         </div>
 
-        <div className="onboard-info">
-          <p>Get your keys from <a href="https://app.alpaca.markets/paper/dashboard/overview" target="_blank" rel="noreferrer">Alpaca Paper Trading</a></p>
-          <p>Your keys are stored securely and never shared.</p>
-        </div>
+        <div className="cl-pad" style={{padding: '28px 28px 24px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:20}}>
+            <span className="logo-p" style={{width:28,height:28,fontSize:12}}>P</span>
+            <span style={{fontWeight:600,color:'var(--wh)',fontSize:'.88rem'}}>Setup</span>
+            <span style={{marginLeft:'auto',fontFamily:'var(--mono)',fontSize:'.48rem',color:'var(--dim)'}}>{step + 1} of {totalSteps}</span>
+          </div>
 
-        <button className="onboard-skip" onClick={onSkip}>Skip for now →</button>
+          {step === 0 && <>
+            <h3 className="ob-h">How do you trade?</h3>
+            <p className="ob-sub">This helps Paula scan the right setups and size positions for you.</p>
+            <div className="ob-opts">
+              {['Day','Swing'].map(s => (
+                <button key={s} className={'fp-btn ob-opt'+(style===s?' fp-on':'')} onClick={() => setStyle(s)}>
+                  <span className="ob-opt-title">{s} Trading</span>
+                  <span className="ob-opt-desc">{s==='Day'?'In and out same day':'Hold for days or weeks'}</span>
+                </button>
+              ))}
+            </div>
+            <button className="login-btn" onClick={() => setStep(1)}>Next</button>
+          </>}
+
+          {step === 1 && <>
+            <h3 className="ob-h">Market outlook?</h3>
+            <p className="ob-sub">Are you feeling bullish, neutral, or bearish right now?</p>
+            <div className="ob-opts ob-opts-3">
+              {['Bull','Neutral','Bear'].map(s => (
+                <button key={s} className={'fp-btn ob-opt'+(bias===s?' fp-on':'')} onClick={() => setBias(s)}>
+                  <span className="ob-opt-title">{s==='Bull'?'Bullish':s==='Bear'?'Bearish':'Neutral'}</span>
+                  <span className="ob-opt-desc">{s==='Bull'?'Looking for longs':s==='Bear'?'Looking for shorts':'Both directions'}</span>
+                </button>
+              ))}
+            </div>
+            <button className="login-btn" onClick={() => setStep(2)}>Next</button>
+          </>}
+
+          {step === 2 && <>
+            <h3 className="ob-h">Risk per trade?</h3>
+            <p className="ob-sub">How much of your account to risk on a single trade?</p>
+            <div className="ob-opts ob-opts-3">
+              {[{v:'0.5%',d:'Conservative'},{v:'1.0%',d:'Standard'},{v:'2.0%',d:'Aggressive'}].map(s => (
+                <button key={s.v} className={'fp-btn ob-opt'+(risk===s.v?' fp-on':'')} onClick={() => setRisk(s.v)}>
+                  <span className="ob-opt-title">{s.v}</span>
+                  <span className="ob-opt-desc">{s.d}</span>
+                </button>
+              ))}
+            </div>
+            <button className="login-btn" onClick={() => setStep(3)}>Next</button>
+          </>}
+
+          {step === 3 && <>
+            <h3 className="ob-h">Connect your broker</h3>
+            <p className="ob-sub">Paula uses Alpaca to execute trades. Paper trading keys work too.</p>
+            <div className="ob-fields">
+              <div className="onboard-field">
+                <label>Alpaca API Key</label>
+                <input type="text" value={alpacaKey} onChange={e => setAlpacaKey(e.target.value)} placeholder="PKSPW6O3..." autoComplete="off"/>
+              </div>
+              <div className="onboard-field">
+                <label>Alpaca Secret Key</label>
+                <input type="password" value={alpacaSecret} onChange={e => setAlpacaSecret(e.target.value)} placeholder="AzMrJhgV..." autoComplete="off"/>
+              </div>
+            </div>
+            <p className="ob-link">Get keys from <a href="https://app.alpaca.markets/paper/dashboard/overview" target="_blank" rel="noreferrer">Alpaca Paper Trading</a></p>
+            <button className="login-btn" onClick={finish}>{alpacaKey && alpacaSecret ? 'Connect and start' : 'Start without broker'}</button>
+          </>}
+
+          <button className="onboard-skip" onClick={onSkip}>Skip setup</button>
+        </div>
       </div>
     </div>
   )
@@ -1272,6 +1328,61 @@ function SignalCard({ data, onExecute }) {
   )
 }
 
+function AdminPanel({ token, onClose }) {
+  const [users, setUsers] = useState([])
+  const [stats, setStats] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const load = async () => {
+      const [u, s] = await Promise.all([
+        f(API + '/api/admin/users', { headers: { Authorization: 'Bearer ' + token } }).then(r => r.json()),
+        f(API + '/api/admin/stats', { headers: { Authorization: 'Bearer ' + token } }).then(r => r.json()),
+      ])
+      if (u.ok) setUsers(u.users)
+      if (s.ok) setStats(s)
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  const deleteUser = async (id, name) => {
+    if (!confirm('Delete user "' + name + '" and all their data?')) return
+    const r = await f(API + '/api/admin/users/' + id, { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } }).then(r => r.json())
+    if (r.ok) setUsers(prev => prev.filter(u => u.id !== id))
+  }
+
+  return (
+    <div className="cl-overlay" onClick={onClose}>
+      <div className="cl-modal" onClick={e => e.stopPropagation()} style={{width: 600, maxHeight: '80vh'}}>
+        <div className="cl-head"><span className="cl-ver-title">Admin Panel</span><button className="cl-x" onClick={onClose}>×</button></div>
+        <div className="cl-pad" style={{overflowY: 'auto'}}>
+          {stats && <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,marginBottom:16}}>
+            <div className="card"><div className="stat-sub">Users</div><div className="stat-n">{stats.total_users}</div></div>
+            <div className="card"><div className="stat-sub">Messages</div><div className="stat-n">{stats.total_messages}</div></div>
+            <div className="card"><div className="stat-sub">Sessions</div><div className="stat-n">{stats.active_sessions}</div></div>
+            <div className="card"><div className="stat-sub">Autopilot</div><div className="stat-n">{stats.autopilot_active ? 'ON' : 'OFF'}</div></div>
+          </div>}
+
+          <div style={{fontSize:'.52rem',textTransform:'uppercase',letterSpacing:'.12em',color:'var(--dim)',fontWeight:700,marginBottom:8}}>Accounts</div>
+          {loading ? <div style={{color:'var(--dim)',padding:20}}>Loading...</div> :
+          <div style={{display:'flex',flexDirection:'column',gap:4}}>
+            {users.map(u => (
+              <div key={u.id} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 12px',background:'var(--c2)',borderRadius:8}}>
+                <span style={{fontFamily:'var(--mono)',fontWeight:700,color:'var(--wh)',fontSize:'.76rem',minWidth:80}}>{u.username}</span>
+                <span style={{fontSize:'.56rem',color:'var(--dim)',flex:1}}>{u.email || 'no email'}</span>
+                <span style={{fontFamily:'var(--mono)',fontSize:'.52rem',color:'var(--dim)'}}>{u.messages} msgs</span>
+                <span style={{fontSize:'.48rem',color:'var(--dim)'}}>{u.last_login ? new Date(u.last_login).toLocaleDateString() : 'never'}</span>
+                <button onClick={() => deleteUser(u.id, u.username)} style={{background:'none',border:'1px solid var(--brd)',borderRadius:6,padding:'4px 10px',color:'var(--red)',fontSize:'.52rem',fontWeight:600,cursor:'pointer'}}>Delete</button>
+              </div>
+            ))}
+          </div>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function Typewriter() {
   const [display, setDisplay] = useState('')
   const state = useRef({ idx: 0, charIdx: 0, deleting: false, paused: false })
@@ -1392,6 +1503,7 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
   const [keys, setKeys] = useState({alpaca_key:'',alpaca_secret:'',groq_key:'',polygon_key:''})
   const [keySaved, setKeySaved] = useState(false)
   const [keyLoaded, setKeyLoaded] = useState(false)
+  const [showAdmin, setShowAdmin] = useState(false)
 
   useEffect(()=>{
     if(token&&!keyLoaded){
@@ -1416,11 +1528,6 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
     }).then(r=>r.json())
     if(res.ok){setKeySaved(true);setTimeout(()=>setKeySaved(false),2000)}
   }
-
-  const accentColors = [
-    {name:'Green',val:'#10b981'},{name:'Blue',val:'#3b82f6'},{name:'Purple',val:'#8b5cf6'},
-    {name:'Cyan',val:'#06b6d4'},{name:'Pink',val:'#ec4899'},{name:'Orange',val:'#f59e0b'},
-  ]
 
   const fontSizes = [{name:'Small',val:'13px',display:11},{name:'Default',val:'15px',display:15},{name:'Large',val:'18px',display:19}]
 
@@ -1456,14 +1563,6 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
 
     {/* Appearance */}
     <div className="card wide"><label>Appearance</label>
-      <div className="s-row"><span>Accent Color</span>
-        <div className="color-picks">
-          {accentColors.map(c=>(
-            <button key={c.val} className={'color-dot'+(settings.accent===c.val||(!settings.accent&&c.val==='#10b981')?' cd-on':'')}
-              style={{background:c.val}} onClick={()=>{update('accent',c.val);document.documentElement.style.setProperty('--grn',c.val)}} title={c.name}/>
-          ))}
-        </div>
-      </div>
       <div className="s-row"><span>Font Size</span>
         <div className="font-picks">
           {fontSizes.map(s=>(
@@ -1506,6 +1605,8 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
     {/* About */}
     <div className="card wide"><label>About</label>
       <div className="s-row"><span>Version</span><span className="s-ver">v3.1</span></div>
+      {user.username.toUpperCase() === 'PJ' && <div className="s-row"><span>Admin</span><button className="tog" onClick={() => setShowAdmin(true)}>Open panel</button></div>}
+      {showAdmin && <AdminPanel token={token} onClose={() => setShowAdmin(false)}/>}
       <div className="s-row"><span>What's new</span><button className="tog" onClick={()=>setShowChangelog(true)}>View</button></div>
       <div className="s-row"><span>Sign out</span><button className="tog tog-danger" onClick={logout}>Logout</button></div>
     </div>
