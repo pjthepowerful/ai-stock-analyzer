@@ -489,6 +489,23 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 
 /* ═══ Analyze ═══ */
 
+/* ═══ Onboarding ═══ */
+.onboard-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--bg); padding: 20px }
+.onboard-card { width: 460px; max-width: 100% }
+.onboard-top { display: flex; align-items: center; gap: 10px; margin-bottom: 32px }
+.onboard-h { font-size: 1.6rem; font-weight: 600; color: var(--wh); margin-bottom: 10px }
+.onboard-sub { font-size: .76rem; color: var(--dim); line-height: 1.6; margin-bottom: 28px }
+.onboard-form { display: flex; flex-direction: column; gap: 16px }
+.onboard-field label { display: block; font-family: var(--mono); font-size: .52rem; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); font-weight: 600; margin-bottom: 6px }
+.onboard-field input { width: 100%; background: var(--c1); border: 1px solid var(--brd); border-radius: 10px; padding: 12px 14px; color: var(--wh); font-family: var(--mono); font-size: .74rem; outline: none; transition: .15s }
+.onboard-field input:focus { border-color: rgba(16,185,129,.3) }
+.onboard-err { font-size: .64rem; color: var(--red); padding: 8px 12px; background: rgba(239,68,68,.06); border-radius: 8px }
+.onboard-info { margin-top: 20px; font-size: .58rem; color: var(--dim); line-height: 1.8 }
+.onboard-info a { color: var(--grn); text-decoration: none }
+.onboard-info a:hover { text-decoration: underline }
+.onboard-skip { background: none; border: none; color: var(--dim); font-size: .6rem; cursor: pointer; margin-top: 16px; padding: 8px 0; font-family: var(--sans); transition: .15s }
+.onboard-skip:hover { color: var(--lt) }
+
 /* ═══ Signal Card ═══ */
 .signal-card { margin-top: 16px; display: flex; flex-direction: column; gap: 12px }
 

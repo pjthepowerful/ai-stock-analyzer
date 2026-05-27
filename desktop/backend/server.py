@@ -34,7 +34,23 @@ except Exception:
 # ── State ──
 autopilot_task: Optional[asyncio.Task] = None
 connected_clients: list[WebSocket] = []
-chat_history: list[dict] = []
+# Per-user session isolation — NO global shared state
+_user_sessions: dict[int, list[dict]] = {}  # {user_id: [chat messages]}
+_session_lock = asyncio.Lock()
+autopilot_owner_id: Optional[int] = None  # Only one user can own autopilot
+
+def _get_user_history(user_id: int) -> list:
+    """Get chat history for a specific user. Creates if needed."""
+    if user_id not in _user_sessions:
+        # Load from DB on first access
+        db_history = auth.get_chat_history(user_id, limit=20)
+        _user_sessions[user_id] = db_history or []
+    return _user_sessions[user_id]
+
+def _trim_history(user_id: int, max_len: int = 30):
+    """Keep history bounded to prevent memory bloat."""
+    if user_id in _user_sessions and len(_user_sessions[user_id]) > max_len:
+        _user_sessions[user_id] = _user_sessions[user_id][-max_len:]
 
 # ── Phone notifications via ntfy.sh ──
 NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "paula-trades")  # Change this to your own topic
@@ -242,7 +258,7 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.send_text(json.dumps({
             "event": "connected",
             "data": {
-                "autopilot": autopilot_task is not None and not autopilot_task.done(),
+                "autopilot": autopilot_task is not None and not autopilot_task.done() and autopilot_owner_id == (user.get("id") if user else None),
             }
         }))
         while True:
@@ -310,12 +326,19 @@ async def save_user_settings(req: SettingsRequest, authorization: str = Header(N
         os.environ["ALPACA_KEY_ID"] = req.alpaca_key
     if req.alpaca_secret:
         os.environ["ALPACA_SECRET"] = req.alpaca_secret
-    if req.groq_key:
-        os.environ["GROQ_API_KEY"] = req.groq_key
-    if req.polygon_key:
-        os.environ["POLYGON_API_KEY"] = req.polygon_key
 
     return result
+
+
+@app.get("/api/auth/onboarding")
+async def check_onboarding(authorization: str = Header(None)):
+    """Check if user has completed onboarding (has Alpaca keys)."""
+    user = _get_user(authorization)
+    if not user:
+        return {"ok": False, "error": "Not authenticated"}
+    settings = auth.get_settings(user["id"])
+    has_keys = bool(settings.get("alpaca_key")) and bool(settings.get("alpaca_secret"))
+    return {"ok": True, "onboarded": has_keys, "user": user}
 
 @app.get("/api/auth/chat-history")
 async def get_chat_hist(authorization: str = Header(None)):
@@ -337,7 +360,7 @@ async def health():
     return {
         "status": "ok",
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
-        "autopilot": autopilot_task is not None and not autopilot_task.done(),
+        "autopilot": autopilot_task is not None and not autopilot_task.done() and autopilot_owner_id == (user.get("id") if user else None),
     }
 
 
@@ -554,7 +577,7 @@ async def generate_title(req: TitleRequest):
 @app.post("/api/chat/clear")
 async def clear_chat():
     """Clear chat history."""
-    chat_history.clear()
+    _user_sessions.pop(user.get("id", 0), None)
     return {"ok": True}
 
 
@@ -947,16 +970,19 @@ def chart_data(ticker: str, period: str = "1y"):
 async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
     """Stream AI response token by token via SSE."""
     from starlette.responses import StreamingResponse
-    global autopilot_task
+    global autopilot_task, autopilot_owner_id
 
     user_msg = msg.message.strip()
     if not user_msg:
         return {"ok": False, "error": "Empty message"}
 
     user = _get_user(authorization)
+    user_id = user["id"] if user else 0
     if user:
         auth.save_chat(user["id"], "user", user_msg)
 
+    # Per-user isolated chat history
+    chat_history = _get_user_history(user_id)
     chat_history.append({"role": "user", "content": user_msg})
 
     # Route the message
@@ -966,6 +992,7 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
     # Autopilot start/stop — handle instantly, no execute needed
     if itype == "autopilot":
         if not autopilot_task or autopilot_task.done():
+            autopilot_owner_id = user_id
             autopilot_task = asyncio.create_task(_autopilot_loop())
         resp = "🟢 Autopilot activated. Scanning every 5 minutes."
         chat_history.append({"role": "assistant", "content": resp})
@@ -973,8 +1000,11 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
 
     if itype == "stop_autopilot":
         if autopilot_task and not autopilot_task.done():
+            if autopilot_owner_id and autopilot_owner_id != user_id:
+                return {"ok": False, "error": "Autopilot is owned by another user"}
             autopilot_task.cancel()
             autopilot_task = None
+            autopilot_owner_id = None
         resp = "🔴 Autopilot stopped."
         chat_history.append({"role": "assistant", "content": resp})
         return {"ok": True, "message": resp, "stream": False, "type": "trade", "autopilot": False}
@@ -1006,7 +1036,7 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
                 "ok": True, "message": resp, "stream": False,
                 "type": rtype, "ticker": result.get("ticker"),
                 "trade_signal": result.get("trade_signal"),
-                "autopilot": autopilot_task is not None and not autopilot_task.done(),
+                "autopilot": autopilot_task is not None and not autopilot_task.done() and autopilot_owner_id == (user.get("id") if user else None),
             }
     elif result and result.get("ok") and result.get("type") == "analysis":
         stock_data = result.get("data")
@@ -1060,16 +1090,19 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
 @app.post("/api/chat")
 async def chat(msg: ChatMessage, authorization: str = Header(None)):
     """Process a chat message through Paula's brain."""
-    global autopilot_task
+    global autopilot_task, autopilot_owner_id
     user_msg = msg.message.strip()
     if not user_msg:
         return {"ok": False, "error": "Empty message"}
 
     # Get user if authenticated
     user = _get_user(authorization)
+    user_id = user["id"] if user else 0
     if user:
         auth.save_chat(user["id"], "user", user_msg)
 
+    # Per-user isolated chat history
+    chat_history = _get_user_history(user_id)
     chat_history.append({"role": "user", "content": user_msg})
 
     # Route the message
@@ -1186,6 +1219,7 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
             resp = _fix_ai_prices(resp, _real_price)
 
     chat_history.append({"role": "assistant", "content": resp})
+    _trim_history(user_id)
 
     # Save assistant response for logged-in users
     if user:
@@ -1202,7 +1236,7 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
         "trade_signal": result.get("trade_signal") if result else None,
         "signal_data": result.get("signal_data") if result else None,
         "table": result.get("data") if result and result.get("type") == "list" else None,
-        "autopilot": autopilot_task is not None and not autopilot_task.done(),
+        "autopilot": autopilot_task is not None and not autopilot_task.done() and autopilot_owner_id == (user.get("id") if user else None),
     }
 
     # Extract tickers for charts

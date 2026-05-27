@@ -17,6 +17,7 @@ const WS_URL = `${BACKEND.startsWith('https') ? 'wss:' : 'ws:'}//${new URL(BACKE
 function App() {
   const [user, setUser] = useState(null)
   const [token, setToken] = useState(localStorage.getItem('paula-token'))
+  const [onboarded, setOnboarded] = useState(true) // assume true until checked
   const [authLoading, setAuthLoading] = useState(true)
 
   // Check auth on mount
@@ -24,7 +25,14 @@ function App() {
     if (token) {
       f(API + '/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } })
         .then(r => r.json())
-        .then(data => { if (data.ok) setUser(data.user); else { setToken(null); localStorage.removeItem('paula-token') } })
+        .then(async data => {
+          if (data.ok) {
+            setUser(data.user)
+            // Check onboarding
+            const ob = await f(API + '/api/auth/onboarding', { headers: { Authorization: 'Bearer ' + token } }).then(r => r.json()).catch(() => ({ onboarded: true }))
+            setOnboarded(ob.onboarded !== false)
+          } else { setToken(null); localStorage.removeItem('paula-token') }
+        })
         .catch(() => {})
         .finally(() => setAuthLoading(false))
     } else { setAuthLoading(false) }
@@ -37,17 +45,29 @@ function App() {
     }).then(r => r.json())
     if (res.ok) {
       setToken(res.token); setUser(res.user); localStorage.setItem('paula-token', res.token)
-      // Auto-set display name from username
       const s = JSON.parse(localStorage.getItem('paula-settings') || '{}')
       if (!s.userName) { s.userName = res.user.username; localStorage.setItem('paula-settings', JSON.stringify(s)) }
+      // Check onboarding
+      const ob = await f(API + '/api/auth/onboarding', { headers: { Authorization: 'Bearer ' + res.token } }).then(r => r.json()).catch(() => ({ onboarded: true }))
+      setOnboarded(ob.onboarded !== false)
     }
     return res
   }
 
-  const logout = () => { setUser(null); setToken(null); localStorage.removeItem('paula-token') }
+  const completeOnboarding = async (alpacaKey, alpacaSecret) => {
+    const r = await f(API + '/api/auth/settings', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ alpaca_key: alpacaKey, alpaca_secret: alpacaSecret })
+    }).then(r => r.json())
+    if (r.ok) setOnboarded(true)
+    return r
+  }
+
+  const logout = () => { setUser(null); setToken(null); setOnboarded(true); localStorage.removeItem('paula-token') }
 
   if (authLoading) return <div className="auth-loading"><div className="logo-p">P</div></div>
   if (!user) return <LoginPage onAuth={doAuth} />
+  if (!onboarded) return <OnboardingPage user={user} onComplete={completeOnboarding} onSkip={() => setOnboarded(true)} />
 
   return <MainApp user={user} token={token} logout={logout} />
 }
@@ -75,7 +95,7 @@ function LoginPage({ onAuth }) {
       <div className="login-left">
         <div className="ll-top"><span className="logo-p">P</span><span className="ll-name">Paula</span></div>
         <div className="ll-mid">
-          <span className="ll-label">TRADING COPILOT · v3.0</span>
+          <span className="ll-label">TRADING COPILOT · v3.1</span>
           <h1 className="ll-hero">Hey Paula. <span className="ll-hero-sub">Trade smarter. Sleep better. Let her handle the markets.</span></h1>
 
           {/* Live tape card */}
@@ -118,7 +138,7 @@ function LoginPage({ onAuth }) {
             <input className="login-input" placeholder="pj@trader.io" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') document.querySelector('.pw-input')?.focus() }} autoFocus autoComplete="username" />
             <div className="lf-pw-row">
               <label className="lf-label">Password</label>
-              {!isSignup && <button className="lf-forgot" type="button">Forgot password?</button>}
+
             </div>
             <div className="pw-wrap">
               <input className="login-input pw-input" type={showPw ? 'text' : 'password'} placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit() }} autoComplete={isSignup ? 'new-password' : 'current-password'} />
@@ -132,20 +152,55 @@ function LoginPage({ onAuth }) {
               {loading ? '...' : isSignup ? 'Create account  →' : 'Sign in  →'}
             </button>
 
-            <div className="lr-divider"><span>OR</span></div>
-
-            <div className="lr-oauth">
-              <button className="oauth-btn" type="button"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> Continue with Google</button>
-              <button className="oauth-btn" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg> Continue with Apple</button>
-            </div>
-
-            <button className="login-toggle" onClick={() => { setIsSignup(!isSignup); setError('') }}>
-              {isSignup ? 'Already have an account? ' : 'New to Paula? '}<span className="lt-link">{isSignup ? 'Sign in' : 'Create account'}</span>
-            </button>
-          </div>
+            
           <div className="lr-footer">By continuing you agree to our Terms · Privacy <span className="lr-sys">● All systems operational</span></div>
           <a href="/commercial.html" target="_blank" className="lr-trailer">▶ Watch the trailer</a>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function OnboardingPage({ user, onComplete, onSkip }) {
+  const [alpacaKey, setAlpacaKey] = useState('')
+  const [alpacaSecret, setAlpacaSecret] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleSubmit = async () => {
+    if (!alpacaKey.trim() || !alpacaSecret.trim()) { setError('Both keys are required'); return }
+    setSaving(true); setError('')
+    const r = await onComplete(alpacaKey.trim(), alpacaSecret.trim())
+    if (!r.ok) setError(r.error || 'Failed to save')
+    setSaving(false)
+  }
+
+  return (
+    <div className="onboard-page">
+      <div className="onboard-card">
+        <div className="onboard-top"><span className="logo-p">P</span><span className="ll-name">Paula</span></div>
+        <h1 className="onboard-h">Welcome, {user.username}.</h1>
+        <p className="onboard-sub">Connect your Alpaca brokerage account to start trading. Paula will use these keys to execute trades directly on your account.</p>
+
+        <div className="onboard-form">
+          <div className="onboard-field">
+            <label>Alpaca API Key</label>
+            <input type="text" value={alpacaKey} onChange={e => setAlpacaKey(e.target.value)} placeholder="PKSPW6O3..." autoComplete="off"/>
+          </div>
+          <div className="onboard-field">
+            <label>Alpaca Secret Key</label>
+            <input type="password" value={alpacaSecret} onChange={e => setAlpacaSecret(e.target.value)} placeholder="AzMrJhgV..." autoComplete="off"/>
+          </div>
+          {error && <div className="onboard-err">{error}</div>}
+          <button className="login-btn" onClick={handleSubmit} disabled={saving}>{saving ? 'Connecting...' : 'Connect account'}</button>
+        </div>
+
+        <div className="onboard-info">
+          <p>Get your keys from <a href="https://app.alpaca.markets/paper/dashboard/overview" target="_blank" rel="noreferrer">Alpaca Paper Trading</a></p>
+          <p>Your keys are stored securely and never shared.</p>
+        </div>
+
+        <button className="onboard-skip" onClick={onSkip}>Skip for now →</button>
       </div>
     </div>
   )
@@ -207,12 +262,12 @@ function MainApp({ user, token, logout }) {
   const [view, setView] = useState('chat')
   const [perf, setPerf] = useState(null)
   const [showChangelog, setShowChangelog] = useState(() => {
-    const v = '3.0'
+    const v = '3.1'
     const seen = localStorage.getItem('paula-changelog-seen')
     if (seen !== v) return true
     return false
   })
-  const dismissChangelog = () => { setShowChangelog(false); localStorage.setItem('paula-changelog-seen', '3.0') }
+  const dismissChangelog = () => { setShowChangelog(false); localStorage.setItem('paula-changelog-seen', '3.1') }
   
   const [sideOpen, setSideOpen] = useState(window.innerWidth > 768)
   const [pinnedChats, setPinnedChats] = useState(() => {
@@ -296,7 +351,6 @@ function MainApp({ user, token, logout }) {
   const settingsRef = useRef(settings)
   useEffect(() => {
     settingsRef.current = settings
-    if (settings.accent) document.documentElement.style.setProperty('--grn', settings.accent)
     if (settings.fontSize) document.documentElement.style.setProperty('--chat-fs', settings.fontSize)
   }, [settings])
   const updateSetting = (k, v) => { const n = { ...settings, [k]: v }; setSettings(n); localStorage.setItem('paula-settings', JSON.stringify(n)) }
@@ -608,7 +662,7 @@ function MainApp({ user, token, logout }) {
             <div className="cl-top-l">
               <span className="logo-p cl-logo">P</span>
               <div>
-                <span className="cl-ver-title">Paula v3.0</span>
+                <span className="cl-ver-title">Paula v3.1</span>
                 <span className="cl-date">May 2026</span>
               </div>
             </div>
@@ -634,7 +688,7 @@ function MainApp({ user, token, logout }) {
               <span className="cl-group-title">Interface</span>
               <div className="cl-item"><span className="cl-dot cl-dot-blu"/><div><b>Redesigned UI</b><p>New split login, welcome widgets, prompt cards with icons, positions strip, and refined sidebar.</p></div></div>
               <div className="cl-item"><span className="cl-dot cl-dot-blu"/><div><b>Typing Animation</b><p>Responses appear word-by-word with a blinking cursor. Loading states show what Paula is doing.</p></div></div>
-              <div className="cl-item"><span className="cl-dot cl-dot-blu"/><div><b>Accent Colors & Font Sizes</b><p>Pick from 6 accent colors and 3 font sizes in Settings → Appearance.</p></div></div>
+              
             </div>
 
             <div className="cl-group">
@@ -655,7 +709,7 @@ function MainApp({ user, token, logout }) {
       {/* Sidebar */}
       <aside className={'sb'+(sideOpen?'':' sb-hide')}>
         <div className="sb-top">
-          <div className="sb-logo"><span className="logo-p">P</span>Paula<span className="sb-ver">v3.0</span></div>
+          <div className="sb-logo"><span className="logo-p">P</span>Paula<span className="sb-ver">v3.1</span></div>
           <div className="sb-top-r">
             <button className="sb-new" onClick={newChat} title="New chat (⌘N)">+</button>
             <button className="sb-close" onClick={()=>setSideOpen(false)}>×</button>
@@ -728,7 +782,7 @@ function MainApp({ user, token, logout }) {
             </>}
           </div>
           <nav className="hdr-nav">
-            {[['chat','Chat'],['analyze','Analyze'],['backtest','Backtest'],['stats','Stats'],['settings','Settings']].map(([v,label])=>(
+            {[['chat','Chat'],['analyze','Analyze'],['stats','Stats'],['settings','Settings']].map(([v,label])=>(
               <button key={v} className={'hdr-tab'+(view===v?' ht-on':'')} onClick={()=>{setView(v);if(v==='stats')loadDashboard()}}>{label}</button>
             ))}
           </nav>
@@ -766,13 +820,13 @@ function MainApp({ user, token, logout }) {
             }}>
               <span className={'ap-dot'+(autopilot?' dot-on':'')}/>{autopilot?'Scanning · 412 tickers':'Autopilot'}
             </button>
-            <button className="hdr-ver" onClick={()=>setShowChangelog(true)}>v3.0</button>
+            <button className="hdr-ver" onClick={()=>setShowChangelog(true)}>v3.1</button>
             <button className="hdr-logout" onClick={logout}>↗</button>
           </div>
         </div>
 
         {view==='analyze'?<AnalyzeView sendMessage={sendMessage} setView={setView}/>
-        :view==='backtest'?<BacktestView/>
+
         :view==='stats'?<DashView perf={perf}/>
         
         :view==='settings'?<SetView settings={settings} update={updateSetting} user={user} token={token} logout={logout} autopilot={autopilot} setAutopilot={setAutopilot} persist={persist} setActiveChatId={setActiveChatId} setMessages={setMessages} setShowChangelog={setShowChangelog}/>
@@ -799,15 +853,13 @@ function MainApp({ user, token, logout }) {
                 <h1><span className="w-hi">{(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' })()}, {name},</span> <Typewriter/></h1>
                 <div className="w-prompts">
                   {[
-                    {q:'Market overview', a:'SPY trend, VIX, and whether it\'s safe to trade.', cmd:'market regime', icon:'✦'},
-                    {q:'Find me a trade', a:'Scan for the best setup right now — one stock, written analysis.', cmd:'Find me 1 stock to trade today', icon:'◎'},
+                    {q:'Market overview', a:'SPY trend, VIX, and whether it\'s safe to trade.', cmd:'market regime', icon:''},
+                    {q:'Find me a trade', a:'Scan for the best setup right now — one stock, written analysis.', cmd:'Find me 1 stock to trade today', icon:''},
                   ].map((p,i)=>(
                     <button key={i} className="w-prompt" disabled={sending && sendingChatRef.current === chatIdRef.current} onClick={()=>sendMessage(p.cmd)}>
-                      <span className="wp-icon">{p.icon}</span>
                       <div><span className="wp-q">{p.q}</span><span className="wp-a">{p.a}</span></div>
                     </button>))}
                   <button className="w-prompt" onClick={()=>setView('analyze')}>
-                    <span className="wp-icon">🔍</span>
                     <div><span className="wp-q">Analyze a stock</span><span className="wp-a">Look up any ticker — price, chart, score, and signal.</span></div>
                   </button>
                 </div>
@@ -1396,8 +1448,6 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
     {user&&<div className="card wide"><label>Connections</label><span className="card-sub">Broker and data feeds</span>
       <div className="s-row"><div className="s-col"><span>Alpaca Key</span><span className="s-desc">Broker · trade execution</span></div><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.alpaca_key} onChange={e=>setKeys({...keys,alpaca_key:e.target.value})} placeholder="PKSPW..."/></div>
       <div className="s-row"><div className="s-col"><span>Alpaca Secret</span><span className="s-desc">Required for live trading</span></div><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.alpaca_secret} onChange={e=>setKeys({...keys,alpaca_secret:e.target.value})} placeholder="AzMr..."/></div>
-      <div className="s-row"><div className="s-col"><span>Polygon Key</span><span className="s-desc">Realtime market data</span></div><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.polygon_key} onChange={e=>setKeys({...keys,polygon_key:e.target.value})} placeholder="wzJ5..."/></div>
-      <div className="s-row"><div className="s-col"><span>Groq Key</span><span className="s-desc">LLM inference for chat</span></div><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.groq_key} onChange={e=>setKeys({...keys,groq_key:e.target.value})} placeholder="gsk_..."/></div>
       <button className={'login-btn s-save'+(keySaved?' s-saved':'')} onClick={saveKeys}>{keySaved?'✓ Saved':'Save connections'}</button>
     </div>}
 
@@ -1430,11 +1480,7 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
       <Tog l="Scan notification" on={settings.scanSound!==false} fn={()=>update('scanSound',!(settings.scanSound!==false))}/>
     </div>
 
-    {/* Notifications */}
-    <div className="card wide"><label>Notifications</label>
-      <Tog l="Toast popups" on={settings.toasts!==false} fn={()=>update('toasts',!(settings.toasts!==false))}/>
-      <Tog l="Phone notifications" on={settings.pushNotif!==false} fn={()=>update('pushNotif',!(settings.pushNotif!==false))}/>
-    </div>
+    
 
     {/* Autopilot */}
     <div className="card wide"><label>Autopilot</label>
@@ -1456,7 +1502,7 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
 
     {/* About */}
     <div className="card wide"><label>About</label>
-      <div className="s-row"><span>Version</span><span className="s-ver">v3.0</span></div>
+      <div className="s-row"><span>Version</span><span className="s-ver">v3.1</span></div>
       <div className="s-row"><span>What's new</span><button className="tog" onClick={()=>setShowChangelog(true)}>View</button></div>
       <div className="s-row"><span>Sign out</span><button className="tog tog-danger" onClick={logout}>Logout</button></div>
     </div>
