@@ -328,21 +328,22 @@ function MainApp({ user, token, logout }) {
   }
 
   // ── Chat system ──
-  const chatsRef = useRef(JSON.parse(localStorage.getItem('paula-chats') || '[]'))
+  const chatKey = 'paula-chats-' + user.id
+  const chatsRef = useRef(JSON.parse(localStorage.getItem(chatKey) || '[]'))
   const [chats, _setChats] = useState(chatsRef.current)
-  const chatIdRef = useRef(localStorage.getItem('paula-current-chat') || null)
+  const chatIdRef = useRef(localStorage.getItem('paula-chat-id-' + user.id) || null)
   const [chatId, _setChatId] = useState(chatIdRef.current)
 
   const persist = (updated) => {
     chatsRef.current = updated
     _setChats(updated)
-    localStorage.setItem('paula-chats', JSON.stringify(updated))
+    localStorage.setItem(chatKey, JSON.stringify(updated))
   }
 
   const setActiveChatId = (id) => {
     chatIdRef.current = id
     _setChatId(id)
-    localStorage.setItem('paula-current-chat', id || '')
+    localStorage.setItem('paula-chat-id-' + user.id, id || '')
   }
 
   // Save current messages into the active chat
@@ -390,18 +391,18 @@ function MainApp({ user, token, logout }) {
       const updated = chatsRef.current.map(c => c.id === id ? { ...c, messages } : c)
       chatsRef.current = updated
       _setChats(updated)
-      localStorage.setItem('paula-chats', JSON.stringify(updated))
+      localStorage.setItem(chatKey, JSON.stringify(updated))
     }, 500)
   }, [messages])
   const [settings, setSettings] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('paula-settings')) || {} } catch { return {} }
+    try { return JSON.parse(localStorage.getItem('paula-settings-' + user.id)) || {} } catch { return {} }
   })
   const settingsRef = useRef(settings)
   useEffect(() => {
     settingsRef.current = settings
     if (settings.fontSize) document.documentElement.style.setProperty('--chat-fs', settings.fontSize)
   }, [settings])
-  const updateSetting = (k, v) => { const n = { ...settings, [k]: v }; setSettings(n); localStorage.setItem('paula-settings', JSON.stringify(n)) }
+  const updateSetting = (k, v) => { const n = { ...settings, [k]: v }; setSettings(n); localStorage.setItem('paula-settings-' + user.id, JSON.stringify(n)) }
   const snd = (fn) => { if (settingsRef.current.sounds !== false) fn() }
 
   const messagesEnd = useRef(null)

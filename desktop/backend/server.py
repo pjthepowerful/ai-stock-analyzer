@@ -290,11 +290,21 @@ class SettingsRequest(BaseModel):
     settings: dict = {}
 
 def _get_user(authorization: str = Header(None)):
-    """Extract user from Authorization header."""
+    """Extract user from Authorization header. Always fetches email from DB."""
     if not authorization:
         return None
     token = authorization.replace("Bearer ", "")
-    return auth.get_user(token)
+    user = auth.get_user(token)
+    if user:
+        # Always fetch fresh email from DB (old JWTs may lack it)
+        try:
+            db = auth._get_db()
+            row = db.execute("SELECT email FROM users WHERE id = ?", (user["id"],)).fetchone()
+            if row and row["email"]:
+                user["email"] = row["email"]
+            db.close()
+        except: pass
+    return user
 
 @app.post("/api/auth/signup")
 async def signup(req: AuthRequest):
