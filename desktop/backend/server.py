@@ -1000,23 +1000,25 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
     intent = engine.route(user_msg)
     itype = intent.get("type", "chat")
 
-    # Autopilot start/stop — handle instantly, no execute needed
+    # Autopilot start/stop — admin only
     if itype == "autopilot":
+        if not user or user.get("email", "").lower() != ADMIN_EMAIL:
+            return {"ok": True, "message": "Autopilot is restricted to admin accounts.", "stream": False, "type": "chat", "autopilot": False}
         if not autopilot_task or autopilot_task.done():
             autopilot_owner_id = user_id
             autopilot_task = asyncio.create_task(_autopilot_loop())
-        resp = "🟢 Autopilot activated. Scanning every 5 minutes."
+        resp = "Autopilot activated. Scanning every 5 minutes."
         chat_history.append({"role": "assistant", "content": resp})
         return {"ok": True, "message": resp, "stream": False, "type": "trade", "autopilot": True}
 
     if itype == "stop_autopilot":
+        if not user or user.get("email", "").lower() != ADMIN_EMAIL:
+            return {"ok": True, "message": "Autopilot is restricted to admin accounts.", "stream": False, "type": "chat", "autopilot": False}
         if autopilot_task and not autopilot_task.done():
-            if autopilot_owner_id and autopilot_owner_id != user_id:
-                return {"ok": False, "error": "Autopilot is owned by another user"}
             autopilot_task.cancel()
             autopilot_task = None
             autopilot_owner_id = None
-        resp = "🔴 Autopilot stopped."
+        resp = "Autopilot stopped."
         chat_history.append({"role": "assistant", "content": resp})
         return {"ok": True, "message": resp, "stream": False, "type": "trade", "autopilot": False}
 
@@ -1119,17 +1121,23 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
     # Route the message
     intent = engine.route(user_msg)
 
-    # Autopilot — handle instantly, don't run through engine
+    # Autopilot — admin only
     if intent.get("type") == "autopilot":
+        if not user or user.get("email", "").lower() != ADMIN_EMAIL:
+            return {"ok": True, "message": "Autopilot is restricted to admin accounts.", "type": "chat", "autopilot": False}
         if not autopilot_task or autopilot_task.done():
+            autopilot_owner_id = user_id
             autopilot_task = asyncio.create_task(_autopilot_loop())
-        return {"ok": True, "message": "🟢 Autopilot activated.", "type": "trade", "autopilot": True}
+        return {"ok": True, "message": "Autopilot activated.", "type": "trade", "autopilot": True}
 
     if intent.get("type") == "stop_autopilot":
+        if not user or user.get("email", "").lower() != ADMIN_EMAIL:
+            return {"ok": True, "message": "Autopilot is restricted to admin accounts.", "type": "chat", "autopilot": False}
         if autopilot_task and not autopilot_task.done():
             autopilot_task.cancel()
             autopilot_task = None
-        return {"ok": True, "message": "🔴 Autopilot stopped.", "type": "trade", "autopilot": False}
+            autopilot_owner_id = None
+        return {"ok": True, "message": "Autopilot stopped.", "type": "trade", "autopilot": False}
 
     # Run in thread pool since engine functions are blocking
     loop = asyncio.get_event_loop()
@@ -1561,12 +1569,16 @@ async def _autopilot_loop():
 
 
 @app.post("/api/autopilot/start")
-async def start_autopilot():
-    """Start the autopilot background loop."""
-    global autopilot_task
+async def start_autopilot(authorization: str = Header(None)):
+    """Start the autopilot background loop. Admin only."""
+    global autopilot_task, autopilot_owner_id
+    user = _get_user(authorization)
+    if not user or user.get("email", "").lower() != ADMIN_EMAIL:
+        return {"ok": False, "error": "Autopilot access restricted"}
     if autopilot_task and not autopilot_task.done():
         return {"ok": True, "message": "Autopilot already running"}
 
+    autopilot_owner_id = user["id"]
     autopilot_task = asyncio.create_task(_autopilot_loop())
     await broadcast("autopilot", {"status": "started"})
     await send_phone_notification("🟢 Autopilot Started", "Paula is now scanning for trades every 5 minutes", priority="default")
@@ -1574,12 +1586,16 @@ async def start_autopilot():
 
 
 @app.post("/api/autopilot/stop")
-async def stop_autopilot():
-    """Stop the autopilot."""
-    global autopilot_task
+async def stop_autopilot(authorization: str = Header(None)):
+    """Stop the autopilot. Admin only."""
+    global autopilot_task, autopilot_owner_id
+    user = _get_user(authorization)
+    if not user or user.get("email", "").lower() != ADMIN_EMAIL:
+        return {"ok": False, "error": "Autopilot access restricted"}
     if autopilot_task and not autopilot_task.done():
         autopilot_task.cancel()
         autopilot_task = None
+        autopilot_owner_id = None
     await broadcast("autopilot", {"status": "stopped"})
     try:
         acc = engine.alpaca_account() or {}

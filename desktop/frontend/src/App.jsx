@@ -54,7 +54,7 @@ function App() {
     return res
   }
 
-  const completeOnboarding = async (style, bias, risk, alpacaKey, alpacaSecret) => {
+  const completeOnboarding = async (style, bias, risk) => {
     const s = JSON.parse(localStorage.getItem('paula-settings') || '{}')
     s.tradingStyle = style; s.marketBias = bias; s.riskPct = risk
     localStorage.setItem('paula-settings', JSON.stringify(s))
@@ -63,13 +63,7 @@ function App() {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
       body: JSON.stringify({ tradingStyle: style, marketBias: bias, riskPct: risk })
     }).catch(() => {})
-    // Save Alpaca keys if provided
-    if (alpacaKey && alpacaSecret) {
-      await f(API + '/api/auth/settings', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ alpaca_key: alpacaKey, alpaca_secret: alpacaSecret })
-      }).catch(() => {})
-    }
+
     localStorage.setItem('paula-onboarded-' + (user?.id || 0), 'true')
     setOnboarded(true)
   }
@@ -191,11 +185,9 @@ function OnboardingPage({ user, onComplete, onSkip }) {
   const [style, setStyle] = useState('Day')
   const [bias, setBias] = useState('Bull')
   const [risk, setRisk] = useState('1.0%')
-  const [alpacaKey, setAlpacaKey] = useState('')
-  const [alpacaSecret, setAlpacaSecret] = useState('')
-  const totalSteps = 4
+  const totalSteps = 3
 
-  const finish = () => onComplete(style, bias, risk, alpacaKey, alpacaSecret)
+  const finish = () => onComplete(style, bias, risk)
 
   return (
     <div className="cl-overlay">
@@ -250,25 +242,10 @@ function OnboardingPage({ user, onComplete, onSkip }) {
                 </button>
               ))}
             </div>
-            <button className="login-btn" onClick={() => setStep(3)}>Next</button>
+            <button className="login-btn" onClick={finish}>Start trading</button>
           </>}
 
-          {step === 3 && <>
-            <h3 className="ob-h">Connect your broker</h3>
-            <p className="ob-sub">Paula uses Alpaca to execute trades. Paper trading keys work too.</p>
-            <div className="ob-fields">
-              <div className="onboard-field">
-                <label>Alpaca API Key</label>
-                <input type="text" value={alpacaKey} onChange={e => setAlpacaKey(e.target.value)} placeholder="PKSPW6O3..." autoComplete="off"/>
-              </div>
-              <div className="onboard-field">
-                <label>Alpaca Secret Key</label>
-                <input type="password" value={alpacaSecret} onChange={e => setAlpacaSecret(e.target.value)} placeholder="AzMrJhgV..." autoComplete="off"/>
-              </div>
-            </div>
-            <p className="ob-link">Get keys from <a href="https://app.alpaca.markets/paper/dashboard/overview" target="_blank" rel="noreferrer">Alpaca Paper Trading</a></p>
-            <button className="login-btn" onClick={finish}>{alpacaKey && alpacaSecret ? 'Connect and start' : 'Start without broker'}</button>
-          </>}
+          
 
           <button className="onboard-skip" onClick={onSkip}>Skip setup</button>
         </div>
