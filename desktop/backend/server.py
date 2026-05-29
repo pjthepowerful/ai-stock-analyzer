@@ -896,48 +896,51 @@ def get_profile():
 
 @app.get("/api/quick/{ticker}")
 def quick_lookup(ticker: str):
-    """Quick ticker lookup — price, score, signal. Fast."""
-    import yfinance as yf
-    import warnings
+    """Quick ticker lookup — uses the SAME signal engine as chat for consistent scores."""
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            t = yf.Ticker(ticker.upper())
-            info = t.fast_info if hasattr(t, 'fast_info') else {}
-            hist = t.history(period="5d")
+        data = engine.fetch_full(ticker.upper())
+        if not data or not data.get("price"):
+            # Fallback to yfinance direct
+            import yfinance as yf
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                t = yf.Ticker(ticker.upper())
+                hist = t.history(period="5d")
+            if hist is None or hist.empty:
+                return {"ok": False, "error": "No data"}
+            price = float(hist["Close"].iloc[-1])
+            prev = float(hist["Close"].iloc[-2]) if len(hist) > 1 else price
+            return {
+                "ok": True, "ticker": ticker.upper(),
+                "price": round(price, 2),
+                "change": round(price - prev, 2),
+                "change_pct": round((price - prev) / prev * 100 if prev else 0, 2),
+                "score": 50, "signal": "HOLD",
+            }
 
-        if hist is None or hist.empty:
-            return {"ok": False, "error": "No data"}
+        signal = engine.generate_trade_signal(data)
+        price = data.get("price", 0)
+        prev = data.get("prev_close", price)
+        change = price - prev if prev else 0
+        change_pct = (change / prev * 100) if prev else 0
 
-        price = float(hist["Close"].iloc[-1])
-        prev = float(hist["Close"].iloc[-2]) if len(hist) > 1 else price
-        change = price - prev
-        change_pct = (change / prev) * 100 if prev else 0
-
-        # Quick score
-        score = 50
-        if len(hist) >= 5:
-            closes = hist["Close"].values
-            # Simple momentum
-            ret5 = (closes[-1] - closes[0]) / closes[0]
-            if 0.01 < ret5 < 0.08: score += 15
-            elif ret5 > 0.08: score -= 5
-            # Volume
-            vols = hist["Volume"].values
-            if vols[-1] > sum(vols[:-1]) / max(len(vols)-1, 1) * 1.3: score += 10
-            # Trend
-            if closes[-1] > sum(closes) / len(closes): score += 10
-
-        signal = "BUY" if score >= 75 else "HOLD" if score >= 50 else "AVOID"
+        score = signal.get("score", 50)
+        action = signal.get("action", "HOLD")
+        # Map action to simple signal
+        if action in ("BUY", "STRONG_BUY"):
+            sig = "BUY"
+        elif action in ("SELL", "STRONG_SELL"):
+            sig = "SELL"
+        else:
+            sig = "HOLD"
 
         return {
-            "ok": True,
-            "ticker": ticker.upper(),
+            "ok": True, "ticker": ticker.upper(),
             "price": round(price, 2),
             "change": round(change, 2),
             "change_pct": round(change_pct, 2),
-            "score": score,
-            "signal": signal,
+            "score": score, "signal": sig,
         }
     except Exception as e:
         return {"ok": False, "error": str(e)[:100]}
