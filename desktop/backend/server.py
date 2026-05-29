@@ -596,9 +596,11 @@ async def generate_title(req: TitleRequest):
 
 
 @app.post("/api/chat/clear")
-async def clear_chat():
-    """Clear chat history."""
-    _user_sessions.pop(user.get("id", 0), None)
+async def clear_chat(authorization: str = Header(None)):
+    """Clear chat history for current user."""
+    user = _get_user(authorization)
+    user_id = user["id"] if user else 0
+    _user_sessions.pop(user_id, None)
     return {"ok": True}
 
 
