@@ -277,7 +277,7 @@ async def websocket_endpoint(websocket: WebSocket):
 # ── Auth endpoints ──
 
 class AuthRequest(BaseModel):
-    username: str
+    username: str = None
     password: str
     email: str = None
 
@@ -324,7 +324,11 @@ async def signup(req: AuthRequest):
 
 @app.post("/api/auth/login")
 async def login(req: AuthRequest):
-    result = auth.login(req.username, req.password)
+    # Login accepts email or username
+    identifier = req.email or req.username
+    if not identifier:
+        return {"ok": False, "error": "Email is required"}
+    result = auth.login(identifier.strip(), req.password)
     return result
 
 @app.get("/api/auth/me")

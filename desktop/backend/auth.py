@@ -119,8 +119,10 @@ def signup(username: str, password: str, email: str = None) -> dict:
         db.commit()
         token = _make_jwt({"user_id": user_id, "username": username, "email": email or ""})
         return {"ok": True, "token": token, "user": {"id": user_id, "username": username, "email": email or ""}}
-    except sqlite3.IntegrityError:
-        return {"ok": False, "error": "Username already taken"}
+    except sqlite3.IntegrityError as e:
+        if "email" in str(e).lower():
+            return {"ok": False, "error": "An account with this email already exists"}
+        return {"ok": False, "error": "An account with this name already exists"}
     finally:
         db.close()
 
@@ -131,10 +133,10 @@ def login(username: str, password: str) -> dict:
     try:
         row = db.execute("SELECT * FROM users WHERE username = ? OR email = ?", (username, username)).fetchone()
         if not row:
-            return {"ok": False, "error": "Invalid username or password"}
+            return {"ok": False, "error": "No account found with this email"}
         pw_hash, _ = _hash_password(password, row["salt"])
         if pw_hash != row["password_hash"]:
-            return {"ok": False, "error": "Invalid username or password"}
+            return {"ok": False, "error": "Incorrect password"}
         db.execute("UPDATE users SET last_login = ? WHERE id = ?",
                    (datetime.utcnow().isoformat(), row["id"]))
         db.commit()

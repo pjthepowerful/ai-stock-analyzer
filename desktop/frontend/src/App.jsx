@@ -40,12 +40,13 @@ function App() {
   const doAuth = async (username, password, isSignup, email) => {
     const res = await f(API + '/api/auth/' + (isSignup ? 'signup' : 'login'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password, email: isSignup ? email : undefined })
+      body: JSON.stringify({ username: isSignup ? username : undefined, password, email: isSignup ? email : username })
     }).then(r => r.json())
     if (res.ok) {
       setToken(res.token); setUser(res.user); localStorage.setItem('paula-token', res.token)
-      const s = JSON.parse(localStorage.getItem('paula-settings') || '{}')
-      if (!s.userName) { s.userName = res.user.username; localStorage.setItem('paula-settings', JSON.stringify(s)) }
+      const settingsKey = 'paula-settings-' + res.user.id
+      const s = JSON.parse(localStorage.getItem(settingsKey) || '{}')
+      if (!s.userName) { s.userName = res.user.username; localStorage.setItem(settingsKey, JSON.stringify(s)) }
       // Show onboarding only for brand new signups
       if (isSignup) { setOnboarded(false) } else {
         setOnboarded(localStorage.getItem('paula-onboarded-' + res.user.id) === 'true')
@@ -93,7 +94,7 @@ function LoginPage({ onAuth }) {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('Enter a valid email address'); return }
       if (password.length < 6) { setError('Password must be at least 6 characters'); return }
     } else {
-      if (!username || !password) return
+      if (!username || !password) { setError('Email and password required'); return }
     }
     setLoading(true); setError('')
     const res = await onAuth(username, password, isSignup, email)
