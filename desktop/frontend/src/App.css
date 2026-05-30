@@ -665,6 +665,8 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .login-input:focus { border-color: rgba(16,185,129,.3); background: var(--c2) }
 .login-input::placeholder { color: var(--dim) }
 .login-error { font-size: .68rem; color: var(--red); padding: 4px 0 }
+.login-notice { font-size: .68rem; color: var(--grn); padding: 4px 0 }
+.lf-forgot { background: none; border: none; cursor: pointer; font-size: .66rem; padding: 0 }
 .pw-wrap { position: relative }
 .pw-input { padding-right: 44px }
 .pw-eye { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--dim); cursor: pointer; padding: 2px; transition: .15s; display: flex; align-items: center }

@@ -289,6 +289,13 @@ class SettingsRequest(BaseModel):
     display_name: str = ""
     settings: dict = {}
 
+class ForgotRequest(BaseModel):
+    email: str
+
+class ResetRequest(BaseModel):
+    token: str
+    password: str
+
 def _get_user(authorization: str = Header(None)):
     """Extract user from Authorization header. Always fetches email from DB."""
     if not authorization:
@@ -330,6 +337,67 @@ async def login(req: AuthRequest):
         return {"ok": False, "error": "Email is required"}
     result = auth.login(identifier.strip(), req.password)
     return result
+
+
+# ── Password reset ───────────────────────────────────────────────────────────
+# To enable real emails: set RESEND_API_KEY (https://resend.com) and FRONTEND_URL.
+# Without a key, the reset link is printed to the server log (dev mode) so the
+# flow is fully testable locally.
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://paula-seven.vercel.app").rstrip("/")
+
+
+def _send_reset_email(to_email: str, token: str) -> bool:
+    """Send a password-reset email. Falls back to logging in dev."""
+    reset_link = f"{FRONTEND_URL}/?reset={token}"
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    from_addr = os.environ.get("RESET_FROM_EMAIL", "Paula <onboarding@resend.dev>")
+    if not api_key:
+        # Dev mode — no email provider configured.
+        print(f"[password-reset] (no RESEND_API_KEY set) reset link for {to_email}:\n  {reset_link}", flush=True)
+        return False
+    try:
+        import requests as r
+        resp = r.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "from": from_addr,
+                "to": [to_email],
+                "subject": "Reset your Paula password",
+                "html": (
+                    "<p>You requested a password reset for your Paula account.</p>"
+                    f'<p><a href="{reset_link}">Click here to set a new password</a>. '
+                    "This link expires in 1 hour.</p>"
+                    "<p>If you didn't request this, you can ignore this email.</p>"
+                ),
+            },
+            timeout=10,
+        )
+        return resp.status_code in (200, 201)
+    except Exception as e:
+        print(f"[password-reset] email send failed: {e}", flush=True)
+        return False
+
+
+@app.post("/api/auth/forgot")
+async def forgot_password(req: ForgotRequest):
+    # Always return the same response regardless of whether the account exists,
+    # to avoid leaking which emails are registered (account enumeration).
+    generic = {"ok": True, "message": "If an account exists for that email, a reset link has been sent."}
+    try:
+        info = auth.create_reset_token((req.email or "").strip().lower())
+        if info:
+            await asyncio.get_event_loop().run_in_executor(
+                None, _send_reset_email, info["email"], info["token"]
+            )
+    except Exception as e:
+        print(f"[password-reset] forgot error: {e}", flush=True)
+    return generic
+
+
+@app.post("/api/auth/reset")
+async def reset_password_endpoint(req: ResetRequest):
+    return auth.reset_password(req.token.strip(), req.password)
 
 @app.get("/api/auth/me")
 async def me(authorization: str = Header(None)):
@@ -1025,7 +1093,7 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
             return {"ok": True, "message": "Autopilot is restricted to admin accounts.", "stream": False, "type": "chat", "autopilot": False}
         if not autopilot_task or autopilot_task.done():
             autopilot_owner_id = user_id
-            autopilot_task = asyncio.create_task(_autopilot_loop())
+            autopilot_task = _spawn_autopilot()
         resp = "Autopilot activated. Scanning every 5 minutes."
         chat_history.append({"role": "assistant", "content": resp})
         return {"ok": True, "message": resp, "stream": False, "type": "trade", "autopilot": True}
@@ -1146,7 +1214,7 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
             return {"ok": True, "message": "Autopilot is restricted to admin accounts.", "type": "chat", "autopilot": False}
         if not autopilot_task or autopilot_task.done():
             autopilot_owner_id = user_id
-            autopilot_task = asyncio.create_task(_autopilot_loop())
+            autopilot_task = _spawn_autopilot()
         return {"ok": True, "message": "Autopilot activated.", "type": "trade", "autopilot": True}
 
     if intent.get("type") == "stop_autopilot":
@@ -1414,6 +1482,45 @@ async def _eod_guardian():
         await asyncio.sleep(60)
 
 
+def _autopilot_watchdog(task: asyncio.Task):
+    """Restart autopilot if the loop ever dies for any reason other than a
+    deliberate stop. Prevents the 'autopilot randomly stops' failure mode."""
+    global autopilot_task
+    # Ignore the callback if this isn't the live task anymore (e.g. it was
+    # replaced by a stop+restart) or if it was cleanly cancelled.
+    if task is not autopilot_task:
+        return
+    if task.cancelled():
+        return
+    exc = None
+    try:
+        exc = task.exception()
+    except asyncio.CancelledError:
+        return
+    # Loop exited without being cancelled — that's never expected. Restart it.
+    reason = repr(exc) if exc else "loop returned unexpectedly"
+    print(f"[autopilot] loop died ({reason}) — restarting in 10s", flush=True)
+
+    async def _restart():
+        global autopilot_task
+        await asyncio.sleep(10)  # avoid a tight crash-loop
+        if autopilot_owner_id is not None:
+            autopilot_task = _spawn_autopilot()
+            try:
+                await broadcast("autopilot", {"status": "restarted", "reason": reason[:160]})
+            except Exception:
+                pass
+
+    asyncio.create_task(_restart())
+
+
+def _spawn_autopilot() -> asyncio.Task:
+    """Create the autopilot task and attach the restart watchdog."""
+    t = asyncio.create_task(_autopilot_loop())
+    t.add_done_callback(_autopilot_watchdog)
+    return t
+
+
 async def _autopilot_loop():
     """Background autopilot loop — runs every 5 minutes."""
     last_hourly_update = -1  # track which hour we last sent status
@@ -1574,12 +1681,20 @@ async def _autopilot_loop():
                 )
 
         except asyncio.CancelledError:
-            break
-        except asyncio.CancelledError:
-            raise  # Let cancellation work
+            break  # Clean exit on stop
         except Exception as e:
-            await broadcast("autopilot", {"status": "error", "error": str(e)[:200]})
-            await send_phone_notification("⚠️ Paula Error", str(e)[:80], priority="high")
+            # The error handler itself must never raise — a failed broadcast or
+            # notification used to bubble out of the loop and silently kill autopilot.
+            err = str(e)[:200]
+            print(f"[autopilot] scan error: {err}", flush=True)
+            try:
+                await broadcast("autopilot", {"status": "error", "error": err})
+            except Exception:
+                pass
+            try:
+                await send_phone_notification("⚠️ Paula Error", err[:80], priority="high")
+            except Exception:
+                pass
 
         try:
             await asyncio.sleep(5 * 60)  # 5 minutes
@@ -1598,7 +1713,7 @@ async def start_autopilot(authorization: str = Header(None)):
         return {"ok": True, "message": "Autopilot already running"}
 
     autopilot_owner_id = user["id"]
-    autopilot_task = asyncio.create_task(_autopilot_loop())
+    autopilot_task = _spawn_autopilot()
     await broadcast("autopilot", {"status": "started"})
     await send_phone_notification("🟢 Autopilot Started", "Paula is now scanning for trades every 5 minutes", priority="default")
     return {"ok": True, "message": "Autopilot started"}

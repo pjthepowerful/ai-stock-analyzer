@@ -56,9 +56,10 @@ function App() {
   }
 
   const completeOnboarding = async (style, bias, risk) => {
-    const s = JSON.parse(localStorage.getItem('paula-settings') || '{}')
+    const settingsKey = 'paula-settings-' + (user?.id ?? '')
+    const s = JSON.parse(localStorage.getItem(settingsKey) || '{}')
     s.tradingStyle = style; s.marketBias = bias; s.riskPct = risk
-    localStorage.setItem('paula-settings', JSON.stringify(s))
+    localStorage.setItem(settingsKey, JSON.stringify(s))
     // Save profile
     await f(API + '/api/profile', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
@@ -86,6 +87,11 @@ function LoginPage({ onAuth }) {
   const [isSignup, setIsSignup] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  // Password reset
+  const resetToken = (() => { try { return new URLSearchParams(window.location.search).get('reset') } catch { return null } })()
+  const [view, setView] = useState(resetToken ? 'reset' : 'auth') // 'auth' | 'forgot' | 'reset'
+  const [notice, setNotice] = useState('')
+  const [newPw, setNewPw] = useState('')
 
   const submit = async (e) => {
     e?.preventDefault()
@@ -99,6 +105,32 @@ function LoginPage({ onAuth }) {
     setLoading(true); setError('')
     const res = await onAuth(username, password, isSignup, email)
     if (!res.ok) setError(res.error)
+    setLoading(false)
+  }
+
+  const submitForgot = async (e) => {
+    e?.preventDefault()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('Enter a valid email address'); return }
+    setLoading(true); setError(''); setNotice('')
+    try {
+      const r = await f(API + '/api/auth/forgot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }).then(r => r.json())
+      setNotice(r.message || 'If an account exists for that email, a reset link has been sent.')
+    } catch { setError("Can't connect to backend") }
+    setLoading(false)
+  }
+
+  const submitReset = async (e) => {
+    e?.preventDefault()
+    if (newPw.length < 6) { setError('Password must be at least 6 characters'); return }
+    setLoading(true); setError(''); setNotice('')
+    try {
+      const r = await f(API + '/api/auth/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: resetToken, password: newPw }) }).then(r => r.json())
+      if (r.ok) {
+        setNotice('Password updated. You can sign in now.')
+        setView('auth'); setIsSignup(false)
+        try { window.history.replaceState({}, '', window.location.pathname) } catch {}
+      } else { setError(r.error || 'Reset failed') }
+    } catch { setError("Can't connect to backend") }
     setLoading(false)
   }
 
@@ -144,6 +176,7 @@ function LoginPage({ onAuth }) {
             <div className="logo-p lp-lg">P</div>
             <span className="lh-name">Paula</span>
           </div>
+          {view === 'auth' && <>
           <h2 className="lr-title">{isSignup ? 'Create account' : 'Welcome back'}</h2>
           <p className="lr-sub">{isSignup ? 'Takes 30 seconds. No card required for paper trading.' : 'Sign in to pick up where you left off.'}</p>
           <div className="login-form">
@@ -155,7 +188,7 @@ function LoginPage({ onAuth }) {
             <input className="login-input" placeholder="" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') document.querySelector('.pw-input')?.focus() }} autoFocus autoComplete="email" type="email" /></>}
             <div className="lf-pw-row">
               <label className="lf-label">Password</label>
-
+              {!isSignup && <button type="button" className="lf-forgot lt-link" onClick={() => { setView('forgot'); setError(''); setNotice(''); setEmail(username) }}>Forgot password?</button>}
             </div>
             <div className="pw-wrap">
               <input className="login-input pw-input" type={showPw ? 'text' : 'password'} placeholder="" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit() }} autoComplete={isSignup ? 'new-password' : 'current-password'} />
@@ -165,14 +198,45 @@ function LoginPage({ onAuth }) {
               </button>
             </div>
             {error && <div className="login-error">{error}</div>}
+            {notice && <div className="login-notice">{notice}</div>}
             <button className="login-btn" onClick={submit} disabled={loading}>
               {loading ? '...' : isSignup ? 'Create account  →' : 'Sign in  →'}
             </button>
 
-            <button className="login-toggle" onClick={() => { setIsSignup(!isSignup); setError('') }}>
+            <button className="login-toggle" onClick={() => { setIsSignup(!isSignup); setError(''); setNotice('') }}>
               {isSignup ? 'Already have an account? ' : 'New to Paula? '}<span className="lt-link">{isSignup ? 'Sign in' : 'Create account'}</span>
             </button>
           </div>
+          </>}
+
+          {view === 'forgot' && <>
+          <h2 className="lr-title">Reset your password</h2>
+          <p className="lr-sub">Enter your account email and we'll send you a reset link.</p>
+          <div className="login-form">
+            <label className="lf-label">Email</label>
+            <input className="login-input" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submitForgot() }} autoFocus autoComplete="email" type="email" />
+            {error && <div className="login-error">{error}</div>}
+            {notice && <div className="login-notice">{notice}</div>}
+            <button className="login-btn" onClick={submitForgot} disabled={loading}>{loading ? '...' : 'Send reset link  →'}</button>
+            <button className="login-toggle" onClick={() => { setView('auth'); setError(''); setNotice('') }}><span className="lt-link">Back to sign in</span></button>
+          </div>
+          </>}
+
+          {view === 'reset' && <>
+          <h2 className="lr-title">Set a new password</h2>
+          <p className="lr-sub">Choose a new password for your account.</p>
+          <div className="login-form">
+            <label className="lf-label">New password</label>
+            <div className="pw-wrap">
+              <input className="login-input pw-input" type={showPw ? 'text' : 'password'} value={newPw} onChange={e => setNewPw(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submitReset() }} autoFocus autoComplete="new-password" />
+              <button type="button" className="pw-eye" onClick={() => setShowPw(!showPw)}>{showPw ? 'Hide' : 'Show'}</button>
+            </div>
+            {error && <div className="login-error">{error}</div>}
+            {notice && <div className="login-notice">{notice}</div>}
+            <button className="login-btn" onClick={submitReset} disabled={loading}>{loading ? '...' : 'Update password  →'}</button>
+            <button className="login-toggle" onClick={() => { setView('auth'); setError(''); setNotice(''); try { window.history.replaceState({}, '', window.location.pathname) } catch {} }}><span className="lt-link">Back to sign in</span></button>
+          </div>
+          </>}
           <div className="lr-footer">By continuing you agree to our Terms · Privacy <span className="lr-sys">● All systems operational</span></div>
           <a href="/commercial.html" target="_blank" className="lr-trailer">▶ Watch the trailer</a>
         </div>
@@ -927,7 +991,7 @@ function MainApp({ user, token, logout }) {
                       ):m.showChart && (m.ticker||m.tickers?.[0])?(
                         <div className="ai-chart"><Chart ticker={m.ticker||m.tickers[0]} signal={m.signal} height={260}/></div>
                       ):null}
-                      {m.signalData && <SignalCard data={m.signalData} onExecute={(ticker) => sendMessage('Buy ' + ticker)}/>}
+                      {m.signalData && <SignalCard data={m.signalData} onExecute={(ticker, side) => sendMessage((side === 'EXIT' ? 'Sell ' : 'Buy ') + ticker)}/>}
                       {m.time&&!m.streaming&&<div className="msg-time">{m.time}</div>}
                     </div>
                   </div>
@@ -1267,8 +1331,10 @@ function SignalCard({ data, onExecute }) {
   if (!data) return null
   const scores = data.scores || {}
   const trade = data.trade || {}
-  const isBuy = trade.side === 'LONG'
-  const isSell = trade.side === 'SHORT'
+  const side = trade.side
+  const isBuy = side === 'LONG'
+  const isExit = side === 'EXIT'
+  const isAvoid = side === 'AVOID'
 
   const ScoreBar = ({ name, sub, value }) => {
     const color = value >= 70 ? 'var(--grn)' : value >= 50 ? 'var(--amb)' : 'var(--red)'
@@ -1294,12 +1360,38 @@ function SignalCard({ data, onExecute }) {
         {scores.news && <ScoreBar name="News sentiment" sub={scores.news.label} value={scores.news.value}/>}
       </div>
 
-      {/* Trade card */}
-      {trade.entry > 0 && (
-        <div className={'sc-trade' + (isBuy ? ' sc-buy' : isSell ? ' sc-sell' : '')}>
+      {/* Bearish banner — no short-entry plan shown for EXIT/AVOID */}
+      {(isExit || isAvoid) && (
+        <div className={'sc-trade ' + (isExit ? 'sc-sell' : '')}>
           <div className="sc-trade-head">
             <div className="sc-trade-left">
-              <span className={'sc-side ' + (isBuy ? 'sc-side-buy' : 'sc-side-sell')}>{trade.side}</span>
+              <span className={'sc-side sc-side-sell'}>{isExit ? 'EXIT' : 'AVOID'}</span>
+              <span className="sc-ticker">{data.ticker}</span>
+            </div>
+            <span className="sc-rr">Score <b>{data.score}</b></span>
+          </div>
+          <div className="sc-warn">
+            {isExit
+              ? (trade.holds_long
+                  ? 'Signal has turned bearish on a position you hold. Consider closing the long — this is not a setup to short.'
+                  : 'Bearish signal. If you hold this, consider exiting — this is not a short-entry setup.')
+              : 'Bearish signal and you don\u2019t hold it. Best action is to stay flat — no long entry here.'}
+          </div>
+          {data.earnings_warning && <div className="sc-warn">⚠ {data.earnings_warning}</div>}
+          {isExit && (
+            <div className="sc-actions">
+              <button className="sc-btn sc-exec" onClick={() => onExecute(data.ticker, 'EXIT')}>Close position</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Long trade card */}
+      {isBuy && trade.entry > 0 && (
+        <div className="sc-trade sc-buy">
+          <div className="sc-trade-head">
+            <div className="sc-trade-left">
+              <span className="sc-side sc-side-buy">LONG</span>
               <span className="sc-ticker">{data.ticker}</span>
             </div>
             <span className="sc-rr">R:R · <b>{trade.rr?.toFixed(1)}</b></span>
@@ -1311,7 +1403,7 @@ function SignalCard({ data, onExecute }) {
           </div>
           {data.earnings_warning && <div className="sc-warn">⚠ {data.earnings_warning}</div>}
           <div className="sc-actions">
-            <button className="sc-btn sc-exec" onClick={() => onExecute(data.ticker)}>Execute</button>
+            <button className="sc-btn sc-exec" onClick={() => onExecute(data.ticker, 'LONG')}>Execute</button>
           </div>
         </div>
       )}
@@ -1326,13 +1418,18 @@ function AdminPanel({ token, onClose }) {
 
   useEffect(() => {
     const load = async () => {
-      const [u, s] = await Promise.all([
-        f(API + '/api/admin/users', { headers: { Authorization: 'Bearer ' + token } }).then(r => r.json()),
-        f(API + '/api/admin/stats', { headers: { Authorization: 'Bearer ' + token } }).then(r => r.json()),
-      ])
-      if (u.ok) setUsers(u.users)
-      if (s.ok) setStats(s)
-      setLoading(false)
+      try {
+        const [u, s] = await Promise.all([
+          f(API + '/api/admin/users', { headers: { Authorization: 'Bearer ' + token } }).then(r => r.json()),
+          f(API + '/api/admin/stats', { headers: { Authorization: 'Bearer ' + token } }).then(r => r.json()),
+        ])
+        if (u.ok) setUsers(u.users)
+        if (s.ok) setStats(s)
+      } catch {
+        // network/parse error — leave existing data, just stop the spinner
+      } finally {
+        setLoading(false)
+      }
     }
     load()
   }, [])

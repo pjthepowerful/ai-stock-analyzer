@@ -57,6 +57,15 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id)
         );
+        CREATE TABLE IF NOT EXISTS password_resets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            token_hash TEXT NOT NULL,
+            expires_at INTEGER NOT NULL,
+            used INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
     """)
     db.commit()
     db.close()
@@ -229,6 +238,68 @@ def clear_chat(user_id: int):
     try:
         db.execute("DELETE FROM chat_history WHERE user_id = ?", (user_id,))
         db.commit()
+    finally:
+        db.close()
+
+
+# ── Password reset ──────────────────────────────────────────────────────────
+RESET_TOKEN_TTL_SECONDS = 3600  # 1 hour
+
+
+def _hash_token(token: str) -> str:
+    """Hash a reset token before storing it (never store the raw token)."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def create_reset_token(email: str) -> dict | None:
+    """Create a one-time reset token for the account with this email.
+
+    Returns {"token": ..., "email": ..., "username": ...} for the caller to
+    email, or None if no such account exists. The caller must NOT reveal to the
+    client whether an account was found (anti-enumeration).
+    """
+    if not email:
+        return None
+    db = _get_db()
+    try:
+        row = db.execute("SELECT id, username, email FROM users WHERE email = ?",
+                         (email.strip().lower(),)).fetchone()
+        if not row:
+            return None
+        token = secrets.token_urlsafe(32)
+        expires_at = int(time.time()) + RESET_TOKEN_TTL_SECONDS
+        # Invalidate any prior outstanding tokens for this user
+        db.execute("UPDATE password_resets SET used = 1 WHERE user_id = ? AND used = 0", (row["id"],))
+        db.execute("INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, ?)",
+                   (row["id"], _hash_token(token), expires_at))
+        db.commit()
+        return {"token": token, "email": row["email"], "username": row["username"]}
+    finally:
+        db.close()
+
+
+def reset_password(token: str, new_password: str) -> dict:
+    """Consume a reset token and set a new password."""
+    if not token:
+        return {"ok": False, "error": "Invalid or expired reset link"}
+    if not new_password or len(new_password) < 6:
+        return {"ok": False, "error": "Password must be at least 6 characters"}
+    db = _get_db()
+    try:
+        row = db.execute(
+            "SELECT id, user_id, expires_at, used FROM password_resets WHERE token_hash = ?",
+            (_hash_token(token),)
+        ).fetchone()
+        if not row or row["used"]:
+            return {"ok": False, "error": "Invalid or expired reset link"}
+        if row["expires_at"] < int(time.time()):
+            return {"ok": False, "error": "This reset link has expired"}
+        pw_hash, salt = _hash_password(new_password)
+        db.execute("UPDATE users SET password_hash = ?, salt = ? WHERE id = ?",
+                   (pw_hash, salt, row["user_id"]))
+        db.execute("UPDATE password_resets SET used = 1 WHERE id = ?", (row["id"],))
+        db.commit()
+        return {"ok": True}
     finally:
         db.close()
 

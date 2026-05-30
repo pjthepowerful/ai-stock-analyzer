@@ -2748,7 +2748,7 @@ def route(msg: str) -> dict:
     ]):
         ticker, market = _find_ticker(msg)
         if ticker:
-            return {"type": "analyze", "ticker": ticker, "market": market}
+            return {"type": "analyze", "ticker": ticker, "market": market, "_original_msg": msg}
         return {"type": "chat", "market": _detect_market(msg)}
 
     ticker, market = _find_ticker(msg)
@@ -2865,7 +2865,7 @@ def route(msg: str) -> dict:
         if ticker:
             return {"type": "price", "ticker": ticker, "market": market}
     if ticker:
-        return {"type": "analyze", "ticker": ticker, "market": market}
+        return {"type": "analyze", "ticker": ticker, "market": market, "_original_msg": msg}
     return {"type": "chat", "market": market}
 
 
@@ -4886,13 +4886,56 @@ def execute(intent: dict) -> dict:
         if not data:
             return {"ok": False, "error": f"No data for {intent['ticker']}."}
         signal = generate_trade_signal(data)
+        action = signal.get("action", "HOLD")
         # Build structured signal data for visual cards
         trade = signal.get("trade", {})
+
+        # ── Bearish framing (bug fix) ───────────────────────────────────────
+        # A low score must NOT be presented as a "SHORT" entry setup. The app
+        # is long-biased, and users asking "should I sell my AAPL?" hold a LONG.
+        # Decide between EXIT (close a long they hold / are asking to sell) and
+        # AVOID (bearish, but they don't hold it — just stay away).
+        orig_msg = (intent.get("_original_msg") or "").lower()
+        exit_words = ("sell", "exit", "get out", "dump", "unload", "take profit",
+                      "should i sell", "close my", "close position", "i own",
+                      "i bought", "i hold", "i'm holding", "im holding", "my position")
+        asking_to_exit = any(w in orig_msg for w in exit_words)
+        holds_long = False
+        try:
+            for _p in (alpaca_positions() or []):
+                _pt = (_p.get("ticker") or "").upper().replace(".", "-")
+                if _pt == tick.upper().replace(".", "-") and _p.get("side", "long") == "long":
+                    holds_long = True
+                    break
+        except Exception:
+            pass
+
+        is_bearish = action in ("SELL", "STRONG_SELL")
+        if is_bearish and (asking_to_exit or holds_long):
+            side = "EXIT"
+        elif is_bearish:
+            side = "AVOID"
+        elif action in ("BUY", "STRONG_BUY"):
+            side = "LONG"
+        else:
+            side = "NEUTRAL"
+
+        # For EXIT/AVOID we deliberately omit short entry/stop/target — showing a
+        # short-entry plan to someone selling a long is exactly the bug. Sending
+        # entry=0 hides the trade-levels block in the card.
+        if side in ("EXIT", "AVOID"):
+            t_entry = t_stop = t_target = t_rr = 0
+        else:
+            t_entry = trade.get("entry", 0)
+            t_stop = trade.get("stop_loss", 0)
+            t_target = trade.get("target_1", 0)
+            t_rr = trade.get("risk_reward", 0)
+
         sig_data = {
             "ticker": tick,
             "name": data.get("name", tick),
             "price": data.get("price", 0),
-            "action": signal.get("action", "HOLD"),
+            "action": action,
             "score": signal.get("score", 0),
             "scores": {
                 "trend": {"value": signal.get("trend_score", 0), "label": signal.get("trend_label", "")},
@@ -4901,11 +4944,12 @@ def execute(intent: dict) -> dict:
                 "news": {"value": signal.get("news_score", 0), "label": signal.get("news_label", "")},
             },
             "trade": {
-                "side": "LONG" if signal.get("action") in ("BUY", "STRONG_BUY") else "SHORT" if signal.get("action") in ("SELL", "STRONG_SELL") else "NEUTRAL",
-                "entry": trade.get("entry", 0),
-                "stop": trade.get("stop_loss", 0),
-                "target": trade.get("target_1", 0),
-                "rr": trade.get("risk_reward", 0),
+                "side": side,
+                "holds_long": holds_long,
+                "entry": t_entry,
+                "stop": t_stop,
+                "target": t_target,
+                "rr": t_rr,
             },
             "earnings_warning": signal.get("earnings_warning", ""),
         }
@@ -4993,9 +5037,16 @@ INTELLIGENCE RULES:
 CRITICAL — PRICE ACCURACY:
 - ONLY quote prices that appear in the attached data. NEVER guess or estimate a price.
 - If data shows Price: 142.50 — say $142.50. Don't round to $143 or say "around $140".
-- For trade plans (entry, stop, targets), calculate from the ACTUAL current price in the data.
+- For trade plans (entry, stop, targets), use the EXACT entry/stop/target numbers already provided in the attached signal data. Do NOT recompute them.
 - If you don't have price data for a stock, say so — don't make up a number.
 - When listing multiple stocks, use the exact Price and Chg% from the data for each one.
+
+CRITICAL — NO ARITHMETIC (you are bad at math, so don't do any):
+- NEVER calculate percentages, gains, losses, dollar amounts, share counts, or projections yourself. You make arithmetic errors.
+- For the day's move, use the EXACT "Chg%" value from the data verbatim. Do not derive it from prices.
+- For risk/reward, position size, P&L, or "what if I bought X shares" — only state numbers that are ALREADY in the attached data. If a number isn't in the data, do NOT compute it; say "I can run the exact numbers if you place the trade" instead.
+- Never multiply price × shares, never subtract two prices to get a gain, never convert a dollar move to a percent. If you're tempted to do math, stop and just quote the pre-computed figure from the data.
+- It is far better to omit a number than to state a wrong one. Round-number estimates and "roughly X%" calculations are BANNED.
 
 RESPONSE STYLE:
 - Keep responses SHORT — 2-4 paragraphs max. No walls of text.
@@ -5126,7 +5177,8 @@ RULES:
 4. If NO live data is attached, use information from the conversation history. The user may have already discussed prices or stocks earlier — reference those.
 5. If you truly have zero information about a stock, say "Ask me to analyze [ticker] and I'll pull up the full picture" — do NOT say you "need to look it up" or "don't have access".
 6. ALWAYS be useful. Give a real answer. Suggest a ticker. Give an opinion. Never punt back to the user with empty responses.
-7. You CAN reference prices, scores, or analysis from earlier messages in the conversation — they are real data."""
+7. You CAN reference prices, scores, or analysis from earlier messages in the conversation — they are real data.
+8. NO ARITHMETIC — you make math errors. Never calculate percentages, gains, dollar amounts, share counts, or projections. Use the exact Chg% and pre-computed entry/stop/target numbers from the data verbatim. Never multiply, subtract, or convert prices to percents. If a number isn't already in the data, don't state it — omitting a number always beats stating a wrong one."""
 
     messages = [{"role": "system", "content": system}]
     for h in (history or [])[-12:]:
