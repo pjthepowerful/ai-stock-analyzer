@@ -63,6 +63,13 @@ class _MockStreamlit:
 # Install the mock before importing trading
 sys.modules['streamlit'] = _MockStreamlit()
 
+# Single source of truth: import the repo-root trading.py instead of keeping a
+# duplicate copy in this directory. The two used to be byte-identical, which
+# meant edits to one could silently no-op — this guarantees one canonical file.
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
 # Now import the actual trading engine
 # It will use our mock streamlit, so no crashes
 from trading import (
