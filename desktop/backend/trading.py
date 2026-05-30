@@ -195,15 +195,74 @@ def _find_ticker(text: str) -> tuple[str | None, str]:
                 return clean, "India"
             if clean in us_set:
                 return clean, "US"
-    # 2.5) Common misspellings/aliases
-    ALIASES = {"appl": "AAPL", "goog": "GOOGL", "googl": "GOOGL", "msft": "MSFT",
-               "amzn": "AMZN", "tsla": "TSLA", "nvda": "NVDA", "meta": "META",
-               "nflx": "NFLX", "baba": "BABA", "intc": "INTC"}
+    # 2.5) Common misspellings, typos, voice recognition, and aliases
+    ALIASES = {
+        # Apple
+        "appl": "AAPL", "aple": "AAPL", "apple": "AAPL", "aaple": "AAPL",
+        # Google
+        "goog": "GOOGL", "googl": "GOOGL", "google": "GOOGL", "gogle": "GOOGL",
+        # Microsoft
+        "msft": "MSFT", "microsoft": "MSFT", "micosoft": "MSFT", "mircosoft": "MSFT",
+        # Amazon
+        "amzn": "AMZN", "amazon": "AMAZON", "amazn": "AMZN",
+        # Tesla
+        "tsla": "TSLA", "tesla": "TSLA", "telsa": "TSLA", "tesle": "TSLA",
+        # Nvidia
+        "nvda": "NVDA", "nvidia": "NVDA", "nvidea": "NVDA", "nviida": "NVDA",
+        # Meta
+        "meta": "META", "facebook": "META",
+        # Netflix
+        "nflx": "NFLX", "netflix": "NFLX", "netflex": "NFLX", "netflx": "NFLX",
+        # Intel
+        "intc": "INTC", "intel": "INTC",
+        # AMD
+        "amd": "AMD",
+        # Coinbase
+        "coin": "COIN", "coinbase": "COIN",
+        # Palantir
+        "pltr": "PLTR", "palantir": "PLTR", "palentir": "PLTR",
+        # Others
+        "baba": "BABA", "alibaba": "BABA",
+        "snap": "SNAP", "snapchat": "SNAP",
+        "uber": "UBER",
+        "disney": "DIS", "dis": "DIS",
+        "nike": "NKE", "nke": "NKE",
+        "starbucks": "SBUX", "sbux": "SBUX",
+        "walmart": "WMT", "wmt": "WMT",
+        "costco": "COST", "cost": "COST",
+        "boeing": "BA",
+        "ford": "F",
+        "shopify": "SHOP", "shop": "SHOP",
+        "robinhood": "HOOD", "hood": "HOOD",
+        "sofi": "SOFI",
+        "roblox": "RBLX", "rblx": "RBLX",
+        "celsius": "CELH", "celh": "CELH",
+        "rivian": "RIVN", "rivn": "RIVN",
+        "duolingo": "DUOL", "duol": "DUOL",
+        "chipotle": "CMG", "cmg": "CMG",
+        "moderna": "MRNA", "mrna": "MRNA",
+        "crowdstrike": "CRWD", "crwd": "CRWD",
+        "datadog": "DDOG", "ddog": "DDOG",
+        "snowflake": "SNOW", "snow": "SNOW",
+        "broadcom": "AVGO", "avgo": "AVGO",
+        "jpmorgan": "JPM", "jpm": "JPM", "jp morgan": "JPM",
+        "goldman": "GS", "goldman sachs": "GS",
+        "berkshire": "BRK-B",
+    }
     for word in text.lower().split():
         clean = re.sub(r"[^a-z]", "", word)
         if clean in ALIASES:
             tick = ALIASES[clean]
             return tick, "US"
+    # 2.6) Fuzzy match — if a word is 1-2 chars off from a known ticker
+    for word in text.upper().split():
+        clean = re.sub(r"[^A-Z]", "", word)
+        if clean and 3 <= len(clean) <= 5 and clean not in _NOISE_WORDS:
+            for known in list(us_set)[:200]:  # check against top tickers
+                if len(known) == len(clean) and known != clean:
+                    diffs = sum(1 for a, b in zip(known, clean) if a != b)
+                    if diffs == 1:  # only 1 letter off
+                        return known, "US"
     # 3) Polygon search — only if the message looks like a specific stock query
     stock_intent = any(w in low for w in [
         "analyze", "analysis", "price", "buy", "sell", "short", "cover", "chart", "graph", "quote",
@@ -2174,6 +2233,7 @@ def generate_trade_signal(data: dict) -> dict:
 
 @st.cache_data(ttl=120)
 def fetch_price(ticker: str) -> dict | None:
+    # Try yfinance first
     try:
         stk = yf.Ticker(ticker)
         info = stk.info or {}
@@ -2182,7 +2242,7 @@ def fetch_price(ticker: str) -> dict | None:
         if not price or price <= 0:
             hist = stk.history(period="5d")
             if hist is None or hist.empty:
-                return None
+                raise ValueError("No yfinance data")
             price = float(hist["Close"].iloc[-1])
             prev = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else price
         prev = prev or price
@@ -2199,7 +2259,34 @@ def fetch_price(ticker: str) -> dict | None:
             "recommendation": info.get("recommendationKey"),
         }
     except Exception:
-        return None
+        pass
+
+    # Fallback: Polygon API
+    polygon_key = os.environ.get("POLYGON_API_KEY", "")
+    if polygon_key:
+        try:
+            clean = ticker.replace(".NS", "").replace("-", ".")
+            r = requests.get(f"https://api.polygon.io/v2/aggs/ticker/{clean}/prev",
+                            params={"apiKey": polygon_key}, timeout=10)
+            if r.status_code == 200:
+                data = r.json()
+                results = data.get("results", [])
+                if results:
+                    bar = results[0]
+                    price = bar.get("c", 0)
+                    prev = bar.get("o", price)
+                    return {
+                        "price": round(price, 2), "prev_close": round(prev, 2),
+                        "change": round(price - prev, 2),
+                        "change_pct": round((price - prev) / prev * 100, 2) if prev else 0,
+                        "name": ticker, "market_cap": None, "pe_ratio": None,
+                        "forward_pe": None, "52w_high": None, "52w_low": None,
+                        "sector": None, "target_price": None, "recommendation": None,
+                    }
+        except Exception:
+            pass
+
+    return None
 
 
 
