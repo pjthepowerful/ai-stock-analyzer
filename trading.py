@@ -21,6 +21,7 @@ import random
 import time
 import requests
 import warnings
+from signal_logic import classify_analysis_side
 
 warnings.filterwarnings("ignore")
 load_dotenv()
@@ -4893,13 +4894,9 @@ def execute(intent: dict) -> dict:
         # ── Bearish framing (bug fix) ───────────────────────────────────────
         # A low score must NOT be presented as a "SHORT" entry setup. The app
         # is long-biased, and users asking "should I sell my AAPL?" hold a LONG.
-        # Decide between EXIT (close a long they hold / are asking to sell) and
-        # AVOID (bearish, but they don't hold it — just stay away).
-        orig_msg = (intent.get("_original_msg") or "").lower()
-        exit_words = ("sell", "exit", "get out", "dump", "unload", "take profit",
-                      "should i sell", "close my", "close position", "i own",
-                      "i bought", "i hold", "i'm holding", "im holding", "my position")
-        asking_to_exit = any(w in orig_msg for w in exit_words)
+        # The side decision lives in signal_logic.classify_analysis_side so it
+        # can be unit-tested without trading.py's heavy dependencies.
+        orig_msg = intent.get("_original_msg") or ""
         holds_long = False
         try:
             for _p in (alpaca_positions() or []):
@@ -4910,15 +4907,7 @@ def execute(intent: dict) -> dict:
         except Exception:
             pass
 
-        is_bearish = action in ("SELL", "STRONG_SELL")
-        if is_bearish and (asking_to_exit or holds_long):
-            side = "EXIT"
-        elif is_bearish:
-            side = "AVOID"
-        elif action in ("BUY", "STRONG_BUY"):
-            side = "LONG"
-        else:
-            side = "NEUTRAL"
+        side = classify_analysis_side(action, orig_msg, holds_long)
 
         # For EXIT/AVOID we deliberately omit short entry/stop/target — showing a
         # short-entry plan to someone selling a long is exactly the bug. Sending

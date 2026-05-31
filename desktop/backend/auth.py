@@ -118,6 +118,7 @@ def signup(username: str, password: str, email: str = None) -> dict:
         return {"ok": False, "error": "Password must be at least 4 characters"}
 
     pw_hash, salt = _hash_password(password)
+    email = email.strip().lower() if email else None
     db = _get_db()
     try:
         db.execute("INSERT INTO users (username, email, password_hash, salt) VALUES (?, ?, ?, ?)",
@@ -137,10 +138,14 @@ def signup(username: str, password: str, email: str = None) -> dict:
 
 
 def login(username: str, password: str) -> dict:
-    """Authenticate a user."""
+    """Authenticate a user. Accepts username or email (email is case-insensitive)."""
     db = _get_db()
     try:
-        row = db.execute("SELECT * FROM users WHERE username = ? OR email = ?", (username, username)).fetchone()
+        ident = (username or "").strip()
+        row = db.execute(
+            "SELECT * FROM users WHERE username = ? OR email = ?",
+            (ident, ident.lower())
+        ).fetchone()
         if not row:
             return {"ok": False, "error": "No account found with this email"}
         pw_hash, _ = _hash_password(password, row["salt"])
