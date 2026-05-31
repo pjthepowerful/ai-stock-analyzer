@@ -3525,10 +3525,16 @@ def run_backtest(years: int = 2) -> dict:
                     entry_date = window.index[-1]
                 except Exception:
                     entry_date = i
+                try:
+                    # Exit happens after `bars_held` bars into the future window.
+                    exit_date = future.index[min(bars_held, len(future) - 1)]
+                except Exception:
+                    exit_date = entry_date
 
                 pending_trades.append({
                     "ticker": ticker,
                     "entry_date": entry_date,
+                    "exit_date": exit_date,
                     "entry": round(entry_price, 2),
                     "exit": round(exit_price, 2),
                     "ret_frac": ret_frac,
@@ -3542,92 +3548,110 @@ def run_backtest(years: int = 2) -> dict:
         except Exception:
             continue
 
-    # ── Chronological compounding pass ──────────────────────────────────────
-    # Trades were collected per-ticker (alphabetical). Compounding in that order
-    # is meaningless — sort by actual entry date so capital, drawdown, and
-    # position sizing reflect the real timeline.
-    def _date_key(t):
-        d = t["entry_date"]
+    # ── Portfolio simulation with a concurrent-position cap ─────────────────
+    # The live engine holds at most a couple positions at once. Summing every
+    # signal independently (the old pass) let the backtest hold hundreds of
+    # correlated positions simultaneously, so a market dip crushed all of them
+    # together → fake 90%+ drawdowns. This walks the real timeline: a new trade
+    # can only open when a slot is free, exactly like live trading.
+    def _to_dt(d):
         try:
-            return d.to_pydatetime()
+            return d.to_pydatetime().replace(tzinfo=None)
         except Exception:
             try:
                 return d.tz_localize(None)
             except Exception:
                 return d
 
+    # Normalize dates and sort by entry.
+    evs = []
+    for t in pending_trades:
+        try:
+            ed = _to_dt(t["entry_date"])
+            xd = _to_dt(t.get("exit_date", t["entry_date"]))
+            evs.append((ed, xd, t))
+        except Exception:
+            continue
     try:
-        pending_trades.sort(key=_date_key)
+        evs.sort(key=lambda x: x[0])
     except Exception:
-        pass  # if dates are heterogeneous, fall back to collection order
+        pass
 
-    # Portfolio drawdown brake: if equity falls this far below its peak, stop
-    # opening new trades until it recovers. A real trader (and the live daily-
-    # loss-limit) would never sit through an unbounded drawdown — without this
-    # the backtest happily rode a 93% drawdown to a fake +900% "return".
-    DD_BRAKE = 0.20          # halt new entries when >20% below peak
-    MAX_POS_PCT = 0.15       # no single position over 15% of capital (was 25%)
-    halted = False
+    MAX_CONCURRENT = 2       # match the live engine's MAX_POSITIONS
+    RISK_PER_TRADE_BT = RISK_PER_TRADE
+    MAX_POS_PCT = 0.15
+    DD_BRAKE = 0.20
+
+    open_slots = []          # list of (exit_date, cost, ret_frac) currently held
+    skipped_full = 0         # trades skipped because all slots were busy
     skipped_dd = 0
 
-    for pt in pending_trades:
+    def _close_due(now_dt):
+        """Realize P&L for any open positions whose exit date has passed."""
+        nonlocal capital, peak, min_capital, open_slots
+        still_open = []
+        for (xd, cost, rf, rec) in open_slots:
+            if xd <= now_dt:
+                pnl = rf * cost
+                capital += pnl
+                peak = max(peak, capital)
+                min_capital = min(min_capital, capital)
+                rec["pnl"] = round(pnl, 2)
+                trades.append(rec)
+            else:
+                still_open.append((xd, cost, rf, rec))
+        open_slots = still_open
+
+    for (ed, xd, pt) in evs:
+        # First, close anything that exited before this entry.
+        _close_due(ed)
         if capital < 500:
             break
 
-        # Drawdown brake — pause/resume around the 20% line (hysteresis so it
-        # doesn't flap: resume only once back within 10% of peak).
+        # Drawdown brake.
         dd = (peak - capital) / peak if peak > 0 else 0
-        if halted:
-            if dd <= 0.10:
-                halted = False
-            else:
-                skipped_dd += 1
-                continue
-        elif dd >= DD_BRAKE:
-            halted = True
+        if dd >= DD_BRAKE:
             skipped_dd += 1
             continue
+        # Concurrent-position cap.
+        if len(open_slots) >= MAX_CONCURRENT:
+            skipped_full += 1
+            continue
 
-        # Resolve position size against CURRENT (chronological) capital.
-        max_risk = capital * RISK_PER_TRADE * pt["score_mult"]
         rps = pt["risk_per_share"]
         if rps <= 0:
             continue
+        max_risk = capital * RISK_PER_TRADE_BT * pt["score_mult"]
         qty = max(1, int(max_risk / rps))
         cost = qty * pt["entry"]
-        # Cap any single position at MAX_POS_PCT of capital.
         if cost > capital * MAX_POS_PCT:
             qty = max(1, int(capital * MAX_POS_PCT / pt["entry"]))
             cost = qty * pt["entry"]
-        if cost > capital:
+        if cost > capital or qty < 1:
             continue
 
-        # P&L = per-dollar return × dollars deployed.
-        pnl = pt["ret_frac"] * cost
-        pnl_pct = pt["ret_frac"] * 100
-        capital += pnl
-
-        if pnl > 0:
+        # Count win/loss at entry time (P&L realized at exit).
+        if pt["ret_frac"] > 0:
             wins += 1
         else:
             losses += 1
 
-        peak = max(peak, capital)
-        min_capital = min(min_capital, capital)
-
-        trades.append({
+        rec = {
             "ticker": pt["ticker"], "entry": pt["entry"], "exit": pt["exit"],
-            "qty": qty, "pnl": round(pnl, 2), "pnl_pct": round(pnl_pct, 2),
+            "qty": qty, "pnl_pct": round(pt["ret_frac"] * 100, 2),
             "result": pt["result"], "score": pt["score"], "bars_held": pt["bars_held"],
-        })
+        }
+        open_slots.append((xd, cost, pt["ret_frac"], rec))
+
+    # Close any positions still open at the end of the test.
+    _close_due(datetime.max.replace(tzinfo=None))
 
     total_trades = wins + losses
     win_rate = (wins / total_trades * 100) if total_trades > 0 else 0
-    gross_win = sum(t["pnl"] for t in trades if t["pnl"] > 0)
-    gross_loss = abs(sum(t["pnl"] for t in trades if t["pnl"] < 0))
+    gross_win = sum(t["pnl"] for t in trades if t.get("pnl", 0) > 0)
+    gross_loss = abs(sum(t["pnl"] for t in trades if t.get("pnl", 0) < 0))
     avg_win = (gross_win / wins) if wins > 0 else 0
     avg_loss = (-gross_loss / losses) if losses > 0 else 0
-    # Profit factor = gross profit / gross loss (correct definition).
     profit_factor = (gross_win / gross_loss) if gross_loss > 0 else (float("inf") if gross_win > 0 else 0)
     max_drawdown = ((peak - min_capital) / peak * 100) if peak > 0 else 0
     total_return = ((capital - STARTING_CAPITAL) / STARTING_CAPITAL * 100)
@@ -3652,8 +3676,8 @@ def run_backtest(years: int = 2) -> dict:
     log.append(f"Starting: ${STARTING_CAPITAL:,} → Final: ${capital:,.2f}")
     log.append(f"Total return: {total_return:+.1f}%")
     log.append(f"Max drawdown: {max_drawdown:.1f}%")
-    if skipped_dd:
-        log.append(f"🛑 Drawdown brake skipped {skipped_dd} trades (halted new entries >20% below peak)")
+    if skipped_full or skipped_dd:
+        log.append(f"📋 Held max {MAX_CONCURRENT} positions · skipped {skipped_full} (slots full) + {skipped_dd} (drawdown brake)")
     log.append(f"Peak: ${peak:,.2f} · Trough: ${min_capital:,.2f}")
 
     if trades:

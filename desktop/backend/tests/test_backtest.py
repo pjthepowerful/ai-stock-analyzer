@@ -118,6 +118,28 @@ def test_stop_distance_is_capped():
             f"stop should clamp to [{MIN_STOP_PCT:.1%},{MAX_STOP_PCT:.1%}], got {risk_pct:.1f}%"
 
 
+def test_concurrent_position_cap_limits_exposure():
+    # Simulate the cap: with MAX_CONCURRENT=2, no more than 2 positions open at once.
+    import datetime as dt
+    MAX_CONCURRENT = 2
+    # 5 trades all entering same day, each held 5 days — only 2 can be open.
+    base = dt.datetime(2024, 1, 1)
+    trades = [{"entry_date": base, "exit_date": base + dt.timedelta(days=5)} for _ in range(5)]
+    open_slots = []
+    opened = 0
+    skipped = 0
+    for t in trades:
+        # close due (none, all same day)
+        open_slots = [s for s in open_slots if s > t["entry_date"]]
+        if len(open_slots) >= MAX_CONCURRENT:
+            skipped += 1
+            continue
+        open_slots.append(t["exit_date"])
+        opened += 1
+    assert opened == 2, f"only 2 should open concurrently, got {opened}"
+    assert skipped == 3, f"3 should be skipped (slots full), got {skipped}"
+
+
 def _run():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     passed = 0
