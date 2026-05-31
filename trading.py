@@ -2161,17 +2161,22 @@ def generate_trade_signal(data: dict) -> dict:
         action = "HOLD"
         confidence = max(40, 100 - abs(score - 50) * 2)
     
-    # ═══ STEP 5: RISK MANAGEMENT (Daily — for manual analysis) ═══
-    # Stop distance is bounded BOTH ways: at least 1.5% (avoid noise stop-outs)
-    # and at most 4% (a 3x-ATR stop on a high-priced, volatile name like AMD
-    # was producing 15% stops and absurd 45% targets — bound it to keep the
-    # displayed entry/stop/target realistic for the intended horizon).
-    MAX_STOP_PCT = 0.04
-    MIN_STOP_PCT = 0.015
+    # ═══ STEP 5: RISK MANAGEMENT ═══
+    # Stop distance is bounded both ways. In SWING mode the band is wider
+    # (3–10%) so a multi-day hold can survive normal overnight noise; the
+    # legacy intraday band was tight (1.5–4%).
+    if SWING_MODE:
+        MAX_STOP_PCT = SWING_MAX_STOP_PCT   # 0.10
+        MIN_STOP_PCT = SWING_MIN_STOP_PCT   # 0.03
+        STOP_ATR_MULT = SWING_STOP_ATR_MULT # 2.0
+    else:
+        MAX_STOP_PCT = 0.04
+        MIN_STOP_PCT = 0.015
+        STOP_ATR_MULT = 3.0
     if action in ("BUY", "STRONG_BUY"):
         entry = price
-        # Stop loss: 3x ATR below entry, or below nearest support
-        stop_atr = round(entry - 3.0 * atr, 2)
+        # Stop loss: ATR-based below entry, or below nearest support
+        stop_atr = round(entry - STOP_ATR_MULT * atr, 2)
         stop_support = round(supports[0] - 0.3 * atr, 2) if supports and (price - supports[0]) / price < 0.05 else stop_atr
         stop_loss = max(stop_atr, stop_support)
         # Clamp stop distance to [MIN_STOP_PCT, MAX_STOP_PCT] of entry.
@@ -2188,7 +2193,7 @@ def generate_trade_signal(data: dict) -> dict:
         risk_pct = round(risk / entry * 100, 2)
     elif action in ("SELL", "STRONG_SELL"):
         entry = price
-        stop_loss = round(price + 3.0 * atr, 2)
+        stop_loss = round(price + STOP_ATR_MULT * atr, 2)
         max_short_stop = round(entry * (1 + MAX_STOP_PCT), 2)
         if stop_loss > max_short_stop:
             stop_loss = max_short_stop
@@ -3372,13 +3377,14 @@ def run_backtest(years: int = 2) -> dict:
 
     log = [f"**Backtesting {len(TEST_UNIVERSE)} stocks over {years} years...**",
            f"Starting capital: ${STARTING_CAPITAL:,}",
-           f"Rules: score≥{MIN_SCORE}, BUY/STRONG_BUY, R:R≥{MIN_RR}, 1.5x ATR trail, partial @ +2%",
+           f"Mode: {'SWING (~%d-day holds)' % SWING_MAX_HOLD_DAYS if SWING_MODE else 'Intraday'} · score≥{MIN_SCORE} · R:R≥{MIN_RR}",
+           f"Stops: {'2x ATR, 3–10% band' if SWING_MODE else '3x ATR, 1.5–4% band'} · partial @ +{4 if SWING_MODE else 2}% · trail {SWING_STOP_ATR_MULT if SWING_MODE else 1.5}x ATR",
            f"Fills: {SLIPPAGE*10000:.0f}bps slippage/side · stop wins intrabar ties · chronological compounding",
            f"⚠️ Score threshold lowered to {MIN_SCORE} (live has RS/sector/news data worth ~20+ extra pts)",
            f"⚠️ Fixed universe of current names → results carry survivorship bias; treat as optimistic"]
 
-    step = 5        # check every 5 bars — catch the most setups
-    max_hold = 25   # cut dead trades after 25 bars (~5 weeks)
+    step = 3        # check every 3 bars
+    max_hold = SWING_MAX_HOLD_DAYS if SWING_MODE else 25   # swing: ~10 trading days
 
     for ticker in TEST_UNIVERSE:
         try:
@@ -3457,7 +3463,7 @@ def run_backtest(years: int = 2) -> dict:
                 partial_taken = False
                 partial_pnl_ps = 0.0      # realized P&L per share from the partial
                 remaining_frac = 1.0      # fraction of the position still open
-                partial_threshold = entry_price * 1.02  # +2% partial (faster)
+                partial_threshold = entry_price * (1.04 if SWING_MODE else 1.02)  # swing: partial at +4%
                 bars_held = 0
 
                 for _, day in future.iterrows():
@@ -3491,10 +3497,12 @@ def run_backtest(years: int = 2) -> dict:
                         exit_reason = "TARGET"
                         break
 
-                    # Tight trailing: 1.5x ATR from highest
+                    # Trailing stop: 2x ATR for swing (room to breathe over days),
+                    # 1.5x for intraday.
                     if day_high > highest:
                         highest = day_high
-                        new_stop = round(highest - 1.5 * atr, 2)
+                        _trail_mult = SWING_STOP_ATR_MULT if SWING_MODE else 1.5
+                        new_stop = round(highest - _trail_mult * atr, 2)
                         if new_stop > current_stop:
                             current_stop = new_stop
 

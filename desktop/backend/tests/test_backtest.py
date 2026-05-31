@@ -100,25 +100,22 @@ def test_slippage_makes_breakeven_trade_a_loss():
 
 def test_stop_distance_is_capped():
     # Regression: AMD at $516 with high ATR produced a 15% stop and $750 target.
-    # The stop must be clamped to [1.5%, 4%] of entry.
-    MAX_STOP_PCT = 0.04
-    MIN_STOP_PCT = 0.015
-    entry = 516.10
-    atr = 26.0  # high ATR -> 3xATR = $78 stop (15%) before clamping
-    stop_atr = round(entry - 3.0 * atr, 2)
-    stop_loss = stop_atr
-    min_stop = round(entry * (1 - MIN_STOP_PCT), 2)
-    max_stop = round(entry * (1 - MAX_STOP_PCT), 2)
-    if stop_loss > min_stop:
-        stop_loss = min_stop
-    if stop_loss < max_stop:
-        stop_loss = max_stop
-    risk_pct = (entry - stop_loss) / entry * 100
-    assert 1.4 <= risk_pct <= 4.1, f"stop should be clamped to ~4%, got {risk_pct:.1f}%"
-    # And the 3:1 target should now be realistic, not $750.
-    risk = entry - stop_loss
-    target = entry + 3 * risk
-    assert target < entry * 1.13, f"target should be realistic, got {target:.0f}"
+    # The stop must be clamped to a sane band. In SWING mode the band is 3–10%;
+    # the key property is that a high ATR can't blow past the max.
+    for MAX_STOP_PCT, MIN_STOP_PCT, mult in [(0.10, 0.03, 2.0), (0.04, 0.015, 3.0)]:
+        entry = 516.10
+        atr = 40.0  # high ATR -> mult*ATR is a huge stop before clamping
+        stop_atr = round(entry - mult * atr, 2)
+        stop_loss = stop_atr
+        min_stop = round(entry * (1 - MIN_STOP_PCT), 2)
+        max_stop = round(entry * (1 - MAX_STOP_PCT), 2)
+        if stop_loss > min_stop:
+            stop_loss = min_stop
+        if stop_loss < max_stop:
+            stop_loss = max_stop
+        risk_pct = (entry - stop_loss) / entry * 100
+        assert (MIN_STOP_PCT * 100 - 0.1) <= risk_pct <= (MAX_STOP_PCT * 100 + 0.1), \
+            f"stop should clamp to [{MIN_STOP_PCT:.1%},{MAX_STOP_PCT:.1%}], got {risk_pct:.1f}%"
 
 
 def _run():
