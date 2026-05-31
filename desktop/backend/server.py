@@ -12,6 +12,22 @@ from zoneinfo import ZoneInfo
 from contextlib import asynccontextmanager
 from typing import Optional
 
+# ── Load .env BEFORE importing the engine ──────────────────────────────────
+# Keys live in a gitignored .env file so they never need to be exported by
+# hand (and never end up in shell history). We look in the backend dir first,
+# then the repo root, so it works regardless of where the server is launched.
+try:
+    from dotenv import load_dotenv
+    _here = os.path.dirname(os.path.abspath(__file__))
+    for _env_path in (os.path.join(_here, ".env"),
+                      os.path.abspath(os.path.join(_here, "..", "..", ".env"))):
+        if os.path.exists(_env_path):
+            load_dotenv(_env_path)
+            print(f"[env] loaded {_env_path}", flush=True)
+            break
+except Exception as _e:
+    print(f"[env] dotenv not loaded: {_e}", flush=True)
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
