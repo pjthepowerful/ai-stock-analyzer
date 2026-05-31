@@ -24,23 +24,59 @@ def _install_mocks():
                 return fn
             return deco
 
-    for name in ("streamlit", "yfinance", "plotly", "plotly.graph_objects",
-                 "plotly.subplots", "groq", "dotenv"):
-        if name not in sys.modules:
-            sys.modules[name] = types.ModuleType(name)
+    class _AnyAttrModule(types.ModuleType):
+        """Stub module that yields a harmless object for ANY attribute access.
 
-    sys.modules["dotenv"].load_dotenv = lambda *a, **k: None
-    sys.modules["groq"].Groq = object
+        Needed because trading.py references e.g. `pd.Series` in type
+        annotations at import time; a bare ModuleType would raise AttributeError.
+        """
+        def __getattr__(self, name):
+            return object
+
+    # Libraries trading.py imports at module load but that route() never uses.
+    # If a real one is installed (e.g. inside the venv), keep it; only stub the
+    # ones that are actually missing so the router stays testable anywhere.
+    optional = ("streamlit", "yfinance", "pandas", "numpy", "plotly",
+                "plotly.graph_objects", "plotly.subplots", "groq", "dotenv",
+                "requests")
+    for name in optional:
+        if name in sys.modules:
+            continue
+        try:
+            __import__(name)
+        except Exception:
+            sys.modules[name] = _AnyAttrModule(name)
+
+    # Fill in the specific attributes trading.py references at import time.
+    # Only patch modules WE stubbed (real installed libs already have these and
+    # must not be clobbered). _AnyAttrModule answers hasattr() for everything,
+    # so we detect our stubs by type rather than by hasattr().
+    def _is_stub(mod):
+        return isinstance(mod, _AnyAttrModule)
+
+    dotenv = sys.modules["dotenv"]
+    if _is_stub(dotenv):
+        dotenv.load_dotenv = lambda *a, **k: None
+
+    groq = sys.modules["groq"]
+    if _is_stub(groq):
+        groq.Groq = object
 
     st = sys.modules["streamlit"]
-    st.cache_data = _CacheDecorator()
-    st.cache_resource = _CacheDecorator()
+    if _is_stub(st):
+        st.cache_data = _CacheDecorator()
+        st.cache_resource = _CacheDecorator()
 
     go = sys.modules["plotly.graph_objects"]
-    for attr in ("Figure", "Candlestick", "Scatter", "Bar"):
-        setattr(go, attr, object)
-    sys.modules["plotly.subplots"].make_subplots = lambda *a, **k: None
-    sys.modules["plotly"].graph_objects = go
+    if _is_stub(go):
+        for attr in ("Figure", "Candlestick", "Scatter", "Bar"):
+            setattr(go, attr, object)
+    subplots = sys.modules["plotly.subplots"]
+    if _is_stub(subplots):
+        subplots.make_subplots = lambda *a, **k: None
+    plotly = sys.modules["plotly"]
+    if _is_stub(plotly):
+        plotly.graph_objects = go
 
 
 _install_mocks()
