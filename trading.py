@@ -466,6 +466,12 @@ SWING_MAX_HOLD_DAYS = 10      # exit a stale trade after ~2 weeks
 SWING_STOP_ATR_MULT = 2.0     # wider stop than intraday to survive overnight noise
 SWING_MIN_STOP_PCT = 0.03     # at least 3% room
 SWING_MAX_STOP_PCT = 0.10     # at most 10% risk on a multi-day hold
+# Concurrent positions — the single knob controlling how much capital is
+# deployed at once. Higher = more trades captured & higher return, but larger
+# drawdown. Used by BOTH the backtest and the live autopilot so they stay in
+# sync (change here = changes everywhere). 2 ≈ ~8% drawdown in backtest.
+SWING_MAX_POSITIONS = 2
+
 
 
 def _alpaca_headers() -> dict:
@@ -3577,7 +3583,7 @@ def run_backtest(years: int = 2) -> dict:
     except Exception:
         pass
 
-    MAX_CONCURRENT = 2       # match the live engine's MAX_POSITIONS
+    MAX_CONCURRENT = SWING_MAX_POSITIONS   # shared knob (see module constants)
     RISK_PER_TRADE_BT = RISK_PER_TRADE
     MAX_POS_PCT = 0.15
     DD_BRAKE = 0.20
@@ -3829,7 +3835,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
 
     # Default params
     DEFAULT_PARAMS = {
-        "MAX_POSITIONS": 1,
+        "MAX_POSITIONS": SWING_MAX_POSITIONS if SWING_MODE else 1,
         "RISK_PER_TRADE": 0.01,
         "MAX_POS_PCT": 0.15,
         "MIN_SCORE": 82,
@@ -3864,12 +3870,17 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     except Exception:
         params = DEFAULT_PARAMS.copy()
 
+    # In swing mode the position cap is governed by SWING_MAX_POSITIONS, not by
+    # whatever an older persisted config saved. Force it so the one knob wins.
+    if SWING_MODE:
+        params["MAX_POSITIONS"] = SWING_MAX_POSITIONS
+
     # ── Daily auto-tune: review yesterday's trades and adjust ──
     # PROVEN FLOORS (backtest: 33% WR, +$58, profitable):
     # MIN_SCORE >= 78, MAX_POSITIONS <= 2, MAX_DAILY_ENTRIES <= 5
     # STOP_FLOOR >= 0.010, MIN_CONFLUENCE >= 4
     FLOOR_MIN_SCORE = 78
-    FLOOR_MAX_POS = 2
+    FLOOR_MAX_POS = SWING_MAX_POSITIONS if SWING_MODE else 2
     FLOOR_MAX_ENTRIES = 5
     FLOOR_STOP = 0.010
     FLOOR_CONFLUENCE = 4
