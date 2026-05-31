@@ -3307,7 +3307,7 @@ def run_backtest(years: int = 2) -> dict:
     Simulates autopilot with trailing stops over the last N years.
     """
     STARTING_CAPITAL = 25_000
-    RISK_PER_TRADE = 0.02        # 2% risk per trade — more aggressive
+    RISK_PER_TRADE = 0.01        # 1% risk per trade — matches the live engine
     MIN_SCORE = 50               # lower bar — backtester has ~20-30 pts missing data
     MIN_RR = 1.2                 # lower R:R bar = more trades
     SLIPPAGE = 0.0005            # 5 bps per side — models realistic fill cost
@@ -3561,9 +3561,33 @@ def run_backtest(years: int = 2) -> dict:
     except Exception:
         pass  # if dates are heterogeneous, fall back to collection order
 
+    # Portfolio drawdown brake: if equity falls this far below its peak, stop
+    # opening new trades until it recovers. A real trader (and the live daily-
+    # loss-limit) would never sit through an unbounded drawdown — without this
+    # the backtest happily rode a 93% drawdown to a fake +900% "return".
+    DD_BRAKE = 0.20          # halt new entries when >20% below peak
+    MAX_POS_PCT = 0.15       # no single position over 15% of capital (was 25%)
+    halted = False
+    skipped_dd = 0
+
     for pt in pending_trades:
         if capital < 500:
             break
+
+        # Drawdown brake — pause/resume around the 20% line (hysteresis so it
+        # doesn't flap: resume only once back within 10% of peak).
+        dd = (peak - capital) / peak if peak > 0 else 0
+        if halted:
+            if dd <= 0.10:
+                halted = False
+            else:
+                skipped_dd += 1
+                continue
+        elif dd >= DD_BRAKE:
+            halted = True
+            skipped_dd += 1
+            continue
+
         # Resolve position size against CURRENT (chronological) capital.
         max_risk = capital * RISK_PER_TRADE * pt["score_mult"]
         rps = pt["risk_per_share"]
@@ -3571,9 +3595,9 @@ def run_backtest(years: int = 2) -> dict:
             continue
         qty = max(1, int(max_risk / rps))
         cost = qty * pt["entry"]
-        # Cap any single position at 25% of capital.
-        if cost > capital * 0.25:
-            qty = max(1, int(capital * 0.25 / pt["entry"]))
+        # Cap any single position at MAX_POS_PCT of capital.
+        if cost > capital * MAX_POS_PCT:
+            qty = max(1, int(capital * MAX_POS_PCT / pt["entry"]))
             cost = qty * pt["entry"]
         if cost > capital:
             continue
@@ -3628,6 +3652,8 @@ def run_backtest(years: int = 2) -> dict:
     log.append(f"Starting: ${STARTING_CAPITAL:,} → Final: ${capital:,.2f}")
     log.append(f"Total return: {total_return:+.1f}%")
     log.append(f"Max drawdown: {max_drawdown:.1f}%")
+    if skipped_dd:
+        log.append(f"🛑 Drawdown brake skipped {skipped_dd} trades (halted new entries >20% below peak)")
     log.append(f"Peak: ${peak:,.2f} · Trough: ${min_capital:,.2f}")
 
     if trades:
