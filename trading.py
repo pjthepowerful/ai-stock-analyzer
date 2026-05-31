@@ -470,7 +470,7 @@ SWING_MAX_STOP_PCT = 0.10     # at most 10% risk on a multi-day hold
 # deployed at once. Higher = more trades captured & higher return, but larger
 # drawdown. Used by BOTH the backtest and the live autopilot so they stay in
 # sync (change here = changes everywhere). 2 ≈ ~8% drawdown in backtest.
-SWING_MAX_POSITIONS = 3
+SWING_MAX_POSITIONS = 4
 
 
 
