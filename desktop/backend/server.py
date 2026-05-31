@@ -1399,13 +1399,15 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
 async def _eod_guardian():
     """
     DEDICATED EOD CLOSER — runs independently of autopilot.
-    Every 30 seconds from 2:00-3:00 PM CT, checks for open positions
-    and force-closes them. Multiple safety layers:
-    1. Cancel ALL orders first
-    2. DELETE /positions with cancel_orders=true
-    3. Verify positions are closed
-    4. If any remain, retry individually
+
+    In SWING mode this is a no-op: swing positions are held overnight and must
+    NOT be force-closed at the bell. The closer only runs if the engine is in
+    legacy intraday mode.
     """
+    if getattr(engine, "SWING_MODE", False):
+        print("[eod-guardian] swing mode — EOD liquidation disabled", flush=True)
+        return
+
     import requests as req
     while True:
         try:

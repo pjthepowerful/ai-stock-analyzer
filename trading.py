@@ -454,6 +454,20 @@ def polygon_search_ticker(query: str) -> str | None:
 
 ALPACA_BASE = "https://paper-api.alpaca.markets"
 
+# ═══════════════════════════════════════════════════════════════════════════
+#  TRADING HORIZON — Paula is a SWING trader, not a day trader.
+#  Swing mode: holds positions across days (no end-of-day force-close), uses
+#  daily-bar signals, wider stops/targets to ride multi-day moves. Target hold
+#  is roughly 3–10 trading days; positions are only closed on stop, target,
+#  signal reversal, or the max-hold timeout — never just because the bell rang.
+# ═══════════════════════════════════════════════════════════════════════════
+SWING_MODE = True
+SWING_MAX_HOLD_DAYS = 10      # exit a stale trade after ~2 weeks
+SWING_STOP_ATR_MULT = 2.0     # wider stop than intraday to survive overnight noise
+SWING_MIN_STOP_PCT = 0.03     # at least 3% room
+SWING_MAX_STOP_PCT = 0.10     # at most 10% risk on a multi-day hold
+
+
 def _alpaca_headers() -> dict:
     key_id = st.secrets.get("ALPACA_KEY_ID") or os.environ.get("ALPACA_KEY_ID", "")
     secret = st.secrets.get("ALPACA_SECRET") or os.environ.get("ALPACA_SECRET", "")
@@ -3903,7 +3917,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     daily_entries = len(st.session_state.get("autopilot_bought", set()))
 
     log.append(f"Open positions: {len(positions)} · Max: {MAX_POSITIONS} · Entries today: {daily_entries}/{MAX_DAILY_ENTRIES}")
-    log.append(f"📊 Mode: **Selective Intraday** · Score≥{MIN_SCORE} · R:R≥{MIN_RR} · Max {MAX_POSITIONS} pos")
+    log.append(f"📊 Mode: **{'Swing' if SWING_MODE else 'Selective Intraday'}** · Score≥{MIN_SCORE} · R:R≥{MIN_RR} · Max {MAX_POSITIONS} pos")
     DAILY_LOSS_LIMIT = params["DAILY_LOSS_LIMIT"]
     PARTIAL_PROFIT_PCT = params["PARTIAL_PROFIT_PCT"]
     PARTIAL_PROFIT_SOLD_KEY = "autopilot_partial_sold"
@@ -3927,70 +3941,71 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     else:
         log.append(f"Daily P&L: {daily_pnl_pct:+.2f}%")
 
-    # ── 1b. EOD Liquidation — close ALL positions 45min before close ──
+    # ── 1b. EOD handling ──
     now_et = datetime.now(et)
     weekday = now_et.strftime("%A")
     log.append(f"📅 {weekday} {now_et.strftime('%I:%M %p ET')}")
 
-    eod_warning = now_et.replace(hour=15, minute=30, second=0, microsecond=0)    # 3:30 PM ET = 2:30 PM CT
-    eod_liquidation = now_et.replace(hour=15, minute=45, second=0, microsecond=0) # 3:45 PM ET = 2:45 PM CT
-    eod_hard_close = now_et.replace(hour=15, minute=55, second=0, microsecond=0)  # 3:55 PM ET = 2:55 PM CT
+    if SWING_MODE:
+        # Swing trading: positions are held across days. We do NOT force-close
+        # at the bell — exits happen on stop/target/reversal/max-hold only.
+        log.append("📈 Swing mode — positions held overnight, no EOD liquidation")
+        no_new_buys_eod = False
+    else:
+        # (legacy intraday path — kept for reference, disabled while SWING_MODE)
+        eod_warning = now_et.replace(hour=15, minute=30, second=0, microsecond=0)
+        eod_liquidation = now_et.replace(hour=15, minute=45, second=0, microsecond=0)
+        eod_hard_close = now_et.replace(hour=15, minute=55, second=0, microsecond=0)
 
-    if now_et >= eod_warning and now_et < eod_liquidation and positions:
-        log.append(f"⏰ **EOD WARNING** — closing all in {(eod_liquidation - now_et).seconds // 60} min")
+        if now_et >= eod_warning and now_et < eod_liquidation and positions:
+            log.append(f"⏰ **EOD WARNING** — closing all in {(eod_liquidation - now_et).seconds // 60} min")
 
-    if now_et >= eod_liquidation and positions and not dry_run:
-        log.append(f"🔔 **EOD LIQUIDATION (2:45 PM CT)** — closing ALL {len(positions)} positions")
-        # Try bulk close first
-        result = alpaca_close_all()
-        if result.get("ok"):
-            log.append(f"✅ Closed {len(positions)} positions — flat for the day")
-        else:
-            log.append(f"⚠️ Bulk close failed: {result.get('error', '')} — trying individually")
-            # Individual close — handles both longs and shorts
-            for pos in positions:
-                try:
-                    ticker = pos["ticker"]
-                    # Cancel any pending orders for this ticker first
-                    requests.delete(
-                        f"{ALPACA_BASE}/v2/orders",
-                        headers=_alpaca_headers(),
-                        params={"symbols": ticker.upper()},
-                        timeout=10
-                    )
-                    # DELETE /v2/positions/{ticker} works for both long and short
-                    r = requests.delete(
-                        f"{ALPACA_BASE}/v2/positions/{ticker.upper()}",
-                        headers=_alpaca_headers(),
-                        params={"cancel_orders": "true"},
-                        timeout=10
-                    )
-                    if r.status_code in (200, 201, 207):
-                        log.append(f"✅ Closed {ticker} ({pos.get('side', 'long')})")
-                    else:
-                        err = r.json().get("message", "") if r.text else "unknown"
-                        log.append(f"⚠️ Failed {ticker}: {err}")
-                except Exception as e:
-                    log.append(f"⚠️ Error closing {ticker}: {str(e)[:60]}")
+        if now_et >= eod_liquidation and positions and not dry_run:
+            log.append(f"🔔 **EOD LIQUIDATION (2:45 PM CT)** — closing ALL {len(positions)} positions")
+            result = alpaca_close_all()
+            if result.get("ok"):
+                log.append(f"✅ Closed {len(positions)} positions — flat for the day")
+            else:
+                log.append(f"⚠️ Bulk close failed: {result.get('error', '')} — trying individually")
+                for pos in positions:
+                    try:
+                        ticker = pos["ticker"]
+                        requests.delete(
+                            f"{ALPACA_BASE}/v2/orders",
+                            headers=_alpaca_headers(),
+                            params={"symbols": ticker.upper()},
+                            timeout=10
+                        )
+                        r = requests.delete(
+                            f"{ALPACA_BASE}/v2/positions/{ticker.upper()}",
+                            headers=_alpaca_headers(),
+                            params={"cancel_orders": "true"},
+                            timeout=10
+                        )
+                        if r.status_code in (200, 201, 207):
+                            log.append(f"✅ Closed {ticker} ({pos.get('side', 'long')})")
+                        else:
+                            err = r.json().get("message", "") if r.text else "unknown"
+                            log.append(f"⚠️ Failed {ticker}: {err}")
+                    except Exception as e:
+                        log.append(f"⚠️ Error closing {ticker}: {str(e)[:60]}")
 
-        # Hard close retry at 3:30 PM ET — catch anything that slipped
-        if now_et >= eod_hard_close:
-            remaining = alpaca_positions()
-            if remaining:
-                log.append(f"🔴 **HARD CLOSE** — {len(remaining)} positions still open at 2:55 PM CT")
-                # Nuclear: cancel ALL orders, then close ALL positions
-                requests.delete(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(), timeout=10)
-                requests.delete(f"{ALPACA_BASE}/v2/positions", headers=_alpaca_headers(),
-                               params={"cancel_orders": "true"}, timeout=10)
-                log.append("🔴 Cancelled all orders + closed all positions")
+            if now_et >= eod_hard_close:
+                remaining = alpaca_positions()
+                if remaining:
+                    log.append(f"🔴 **HARD CLOSE** — {len(remaining)} positions still open at 2:55 PM CT")
+                    requests.delete(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(), timeout=10)
+                    requests.delete(f"{ALPACA_BASE}/v2/positions", headers=_alpaca_headers(),
+                                   params={"cancel_orders": "true"}, timeout=10)
+                    log.append("🔴 Cancelled all orders + closed all positions")
 
-        return {"ok": True, "log": log, "buys": 0, "sells": len(positions), "scanned": 0, "opportunities": 0}
-    elif now_et >= eod_liquidation and positions and dry_run:
-        log.append(f"🔔 EOD: Would close {len(positions)} positions (dry run)")
+            return {"ok": True, "log": log, "buys": 0, "sells": len(positions), "scanned": 0, "opportunities": 0}
+        elif now_et >= eod_liquidation and positions and dry_run:
+            log.append(f"🔔 EOD: Would close {len(positions)} positions (dry run)")
 
-    # No new trades in last 60min of trading
-    last_buy_cutoff = now_et.replace(hour=15, minute=30, second=0, microsecond=0)  # 3:30 PM ET = 2:30 PM CT
-    no_new_buys_eod = now_et >= last_buy_cutoff
+        # No new trades in last 60min of trading (intraday only)
+        last_buy_cutoff = now_et.replace(hour=15, minute=30, second=0, microsecond=0)
+        no_new_buys_eod = now_et >= last_buy_cutoff
 
     # ── 1b2. Avoid the open — first 15min is pure chop ──
     start_h, start_m = [int(x) for x in params.get("TRADING_HOURS_START", "09:45").split(":")]
@@ -4148,15 +4163,21 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     for pos in positions:
         try:
             is_short = pos.get("side") == "short"
-            data = fetch_scan_intraday(pos["ticker"])
-            if not data:
-                # Fallback to daily if intraday unavailable
+            if SWING_MODE:
+                # Swing: judge exits on the DAILY signal, not 5-min intraday noise.
                 data = fetch_scan(pos["ticker"])
                 if not data:
                     continue
                 sig = generate_trade_signal(data)
             else:
-                sig = generate_intraday_signal(data)
+                data = fetch_scan_intraday(pos["ticker"])
+                if not data:
+                    data = fetch_scan(pos["ticker"])
+                    if not data:
+                        continue
+                    sig = generate_trade_signal(data)
+                else:
+                    sig = generate_intraday_signal(data)
 
             # For longs: close if signal turned bearish
             # For shorts: close if signal turned bullish
@@ -4363,30 +4384,43 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     MAX_ANALYZE = 80
     for ticker in scan_list[:MAX_ANALYZE]:
         try:
-            data = fetch_scan_intraday(ticker)
-            if not data:
-                errors += 1
-                continue
-            price = data.get("price", 0)
-            if not price or price < 5:  # $5 minimum — skip penny stocks
-                continue
-            # Liquidity: skip if intraday volume too thin
-            itech = data.get("intraday_technicals", {})
-            if itech.get("vol_ratio", 1) < 0.3:
-                continue  # dead volume
+            if SWING_MODE:
+                data = fetch_scan(ticker)
+                if not data:
+                    errors += 1
+                    continue
+                price = data.get("price", 0)
+                if not price or price < 5:
+                    continue
+                if _has_earnings_today(ticker):
+                    continue
+                analyzed += 1
+                sig = generate_trade_signal(data)
+            else:
+                data = fetch_scan_intraday(ticker)
+                if not data:
+                    errors += 1
+                    continue
+                price = data.get("price", 0)
+                if not price or price < 5:  # $5 minimum — skip penny stocks
+                    continue
+                # Liquidity: skip if intraday volume too thin
+                itech = data.get("intraday_technicals", {})
+                if itech.get("vol_ratio", 1) < 0.3:
+                    continue  # dead volume
 
-            # ── EARNINGS FILTER — never trade on earnings day ──
-            if _has_earnings_today(ticker):
-                continue
+                # ── EARNINGS FILTER — never trade on earnings day ──
+                if _has_earnings_today(ticker):
+                    continue
 
-            # ── MOMENTUM FILTER — stock must be moving today ──
-            day_change = data.get("change_pct", 0)
-            # Skip stocks barely moving (between -0.3% and +0.3%) — no momentum
-            if abs(day_change) < 0.3:
-                continue
+                # ── MOMENTUM FILTER — stock must be moving today ──
+                day_change = data.get("change_pct", 0)
+                # Skip stocks barely moving (between -0.3% and +0.3%) — no momentum
+                if abs(day_change) < 0.3:
+                    continue
 
-            analyzed += 1
-            sig = generate_intraday_signal(data)
+                analyzed += 1
+                sig = generate_intraday_signal(data)
             all_scores.append((ticker, sig["score"], sig["action"], sig["confluence"]["bullish"], sig["trade"]["risk_reward"]))
 
             # LONG opportunities
@@ -5178,21 +5212,19 @@ BANNED PHRASES (NEVER say these — they make you sound broken):
 - "I don't see a response" — read the conversation history, it's there
 - Never show portfolio/account data when the user is asking for trade ideas
 
-IMPORTANT: Autopilot runs a dedicated INTRADAY engine combining 9 proven day trading strategies on 5-minute bars:
+IMPORTANT: Autopilot runs a SWING-TRADING engine. It holds positions across multiple days (typically 3–10 trading days), not intraday. It combines proven swing strategies on daily bars:
 
-1. TREND TRADING — follows the dominant intraday trend using VWAP + 9/20/50 EMA alignment. Goes long in uptrends, shorts in downtrends.
-2. MOMENTUM — scores momentum via RSI, MACD histogram, Stochastic RSI. Strong momentum = higher conviction entries.
-3. BREAKOUT — detects when price breaks above previous day high or below previous day low on volume. Volume-confirmed breakouts get priority.
-4. PULLBACK — identifies pullbacks to VWAP or 20 EMA in an uptrend as buying opportunities. Best entries are bounces off key levels.
-5. GAP TRADING — pre-market gap scanner finds stocks gapping >1.5% on volume. Gaps with momentum continuation get traded.
-6. RANGE DETECTION — identifies stocks stuck in a range (low ADX, tight price). Avoids these or fades the extremes.
-7. PRICE ACTION — reads candlestick patterns (hammer, engulfing, shooting star, doji) for reversal/continuation signals.
-8. NEWS TRADING — AI-powered headline analysis via Groq. Detects catalysts, macro risks, earnings surprises. Blocks trades against strong news flow.
-9. SCALP-STYLE RISK — tight stops (2x ATR), fast breakeven at +0.5%, partial profits at +1.5%, trailing stops. Kills flat trades after 90 min.
+1. TREND FOLLOWING — buys established uptrends (price above stacked 20/50/200 SMAs) and rides them for days.
+2. PULLBACK ENTRIES — the core edge: buy quality stocks when they pull back to the 20 or 50 SMA in an uptrend, then resume higher.
+3. MOMENTUM — RSI, MACD, and relative strength confirm the move has legs before entering.
+4. BREAKOUT — enters on daily closes above key resistance with volume confirmation.
+5. RELATIVE STRENGTH — favors stocks outperforming SPY and their sector.
+6. NEWS / CATALYST — AI headline analysis flags catalysts and blocks entries fighting strong negative news.
+7. RISK MANAGEMENT — wider stops (2x daily ATR, ~3–10% room) to survive normal overnight noise, partial profits into strength, trailing stops, and a max-hold timeout (~10 days) to cut dead trades.
 
-Additional filters: SPY correlation (blocks longs when SPY dumps), VIX panic filter (closes all longs when VIX ≥35), ADX trend strength, stop hunt/liquidity sweep detection, parabolic exhaustion warnings, higher timeframe bias from hourly chart.
+Filters: SPY trend (avoid longs in a broad downtrend), VIX panic filter, ADX trend strength, sector rank, earnings-date awareness.
 
-Everything gets liquidated 15 minutes before market close (2:45 PM CT) to avoid overnight gap risk. Users can also manually short via "short TSLA" and cover via "cover TSLA". This is day trading — NEVER hold overnight.
+This is SWING trading — positions ARE held overnight and across days. There is NO end-of-day liquidation. Trades exit on stop-loss, target, signal reversal, or the max-hold timeout — never just because the market is closing. Users can manually buy, sell, short, and cover any time.
 
 CRITICAL — Stock recommendations:
 When asked to suggest, name, or recommend stocks, NEVER just list the same boring mega-caps everyone already knows (AAPL, MSFT, GOOGL, AMZN, TSLA, etc.). Anyone can name those. Instead:
