@@ -116,6 +116,23 @@ def test_stock_ideas():
     assert r["type"] == "stock_ideas"
 
 
+def test_shares_math_with_ticker_is_analyze_not_scan():
+    # "$5000, how many shares of TSLA" must analyze TSLA, not trigger the scanner.
+    r = route("I have $5,000, how many shares of TSLA can I buy?")
+    assert r["type"] == "analyze" and r["ticker"] == "TSLA", f"got {r}"
+
+
+def test_position_worth_with_ticker_is_analyze():
+    r = route("if I buy 100 shares of NVDA what's it worth")
+    assert r["type"] == "analyze" and r["ticker"] == "NVDA", f"got {r}"
+
+
+def test_generic_money_question_still_scans():
+    # No specific ticker -> still routes to ideas scanner.
+    r = route("what should i buy with $5000")
+    assert r["type"] == "stock_ideas", f"got {r}"
+
+
 def _run():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     passed = 0

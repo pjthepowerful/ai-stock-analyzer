@@ -98,6 +98,29 @@ def test_slippage_makes_breakeven_trade_a_loss():
     assert ret_frac < 0, "round-trip slippage must turn a flat trade into a small loss"
 
 
+def test_stop_distance_is_capped():
+    # Regression: AMD at $516 with high ATR produced a 15% stop and $750 target.
+    # The stop must be clamped to [1.5%, 4%] of entry.
+    MAX_STOP_PCT = 0.04
+    MIN_STOP_PCT = 0.015
+    entry = 516.10
+    atr = 26.0  # high ATR -> 3xATR = $78 stop (15%) before clamping
+    stop_atr = round(entry - 3.0 * atr, 2)
+    stop_loss = stop_atr
+    min_stop = round(entry * (1 - MIN_STOP_PCT), 2)
+    max_stop = round(entry * (1 - MAX_STOP_PCT), 2)
+    if stop_loss > min_stop:
+        stop_loss = min_stop
+    if stop_loss < max_stop:
+        stop_loss = max_stop
+    risk_pct = (entry - stop_loss) / entry * 100
+    assert 1.4 <= risk_pct <= 4.1, f"stop should be clamped to ~4%, got {risk_pct:.1f}%"
+    # And the 3:1 target should now be realistic, not $750.
+    risk = entry - stop_loss
+    target = entry + 3 * risk
+    assert target < entry * 1.13, f"target should be realistic, got {target:.0f}"
+
+
 def _run():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     passed = 0

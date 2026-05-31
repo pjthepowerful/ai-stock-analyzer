@@ -21,7 +21,7 @@ import random
 import time
 import requests
 import warnings
-from signal_logic import classify_analysis_side
+from signal_logic import classify_analysis_side, compute_price_math
 
 warnings.filterwarnings("ignore")
 load_dotenv()
@@ -2148,17 +2148,26 @@ def generate_trade_signal(data: dict) -> dict:
         confidence = max(40, 100 - abs(score - 50) * 2)
     
     # ═══ STEP 5: RISK MANAGEMENT (Daily — for manual analysis) ═══
+    # Stop distance is bounded BOTH ways: at least 1.5% (avoid noise stop-outs)
+    # and at most 4% (a 3x-ATR stop on a high-priced, volatile name like AMD
+    # was producing 15% stops and absurd 45% targets — bound it to keep the
+    # displayed entry/stop/target realistic for the intended horizon).
+    MAX_STOP_PCT = 0.04
+    MIN_STOP_PCT = 0.015
     if action in ("BUY", "STRONG_BUY"):
         entry = price
         # Stop loss: 3x ATR below entry, or below nearest support
         stop_atr = round(entry - 3.0 * atr, 2)
         stop_support = round(supports[0] - 0.3 * atr, 2) if supports and (price - supports[0]) / price < 0.05 else stop_atr
         stop_loss = max(stop_atr, stop_support)
-        # Minimum 2% stop distance
-        min_stop = round(entry * 0.98, 2)
+        # Clamp stop distance to [MIN_STOP_PCT, MAX_STOP_PCT] of entry.
+        min_stop = round(entry * (1 - MIN_STOP_PCT), 2)   # nearest allowed (tight)
+        max_stop = round(entry * (1 - MAX_STOP_PCT), 2)   # farthest allowed (wide)
         if stop_loss > min_stop:
             stop_loss = min_stop
-        
+        if stop_loss < max_stop:
+            stop_loss = max_stop
+
         risk = max(entry - stop_loss, 0.01)
         target_1 = round(entry + 3.0 * risk, 2)
         target_2 = round(entry + 5.0 * risk, 2)
@@ -2166,6 +2175,9 @@ def generate_trade_signal(data: dict) -> dict:
     elif action in ("SELL", "STRONG_SELL"):
         entry = price
         stop_loss = round(price + 3.0 * atr, 2)
+        max_short_stop = round(entry * (1 + MAX_STOP_PCT), 2)
+        if stop_loss > max_short_stop:
+            stop_loss = max_short_stop
         risk = max(stop_loss - entry, 0.01)
         target_1 = round(entry - 3.0 * risk, 2)
         target_2 = round(entry - 5.0 * risk, 2)
@@ -2717,6 +2729,18 @@ def route(msg: str) -> dict:
         "dollars", "want to invest", "want to trade", "want to buy",
         "money into", "into the market", "into stocks",
     ])
+    # A specific ticker named alongside a "how many shares / what's it worth /
+    # can I afford" question is a position-math question about THAT stock — not
+    # a request to scan for ideas. Route to analyze so price-math can answer it.
+    _named_ticker, _named_market = _find_ticker(msg)
+    shares_math = any(p in m for p in [
+        "how many shares", "shares can i", "shares could i", "shares of",
+        "what's it worth", "whats it worth", "position worth", "worth if",
+        "how many can i", "can i afford", "afford",
+    ])
+    if _named_ticker and shares_math:
+        return {"type": "analyze", "ticker": _named_ticker, "market": _named_market, "_original_msg": msg}
+
     if wants_picks and not any(cmd in m for cmd in [
         "close all", "sell everything", "liquidate",
     ]):
@@ -5102,7 +5126,7 @@ CRITICAL — PRICE ACCURACY:
 CRITICAL — NO ARITHMETIC (you are bad at math, so don't do any):
 - NEVER calculate percentages, gains, losses, dollar amounts, share counts, or projections yourself. You make arithmetic errors.
 - For the day's move, use the EXACT "Chg%" value from the data verbatim. Do not derive it from prices.
-- For risk/reward, position size, P&L, or "what if I bought X shares" — only state numbers that are ALREADY in the attached data. If a number isn't in the data, do NOT compute it; say "I can run the exact numbers if you place the trade" instead.
+- For risk/reward, position size, P&L, or "what if I bought X shares" — if a PRE-COMPUTED block is attached, state that number exactly. Otherwise only use numbers already in the data; if a number isn't available, do NOT compute it — say you can run it if they place the trade.
 - Never multiply price × shares, never subtract two prices to get a gain, never convert a dollar move to a percent. If you're tempted to do math, stop and just quote the pre-computed figure from the data.
 - It is far better to omit a number than to state a wrong one. Round-number estimates and "roughly X%" calculations are BANNED.
 
@@ -5207,6 +5231,13 @@ RESPONSE STYLE:
     for h in history[-20:]:
         messages.append({"role": h["role"], "content": h["content"]})
     content = user_msg
+    # Pre-compute any price arithmetic the model would otherwise botch.
+    _cur = 0.0
+    if stock_data:
+        _cur = _safe(stock_data.get("price"), 0) or 0
+    _pm = compute_price_math(user_msg, _cur)
+    if _pm:
+        content += f"\n\n---PRE-COMPUTED (state this number exactly, do NOT recalculate)---\n{_pm['phrasing']}"
     if stock_data:
         content += f"\n\n---LIVE DATA (use ONLY these exact prices, do NOT make up numbers)---\n{json.dumps(stock_data, indent=2, default=str)}"
     messages.append({"role": "user", "content": content})
@@ -5242,6 +5273,10 @@ RULES:
     for h in (history or [])[-12:]:
         messages.append({"role": h.get("role", "user"), "content": str(h.get("content", ""))[:800]})
     content = user_msg
+    _cur = (_safe(stock_data.get("price"), 0) or 0) if stock_data else 0
+    _pm = compute_price_math(user_msg, _cur)
+    if _pm:
+        content += f"\n\n---PRE-COMPUTED (state this number exactly, do NOT recalculate)---\n{_pm['phrasing']}"
     if stock_data:
         content += f"\n\n---LIVE DATA (use ONLY these exact prices, do NOT make up numbers)---\n{json.dumps(stock_data, indent=2, default=str)}"
     messages.append({"role": "user", "content": content})
