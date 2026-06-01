@@ -706,7 +706,7 @@ function MainApp({ user, token, logout }) {
           else if (data.message.includes('Covered')) { snd(playProfit); addToast(data.message.slice(0, 60), 'buy') }
         } else { snd(playTick) }
 
-        if (data.autopilot !== undefined) setAutopilot(data.autopilot)
+        if (data.autopilot !== undefined && Date.now() - apToggleAtRef.current > 10000) setAutopilot(data.autopilot)
       } else {
         if (chatIdRef.current === targetId) {
           setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ ' + (data.error || 'Something went wrong') }])
