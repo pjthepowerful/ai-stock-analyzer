@@ -366,6 +366,7 @@ function MainApp({ user, token, logout }) {
   const [positions, setPositions] = useState([])
   const [autopilot, setAutopilot] = useState(false)
   const apChatRef = useRef(null) // tracks which chat ID autopilot logs go to
+  const apToggleAtRef = useRef(0) // timestamp of last manual toggle — guards against poll races
   const [connected, setConnected] = useState(false)
   const [spyTrend, setSpyTrend] = useState(null)
   const [selectedPos, setSelectedPos] = useState(null)
@@ -489,7 +490,7 @@ function MainApp({ user, token, logout }) {
       ws.onmessage = (e) => {
         try {
           const { event, data } = JSON.parse(e.data)
-          if (event === 'connected') setAutopilot(data.autopilot)
+          if (event === 'connected') { if (Date.now() - apToggleAtRef.current > 10000) setAutopilot(data.autopilot) }
           if (event === 'autopilot') {
             if (data.status === 'started') { setAutopilot(true) }
             if (data.status === 'stopped') { setAutopilot(false); apChatRef.current = null }
@@ -563,7 +564,11 @@ function MainApp({ user, token, logout }) {
         f(API+'/api/spy-trend').then(r=>r.json()), f(API+'/api/health').then(r=>r.json()),
       ])
       if (a.ok) setAccount(a.data); if (p.ok) setPositions(p.data)
-      if (s.ok) setSpyTrend(s.data); setAutopilot(h.autopilot)
+      if (s.ok) setSpyTrend(s.data)
+      // Don't let a poll override the toggle within 10s of a manual change —
+      // the server task may not have settled yet, which caused the "turns off
+      // right after turning on" flicker.
+      if (Date.now() - apToggleAtRef.current > 10000) setAutopilot(h.autopilot)
     } catch {}
   }, [])
 
@@ -902,6 +907,7 @@ function MainApp({ user, token, logout }) {
           <div className="hdr-right">
             <button className={'hdr-ap'+(autopilot?' hap-on':'')} onClick={async ()=>{
               const wasOn = autopilot
+              apToggleAtRef.current = Date.now()
               setAutopilot(!wasOn)
 
               if (wasOn) {
@@ -927,9 +933,8 @@ function MainApp({ user, token, logout }) {
 
               try {
                 const r = await f(API+'/api/autopilot/'+(wasOn?'stop':'start'),{method:'POST'}).then(r=>r.json())
-                if (!r.ok) { setAutopilot(wasOn); if (!wasOn) apChatRef.current = null }
-              } catch { setAutopilot(wasOn); if (!wasOn) apChatRef.current = null }
-              refreshData()
+                if (!r.ok) { apToggleAtRef.current = 0; setAutopilot(wasOn); if (!wasOn) apChatRef.current = null }
+              } catch { apToggleAtRef.current = 0; setAutopilot(wasOn); if (!wasOn) apChatRef.current = null }
             }}>
               <span className={'ap-dot'+(autopilot?' dot-on':'')}/>{autopilot?'Scanning · 412 tickers':'Autopilot'}
             </button>
