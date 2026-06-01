@@ -470,7 +470,7 @@ SWING_MAX_STOP_PCT = 0.10     # at most 10% risk on a multi-day hold
 # deployed at once. Higher = more trades captured & higher return, but larger
 # drawdown. Used by BOTH the backtest and the live autopilot so they stay in
 # sync (change here = changes everywhere). 2 ≈ ~8% drawdown in backtest.
-SWING_MAX_POSITIONS = 4
+SWING_MAX_POSITIONS = 2
 
 
 
@@ -2825,7 +2825,14 @@ def route(msg: str) -> dict:
         return {"type": "stop_autopilot"}
     if any(w in m for w in ["backtest", "back test", "test strategy", "prove it", "historical test",
                             "how would it have done", "test the strategy"]):
-        return {"type": "backtest"}
+        # Optional position count: "backtest 4" / "backtest with 5 positions"
+        _bt = re.search(r"(\d{1,2})\s*(?:position|pos|slot)?", m)
+        mp = None
+        if _bt:
+            v = int(_bt.group(1))
+            if 1 <= v <= 20:
+                mp = v
+        return {"type": "backtest", "max_positions": mp}
     if any(w in m for w in ["market health", "market regime", "is market safe", "spy check", "market status"]):
         return {"type": "market_regime"}
     if any(w in m for w in ["sector strength", "sector rotation", "sectors", "hot sectors", "strong sectors"]):
@@ -3307,7 +3314,7 @@ def update_trailing_stops(positions: list[dict], log: list) -> list[str]:
 
 # ── Backtester ───────────────────────────────────────────────────────────────
 
-def run_backtest(years: int = 2) -> dict:
+def run_backtest(years: int = 2, max_positions: int | None = None) -> dict:
     """
     Backtest the signal engine against historical data.
     Simulates autopilot with trailing stops over the last N years.
@@ -3583,7 +3590,7 @@ def run_backtest(years: int = 2) -> dict:
     except Exception:
         pass
 
-    MAX_CONCURRENT = SWING_MAX_POSITIONS   # shared knob (see module constants)
+    MAX_CONCURRENT = max_positions if max_positions else SWING_MAX_POSITIONS   # shared knob (see module constants)
     RISK_PER_TRADE_BT = RISK_PER_TRADE
     MAX_POS_PCT = 0.15
     DD_BRAKE = 0.20
@@ -4731,7 +4738,7 @@ def execute(intent: dict) -> dict:
         return {"ok": True, "type": "trade", "msg": "🔴 **Autopilot deactivated.** No more automatic scans. Your positions remain open."}
 
     if t == "backtest":
-        result = run_backtest(years=2)
+        result = run_backtest(years=2, max_positions=intent.get("max_positions"))
         if not result.get("ok"):
             return {"ok": False, "error": "Backtest failed"}
         summary = "\n\n".join(result["log"])
