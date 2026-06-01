@@ -48,6 +48,7 @@ except Exception:
     pass
 
 # ── State ──
+ADMIN_EMAIL = "parjan.d@icloud.com"  # Only this email gets admin + autopilot control
 autopilot_task: Optional[asyncio.Task] = None
 connected_clients: list[WebSocket] = []
 # Per-user session isolation — NO global shared state
@@ -1774,7 +1775,6 @@ if __name__ == "__main__":
 
 
 # ═══ Admin Panel ═══
-ADMIN_EMAIL = "parjan.d@icloud.com"  # Only this email can access admin
 
 @app.get("/api/admin/users")
 async def admin_list_users(authorization: str = Header(None)):
