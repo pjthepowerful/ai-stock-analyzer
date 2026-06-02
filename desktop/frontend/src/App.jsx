@@ -933,8 +933,12 @@ function MainApp({ user, token, logout }) {
 
               try {
                 const r = await f(API+'/api/autopilot/'+(wasOn?'stop':'start'),{method:'POST'}).then(r=>r.json())
-                if (!r.ok) { apToggleAtRef.current = 0; setAutopilot(wasOn); if (!wasOn) apChatRef.current = null }
-              } catch { apToggleAtRef.current = 0; setAutopilot(wasOn); if (!wasOn) apChatRef.current = null }
+                if (!r.ok) {
+                  apToggleAtRef.current = 0; setAutopilot(wasOn); if (!wasOn) apChatRef.current = null
+                  const msg = r.error || 'Autopilot could not start'
+                  addToast(msg.includes('signed in') || msg.includes('restricted') ? 'Sign out and back in — your session expired' : msg, 'sell')
+                }
+              } catch { apToggleAtRef.current = 0; setAutopilot(wasOn); if (!wasOn) apChatRef.current = null; addToast("Can't reach backend", 'sell') }
             }}>
               <span className={'ap-dot'+(autopilot?' dot-on':'')}/>{autopilot?'Scanning · 412 tickers':'Autopilot'}
             </button>
