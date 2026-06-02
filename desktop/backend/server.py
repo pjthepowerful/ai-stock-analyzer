@@ -1726,15 +1726,24 @@ async def start_autopilot(authorization: str = Header(None)):
     """Start the autopilot background loop. Admin only."""
     global autopilot_task, autopilot_owner_id
     user = _get_user(authorization)
-    if not user or user.get("email", "").lower() != ADMIN_EMAIL:
+    if not user:
+        print("[autopilot] start rejected: no authenticated user", flush=True)
+        return {"ok": False, "error": "Not signed in"}
+    if user.get("email", "").lower() != ADMIN_EMAIL:
+        print(f"[autopilot] start rejected: {user.get('email')!r} != admin {ADMIN_EMAIL!r}", flush=True)
         return {"ok": False, "error": "Autopilot access restricted"}
     if autopilot_task and not autopilot_task.done():
+        print("[autopilot] already running", flush=True)
         return {"ok": True, "message": "Autopilot already running"}
 
     autopilot_owner_id = user["id"]
     autopilot_task = _spawn_autopilot()
+    print(f"[autopilot] started by {user.get('email')}", flush=True)
     await broadcast("autopilot", {"status": "started"})
-    await send_phone_notification("🟢 Autopilot Started", "Paula is now scanning for trades every 5 minutes", priority="default")
+    try:
+        await send_phone_notification("🟢 Autopilot Started", "Paula is now scanning for trades every 5 minutes", priority="default")
+    except Exception:
+        pass
     return {"ok": True, "message": "Autopilot started"}
 
 
@@ -1756,7 +1765,11 @@ async def stop_autopilot(authorization: str = Header(None)):
         pnl_sign = "+" if pnl >= 0 else ""
         await send_phone_notification("🔴 Autopilot Stopped", f"Day so far: {pnl_sign}${abs(pnl):,.0f} | Equity: ${acc.get('equity', 0):,.0f}", priority="default")
     except Exception:
-        await send_phone_notification("🔴 Autopilot Stopped", "Paula is no longer trading", priority="default")
+        try:
+            await send_phone_notification("🔴 Autopilot Stopped", "Paula is no longer trading", priority="default")
+        except Exception:
+            pass
+    print("[autopilot] stopped", flush=True)
     return {"ok": True, "message": "Autopilot stopped"}
 
 
