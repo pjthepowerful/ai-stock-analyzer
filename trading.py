@@ -1712,7 +1712,15 @@ def generate_intraday_signal(data: dict) -> dict:
                 signals.append(f"Low-volume breakdown ({vol_ratio:.1f}x) — likely fakeout bounce")
 
     # ── DETERMINE ACTION ──
-    score = max(0, min(100, score))
+    # Raw positives can total ~+115 over the 50 baseline, so genuinely strong
+    # stocks used to slam into the 100 ceiling and all read identically (the
+    # "why are they all 100" bug). Compress the above-50 portion so a perfect
+    # setup lands ~95, not 150 — preserving real differentiation between good
+    # and great. Below 50 is left linear (a bad stock should read clearly bad).
+    if score > 50:
+        # Diminishing returns above baseline: 0.6x compression, capped at 98.
+        score = 50 + min(48, (score - 50) * 0.6)
+    score = max(0, min(100, round(score)))
 
     bullish_count = sum(1 for s in signals if "✓" in s)
     bearish_count = len(warnings)
