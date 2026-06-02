@@ -4992,18 +4992,22 @@ def execute(intent: dict) -> dict:
         picks = []
         for ticker in universe:
             try:
-                data = fetch_scan_intraday(ticker)
+                # Use the SAME daily/swing scorer as the Analyze tab so a stock
+                # scores identically in both places (was using the old intraday
+                # scorer here, which produced mismatched scores + VWAP/EMA text).
+                data = fetch_scan(ticker)
                 if not data:
                     continue
-                sig = generate_intraday_signal(data)
+                sig = generate_trade_signal(data)
                 if sig and sig.get("score", 0) >= 50:
+                    reasons = sig.get("signals", [])
                     picks.append({
                         "ticker": ticker,
                         "score": sig["score"],
                         "action": sig["action"],
                         "price": data.get("price", 0),
                         "change_pct": data.get("change_pct", 0),
-                        "signals": [s for s in sig.get("signals", []) if "✓" in s][:3],
+                        "signals": reasons[:3],
                         "trade": sig.get("trade", {}),
                     })
             except Exception:
