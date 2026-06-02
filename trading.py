@@ -5015,6 +5015,26 @@ def execute(intent: dict) -> dict:
             picks = [p for p in picks if p.get("price", 0) <= max_price]
         top = picks[:5]
 
+        # ── Price consistency: the intraday scanner's price (last 5-min bar)
+        # can differ by cents/dollars from the Analyze tab + chart, which use
+        # the real-time quote. Re-stamp the displayed price for the top picks
+        # from the SAME source the Analyze tab uses, so they always match.
+        for p in top:
+            try:
+                fresh = fetch_price(p["ticker"])
+                if fresh and fresh.get("price"):
+                    old_price = p["price"]
+                    p["price"] = fresh["price"]
+                    if fresh.get("change") is not None and fresh.get("prev_close"):
+                        prev = fresh["prev_close"]
+                        p["change_pct"] = round((fresh["price"] - prev) / prev * 100, 2) if prev else p["change_pct"]
+                    # If the trade plan's entry was just the old price, re-anchor it.
+                    tr = p.get("trade", {})
+                    if tr and abs(tr.get("entry", 0) - old_price) < 0.01:
+                        tr["entry"] = fresh["price"]
+            except Exception:
+                pass
+
         if not top:
             if max_price:
                 return {"ok": True, "type": "analysis", "msg": f"I scanned {len(universe)} stocks but couldn't find any under ${max_price:.0f} that score high enough right now. Try a higher price range or ask me to analyze a specific cheap ticker."}

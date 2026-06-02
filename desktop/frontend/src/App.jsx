@@ -971,13 +971,15 @@ function MainApp({ user, token, logout }) {
                 <h1><span className="w-hi">{(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' })()}, {name},</span> <Typewriter/></h1>
                 <div className="w-prompts">
                   {[
-                    {q:'Find me a trade', a:'Scan for the best setup right now — one stock, written analysis.', cmd:'Find me 1 stock to trade today', icon:''},
+                    {q:'Find swing setups', a:'Scan the market for the best multi-day swing trades right now.', cmd:'Find me the 5 best swing trade setups right now'},
+                    {q:'Check the market', a:'How\u2019s the overall market looking — trend, risk, what to watch.', cmd:'How is the market looking today for swing trading?'},
+                    {q:'Backtest the strategy', a:'See how the swing strategy performed over the last 2 years.', cmd:'backtest'},
                   ].map((p,i)=>(
                     <button key={i} className="w-prompt" disabled={sending && sendingChatRef.current === chatIdRef.current} onClick={()=>sendMessage(p.cmd)}>
                       <div><span className="wp-q">{p.q}</span><span className="wp-a">{p.a}</span></div>
                     </button>))}
                   <button className="w-prompt" onClick={()=>setView('analyze')}>
-                    <div><span className="wp-q">Analyze a stock</span><span className="wp-a">Look up any ticker — price, chart, score, and signal.</span></div>
+                    <div><span className="wp-q">Analyze a stock</span><span className="wp-a">Look up any ticker — price, chart, score, and swing signal.</span></div>
                   </button>
                 </div>
               </div>)}
