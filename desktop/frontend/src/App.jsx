@@ -1610,11 +1610,6 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
     {/* Trader Profile */}
     <div className="card wide"><label>Trader Profile</label><span className="card-sub">How Paula scans and sizes for you</span>
       <div className="s-row"><div className="s-col"><span>Display name</span><span className="s-desc">Used in greetings and recaps.</span></div><input className="s-inp" value={settings.userName||user?.username||''} onChange={e=>update('userName',e.target.value)} placeholder="Your name"/></div>
-      <div className="s-row"><div className="s-col"><span>Market direction</span><span className="s-desc">Paula reads the trend (SPY/VIX) automatically — no setting needed.</span></div>
-        <div className="font-picks">
-          <div className="fp-btn fp-on" style={{cursor:'default'}}><span className="fp-aa" style={{fontSize:13}}>Auto</span></div>
-        </div>
-      </div>
       <div className="s-row"><div className="s-col"><span>Risk per trade</span><span className="s-desc">Max % of equity at risk on any single position.</span></div>
         <div className="font-picks">
           {['0.5%','1.0%','2.0%'].map(s=>(<button key={s} className={'fp-btn'+(settings.riskPct===s||(!settings.riskPct&&s==='1.0%')?' fp-on':'')} onClick={()=>{update('riskPct',s);f(API+'/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tradingStyle:'Swing',marketBias:'Auto',riskPct:s})}).catch(()=>{})}}><span className="fp-aa" style={{fontSize:13}}>{s}</span></button>))}
