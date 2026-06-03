@@ -1574,6 +1574,7 @@ function DashView({perf}){
 
 function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persist,setActiveChatId,setMessages,setShowChangelog}){
   const [keys, setKeys] = useState({alpaca_key:'',alpaca_secret:'',groq_key:'',polygon_key:''})
+  const [keyExists, setKeyExists] = useState({alpaca_key:false,alpaca_secret:false,groq_key:false,polygon_key:false})
   const [keySaved, setKeySaved] = useState(false)
   const [keyLoaded, setKeyLoaded] = useState(false)
   const [showAdmin, setShowAdmin] = useState(false)
@@ -1582,11 +1583,13 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
     if(token&&!keyLoaded){
       f(API+'/api/auth/me').then(r=>r.json()).then(d=>{
         if(d.ok&&d.settings){
-          setKeys({
-            alpaca_key:d.settings.alpaca_key||'',
-            alpaca_secret:d.settings.alpaca_secret||'',
-            groq_key:d.settings.groq_key||'',
-            polygon_key:d.settings.polygon_key||'',
+          // Never load the actual secret values into the inputs — only note
+          // which ones are already saved, so we can show a masked placeholder.
+          setKeyExists({
+            alpaca_key: !!d.settings.alpaca_key,
+            alpaca_secret: !!d.settings.alpaca_secret,
+            groq_key: !!d.settings.groq_key,
+            polygon_key: !!d.settings.polygon_key,
           })
         }
         setKeyLoaded(true)
@@ -1599,7 +1602,18 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({...keys,display_name:settings.userName||user?.username||''})
     }).then(r=>r.json())
-    if(res.ok){setKeySaved(true);setTimeout(()=>setKeySaved(false),2000)}
+    if(res.ok){
+      // Mark any just-entered keys as saved, then clear the inputs so secrets
+      // don't linger on screen.
+      setKeyExists(prev=>({
+        alpaca_key: prev.alpaca_key || !!keys.alpaca_key,
+        alpaca_secret: prev.alpaca_secret || !!keys.alpaca_secret,
+        groq_key: prev.groq_key || !!keys.groq_key,
+        polygon_key: prev.polygon_key || !!keys.polygon_key,
+      }))
+      setKeys({alpaca_key:'',alpaca_secret:'',groq_key:'',polygon_key:''})
+      setKeySaved(true);setTimeout(()=>setKeySaved(false),2000)
+    }
   }
 
   const fontSizes = [{name:'Small',val:'13px',display:11},{name:'Default',val:'15px',display:15},{name:'Large',val:'18px',display:19}]
@@ -1619,8 +1633,8 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
 
     {/* Connections */}
     {user&&<div className="card wide"><label>Connections</label><span className="card-sub">Broker and data feeds</span>
-      <div className="s-row"><div className="s-col"><span>Alpaca Key</span><span className="s-desc">Broker · trade execution</span></div><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.alpaca_key} onChange={e=>setKeys({...keys,alpaca_key:e.target.value})} placeholder="PKSPW..."/></div>
-      <div className="s-row"><div className="s-col"><span>Alpaca Secret</span><span className="s-desc">Required for live trading</span></div><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.alpaca_secret} onChange={e=>setKeys({...keys,alpaca_secret:e.target.value})} placeholder="AzMr..."/></div>
+      <div className="s-row"><div className="s-col"><span>Alpaca Key</span><span className="s-desc">Broker · trade execution</span></div><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.alpaca_key} onChange={e=>setKeys({...keys,alpaca_key:e.target.value})} placeholder={keyExists.alpaca_key?'•••••••• saved — leave blank to keep':'PKSPW...'}/></div>
+      <div className="s-row"><div className="s-col"><span>Alpaca Secret</span><span className="s-desc">Required for live trading</span></div><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.alpaca_secret} onChange={e=>setKeys({...keys,alpaca_secret:e.target.value})} placeholder={keyExists.alpaca_secret?'•••••••• saved — leave blank to keep':'AzMr...'}/></div>
       <button className={'login-btn s-save'+(keySaved?' s-saved':'')} onClick={saveKeys}>{keySaved?'✓ Saved':'Save connections'}</button>
     </div>}
 

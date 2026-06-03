@@ -188,13 +188,20 @@ def get_settings(user_id: int) -> dict:
 
 
 def save_settings(user_id: int, settings: dict) -> dict:
-    """Save user settings."""
+    """Save user settings. Empty key fields are treated as 'keep existing' so
+    the UI never has to pre-load (and expose) saved secrets just to re-save."""
     db = _get_db()
     try:
+        # For secret fields, NULLIF('', ...) + COALESCE keeps the old value when
+        # the incoming field is blank.
         db.execute("""
             UPDATE user_settings SET
-                alpaca_key = ?, alpaca_secret = ?, groq_key = ?, polygon_key = ?,
-                display_name = ?, settings_json = ?
+                alpaca_key    = COALESCE(NULLIF(?, ''), alpaca_key),
+                alpaca_secret = COALESCE(NULLIF(?, ''), alpaca_secret),
+                groq_key      = COALESCE(NULLIF(?, ''), groq_key),
+                polygon_key   = COALESCE(NULLIF(?, ''), polygon_key),
+                display_name  = ?,
+                settings_json = ?
             WHERE user_id = ?
         """, (
             settings.get("alpaca_key", ""),
