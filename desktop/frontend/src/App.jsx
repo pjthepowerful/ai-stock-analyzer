@@ -246,11 +246,9 @@ function LoginPage({ onAuth }) {
 }
 
 function OnboardingPage({ user, onComplete, onSkip }) {
-  const [step, setStep] = useState(0)
-  const [style] = useState('Swing')   // Paula is a swing trader — no day-trade option
-  const [bias, setBias] = useState('Bull')
   const [risk, setRisk] = useState('1.0%')
-  const totalSteps = 2
+  const style = 'Swing'        // Paula is a swing trader — not a choice
+  const bias = 'Auto'          // Paula reads market direction itself — not a choice
 
   const finish = () => onComplete(style, bias, risk)
 
@@ -258,57 +256,26 @@ function OnboardingPage({ user, onComplete, onSkip }) {
     <div className="cl-overlay">
       <div className="cl-modal" onClick={e => e.stopPropagation()} style={{width: 460}}>
         <div className="ob-progress-track">
-          <div className="ob-progress-fill" style={{width: ((step + 1) / totalSteps * 100) + '%'}}/>
+          <div className="ob-progress-fill" style={{width: '100%'}}/>
         </div>
 
         <div className="cl-pad" style={{padding: '28px 28px 24px'}}>
           <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:20}}>
             <span className="logo-p" style={{width:28,height:28,fontSize:12}}>P</span>
-            <span style={{fontWeight:600,color:'var(--wh)',fontSize:'.88rem'}}>Setup</span>
-            <span style={{marginLeft:'auto',fontFamily:'var(--mono)',fontSize:'.48rem',color:'var(--dim)'}}>{step + 1} of {totalSteps}</span>
+            <span style={{fontWeight:600,color:'var(--wh)',fontSize:'.88rem'}}>Quick setup</span>
           </div>
 
-          {step === 0 && <>
-            <h3 className="ob-h">Welcome to Paula</h3>
-            <p className="ob-sub">Paula is a swing-trading copilot — she finds quality setups and holds them for days, riding multi-day moves rather than scalping intraday. Let's tune her to you.</p>
-            <div className="ob-opts">
-              <div className="fp-btn ob-opt fp-on" style={{cursor:'default'}}>
-                <span className="ob-opt-title">Swing Trading</span>
-                <span className="ob-opt-desc">Hold positions for days to a couple weeks — exits on target, stop, or trend reversal</span>
-              </div>
-            </div>
-            <button className="login-btn" onClick={() => setStep(1)}>Next</button>
-          </>}
-
-          {step === 1 && <>
-            <h3 className="ob-h">Market outlook?</h3>
-            <p className="ob-sub">Are you feeling bullish, neutral, or bearish right now?</p>
-            <div className="ob-opts ob-opts-3">
-              {['Bull','Neutral','Bear'].map(s => (
-                <button key={s} className={'fp-btn ob-opt'+(bias===s?' fp-on':'')} onClick={() => setBias(s)}>
-                  <span className="ob-opt-title">{s==='Bull'?'Bullish':s==='Bear'?'Bearish':'Neutral'}</span>
-                  <span className="ob-opt-desc">{s==='Bull'?'Looking for longs':s==='Bear'?'Looking for shorts':'Both directions'}</span>
-                </button>
-              ))}
-            </div>
-            <button className="login-btn" onClick={() => setStep(2)}>Next</button>
-          </>}
-
-          {step === 2 && <>
-            <h3 className="ob-h">Risk per trade?</h3>
-            <p className="ob-sub">How much of your account to risk on a single swing trade?</p>
-            <div className="ob-opts ob-opts-3">
-              {[{v:'0.5%',d:'Conservative'},{v:'1.0%',d:'Standard'},{v:'2.0%',d:'Aggressive'}].map(s => (
-                <button key={s.v} className={'fp-btn ob-opt'+(risk===s.v?' fp-on':'')} onClick={() => setRisk(s.v)}>
-                  <span className="ob-opt-title">{s.v}</span>
-                  <span className="ob-opt-desc">{s.d}</span>
-                </button>
-              ))}
-            </div>
-            <button className="login-btn" onClick={finish}>Start trading</button>
-          </>}
-
-          
+          <h3 className="ob-h">One quick thing</h3>
+          <p className="ob-sub">Paula is a swing-trading copilot — she finds quality setups, reads the market direction herself, and holds for days. Just pick how much you want to risk per trade.</p>
+          <div className="ob-opts ob-opts-3">
+            {[{v:'0.5%',d:'Conservative'},{v:'1.0%',d:'Standard'},{v:'2.0%',d:'Aggressive'}].map(s => (
+              <button key={s.v} className={'fp-btn ob-opt'+(risk===s.v?' fp-on':'')} onClick={() => setRisk(s.v)}>
+                <span className="ob-opt-title">{s.v}</span>
+                <span className="ob-opt-desc">{s.d}</span>
+              </button>
+            ))}
+          </div>
+          <button className="login-btn" onClick={finish}>Start trading</button>
 
           <button className="onboard-skip" onClick={onSkip}>Skip setup</button>
         </div>
@@ -1643,19 +1610,14 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
     {/* Trader Profile */}
     <div className="card wide"><label>Trader Profile</label><span className="card-sub">How Paula scans and sizes for you</span>
       <div className="s-row"><div className="s-col"><span>Display name</span><span className="s-desc">Used in greetings and recaps.</span></div><input className="s-inp" value={settings.userName||user?.username||''} onChange={e=>update('userName',e.target.value)} placeholder="Your name"/></div>
-      <div className="s-row"><div className="s-col"><span>Trading style</span><span className="s-desc">Paula trades swing setups — multi-day holds.</span></div>
+      <div className="s-row"><div className="s-col"><span>Market direction</span><span className="s-desc">Paula reads the trend (SPY/VIX) automatically — no setting needed.</span></div>
         <div className="font-picks">
-          <div className="fp-btn fp-on" style={{cursor:'default'}}><span className="fp-aa" style={{fontSize:13}}>Swing</span></div>
-        </div>
-      </div>
-      <div className="s-row"><div className="s-col"><span>Market bias</span><span className="s-desc">Long/short lean for autopilot scans.</span></div>
-        <div className="font-picks">
-          {['Bull','Neutral','Bear'].map(s=>(<button key={s} className={'fp-btn'+(settings.marketBias===s||(!settings.marketBias&&s==='Bull')?' fp-on':'')} onClick={()=>{update('marketBias',s);f(API+'/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tradingStyle:'Swing',marketBias:s,riskPct:settings.riskPct||'1.0%'})}).catch(()=>{})}}><span className="fp-aa" style={{fontSize:13}}>{s}</span></button>))}
+          <div className="fp-btn fp-on" style={{cursor:'default'}}><span className="fp-aa" style={{fontSize:13}}>Auto</span></div>
         </div>
       </div>
       <div className="s-row"><div className="s-col"><span>Risk per trade</span><span className="s-desc">Max % of equity at risk on any single position.</span></div>
         <div className="font-picks">
-          {['0.5%','1.0%','2.0%'].map(s=>(<button key={s} className={'fp-btn'+(settings.riskPct===s||(!settings.riskPct&&s==='1.0%')?' fp-on':'')} onClick={()=>{update('riskPct',s);f(API+'/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tradingStyle:'Swing',marketBias:settings.marketBias||'Bull',riskPct:s})}).catch(()=>{})}}><span className="fp-aa" style={{fontSize:13}}>{s}</span></button>))}
+          {['0.5%','1.0%','2.0%'].map(s=>(<button key={s} className={'fp-btn'+(settings.riskPct===s||(!settings.riskPct&&s==='1.0%')?' fp-on':'')} onClick={()=>{update('riskPct',s);f(API+'/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tradingStyle:'Swing',marketBias:'Auto',riskPct:s})}).catch(()=>{})}}><span className="fp-aa" style={{fontSize:13}}>{s}</span></button>))}
         </div>
       </div>
     </div>

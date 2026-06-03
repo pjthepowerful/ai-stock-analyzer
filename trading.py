@@ -5240,6 +5240,31 @@ def execute(intent: dict) -> dict:
 
 # ── AI response ──────────────────────────────────────────────────────────────
 
+def _market_status_line() -> str:
+    """Human-readable market status so Paula always knows (and acknowledges)
+    whether the market is open, closed, pre-market, or after-hours."""
+    try:
+        now = datetime.now(ZoneInfo("US/Eastern"))
+    except Exception:
+        # Fallback if tz database unavailable: approximate ET as UTC-5.
+        from datetime import timezone, timedelta
+        now = datetime.now(timezone.utc) - timedelta(hours=5)
+    try:
+        wd = now.weekday()  # 0=Mon .. 6=Sun
+        t = now.hour * 60 + now.minute
+        day = now.strftime("%A")
+        if wd >= 5:
+            return f"Market: CLOSED (weekend, {day})."
+        if t < 9 * 60 + 30:
+            return f"Market: PRE-MARKET ({day}, opens 9:30 AM ET)."
+        if t < 16 * 60:
+            return f"Market: OPEN ({day}, regular hours, closes 4:00 PM ET)."
+        if t < 20 * 60:
+            return f"Market: AFTER-HOURS ({day}, closed at 4:00 PM ET)."
+        return f"Market: CLOSED ({day}, reopens 9:30 AM ET next trading day)."
+    except Exception:
+        return "Market: status unavailable."
+
 # Shared voice spec used by both ai_response and ai_response_stream so the
 # personality stays consistent. This defines how Paula SOUNDS — the factual
 # rules (price accuracy, no arithmetic) live separately in each caller.
@@ -5269,7 +5294,9 @@ def ai_response(user_msg: str, stock_data: dict | None, history: list, market: s
     if not key:
         return "⚠️ Set `GROQ_API_KEY` in Streamlit secrets or environment."
 
-    system = f"""You're Paula — a sharp, knowledgeable trading assistant who genuinely enjoys helping people understand the market. You're approachable and warm, but you know your stuff. Think of yourself as a really smart friend who happens to be great at trading. Today is {datetime.now(ZoneInfo("US/Eastern")).strftime("%Y-%m-%d")}. Market: {market}.
+    system = f"""You're Paula — a sharp, knowledgeable trading assistant who genuinely enjoys helping people understand the market. You're approachable and warm, but you know your stuff. Think of yourself as a really smart friend who happens to be great at trading. Today is {datetime.now(ZoneInfo("US/Eastern")).strftime("%Y-%m-%d")}. Market: {market}. {_market_status_line()}
+
+Be aware of the market status above and reflect it naturally — if the market is closed, pre-market, or after-hours, factor that in. Don't describe live intraday action when the market isn't open.
 
 You get live stock data attached to each message. For manual analysis, this includes daily chart signals with confluence scoring across 6 categories (trend, momentum, mean-reversion, volume, fundamentals, news sentiment). USE all of it — weave the numbers into natural conversation.
 
@@ -5399,7 +5426,9 @@ def ai_response_stream(user_msg: str, stock_data: dict | None, history: list, ma
         yield "AI not configured — set GROQ_API_KEY."
         return
 
-    system = f"""You're Paula — a sharp, knowledgeable trading assistant. Today is {datetime.now(ZoneInfo("US/Eastern")).strftime("%Y-%m-%d")}. Market: {market}.
+    system = f"""You're Paula — a sharp, knowledgeable trading assistant. Today is {datetime.now(ZoneInfo("US/Eastern")).strftime("%Y-%m-%d")}. Market: {market}. {_market_status_line()}
+
+Be aware of the market status above and reflect it naturally — if the market is closed, pre-market, or after-hours, factor that in. Don't describe live intraday action when the market isn't open.
 
 {PAULA_VOICE}
 
