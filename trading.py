@@ -1087,6 +1087,30 @@ def compute_technicals(hist: pd.DataFrame) -> dict:
     tech["trend_slope"] = regime["slope_20d"]
     tech["ma_cross"] = regime["ma_cross"]
 
+    # ── 52-week high/low position (swing traders buy strength near highs) ──
+    lookback = min(len(c), 252)
+    hi_52 = float(c.iloc[-lookback:].max())
+    lo_52 = float(c.iloc[-lookback:].min())
+    tech["high_52w"] = round(hi_52, 2)
+    tech["low_52w"] = round(lo_52, 2)
+    tech["pct_from_52w_high"] = round((price - hi_52) / hi_52 * 100, 2) if hi_52 else 0
+    if hi_52 > lo_52:
+        tech["pct_in_52w_range"] = round((price - lo_52) / (hi_52 - lo_52) * 100, 1)
+
+    # ── Volatility contraction (VCP-style: range tightening before a move) ──
+    # Compare recent ATR% to the prior baseline. A contracting range while the
+    # trend holds is a classic swing setup — energy coiling for a breakout.
+    try:
+        atr_series = _compute_atr(h, l, c, 14) / c * 100  # ATR as % of price
+        if len(atr_series.dropna()) >= 30:
+            recent_atr = float(atr_series.iloc[-5:].mean())
+            base_atr = float(atr_series.iloc[-30:-10].mean())
+            if base_atr > 0:
+                tech["vol_contraction_ratio"] = round(recent_atr / base_atr, 2)
+                tech["volatility_contracting"] = recent_atr < base_atr * 0.8
+    except Exception:
+        pass
+
     return tech
 
 
@@ -2146,9 +2170,33 @@ def generate_trade_signal(data: dict) -> dict:
         warnings.append(f"Bearish news sentiment")
     elif news_score <= -1:
         score -= 2
-    
+
+    # -- 52-week high position (swing: buy strength, not falling knives) --
+    pct_from_high = tech.get("pct_from_52w_high", -100)
+    if pct_from_high >= -3:
+        score += 6
+        signals.append("Near 52-week high — leadership strength")
+    elif pct_from_high >= -10:
+        score += 4
+        signals.append(f"Within {abs(pct_from_high):.0f}% of 52-week high")
+    elif pct_from_high >= -20:
+        score += 1
+    elif pct_from_high <= -50:
+        score -= 4
+        warnings.append("Far below 52-week high — deep downtrend")
+
+    # -- Volatility contraction (coiling before a breakout) --
+    if tech.get("volatility_contracting") and (above_50 or above_200):
+        score += 6
+        vcr = tech.get("vol_contraction_ratio", 1)
+        signals.append(f"Volatility contracting ({vcr:.2f}x) — coiling for a move")
+
     # ═══ STEP 4: DETERMINE ACTION ═══
-    score = max(0, min(100, score))
+    # Compress the above-baseline portion so genuinely strong setups spread
+    # across ~80-98 instead of all pinning at 100 (matches the intraday fix).
+    if score > 50:
+        score = 50 + min(48, (score - 50) * 0.6)
+    score = max(0, min(100, round(score)))
     
     bullish_count = sum(1 for s in signals if "✓" in s or "bullish" in s.lower() or "uptrend" in s.lower() or "rising" in s.lower() or "buy" in s.lower() or "outperform" in s.lower() or "sector" in s.lower())
     bearish_count = sum(1 for w in warnings)
@@ -2174,7 +2222,27 @@ def generate_trade_signal(data: dict) -> dict:
     else:
         action = "HOLD"
         confidence = max(40, 100 - abs(score - 50) * 2)
-    
+
+    # ── Setup classification: name the thesis behind the trade ──
+    setup = "No clear setup"
+    if action in ("BUY", "STRONG_BUY"):
+        if pullback_to_50:
+            setup = "Deep pullback in uptrend"
+        elif pullback_to_20:
+            setup = "Pullback to 20 SMA in uptrend"
+        elif tech.get("volatility_contracting"):
+            setup = "Volatility contraction (coiling)"
+        elif pct_from_high >= -3:
+            setup = "Breakout / new-high momentum"
+        elif rsi < 40 and above_200:
+            setup = "Oversold bounce in uptrend"
+        elif is_uptrend:
+            setup = "Trend continuation"
+        else:
+            setup = "Momentum"
+    elif action in ("SELL", "STRONG_SELL"):
+        setup = "Breakdown / downtrend"
+
     # ═══ STEP 5: RISK MANAGEMENT ═══
     # Stop distance is bounded both ways. In SWING mode the band is wider
     # (3–10%) so a multi-day hold can survive normal overnight noise; the
@@ -2249,6 +2317,7 @@ def generate_trade_signal(data: dict) -> dict:
         "score": score,
         "confidence": confidence,
         "confluence": {"bullish": bullish_count, "bearish": bearish_count},
+        "setup": setup,
         "category_scores": {
             "trend": 1 if is_uptrend else -1,
             "pullback": 1 if has_pullback else 0,
@@ -5005,6 +5074,7 @@ def execute(intent: dict) -> dict:
                         "ticker": ticker,
                         "score": sig["score"],
                         "action": sig["action"],
+                        "setup": sig.get("setup", ""),
                         "price": data.get("price", 0),
                         "change_pct": data.get("change_pct", 0),
                         "signals": reasons[:3],
@@ -5086,6 +5156,8 @@ def execute(intent: dict) -> dict:
             t1 = p["trade"].get("target_1", 0)
             arrow = "▲" if p["change_pct"] >= 0 else "▼"
             lines.append(f"**{i}. {p['ticker']}** — Score: `{p['score']}` · {p['action']} · ${p['price']:.2f} {arrow}{p['change_pct']:+.1f}%")
+            if p.get("setup"):
+                lines.append(f"   *{p['setup']}*")
             if stop and t1:
                 lines.append(f"   Entry: `${entry:.2f}` · Stop: `${stop:.2f}` · Target: `${t1:.2f}`")
             if p["signals"]:
