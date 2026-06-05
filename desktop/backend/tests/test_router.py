@@ -133,6 +133,18 @@ def test_generic_money_question_still_scans():
     assert r["type"] == "stock_ideas", f"got {r}"
 
 
+def test_private_company_routes_to_chat():
+    for q in ["What do you think about the SpaceX IPO", "should I buy openai stock",
+              "is starlink going public", "anthropic valuation"]:
+        r = route(q)
+        assert r["type"] == "chat" and r.get("private_company"), f"{q!r} -> {r}"
+
+
+def test_public_ticker_still_analyzes():
+    r = route("analyze NVDA")
+    assert r["type"] == "analyze" and r["ticker"] == "NVDA", f"got {r}"
+
+
 def _run():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     passed = 0

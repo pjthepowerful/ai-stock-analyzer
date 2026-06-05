@@ -1287,27 +1287,32 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
             _chat_data = {}
             try:
                 import re as _re
-                # Scan current message + last 6 history items for tickers
-                _all_text = user_msg + " " + " ".join(h.get("content", "") for h in chat_history[-6:])
-                _found_tickers = list(set(_re.findall(r'\b([A-Z]{1,5})\b', _all_text)))
-                # Filter to known tickers (avoid matching random words like "THE", "AND")
-                _known = set(["AAPL","MSFT","NVDA","GOOGL","AMZN","META","TSLA","AMD","NFLX","SPY","QQQ","JPM","V","BA","HD","CRM","AVGO","LLY","COST","WMT","DIS","XOM","CVX","GS","BAC","INTC","PYPL","COIN","PLTR","UBER","SHOP","SOFI","MARA","CELH","NIO","RIVN","F","GM","KO","PEP","NKE","ADBE","CSCO","IBM","QCOM","TXN","MU","MA","SQ","HOOD","MS","C","WFC","UNH","JNJ","MRK","PFE","ABBV","TGT","SBUX","MCD","CMG","DASH","BKNG","ABNB","LULU","SLB","COP","CAT","GE","HON","DE","UPS","FDX","LMT","SNAP","RBLX","DKNG","MSTR","RIOT","NET","DDOG","SNOW","PANW","CRWD","TTD","SMCI","ARM","IONQ","TMDX","DUOL","FCEL","ONON","HIMS","CAVA","TOST","ELF","LCID","DELL","ROKU","NOW","INTU","PINS","CVNA","MRNA","BRK-B","RKLB","AXON"])
-                _valid = [t for t in _found_tickers if t in _known][:5]  # max 5 lookups
-                if _valid:
-                    _multi = {}
-                    for _vt in _valid:
-                        try:
-                            _vd = engine.fetch_full(_vt)
-                            if _vd and _vd.get("price"):
-                                _multi[_vt] = {"price": _vd["price"], "change_pct": _vd.get("change_pct", 0), "name": _vd.get("name", _vt)}
-                        except: pass
-                    if _multi:
-                        _chat_data = {"stocks": _multi, "note": "Use ONLY these exact prices"}
-                    elif len(_valid) == 1:
-                        _chat_data = engine.fetch_full(_valid[0]) or {}
+                # Only scan the CURRENT message for tickers — pulling them from
+                # history attached unrelated data (e.g. AAPL from an earlier turn)
+                # to questions about something else entirely (e.g. "SpaceX IPO?").
+                if not (result and result.get("private_company")):
+                    _found_tickers = list(set(_re.findall(r'\b([A-Z]{1,5})\b', user_msg)))
+                    # Filter to known tickers (avoid matching random words like "THE", "AND")
+                    _known = set(["AAPL","MSFT","NVDA","GOOGL","AMZN","META","TSLA","AMD","NFLX","SPY","QQQ","JPM","V","BA","HD","CRM","AVGO","LLY","COST","WMT","DIS","XOM","CVX","GS","BAC","INTC","PYPL","COIN","PLTR","UBER","SHOP","SOFI","MARA","CELH","NIO","RIVN","F","GM","KO","PEP","NKE","ADBE","CSCO","IBM","QCOM","TXN","MU","MA","SQ","HOOD","MS","C","WFC","UNH","JNJ","MRK","PFE","ABBV","TGT","SBUX","MCD","CMG","DASH","BKNG","ABNB","LULU","SLB","COP","CAT","GE","HON","DE","UPS","FDX","LMT","SNAP","RBLX","DKNG","MSTR","RIOT","NET","DDOG","SNOW","PANW","CRWD","TTD","SMCI","ARM","IONQ","TMDX","DUOL","FCEL","ONON","HIMS","CAVA","TOST","ELF","LCID","DELL","ROKU","NOW","INTU","PINS","CVNA","MRNA","BRK-B","RKLB","AXON"])
+                    _valid = [t for t in _found_tickers if t in _known][:5]  # max 5 lookups
+                    if _valid:
+                        _multi = {}
+                        for _vt in _valid:
+                            try:
+                                _vd = engine.fetch_full(_vt)
+                                if _vd and _vd.get("price"):
+                                    _multi[_vt] = {"price": _vd["price"], "change_pct": _vd.get("change_pct", 0), "name": _vd.get("name", _vt)}
+                            except: pass
+                        if _multi:
+                            _chat_data = {"stocks": _multi, "note": "Use ONLY these exact prices"}
+                        elif len(_valid) == 1:
+                            _chat_data = engine.fetch_full(_valid[0]) or {}
             except Exception:
                 pass
-            resp = await loop.run_in_executor(None, engine.ai_response, user_msg, _chat_data if _chat_data else None, chat_history, "US")
+            _umsg = user_msg
+            if result and result.get("private_company"):
+                _umsg = user_msg + "\n\n[Note: this is about a privately-held / pre-IPO company with no public ticker. Answer conversationally from what you know — explain its private status, any IPO/funding context, and how (or whether) someone could get exposure. Do NOT say you lack data or look for a stock price.]"
+            resp = await loop.run_in_executor(None, engine.ai_response, _umsg, _chat_data if _chat_data else None, chat_history, "US")
     elif result and result.get("error"):
         resp = f"⚠️ {result['error']}"
     else:

@@ -2798,6 +2798,20 @@ def route(msg: str) -> dict:
     if m in ("hi", "hello", "hey", "thanks", "thank you", "help", "bye"):
         return {"type": "chat"}
 
+    # ── Private / non-tradeable companies ──
+    # Questions about companies with no public ticker (or pre-IPO) should be a
+    # plain conversational answer — NOT a stock lookup that attaches unrelated
+    # data (e.g. "SpaceX IPO?" must not pull AAPL from earlier in the chat).
+    PRIVATE_COMPANIES = [
+        "spacex", "starlink", "openai", "anthropic", "stripe", "databricks",
+        "discord", "epic games", "valve", "chick-fil-a", "in-n-out", "ikea",
+        "mars inc", "cargill", "koch", "deloitte", "pwc", "ey ", "kpmg",
+        "fidelity", "vanguard", "bloomberg lp", "spacex's", "neuralink",
+        "the boring company", "xai", "x.ai", "fanatics", "canva", "revolut",
+    ]
+    if any(p in m for p in PRIVATE_COMPANIES):
+        return {"type": "chat", "private_company": True, "market": "US"}
+
     # ── Detect questions/advice requests → send to AI, not execute commands ──
     is_question = any(q in m for q in [
         "should i", "which", "what should", "can you tell", "can you suggest",
