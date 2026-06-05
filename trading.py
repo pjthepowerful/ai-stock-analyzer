@@ -312,6 +312,34 @@ POLYGON_BASE = "https://api.polygon.io"
 
 
 @st.cache_data(ttl=180)
+def fetch_news(ticker: str | None = None, limit: int = 6) -> list[dict] | None:
+    """Recent news headlines via Polygon. If ticker is given, news for that
+    stock; otherwise the latest market news. Returns [{title, publisher, date,
+    url, summary}] or None."""
+    key = _polygon_key()
+    if not key:
+        return None
+    try:
+        params = {"apiKey": key, "limit": limit, "order": "desc", "sort": "published_utc"}
+        if ticker:
+            params["ticker"] = ticker.upper()
+        r = requests.get(f"{POLYGON_BASE}/v2/reference/news", params=params, timeout=10)
+        if r.status_code != 200:
+            return None
+        out = []
+        for a in r.json().get("results", [])[:limit]:
+            out.append({
+                "title": a.get("title", ""),
+                "publisher": (a.get("publisher") or {}).get("name", ""),
+                "date": (a.get("published_utc") or "")[:10],
+                "url": a.get("article_url", ""),
+                "summary": (a.get("description") or "")[:300],
+            })
+        return out or None
+    except Exception:
+        return None
+
+
 def polygon_gainers(limit: int = 20) -> list[dict] | None:
     """Top gainers across ALL US stocks — one API call."""
     key = _polygon_key()

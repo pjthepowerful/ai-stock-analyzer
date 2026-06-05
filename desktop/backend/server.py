@@ -49,6 +49,8 @@ except Exception:
 
 # ── State ──
 ADMIN_EMAIL = "parjan.d@icloud.com"  # Only this email gets admin + autopilot control
+# Shared set of recognizable tickers (used for chat data + news lookups)
+KNOWN_TICKERS = set(["AAPL","MSFT","NVDA","GOOGL","AMZN","META","TSLA","AMD","NFLX","SPY","QQQ","JPM","V","BA","HD","CRM","AVGO","LLY","COST","WMT","DIS","XOM","CVX","GS","BAC","INTC","PYPL","COIN","PLTR","UBER","SHOP","SOFI","MARA","CELH","NIO","RIVN","F","GM","KO","PEP","NKE","ADBE","CSCO","IBM","QCOM","TXN","MU","MA","SQ","HOOD","MS","C","WFC","UNH","JNJ","MRK","PFE","ABBV","TGT","SBUX","MCD","CMG","DASH","BKNG","ABNB","LULU","SLB","COP","CAT","GE","HON","DE","UPS","FDX","LMT","SNAP","RBLX","DKNG","MSTR","RIOT","NET","DDOG","SNOW","PANW","CRWD","TTD","SMCI","ARM","IONQ","TMDX","DUOL","FCEL","ONON","HIMS","CAVA","TOST","ELF","LCID","DELL","ROKU","NOW","INTU","PINS","CVNA","MRNA","BRK-B","RKLB","AXON"])
 autopilot_task: Optional[asyncio.Task] = None
 connected_clients: list[WebSocket] = []
 # Per-user session isolation — NO global shared state
@@ -1292,8 +1294,7 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                 # to questions about something else entirely (e.g. "SpaceX IPO?").
                 if not (result and result.get("private_company")):
                     _found_tickers = list(set(_re.findall(r'\b([A-Z]{1,5})\b', user_msg)))
-                    # Filter to known tickers (avoid matching random words like "THE", "AND")
-                    _known = set(["AAPL","MSFT","NVDA","GOOGL","AMZN","META","TSLA","AMD","NFLX","SPY","QQQ","JPM","V","BA","HD","CRM","AVGO","LLY","COST","WMT","DIS","XOM","CVX","GS","BAC","INTC","PYPL","COIN","PLTR","UBER","SHOP","SOFI","MARA","CELH","NIO","RIVN","F","GM","KO","PEP","NKE","ADBE","CSCO","IBM","QCOM","TXN","MU","MA","SQ","HOOD","MS","C","WFC","UNH","JNJ","MRK","PFE","ABBV","TGT","SBUX","MCD","CMG","DASH","BKNG","ABNB","LULU","SLB","COP","CAT","GE","HON","DE","UPS","FDX","LMT","SNAP","RBLX","DKNG","MSTR","RIOT","NET","DDOG","SNOW","PANW","CRWD","TTD","SMCI","ARM","IONQ","TMDX","DUOL","FCEL","ONON","HIMS","CAVA","TOST","ELF","LCID","DELL","ROKU","NOW","INTU","PINS","CVNA","MRNA","BRK-B","RKLB","AXON"])
+                    _known = KNOWN_TICKERS
                     _valid = [t for t in _found_tickers if t in _known][:5]  # max 5 lookups
                     if _valid:
                         _multi = {}
@@ -1312,6 +1313,28 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
             _umsg = user_msg
             if result and result.get("private_company"):
                 _umsg = user_msg + "\n\n[Note: this is about a privately-held / pre-IPO company with no public ticker. Answer conversationally from what you know — explain its private status, any IPO/funding context, and how (or whether) someone could get exposure. Do NOT say you lack data or look for a stock price.]"
+            # ── Live news: if the question is news-oriented, fetch recent
+            # headlines (Polygon) and inject them so Paula answers with current
+            # info instead of stale training knowledge.
+            _ml = user_msg.lower()
+            _wants_news = any(w in _ml for w in [
+                "news", "latest", "happening", "headline", "earnings", "report",
+                "announced", "update on", "what's going on", "whats going on",
+                "why is", "why did", "catalyst", "recent", "today",
+            ])
+            if _wants_news and not (result and result.get("private_company")):
+                try:
+                    import re as _re2
+                    _nt = None
+                    for _w in _re2.findall(r'\b([A-Z]{1,5})\b', user_msg):
+                        if _w in KNOWN_TICKERS:
+                            _nt = _w; break
+                    _news = engine.fetch_news(_nt, limit=5)
+                    if _news:
+                        _lines = "\n".join(f"- ({n['date']}) {n['title']} — {n['publisher']}: {n['summary']}" for n in _news)
+                        _umsg = _umsg + f"\n\n[LIVE NEWS (use these recent headlines in your answer, cite the dates):\n{_lines}\n]"
+                except Exception:
+                    pass
             resp = await loop.run_in_executor(None, engine.ai_response, _umsg, _chat_data if _chat_data else None, chat_history, "US")
     elif result and result.get("error"):
         resp = f"⚠️ {result['error']}"
