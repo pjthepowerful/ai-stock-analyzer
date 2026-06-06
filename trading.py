@@ -3972,12 +3972,13 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         "STOP_FLOOR": 0.013,
         "SELL_BELOW": 35,
         "DAILY_LOSS_LIMIT": 0.01,
-        "PARTIAL_PROFIT_PCT": 0.025,
+        "PARTIAL_PROFIT_PCT": 0.04 if SWING_MODE else 0.025,
         "MAX_DAILY_ENTRIES": 4,
+        "MAX_HOLD_DAYS": SWING_MAX_HOLD_DAYS if SWING_MODE else 0,
         "STALE_MINUTES": 120,
         "TRADING_HOURS_START": "09:45",
-        "TRADING_HOURS_END": "15:00",
-        "AVOID_MIDDAY": True,
+        "TRADING_HOURS_END": "15:55" if SWING_MODE else "15:00",
+        "AVOID_MIDDAY": False if SWING_MODE else True,
         "MIDDAY_START": "11:30",
         "MIDDAY_END": "13:30",
         "last_tuned": "",
@@ -3998,10 +3999,28 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     except Exception:
         params = DEFAULT_PARAMS.copy()
 
-    # In swing mode the position cap is governed by SWING_MAX_POSITIONS, not by
-    # whatever an older persisted config saved. Force it so the one knob wins.
+    # ── SWING OVERRIDE ──────────────────────────────────────────────────────
+    # A previously-saved autopilot_config.json holds the OLD intraday values
+    # (same-day holds, EOD close, avoid-midday). Those keys already exist in the
+    # file so the merge above won't replace them — we must FORCE the swing-
+    # critical ones so the live autopilot actually swing-trades instead of
+    # day-trading on a stale config.
     if SWING_MODE:
         params["MAX_POSITIONS"] = SWING_MAX_POSITIONS
+        params["MAX_HOLD_DAYS"] = SWING_MAX_HOLD_DAYS
+        params["AVOID_MIDDAY"] = False
+        params["TRADING_HOURS_END"] = "15:55"
+        params["PARTIAL_PROFIT_PCT"] = 0.04
+        params["STALE_MINUTES"] = 0  # 0 = no intraday stale-exit in swing
+        # A 1%/day loss limit force-closes swing positions on normal intraday
+        # dips before they can work over multiple days. Widen it so the daily
+        # guard only trips on a genuinely bad day, not routine noise.
+        params["DAILY_LOSS_LIMIT"] = 0.04
+        # Persist the corrected config so the dashboard shows the real values.
+        try:
+            CONFIG_PATH.write_text(json.dumps(params, indent=2))
+        except Exception:
+            pass
 
     # ── Daily auto-tune: review yesterday's trades and adjust ──
     # PROVEN FLOORS (backtest: 33% WR, +$58, profitable):
@@ -4292,6 +4311,8 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     stale_kills = []
     STALE_MINUTES = params.get("STALE_MINUTES", 90)
     for pos in positions:
+        if SWING_MODE or STALE_MINUTES <= 0:
+            break  # swing holds across days — no intraday "dead money" kill
         ticker = pos["ticker"]
         pnl_pct = pos.get("unrealized_pnl_pct", 0)
         entry_time = st.session_state[STALE_KEY].get(ticker, time.time())
