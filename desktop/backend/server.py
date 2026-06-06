@@ -471,7 +471,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "spacex-fallthrough-fix-v2",  # bump marker — confirms running code
+        "build": "chat-clear-durable-v3",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -690,10 +690,17 @@ async def generate_title(req: TitleRequest):
 
 @app.post("/api/chat/clear")
 async def clear_chat(authorization: str = Header(None)):
-    """Clear chat history for current user."""
+    """Clear chat history for current user — both in-memory AND the DB, so a
+    fresh chat doesn't reload prior context (which caused Paula to say things
+    like 'I've mentioned this before' at the start of a new chat)."""
     user = _get_user(authorization)
     user_id = user["id"] if user else 0
-    _user_sessions.pop(user_id, None)
+    # Reset in-memory to empty (not pop — pop would trigger a DB reload).
+    _user_sessions[user_id] = []
+    try:
+        auth.clear_chat(user_id)
+    except Exception:
+        pass
     return {"ok": True}
 
 
