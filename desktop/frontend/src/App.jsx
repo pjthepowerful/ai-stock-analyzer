@@ -5,6 +5,7 @@ import './App.css'
 
 const BACKEND = (import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:3141' : 'https://scurrilously-inevasible-kailey.ngrok-free.dev')).replace(/\/+$/, '')
 const API = BACKEND
+try { console.log('[Paula] Using backend:', BACKEND, '| page host:', window.location.hostname) } catch {}
 const H = { 'ngrok-skip-browser-warning': '1' }
 const f = (url, opts = {}) => {
   const headers = { ...H, ...(opts.headers || {}) }
