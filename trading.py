@@ -3918,6 +3918,48 @@ def _check_sector_correlation(ticker: str, positions: list, max_per_sector: int 
     return sector_count >= max_per_sector
 
 
+def load_autopilot_config() -> dict:
+    """Load autopilot config from disk, apply the SWING override, and persist.
+    Single source of truth used by both the autopilot loop and the dashboard so
+    the displayed config can never drift back to stale day-trade values."""
+    import pathlib as _pl
+    cfg_path = _pl.Path(__file__).parent / "autopilot_config.json"
+    defaults = {
+        "MAX_POSITIONS": SWING_MAX_POSITIONS if SWING_MODE else 1,
+        "RISK_PER_TRADE": 0.01, "MAX_POS_PCT": 0.15, "MIN_SCORE": 82,
+        "MIN_CONFLUENCE": 5, "MIN_RR": 2.0, "STOP_FLOOR": 0.013, "SELL_BELOW": 35,
+        "DAILY_LOSS_LIMIT": 0.04 if SWING_MODE else 0.01,
+        "PARTIAL_PROFIT_PCT": 0.04 if SWING_MODE else 0.025,
+        "MAX_DAILY_ENTRIES": 4,
+        "MAX_HOLD_DAYS": SWING_MAX_HOLD_DAYS if SWING_MODE else 0,
+        "STALE_MINUTES": 0 if SWING_MODE else 120,
+        "TRADING_HOURS_START": "09:45",
+        "TRADING_HOURS_END": "15:55" if SWING_MODE else "15:00",
+        "AVOID_MIDDAY": False if SWING_MODE else True,
+        "MIDDAY_START": "11:30", "MIDDAY_END": "13:30",
+        "LONG_ONLY": True, "last_tuned": "", "tune_history": [],
+    }
+    try:
+        params = json.loads(cfg_path.read_text()) if cfg_path.exists() else dict(defaults)
+    except Exception:
+        params = dict(defaults)
+    for k, v in defaults.items():
+        params.setdefault(k, v)
+    if SWING_MODE:
+        params["MAX_POSITIONS"] = SWING_MAX_POSITIONS
+        params["MAX_HOLD_DAYS"] = SWING_MAX_HOLD_DAYS
+        params["AVOID_MIDDAY"] = False
+        params["TRADING_HOURS_END"] = "15:55"
+        params["PARTIAL_PROFIT_PCT"] = 0.04
+        params["STALE_MINUTES"] = 0
+        params["DAILY_LOSS_LIMIT"] = 0.04
+    try:
+        cfg_path.write_text(json.dumps(params, indent=2))
+    except Exception:
+        pass
+    return params
+
+
 def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dict:
     """
     Full autopilot cycle:
@@ -3961,66 +4003,10 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     import json, os, pathlib
     CONFIG_PATH = pathlib.Path(__file__).parent / "autopilot_config.json"
 
-    # Default params
-    DEFAULT_PARAMS = {
-        "MAX_POSITIONS": SWING_MAX_POSITIONS if SWING_MODE else 1,
-        "RISK_PER_TRADE": 0.01,
-        "MAX_POS_PCT": 0.15,
-        "MIN_SCORE": 82,
-        "MIN_CONFLUENCE": 5,
-        "MIN_RR": 2.0,
-        "STOP_FLOOR": 0.013,
-        "SELL_BELOW": 35,
-        "DAILY_LOSS_LIMIT": 0.01,
-        "PARTIAL_PROFIT_PCT": 0.04 if SWING_MODE else 0.025,
-        "MAX_DAILY_ENTRIES": 4,
-        "MAX_HOLD_DAYS": SWING_MAX_HOLD_DAYS if SWING_MODE else 0,
-        "STALE_MINUTES": 120,
-        "TRADING_HOURS_START": "09:45",
-        "TRADING_HOURS_END": "15:55" if SWING_MODE else "15:00",
-        "AVOID_MIDDAY": False if SWING_MODE else True,
-        "MIDDAY_START": "11:30",
-        "MIDDAY_END": "13:30",
-        "last_tuned": "",
-        "tune_history": [],
-    }
-
-    # Load or create config
-    try:
-        if CONFIG_PATH.exists():
-            params = json.loads(CONFIG_PATH.read_text())
-            # Merge with defaults (in case new keys added)
-            for k, v in DEFAULT_PARAMS.items():
-                if k not in params:
-                    params[k] = v
-        else:
-            params = DEFAULT_PARAMS.copy()
-            CONFIG_PATH.write_text(json.dumps(params, indent=2))
-    except Exception:
-        params = DEFAULT_PARAMS.copy()
-
-    # ── SWING OVERRIDE ──────────────────────────────────────────────────────
-    # A previously-saved autopilot_config.json holds the OLD intraday values
-    # (same-day holds, EOD close, avoid-midday). Those keys already exist in the
-    # file so the merge above won't replace them — we must FORCE the swing-
-    # critical ones so the live autopilot actually swing-trades instead of
-    # day-trading on a stale config.
-    if SWING_MODE:
-        params["MAX_POSITIONS"] = SWING_MAX_POSITIONS
-        params["MAX_HOLD_DAYS"] = SWING_MAX_HOLD_DAYS
-        params["AVOID_MIDDAY"] = False
-        params["TRADING_HOURS_END"] = "15:55"
-        params["PARTIAL_PROFIT_PCT"] = 0.04
-        params["STALE_MINUTES"] = 0  # 0 = no intraday stale-exit in swing
-        # A 1%/day loss limit force-closes swing positions on normal intraday
-        # dips before they can work over multiple days. Widen it so the daily
-        # guard only trips on a genuinely bad day, not routine noise.
-        params["DAILY_LOSS_LIMIT"] = 0.04
-        # Persist the corrected config so the dashboard shows the real values.
-        try:
-            CONFIG_PATH.write_text(json.dumps(params, indent=2))
-        except Exception:
-            pass
+    # Load config via the shared loader (applies SWING override + persists, so
+    # the live loop and the dashboard always agree and can't drift to stale
+    # day-trade values).
+    params = load_autopilot_config()
 
     # ── Daily auto-tune: review yesterday's trades and adjust ──
     # PROVEN FLOORS (backtest: 33% WR, +$58, profitable):
