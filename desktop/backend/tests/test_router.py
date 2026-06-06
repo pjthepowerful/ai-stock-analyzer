@@ -145,6 +145,12 @@ def test_public_ticker_still_analyzes():
     assert r["type"] == "analyze" and r["ticker"] == "NVDA", f"got {r}"
 
 
+def test_short_swing_phrasings_route_to_picks():
+    for q in ["find swing setups", "swing setups", "scan for setups", "best swing trades", "top picks"]:
+        r = route(q)
+        assert r["type"] == "stock_ideas", f"{q!r} -> {r}"
+
+
 def _run():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     passed = 0

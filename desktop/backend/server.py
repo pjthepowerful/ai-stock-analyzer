@@ -1255,8 +1255,21 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
 
         if rtype == "analysis":
             if not resp:
+                # If the question is news-oriented, fetch recent headlines for
+                # the analyzed ticker and feed them to the AI (same as chat path).
+                _amsg = user_msg
+                _aml = user_msg.lower()
+                if any(w in _aml for w in ["news","latest","happening","headline","why is","why did","catalyst","recent","what's going on","whats going on","update"]):
+                    try:
+                        _atk = result.get("ticker", "")
+                        _anews = engine.fetch_news(_atk, limit=5) if _atk else None
+                        if _anews:
+                            _al = "\n".join(f"- ({n['date']}) {n['title']} — {n['publisher']}: {n['summary']}" for n in _anews)
+                            _amsg = user_msg + f"\n\n[LIVE NEWS (use these recent headlines, cite dates):\n{_al}\n]"
+                    except Exception:
+                        pass
                 # AI generates analysis — but we prepend real data header
-                ai_text = await loop.run_in_executor(None, engine.ai_response, user_msg, result.get("data"), chat_history, "US")
+                ai_text = await loop.run_in_executor(None, engine.ai_response, _amsg, result.get("data"), chat_history, "US")
                 # Build factual header from data
                 data = result.get("data", {})
                 ticker = result.get("ticker", "")
