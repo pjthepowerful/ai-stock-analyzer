@@ -471,7 +471,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "swing-config-shared-loader-v5",  # bump marker — confirms running code
+        "build": "engine-export-loader-v6",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -499,11 +499,24 @@ async def performance(period: str = "1M"):
     try:
         config = engine.load_autopilot_config()
     except Exception:
+        # Safety net: if the loader isn't available, read the file but STILL
+        # force swing values so the panel can't show stale day-trade params.
         if config_path.exists():
             try:
                 config = json.loads(config_path.read_text())
             except Exception:
-                pass
+                config = {}
+        try:
+            if getattr(engine, "SWING_MODE", True):
+                config["MAX_POSITIONS"] = getattr(engine, "SWING_MAX_POSITIONS", 4)
+                config["MAX_HOLD_DAYS"] = getattr(engine, "SWING_MAX_HOLD_DAYS", 10)
+                config["AVOID_MIDDAY"] = False
+                config["TRADING_HOURS_END"] = "15:55"
+                config["PARTIAL_PROFIT_PCT"] = 0.04
+                config["STALE_MINUTES"] = 0
+                config["DAILY_LOSS_LIMIT"] = 0.04
+        except Exception:
+            pass
 
     # Get Alpaca portfolio history for equity chart
     pnl_history = []

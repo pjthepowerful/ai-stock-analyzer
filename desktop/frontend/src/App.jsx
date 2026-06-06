@@ -727,7 +727,7 @@ function MainApp({ user, token, logout }) {
     } catch { setQuickResult(null) }
     setQuickLoading(false)
   }
-  const loadDashboard = async () => { try { const r = await f(API+'/api/performance').then(r=>r.json()); if(r.ok)setPerf(r) } catch{} }
+  const loadDashboard = async () => { try { const r = await f(API+'/api/performance?_t='+Date.now()).then(r=>r.json()); if(r.ok)setPerf(r) } catch{} }
 
   const pnl = account?(account.daily_pnl||0):0, pnlPct = account?(account.daily_pnl_pct||0):0
   const totalUnrealized = positions.reduce((s,p)=>s+(p.unrealized_pnl||0),0)

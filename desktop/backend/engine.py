@@ -100,6 +100,7 @@ from trading import (
 
     # Autopilot
     run_autopilot,
+    load_autopilot_config,
     premarket_scan,
 
     # Market
