@@ -471,7 +471,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "spacex-routing-check-v1",  # bump marker — confirms running code
+        "build": "spacex-fallthrough-fix-v2",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1354,21 +1354,32 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
     elif result and result.get("error"):
         resp = f"⚠️ {result['error']}"
     else:
-        # Final fallthrough — try to find context from history
+        # Final fallthrough — plain conversational answer.
         _fall_data = None
-        try:
-            for h in reversed(chat_history[-6:]):
+        _fmsg = user_msg
+        _is_private = bool(result and result.get("private_company"))
+        if _is_private:
+            _fmsg = user_msg + "\n\n[Note: this is about a privately-held / pre-IPO company with no public ticker. Answer conversationally from what you know — explain its private status, any IPO/funding context, and how (or whether) someone could get exposure. Do NOT say you lack data or look for a stock price, and do NOT analyze any unrelated ticker.]"
+        else:
+            # Only attach a ticker the CURRENT message actually names — never
+            # one pulled from earlier in the conversation (that caused unrelated
+            # data, e.g. LLY/AAPL, to be stapled onto questions like "SpaceX IPO").
+            try:
                 import re as _re
-                _found = _re.findall(r'\b([A-Z]{1,5})\b', h.get("content", ""))
-                for _ft in _found:
-                    if _ft in ["AAPL","MSFT","NVDA","GOOGL","AMZN","META","TSLA","AMD","NFLX","SPY","QQQ","JPM","V","BA","HD","CRM","AVGO","LLY","COST","WMT","DIS","XOM","CVX","GS","BAC","INTC","PYPL","COIN","PLTR","UBER","SHOP","SOFI","MARA","CELH","NIO","RIVN","F","GM","KO","PEP","NKE","ADBE","CSCO","IBM","QCOM","TXN","MU","AMAT","LRCX","KLAC","MA","SQ","HOOD","AFRM","MS","C","WFC","SCHW","BLK","UNH","JNJ","MRK","PFE","ABBV","TMO","TGT","NKE","SBUX","MCD","CMG","DASH","BKNG","ABNB","LULU","ETSY","SLB","COP","CAT","GE","HON","DE","UPS","FDX","LMT","SNAP","RBLX","DKNG","MSTR","RIOT","NET","DDOG","SNOW","MDB","PANW","CRWD","ZS","TTD","HUBS","SMCI","ARM","IONQ","TMDX","DUOL","FCEL","ONON","HIMS","CAVA","TOST","BROS","ELF","LCID","LI","DELL","ROKU","ZM","DOCU","NOW","INTU","WDAY","PINS","MTCH","CVNA","AMT","PLD","O","T","VZ","TMUS","NEE","NEM","GOLD","FCX","NUE","MRNA","BIIB","BRK-B","RKLB","AXON","SOXX","DIA","ARKK","IWM","XLF","XLE"]:
-                        _fall_data = engine.fetch_full(_ft)
-                        break
-                if _fall_data:
-                    break
-        except Exception:
-            pass
-        resp = await loop.run_in_executor(None, engine.ai_response, user_msg, _fall_data, chat_history, "US")
+                _cur = [t for t in _re.findall(r'\b([A-Z]{1,5})\b', user_msg) if t in KNOWN_TICKERS]
+                if _cur:
+                    _fall_data = engine.fetch_full(_cur[0])
+                # News injection for news-oriented questions
+                _fl = user_msg.lower()
+                if any(w in _fl for w in ["news","latest","happening","headline","earnings","why is","why did","catalyst","recent","update"]):
+                    _ntk = _cur[0] if _cur else None
+                    _fnews = engine.fetch_news(_ntk, limit=5)
+                    if _fnews:
+                        _fl2 = "\n".join(f"- ({n['date']}) {n['title']} — {n['publisher']}: {n['summary']}" for n in _fnews)
+                        _fmsg = _fmsg + f"\n\n[LIVE NEWS (use these recent headlines, cite dates):\n{_fl2}\n]"
+            except Exception:
+                pass
+        resp = await loop.run_in_executor(None, engine.ai_response, _fmsg, _fall_data, chat_history, "US")
 
     # ── Price validation: fix any hallucinated prices in AI responses ──
     if resp and result:
