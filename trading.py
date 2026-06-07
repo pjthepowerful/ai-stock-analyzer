@@ -312,6 +312,44 @@ POLYGON_BASE = "https://api.polygon.io"
 
 
 @st.cache_data(ttl=180)
+def web_search(query: str, max_results: int = 5) -> list[dict] | None:
+    """Open-web search via Tavily (for questions Polygon stock-news can't cover,
+    e.g. 'SpaceX IPO', macro, anything beyond a ticker). Reads TAVILY_API_KEY
+    from the environment — never hardcoded. Returns [{title, url, content}] or
+    None if no key / failure (caller falls back to training knowledge)."""
+    key = os.environ.get("TAVILY_API_KEY")
+    if not key:
+        return None
+    try:
+        r = requests.post(
+            "https://api.tavily.com/search",
+            json={
+                "api_key": key,
+                "query": query,
+                "max_results": max_results,
+                "search_depth": "basic",
+                "include_answer": True,
+            },
+            timeout=12,
+        )
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        out = []
+        # Tavily's synthesized answer first (most useful for the LLM)
+        if data.get("answer"):
+            out.append({"title": "Summary", "url": "", "content": data["answer"][:600]})
+        for res in data.get("results", [])[:max_results]:
+            out.append({
+                "title": res.get("title", ""),
+                "url": res.get("url", ""),
+                "content": (res.get("content") or "")[:400],
+            })
+        return out or None
+    except Exception:
+        return None
+
+
 def fetch_news(ticker: str | None = None, limit: int = 6) -> list[dict] | None:
     """Recent news headlines via Polygon. If ticker is given, news for that
     stock; otherwise the latest market news. Returns [{title, publisher, date,

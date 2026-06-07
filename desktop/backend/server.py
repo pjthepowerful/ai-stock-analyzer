@@ -1382,7 +1382,16 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
         _fmsg = user_msg
         _is_private = bool(result and result.get("private_company"))
         if _is_private:
-            _fmsg = user_msg + "\n\n[Note: this is about a privately-held / pre-IPO company with no public ticker. Answer conversationally from what you know — explain its private status, any IPO/funding context, and how (or whether) someone could get exposure. Do NOT say you lack data or look for a stock price, and do NOT analyze any unrelated ticker.]"
+            _fmsg = user_msg + "\n\n[Note: this is about a privately-held / pre-IPO company with no public ticker. Answer conversationally, and do NOT analyze any unrelated ticker.]"
+            # Pull live open-web context (Tavily) so private-company answers are
+            # current (e.g. recent SpaceX IPO reporting), not stale training data.
+            try:
+                _ws = engine.web_search(user_msg, max_results=5)
+                if _ws:
+                    _wl = "\n".join(f"- {w['title']}: {w['content']}" + (f" ({w['url']})" if w['url'] else "") for w in _ws)
+                    _fmsg = _fmsg + f"\n\n[LIVE WEB SEARCH (use this current info, cite sources where relevant):\n{_wl}\n]"
+            except Exception:
+                pass
         else:
             # Only attach a ticker the CURRENT message actually names — never
             # one pulled from earlier in the conversation (that caused unrelated
@@ -1394,12 +1403,19 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                     _fall_data = engine.fetch_full(_cur[0])
                 # News injection for news-oriented questions
                 _fl = user_msg.lower()
-                if any(w in _fl for w in ["news","latest","happening","headline","earnings","why is","why did","catalyst","recent","update"]):
+                _is_news = any(w in _fl for w in ["news","latest","happening","headline","earnings","why is","why did","catalyst","recent","update"])
+                if _is_news:
                     _ntk = _cur[0] if _cur else None
                     _fnews = engine.fetch_news(_ntk, limit=5)
                     if _fnews:
                         _fl2 = "\n".join(f"- ({n['date']}) {n['title']} — {n['publisher']}: {n['summary']}" for n in _fnews)
                         _fmsg = _fmsg + f"\n\n[LIVE NEWS (use these recent headlines, cite dates):\n{_fl2}\n]"
+                # If no ticker and it's a current-info question, fall back to open web.
+                if not _cur and _is_news:
+                    _ws = engine.web_search(user_msg, max_results=5)
+                    if _ws:
+                        _wl = "\n".join(f"- {w['title']}: {w['content']}" + (f" ({w['url']})" if w['url'] else "") for w in _ws)
+                        _fmsg = _fmsg + f"\n\n[LIVE WEB SEARCH (use this current info, cite sources where relevant):\n{_wl}\n]"
             except Exception:
                 pass
         resp = await loop.run_in_executor(None, engine.ai_response, _fmsg, _fall_data, chat_history, "US")
