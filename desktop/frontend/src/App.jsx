@@ -596,13 +596,21 @@ function MainApp({ user, token, logout }) {
     sendingChatRef.current = targetId
     const isFirstMsg = messages.length === 0
 
+    // Snapshot this chat's prior turns for backend context (each chat independent)
+    const _histSnapshot = messages.filter(m => m.role === 'user' || m.role === 'assistant').slice(-12).map(m => ({ role: m.role, content: m.content }))
+
     // Show user message immediately
     setMessages(prev => [...prev, { role: 'user', content: msg, time: new Date().toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'}) }])
 
     try {
       const res = await f(API + '/api/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: msg })
+        body: JSON.stringify({
+          message: msg,
+          // Send this chat's recent turns so the backend treats each chat
+          // independently (no cross-chat context bleed).
+          history: _histSnapshot
+        })
       })
       const data = await res.json()
 

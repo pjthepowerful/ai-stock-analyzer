@@ -180,6 +180,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 class ChatMessage(BaseModel):
     message: str
+    history: Optional[list] = None  # per-chat history from the frontend (each chat independent)
 
 class TradeRequest(BaseModel):
     ticker: str
@@ -1245,8 +1246,17 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
     if user:
         auth.save_chat(user["id"], "user", user_msg)
 
-    # Per-user isolated chat history
-    chat_history = _get_user_history(user_id)
+    # Per-chat history: if the frontend sends the current chat's messages, use
+    # those (each sidebar chat stays independent). Fall back to the per-user
+    # blob only when no history is supplied.
+    if msg.history is not None:
+        chat_history = [
+            {"role": m.get("role"), "content": m.get("content", "")}
+            for m in msg.history
+            if m.get("role") in ("user", "assistant") and m.get("content")
+        ][-12:]
+    else:
+        chat_history = _get_user_history(user_id)
     chat_history.append({"role": "user", "content": user_msg})
 
     # Route the message
