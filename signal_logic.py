@@ -56,11 +56,18 @@ def compute_price_math(message: str, current_price: float) -> dict | None:
     if not current_price or current_price <= 0:
         current_price = current_price or 0.0
     msg = (message or "").lower()
-    nums = [float(n.replace(",", "")) for n in re.findall(r"\$?([\d,]+(?:\.\d+)?)", msg)]
+    nums = []
+    for n in re.findall(r"\$?(\d[\d,]*(?:\.\d+)?)", msg):
+        cleaned = n.replace(",", "")
+        if cleaned:
+            try:
+                nums.append(float(cleaned))
+            except ValueError:
+                continue
 
     # "N shares" + a target price -> profit on the position
     m_sh = re.search(r"(\d[\d,]*)\s*shares?", msg)
-    m_tgt2 = re.search(r"(?:hits?|reach(?:es)?|goes? to|gets? to|to|at)\s+\$?([\d,]+(?:\.\d+)?)", msg)
+    m_tgt2 = re.search(r"(?:hits?|reach(?:es)?|goes? to|gets? to|to|at)\s+\$?(\d[\d,]*(?:\.\d+)?)", msg)
     if m_sh and m_tgt2 and current_price > 0:
         qty = int(m_sh.group(1).replace(",", ""))
         tgt = float(m_tgt2.group(1).replace(",", ""))
@@ -75,7 +82,7 @@ def compute_price_math(message: str, current_price: float) -> dict | None:
             }
 
     # "X to Y" explicit two-price move (e.g. "from 142 to 158")
-    m_range = re.search(r"(?:from\s+)?\$?([\d,]+(?:\.\d+)?)\s+to\s+\$?([\d,]+(?:\.\d+)?)", msg)
+    m_range = re.search(r"(?:from\s+)?\$?(\d[\d,]*(?:\.\d+)?)\s+to\s+\$?(\d[\d,]*(?:\.\d+)?)", msg)
     if m_range:
         a = float(m_range.group(1).replace(",", ""))
         b = float(m_range.group(2).replace(",", ""))
@@ -102,7 +109,7 @@ def compute_price_math(message: str, current_price: float) -> dict | None:
         }
 
     # "hits/reaches/goes to/at X" target from current price
-    m_target = re.search(r"(?:hits?|reach(?:es)?|goes? to|gets? to|at|to)\s+\$?([\d,]+(?:\.\d+)?)", msg)
+    m_target = re.search(r"(?:hits?|reach(?:es)?|goes? to|gets? to|at|to)\s+\$?(\d[\d,]*(?:\.\d+)?)", msg)
     if m_target and current_price > 0 and ("hit" in msg or "reach" in msg or "goes to" in msg or "get to" in msg or "what's that" in msg or "from here" in msg):
         tgt = float(m_target.group(1).replace(",", ""))
         if tgt > 0:

@@ -5565,7 +5565,10 @@ RESPONSE LENGTH by request type:
     _cur = 0.0
     if stock_data:
         _cur = _safe(stock_data.get("price"), 0) or 0
-    _pm = compute_price_math(user_msg, _cur)
+    try:
+        _pm = compute_price_math(user_msg, _cur)
+    except Exception:
+        _pm = None
     if _pm:
         content += f"\n\n---PRE-COMPUTED (state this number exactly, do NOT recalculate)---\n{_pm['phrasing']}"
     if stock_data:
@@ -5605,7 +5608,10 @@ FACTUAL RULES (never break these):
         messages.append({"role": h.get("role", "user"), "content": str(h.get("content", ""))[:800]})
     content = user_msg
     _cur = (_safe(stock_data.get("price"), 0) or 0) if stock_data else 0
-    _pm = compute_price_math(user_msg, _cur)
+    try:
+        _pm = compute_price_math(user_msg, _cur)
+    except Exception:
+        _pm = None
     if _pm:
         content += f"\n\n---PRE-COMPUTED (state this number exactly, do NOT recalculate)---\n{_pm['phrasing']}"
     if stock_data:
