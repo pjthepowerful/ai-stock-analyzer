@@ -58,6 +58,22 @@ def compute_price_math(message: str, current_price: float) -> dict | None:
     msg = (message or "").lower()
     nums = [float(n.replace(",", "")) for n in re.findall(r"\$?([\d,]+(?:\.\d+)?)", msg)]
 
+    # "N shares" + a target price -> profit on the position
+    m_sh = re.search(r"(\d[\d,]*)\s*shares?", msg)
+    m_tgt2 = re.search(r"(?:hits?|reach(?:es)?|goes? to|gets? to|to|at)\s+\$?([\d,]+(?:\.\d+)?)", msg)
+    if m_sh and m_tgt2 and current_price > 0:
+        qty = int(m_sh.group(1).replace(",", ""))
+        tgt = float(m_tgt2.group(1).replace(",", ""))
+        if tgt > 0 and qty > 0:
+            profit = (tgt - current_price) * qty
+            pct = (tgt - current_price) / current_price * 100
+            return {
+                "kind": "position_profit",
+                "qty": qty, "from": round(current_price, 2), "to": round(tgt, 2),
+                "profit": round(profit, 2), "pct_change": round(pct, 2),
+                "phrasing": f"{qty:,} shares from ${current_price:,.2f} to ${tgt:,.2f} would be {'+' if profit>=0 else '-'}${abs(profit):,.2f} ({'+' if pct>=0 else ''}{pct:.2f}%).",
+            }
+
     # "X to Y" explicit two-price move (e.g. "from 142 to 158")
     m_range = re.search(r"(?:from\s+)?\$?([\d,]+(?:\.\d+)?)\s+to\s+\$?([\d,]+(?:\.\d+)?)", msg)
     if m_range:

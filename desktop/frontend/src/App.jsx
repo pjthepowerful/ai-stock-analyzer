@@ -1492,8 +1492,13 @@ function DashView({perf}){
   const [data, setData] = useState(perf)
   const loadPeriod = async (p) => {
     setPeriod(p)
-    try { const r = await f(API+'/api/performance?period='+p).then(r=>r.json()); if(r.ok)setData(r) } catch{}
+    try { const r = await f(API+'/api/performance?period='+p+'&_t='+Date.now()).then(r=>r.json()); if(r.ok)setData(r) } catch{}
   }
+  // Always fetch fresh on mount (not just rely on the cached perf prop) so the
+  // Auto-Tuner Config panel reflects the live backend config.
+  useEffect(()=>{
+    (async()=>{ try { const r = await f(API+'/api/performance?period=1M&_t='+Date.now()).then(r=>r.json()); if(r.ok)setData(r) } catch{} })()
+  },[])
   useEffect(()=>{if(perf)setData(perf)},[perf])
   const d = data || perf
   if(!d)return <div className="view-msg">Loading...</div>
