@@ -1388,8 +1388,8 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
             try:
                 _ws = engine.web_search(user_msg, max_results=5)
                 if _ws:
-                    _wl = "\n".join(f"- {w['title']}: {w['content']}" + (f" ({w['url']})" if w['url'] else "") for w in _ws)
-                    _fmsg = _fmsg + f"\n\n[LIVE WEB SEARCH (use this current info, cite sources where relevant):\n{_wl}\n]"
+                    _wl = "\n".join(f"- {w['title']}: {w['content']}" + (f" [source]({w['url']})" if w['url'] else "") for w in _ws)
+                    _fmsg = _fmsg + f"\n\n[LIVE WEB SEARCH — use this current info. Cite sources as markdown links [publisher](url), never bare URLs:\n{_wl}\n]"
             except Exception:
                 pass
         else:
@@ -1414,8 +1414,8 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                 if not _cur and _is_news:
                     _ws = engine.web_search(user_msg, max_results=5)
                     if _ws:
-                        _wl = "\n".join(f"- {w['title']}: {w['content']}" + (f" ({w['url']})" if w['url'] else "") for w in _ws)
-                        _fmsg = _fmsg + f"\n\n[LIVE WEB SEARCH (use this current info, cite sources where relevant):\n{_wl}\n]"
+                        _wl = "\n".join(f"- {w['title']}: {w['content']}" + (f" [source]({w['url']})" if w['url'] else "") for w in _ws)
+                        _fmsg = _fmsg + f"\n\n[LIVE WEB SEARCH — use this current info. Cite sources as markdown links [publisher](url), never bare URLs:\n{_wl}\n]"
             except Exception:
                 pass
         resp = await loop.run_in_executor(None, engine.ai_response, _fmsg, _fall_data, chat_history, "US")

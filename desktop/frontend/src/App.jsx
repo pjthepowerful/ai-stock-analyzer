@@ -1739,5 +1739,20 @@ function chatEmoji(title) {
   return '💬'
 }
 
-function fmt(t){if(!t)return '';return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/`(.+?)`/g,'<code>$1</code>').replace(/\n/g,'<br/>')}
+function fmt(t){
+  if(!t)return '';
+  let s = t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // Markdown links [label](url) -> compact anchor
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+    (_,label,url)=>`<a href="${url}" target="_blank" rel="noopener noreferrer" class="ai-link">${label}</a>`);
+  // Bare URLs -> clickable, labeled by domain (compact, not the full URL)
+  s = s.replace(/(^|[\s(])(https?:\/\/[^\s)]+)/g, (m,pre,url)=>{
+    let host=url; try{ host=new URL(url).hostname.replace(/^www\./,''); }catch{}
+    return `${pre}<a href="${url}" target="_blank" rel="noopener noreferrer" class="ai-link">${host}</a>`;
+  });
+  s = s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+       .replace(/`(.+?)`/g,'<code>$1</code>')
+       .replace(/\n/g,'<br/>');
+  return s;
+}
 export default App

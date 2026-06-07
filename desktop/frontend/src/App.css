@@ -244,6 +244,8 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .ai-txt p, .ai-txt span, .ai-txt li, .ai-txt div { font-size: inherit }
 .ai-txt strong { color: var(--wh); font-weight: 600 }
 .ai-txt code { font-size: .85em }
+.ai-txt .ai-link { color: var(--blu); text-decoration: none; font-weight: 500; border-bottom: 1px solid color-mix(in srgb, var(--blu) 35%, transparent); padding-bottom: 1px; transition: all .15s; word-break: break-word }
+.ai-txt .ai-link:hover { color: #60a5fa; border-bottom-color: #60a5fa }
 .stream-cursor { color: var(--grn); animation: blinkcur .5s step-end infinite; font-weight: 300 }
 .ai-chart { margin-top: 14px; padding: 14px; border: 1px solid var(--brd); border-radius: 14px; background: var(--c1) }
 .ct-tabs { display: flex; gap: 2px; margin-bottom: 10px; padding: 2px; background: var(--c2); border-radius: 6px; width: fit-content }
