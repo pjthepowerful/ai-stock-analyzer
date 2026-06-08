@@ -13,8 +13,23 @@ import os
 from pathlib import Path
 from datetime import datetime, timedelta
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "paula.db")
-JWT_SECRET = os.environ.get("JWT_SECRET", secrets.token_hex(32))
+# DB location: use DB_DIR (a Railway persistent volume) if set, so the database
+# survives redeploys. Falls back to the code directory for local dev.
+_DB_DIR = os.environ.get("DB_DIR", os.path.dirname(os.path.abspath(__file__)))
+try:
+    os.makedirs(_DB_DIR, exist_ok=True)
+except Exception:
+    _DB_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(_DB_DIR, "paula.db")
+
+# JWT secret MUST be stable across restarts, or every redeploy invalidates all
+# existing login tokens (everyone gets logged out / "invalid account"). Set
+# JWT_SECRET in the host env. The random fallback is dev-only.
+JWT_SECRET = os.environ.get("JWT_SECRET")
+if not JWT_SECRET:
+    import warnings as _w
+    _w.warn("JWT_SECRET not set — using a random secret; logins won't survive restarts. Set JWT_SECRET in env for hosting.")
+    JWT_SECRET = secrets.token_hex(32)
 TOKEN_EXPIRY_DAYS = 30
 
 
