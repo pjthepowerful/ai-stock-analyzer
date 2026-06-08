@@ -3,9 +3,25 @@ import Chart from './Chart'
 import { playBuy, playSell, playNotify, playAlert, playProfit, playTick } from './sounds'
 import './App.css'
 
-const BACKEND = (import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:3141' : 'https://scurrilously-inevasible-kailey.ngrok-free.dev')).replace(/\/+$/, '')
+// Backend URL resolution:
+//  1. VITE_API_URL (set this to your ngrok/Railway URL when hosting) — wins always
+//  2. localhost dev fallback when running the app on your own machine
+//  3. otherwise: same origin as the page (works if frontend+backend share a host)
+const _envApi = import.meta.env.VITE_API_URL
+const BACKEND = (
+  _envApi
+    ? _envApi
+    : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      ? 'http://127.0.0.1:3141'
+      : window.location.origin
+).replace(/\/+$/, '')
 const API = BACKEND
-try { console.log('[Paula] Using backend:', BACKEND, '| page host:', window.location.hostname) } catch {}
+try {
+  console.log('[Paula] Using backend:', BACKEND, '| page host:', window.location.hostname)
+  if (!_envApi && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    console.warn('[Paula] VITE_API_URL is not set — falling back to page origin. Set VITE_API_URL to your backend URL (ngrok/Railway) when hosting.')
+  }
+} catch {}
 const H = { 'ngrok-skip-browser-warning': '1' }
 const f = (url, opts = {}) => {
   const headers = { ...H, ...(opts.headers || {}) }
