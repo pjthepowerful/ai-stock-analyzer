@@ -1,13 +1,7 @@
-# Railway / Nixpacks build config for Paula's backend.
-# trading.py + signal_logic.py live at the repo root; the FastAPI app lives in
-# desktop/backend. We install the backend's requirements and start uvicorn from
-# there (engine.py adds the repo root to sys.path so root-level modules import).
-
-[phases.setup]
-nixPkgs = ["python311"]
-
-[phases.install]
-cmds = ["pip install -r desktop/backend/requirements.txt"]
+# Railway / Nixpacks config for Paula's backend.
+# requirements.txt at the repo root lets Nixpacks auto-detect Python and install
+# deps with the correct pip. trading.py + signal_logic.py live at root; the
+# FastAPI app is in desktop/backend (engine.py adds root to sys.path on import).
 
 [start]
 cmd = "cd desktop/backend && uvicorn server:app --host 0.0.0.0 --port $PORT"
