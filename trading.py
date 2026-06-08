@@ -2859,6 +2859,54 @@ def build_chart(ticker: str, period: str = "6mo", trade_signal: dict | None = No
 
 # ── Intent routing ───────────────────────────────────────────────────────────
 
+def _llm_classify_intent(msg: str) -> dict | None:
+    """Second-opinion intent classifier for messages the keyword router can't
+    confidently place (it only runs on the chat fallthrough). Restricted to
+    SAFE, non-destructive intents — never trades or autopilot, so a
+    misclassification can't execute an order. Returns an intent dict or None
+    (caller then falls back to plain chat)."""
+    try:
+        key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
+    except Exception:
+        key = os.environ.get("GROQ_API_KEY")
+    if not key:
+        return None
+    try:
+        from groq import Groq
+        client = Groq(api_key=key)
+        sys_prompt = (
+            "Classify the user's stock-app message into ONE intent. Respond with ONLY "
+            "the intent word, nothing else. Options:\n"
+            "- stock_ideas (wants trade/swing setups, picks, 'what should I buy', scan for opportunities)\n"
+            "- market (asking about overall market, SPY, conditions, regime)\n"
+            "- backtest (wants to backtest/test the strategy)\n"
+            "- portfolio (asking about their positions, holdings, P&L)\n"
+            "- gainers (top gainers/movers up)\n"
+            "- losers (top losers/movers down)\n"
+            "- chat (general question, conversation, news, anything else)\n"
+            "Reply with exactly one word from that list."
+        )
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "system", "content": sys_prompt},
+                      {"role": "user", "content": msg[:300]}],
+            temperature=0,
+            max_tokens=5,
+        )
+        out = (resp.choices[0].message.content or "").strip().lower()
+        valid = {"stock_ideas", "market", "backtest", "portfolio", "gainers", "losers", "chat"}
+        for v in valid:
+            if v in out:
+                if v == "chat":
+                    return None  # let normal chat handling proceed
+                if v == "stock_ideas":
+                    return {"type": "stock_ideas", "category": "all", "_original_msg": msg}
+                return {"type": v, "market": _detect_market(msg)}
+        return None
+    except Exception:
+        return None
+
+
 def route(msg: str) -> dict:
     m = msg.lower().strip()
     if m in ("hi", "hello", "hey", "thanks", "thank you", "help", "bye"):
@@ -3082,6 +3130,16 @@ def route(msg: str) -> dict:
             return {"type": "price", "ticker": ticker, "market": market}
     if ticker:
         return {"type": "analyze", "ticker": ticker, "market": market, "_original_msg": msg}
+
+    # Keyword routing didn't confidently place this. Before defaulting to chat,
+    # ask the LLM for a second opinion — but ONLY on safe, non-destructive
+    # intents (never trades/autopilot). If it's unsure or errors, fall to chat.
+    # Skip the LLM for obvious chitchat/news to save a call.
+    _skip_llm = any(w in m for w in ["hi", "hey", "hello", "thanks", "news", "what is", "what's", "explain", "how do", "why"])
+    if not _skip_llm and len(m.split()) <= 12:
+        _llm = _llm_classify_intent(msg)
+        if _llm:
+            return _llm
     return {"type": "chat", "market": market}
 
 
