@@ -220,7 +220,7 @@ function LoginPage({ onAuth }) {
               {loading ? '...' : isSignup ? 'Create account  →' : 'Sign in  →'}
             </button>
 
-            <button className="login-toggle" onClick={() => { setIsSignup(!isSignup); setError(''); setNotice('') }}>
+            <button className="login-toggle" onClick={() => { setIsSignup(!isSignup); setError(''); setNotice(''); setUsername(''); setEmail('') }}>
               {isSignup ? 'Already have an account? ' : 'New to Paula? '}<span className="lt-link">{isSignup ? 'Sign in' : 'Create account'}</span>
             </button>
           </div>
@@ -346,6 +346,8 @@ function MainApp({ user, token, logout }) {
   const [sending, setSending] = useState(false)
   const [loadingText, setLoadingText] = useState('')
   const sendingChatRef = useRef(null) // which chat the current send is for
+  const cancelledRef = useRef(false)  // set true to abort an in-flight response
+  const abortRef = useRef(null)       // AbortController for the fetch
   const [account, setAccount] = useState(null)
   const [positions, setPositions] = useState([])
   const [autopilot, setAutopilot] = useState(false)
@@ -596,16 +598,38 @@ function MainApp({ user, token, logout }) {
   const sendMessage = async (msg) => {
     if (!msg || (sending && sendingChatRef.current === chatIdRef.current)) return
     setSending(true)
+    cancelledRef.current = false
+    abortRef.current = new AbortController()
     setInput('')
     setView('chat')
-    // Set loading text
+    // Thinking sequence — contextual, cycles while waiting so it feels alive.
     const ml = msg.toLowerCase()
-    if (/^analyze |^check |tell me about/i.test(ml)) { const tk = msg.match(/[A-Z]{1,5}/); setLoadingText(tk ? 'Analyzing ' + tk[0] + '...' : 'Analyzing...') }
-    else if (/market|regime|spy/i.test(ml)) setLoadingText('Checking market conditions...')
-    else if (/buy|sell|short|cover/i.test(ml)) setLoadingText('Executing trade...')
-    else if (/gain|mover|top|scan/i.test(ml)) setLoadingText('Scanning market...')
-    else if (/recap|today|performance/i.test(ml)) setLoadingText('Loading recap...')
-    else setLoadingText('Thinking...')
+    const tkm = msg.match(/[A-Z]{1,5}/)
+    let _seq
+    if (/^analyze |^check |tell me about/i.test(ml)) {
+      const t = tkm ? tkm[0] : 'the stock'
+      _seq = [`Pulling ${t} data...`, `Reading the chart...`, `Checking the signal...`, `Weighing the setup...`]
+    } else if (/market|regime|spy/i.test(ml)) {
+      _seq = ['Checking the market...', 'Reading SPY trend...', 'Gauging risk...']
+    } else if (/buy|sell|short|cover/i.test(ml)) {
+      _seq = ['Sizing the trade...', 'Placing the order...']
+    } else if (/gain|mover|top|scan|setup|pick|swing|idea/i.test(ml)) {
+      _seq = ['Scanning the market...', 'Running the signal engine...', 'Ranking setups...', 'Picking the best ones...']
+    } else if (/news|latest|happening|why is|why did/i.test(ml)) {
+      _seq = ['Searching for news...', 'Reading the headlines...', 'Pulling it together...']
+    } else if (/recap|today|performance/i.test(ml)) {
+      _seq = ['Loading your recap...', 'Tallying the day...']
+    } else {
+      _seq = ['Thinking...', 'Working it out...', 'Almost there...']
+    }
+    setLoadingText(_seq[0])
+    let _si = 0
+    const _thinkTimer = setInterval(() => {
+      _si = (_si + 1) % _seq.length
+      setLoadingText(_seq[_si])
+    }, 1400)
+    // store so we can clear it when done
+    abortRef.current._thinkTimer = _thinkTimer
 
     // Always ensure chat exists
     const targetId = ensureChat()
@@ -621,6 +645,7 @@ function MainApp({ user, token, logout }) {
     try {
       const res = await f(API + '/api/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
+        signal: abortRef.current.signal,
         body: JSON.stringify({
           message: msg,
           // Send this chat's recent turns so the backend treats each chat
@@ -629,6 +654,7 @@ function MainApp({ user, token, logout }) {
         })
       })
       const data = await res.json()
+      try { clearInterval(abortRef.current?._thinkTimer) } catch {}
 
       if (data.ok) {
         const text = data.message || ''
@@ -649,15 +675,21 @@ function MainApp({ user, token, logout }) {
 
           let shown = ''
           for (let i = 0; i < words.length; i++) {
-            // Bail if user switched away during animation
+            // Cancelled mid-response: keep what's shown so far, mark it stopped.
+            if (cancelledRef.current && chatIdRef.current === targetId) {
+              setMessages(prev => {
+                const m = [...prev]; const last = m[m.length - 1]
+                if (last?.streaming) m[m.length - 1] = { ...last, streaming: false, content: (shown || '') + ' ⏹' }
+                return m
+              })
+              break
+            }
+            // User switched away: save the full response to the original chat.
             if (chatIdRef.current !== targetId) {
-              // Save complete response to original chat in localStorage
               const updated = chatsRef.current.map(c => {
                 if (c.id !== targetId) return c
                 const msgs = c.messages || []
-                // Replace the streaming message with final
                 const fixed = msgs.map(m => m.streaming ? { ...assistantMsg } : m)
-                // If no streaming msg was saved yet, append
                 if (!msgs.some(m => m.streaming)) fixed.push(assistantMsg)
                 return { ...c, messages: fixed }
               })
@@ -674,8 +706,8 @@ function MainApp({ user, token, logout }) {
             if (i % 3 === 0) await new Promise(r => setTimeout(r, 15))
           }
 
-          // Finalize if still in same chat
-          if (chatIdRef.current === targetId) {
+          // Finalize if still in same chat AND not cancelled
+          if (chatIdRef.current === targetId && !cancelledRef.current) {
             setMessages(prev => {
               const m = [...prev]; const last = m[m.length - 1]
               if (last) m[m.length - 1] = { ...last, streaming: false, content: text }
@@ -719,14 +751,29 @@ function MainApp({ user, token, logout }) {
       }
 
       refreshData()
-    } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Connection lost.' }])
+    } catch (err) {
+      // If the user cancelled, don't show a "connection lost" error.
+      if (!(cancelledRef.current || (err && err.name === 'AbortError'))) {
+        setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Connection lost.' }])
+      }
     }
 
+    try { clearInterval(abortRef.current?._thinkTimer) } catch {}
     setSending(false)
     setLoadingText('')
     sendingChatRef.current = null
+    cancelledRef.current = false
+    abortRef.current = null
     inputRef.current?.focus()
+  }
+
+  // Cancel Paula mid-response
+  const cancelSend = () => {
+    cancelledRef.current = true
+    try { clearInterval(abortRef.current?._thinkTimer) } catch {}
+    try { abortRef.current?.abort() } catch {}
+    setSending(false)
+    setLoadingText('')
   }
 
   const send = () => {
@@ -1007,7 +1054,10 @@ function MainApp({ user, token, logout }) {
             <button className={'mic'+(listening?' mic-on':'')} onClick={toggleVoice} title="Voice input">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0014 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
             </button>
-            <button className="send" onClick={send} disabled={sending && sendingChatRef.current === chatIdRef.current}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9Z"/></svg></button>
+            {sending && sendingChatRef.current === chatIdRef.current
+              ? <button className="send send-stop" onClick={cancelSend} title="Stop"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>
+              : <button className="send" onClick={send}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9Z"/></svg></button>
+            }
           </div>
           <div className="input-hints">
             <span className="ih-left">{autopilot&&<><span className="ih-dot"/>AUTOPILOT</>} · {(settings.tradingStyle||'SWING').toUpperCase()} TRADING</span>

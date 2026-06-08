@@ -300,7 +300,9 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .input-box input, .chat-textarea { flex: 1; background: none; border: none; outline: none; color: var(--lt); font-family: var(--sans); font-size: var(--chat-fs); padding: 12px 0; resize: none; max-height: 120px; line-height: 1.5 }
 .input-box input::placeholder, .chat-textarea::placeholder { color: var(--dim) }
 .input-box input:disabled { opacity: .3 }
-.send { width: 40px; height: 40px; border-radius: 12px; background: var(--grn); border: none; color: var(--bg); display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: all .15s }
+.send { width: 40px; height: 40px; border-radius: 12px; background: var(--grn); border: none; color: var(--bg); display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: all .15s; margin-left: 8px }
+.send-stop { background: var(--dim) }
+.send-stop:hover { background: #ef4444; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(239,68,68,.3) }
 .send:hover { background: var(--grn3); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16,185,129,.3) }
 .send:disabled { opacity: .15; cursor: not-allowed; transform: none }
 
