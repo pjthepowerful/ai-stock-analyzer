@@ -642,16 +642,24 @@ def alpaca_buy(ticker: str, qty: int = None, notional: float = None,
     if notional is not None and notional <= 0:
         return {"ok": False, "error": f"Can't buy ${notional} — need a positive amount"}
 
+    # In swing mode, orders must persist across days. A "day" TIF makes Alpaca
+    # auto-cancel the bracket's stop/target legs at the closing bell — which
+    # silently turned swing positions into same-day exits. GTC keeps them alive.
+    _tif = "gtc" if SWING_MODE else "day"
     order = {
         "symbol": ticker.upper(),
         "side": "buy",
-        "time_in_force": "day",
+        "time_in_force": _tif,
     }
 
     if notional and not qty:
         order["notional"] = round(notional, 2)
     else:
         order["qty"] = str(qty or 1)
+
+    # NOTE: a plain market order with GTC is rejected by Alpaca (market orders
+    # are inherently day). GTC only applies to limit/bracket/stop orders, which
+    # is exactly what swing positions use (they always carry stop+target).
 
     # Bracket order: entry + stop-loss + take-profit
     if stop_loss and take_profit:
@@ -672,6 +680,11 @@ def alpaca_buy(ticker: str, qty: int = None, notional: float = None,
         order["limit_price"] = str(round(limit_price, 2))
     else:
         order["type"] = "market"
+
+    # Alpaca rejects GTC on plain market orders (no stop/target legs to persist).
+    # Such an order has nothing to hold overnight anyway, so fall back to day.
+    if order.get("type") == "market" and order.get("order_class", "simple") in ("simple", None) and order["time_in_force"] == "gtc":
+        order["time_in_force"] = "day"
 
     try:
         r = requests.post(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(),
