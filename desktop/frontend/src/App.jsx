@@ -220,7 +220,17 @@ function LoginPage({ onAuth }) {
               {loading ? '...' : isSignup ? 'Create account  →' : 'Sign in  →'}
             </button>
 
-            <button className="login-toggle" onClick={() => { setIsSignup(!isSignup); setError(''); setNotice(''); setUsername(''); setEmail('') }}>
+            <button className="login-toggle" onClick={() => {
+              setError(''); setNotice('')
+              if (!isSignup) {
+                // sign-in -> sign-up: the email was in `username`; move it to `email`, clear name
+                setEmail(username); setUsername('')
+              } else {
+                // sign-up -> sign-in: sign-in keeps email in `username`; move it back, drop name
+                setUsername(email)
+              }
+              setIsSignup(!isSignup)
+            }}>
               {isSignup ? 'Already have an account? ' : 'New to Paula? '}<span className="lt-link">{isSignup ? 'Sign in' : 'Create account'}</span>
             </button>
           </div>
