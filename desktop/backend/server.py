@@ -1887,7 +1887,11 @@ async def autopilot_status():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=3141, log_level="info")
+    # Cloud hosts (Railway, Render) inject a PORT env var and require binding to
+    # 0.0.0.0. Locally, default to 127.0.0.1:3141 as before.
+    _port = int(os.environ.get("PORT", "3141"))
+    _host = "0.0.0.0" if os.environ.get("PORT") else "127.0.0.1"
+    uvicorn.run(app, host=_host, port=_port, log_level="info")
 
 
 # ═══ Admin Panel ═══
