@@ -645,6 +645,8 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .lt-meta { color: var(--dim); font-size: .58rem; flex: 1 }
 .lt-pnl { font-weight: 700; font-size: .76rem; letter-spacing: .01em }
 .ll-bottom { border-top: 1px solid var(--brd); padding-top: 20px }
+.ll-feature-row { display: flex; flex-wrap: wrap; gap: 8px }
+.ll-feat { font-size: .72rem; color: var(--lt); background: color-mix(in srgb, var(--grn) 10%, transparent); border: 1px solid color-mix(in srgb, var(--grn) 25%, transparent); padding: 5px 11px; border-radius: 999px; white-space: nowrap }
 .ll-stats { display: flex; gap: 0; align-items: stretch }
 .ll-stat { display: flex; flex-direction: column; gap: 5px; padding-right: 28px }
 .ll-stat-div { width: 1px; background: var(--brd); margin: 0 28px 0 0; flex-shrink: 0 }

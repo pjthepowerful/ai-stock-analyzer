@@ -157,33 +157,31 @@ function LoginPage({ onAuth }) {
       <div className="login-left">
         <div className="ll-top"><span className="logo-p">P</span><span className="ll-name">Paula</span></div>
         <div className="ll-mid">
-          <span className="ll-label">TRADING COPILOT · v3.1</span>
-          <h1 className="ll-hero">Hey Paula. <span className="ll-hero-sub">Trade smarter. Sleep better. Let her handle the markets.</span></h1>
+          <span className="ll-label">SWING TRADING COPILOT · v3.2</span>
+          <h1 className="ll-hero">Hey Paula. <span className="ll-hero-sub">Find the setups, hold for the move, and let the engine watch the market while you live your life.</span></h1>
 
           {/* Live tape card */}
           <div className="ll-tape">
-            <div className="lt-head"><span className="lt-live">● Live · today's tape</span><span className="lt-time">{new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/New_York'})} ET</span></div>
+            <div className="lt-head"><span className="lt-live">● Live · swing watchlist</span><span className="lt-time">{new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/New_York'})} ET</span></div>
             <svg className="lt-chart" viewBox="0 0 200 40" preserveAspectRatio="none">
               <polyline points="0,35 10,32 20,30 30,28 40,31 50,27 60,25 70,28 80,24 90,22 100,20 110,18 120,22 130,19 140,16 150,14 160,17 170,13 180,11 190,10 200,8" fill="none" stroke="var(--grn)" strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>
               <linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--grn)" stopOpacity=".15"/><stop offset="100%" stopColor="var(--grn)" stopOpacity="0"/></linearGradient>
               <polygon points="0,35 10,32 20,30 30,28 40,31 50,27 60,25 70,28 80,24 90,22 100,20 110,18 120,22 130,19 140,16 150,14 160,17 170,13 180,11 190,10 200,8 200,40 0,40" fill="url(#tg)"/>
             </svg>
             <div className="lt-positions">
-              <div className="lt-row"><span className="lt-sym">NVDA</span><span className="lt-sig lt-buy">BUY</span><span className="lt-meta">12 @ 142.18</span><span className="lt-pnl up">+$186</span></div>
-              <div className="lt-row"><span className="lt-sym">TSLA</span><span className="lt-sig lt-hold">HOLD</span><span className="lt-meta">8 @ 348.92</span><span className="lt-pnl up">+$94</span></div>
-              <div className="lt-row"><span className="lt-sym">AMD</span><span className="lt-sig lt-watch">WATCH</span><span className="lt-meta">breakout</span><span className="lt-pnl dn">−$42</span></div>
+              <div className="lt-row"><span className="lt-sym">NVDA</span><span className="lt-sig lt-buy">BUY</span><span className="lt-meta">Pullback to 20 SMA</span><span className="lt-pnl up">+$186</span></div>
+              <div className="lt-row"><span className="lt-sym">XOM</span><span className="lt-sig lt-buy">BUY</span><span className="lt-meta">Near 52-wk high</span><span className="lt-pnl up">+$94</span></div>
+              <div className="lt-row"><span className="lt-sym">AMD</span><span className="lt-sig lt-watch">WATCH</span><span className="lt-meta">Volatility coiling</span><span className="lt-pnl dn">−$42</span></div>
             </div>
           </div>
         </div>
         <div className="ll-bottom">
-          <div className="ll-stats">
-            <div className="ll-stat"><span className="ll-stat-l">WIN RATE</span><span className="ll-stat-n ll-grn">33.3%</span></div>
-            <div className="ll-stat-div"/>
-            <div className="ll-stat"><span className="ll-stat-l">PROFIT FACTOR</span><span className="ll-stat-n">1.24</span></div>
-            <div className="ll-stat-div"/>
-            <div className="ll-stat"><span className="ll-stat-l">AVG R:R</span><span className="ll-stat-n">2.47</span></div>
+          <div className="ll-feature-row">
+            <span className="ll-feat">21-factor signal engine</span>
+            <span className="ll-feat">Live news + web search</span>
+            <span className="ll-feat">Autopilot paper trading</span>
           </div>
-          <div className="ll-market-row"><span className="ll-market">● MARKETS OPEN · NYSE</span></div>
+          <div className="ll-market-row"><span className="ll-market">● Hosted &amp; always-on · runs while you sleep</span></div>
         </div>
       </div>
       {/* Right — form */}
@@ -370,12 +368,12 @@ function MainApp({ user, token, logout }) {
   const [view, setView] = useState('chat')
   const [perf, setPerf] = useState(null)
   const [showChangelog, setShowChangelog] = useState(() => {
-    const v = '3.1'
+    const v = '3.2'
     const seen = localStorage.getItem('paula-changelog-seen')
     if (seen !== v) return true
     return false
   })
-  const dismissChangelog = () => { setShowChangelog(false); localStorage.setItem('paula-changelog-seen', '3.1') }
+  const dismissChangelog = () => { setShowChangelog(false); localStorage.setItem('paula-changelog-seen', '3.2') }
   
   const [sideOpen, setSideOpen] = useState(window.innerWidth > 768)
   const [pinnedChats, setPinnedChats] = useState(() => {
@@ -829,8 +827,8 @@ function MainApp({ user, token, logout }) {
             <div className="cl-top-l">
               <span className="logo-p cl-logo">P</span>
               <div>
-                <span className="cl-ver-title">Paula v3.1</span>
-                <span className="cl-date">May 2026</span>
+                <span className="cl-ver-title">Paula v3.2</span>
+                <span className="cl-date">June 2026</span>
               </div>
             </div>
             <button className="cl-close" onClick={dismissChangelog}>
@@ -839,31 +837,33 @@ function MainApp({ user, token, logout }) {
           </div>
 
           <div className="cl-hero">
-            <h2>What's new</h2>
-            <p>A smarter, more personal trading experience.</p>
+            <h2>What's new in 3.2</h2>
+            <p>Paula is now a full swing-trading copilot — deeper signals, live information, and always-on hosting.</p>
           </div>
 
           <div className="cl-body">
             <div className="cl-group">
-              <span className="cl-group-title">Trading</span>
-              <div className="cl-item"><span className="cl-dot cl-dot-grn"/><div><b>Backtest Engine</b><p>Run 90-day historical simulations with equity curve, trade log, and profit factor analysis.</p></div></div>
-              <div className="cl-item"><span className="cl-dot cl-dot-grn"/><div><b>ML Insights</b><p>Analyze your trade history for patterns — best hours, winning scores, and auto-tuner recommendations.</p></div></div>
-              <div className="cl-item"><span className="cl-dot cl-dot-grn"/><div><b>Multi-Chart Tabs</b><p>Ask about multiple stocks — click ticker tabs to switch between charts instantly.</p></div></div>
+              <span className="cl-group-title">Smarter swing engine</span>
+              <div className="cl-item"><span className="cl-dot cl-dot-grn"/><div><b>Named setups</b><p>Every pick comes with its thesis — pullback to 20 SMA, breakout, oversold bounce, or volatility coiling.</p></div></div>
+              <div className="cl-item"><span className="cl-dot cl-dot-grn"/><div><b>52-week-high &amp; VCP detection</b><p>Paula favors strength near highs and spots tightening ranges before a move.</p></div></div>
+              <div className="cl-item"><span className="cl-dot cl-dot-grn"/><div><b>Honest backtest</b><p>Multi-position simulation with realistic drawdown — no more inflated, all-100 scores.</p></div></div>
+              <div className="cl-item"><span className="cl-dot cl-dot-grn"/><div><b>Positions held overnight</b><p>Autopilot now trades true swing — multi-day holds, no end-of-day force-close.</p></div></div>
             </div>
 
             <div className="cl-group">
-              <span className="cl-group-title">Interface</span>
-              <div className="cl-item"><span className="cl-dot cl-dot-blu"/><div><b>Redesigned UI</b><p>New split login, welcome widgets, prompt cards with icons, positions strip, and refined sidebar.</p></div></div>
-              <div className="cl-item"><span className="cl-dot cl-dot-blu"/><div><b>Typing Animation</b><p>Responses appear word-by-word with a blinking cursor. Loading states show what Paula is doing.</p></div></div>
-              
+              <span className="cl-group-title">Knows what's happening now</span>
+              <div className="cl-item"><span className="cl-dot cl-dot-blu"/><div><b>Live news</b><p>Ask "what's the latest on NVDA" and Paula pulls current headlines, not stale data.</p></div></div>
+              <div className="cl-item"><span className="cl-dot cl-dot-blu"/><div><b>Web search</b><p>Questions beyond the ticker tape — like the SpaceX IPO — get answered from the live web.</p></div></div>
+              <div className="cl-item"><span className="cl-dot cl-dot-blu"/><div><b>Private companies</b><p>Paula recognizes pre-IPO names and answers conversationally instead of guessing.</p></div></div>
+              <div className="cl-item"><span className="cl-dot cl-dot-blu"/><div><b>Market awareness</b><p>She knows when the market's open, closed, or after-hours and answers accordingly.</p></div></div>
             </div>
 
             <div className="cl-group">
-              <span className="cl-group-title">Quality of Life</span>
-              <div className="cl-item"><span className="cl-dot cl-dot-pur"/><div><b>Pin Chats</b><p>Pin important conversations to the top of the sidebar.</p></div></div>
-              <div className="cl-item"><span className="cl-dot cl-dot-pur"/><div><b>Keyboard Shortcuts</b><p>⌘N new chat · ⌘K focus input · ↵ send</p></div></div>
-              <div className="cl-item"><span className="cl-dot cl-dot-pur"/><div><b>Message Timestamps</b><p>See when each message was sent.</p></div></div>
-              <div className="cl-item"><span className="cl-dot cl-dot-pur"/><div><b>Settings Overhaul</b><p>Trader Profile, Connections, toggle switches, data export, and more.</p></div></div>
+              <span className="cl-group-title">Polish &amp; reliability</span>
+              <div className="cl-item"><span className="cl-dot cl-dot-pur"/><div><b>Per-chat memory</b><p>Each conversation stays its own — no more context bleeding between chats.</p></div></div>
+              <div className="cl-item"><span className="cl-dot cl-dot-pur"/><div><b>Stop anytime</b><p>Cancel a response mid-stream with the stop button.</p></div></div>
+              <div className="cl-item"><span className="cl-dot cl-dot-pur"/><div><b>Always-on hosting</b><p>Paula now runs in the cloud — available any time, no laptop required.</p></div></div>
+              <div className="cl-item"><span className="cl-dot cl-dot-pur"/><div><b>Consistent scores</b><p>The Analyze tab and chat now always agree on a stock's score.</p></div></div>
             </div>
           </div>
 
@@ -876,7 +876,7 @@ function MainApp({ user, token, logout }) {
       {/* Sidebar */}
       <aside className={'sb'+(sideOpen?'':' sb-hide')}>
         <div className="sb-top">
-          <div className="sb-logo"><span className="logo-p">P</span>Paula<span className="sb-ver">v3.1</span></div>
+          <div className="sb-logo"><span className="logo-p">P</span>Paula<span className="sb-ver">v3.2</span></div>
           <div className="sb-top-r">
             <button className="sb-new" onClick={newChat} title="New chat (⌘N)">+</button>
             <button className="sb-close" onClick={()=>setSideOpen(false)}>×</button>
@@ -991,7 +991,7 @@ function MainApp({ user, token, logout }) {
             }}>
               <span className={'ap-dot'+(autopilot?' dot-on':'')}/>{autopilot?'Scanning · 412 tickers':'Autopilot'}
             </button>
-            <button className="hdr-ver" onClick={()=>setShowChangelog(true)}>v3.1</button>
+            <button className="hdr-ver" onClick={()=>setShowChangelog(true)}>v3.2</button>
             <button className="hdr-logout" onClick={logout}>↗</button>
           </div>
         </div>
@@ -1757,7 +1757,7 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
 
     {/* About */}
     <div className="card wide"><label>About</label>
-      <div className="s-row"><span>Version</span><span className="s-ver">v3.1</span></div>
+      <div className="s-row"><span>Version</span><span className="s-ver">v3.2</span></div>
       {(user.email||'').toLowerCase() === 'parjan.d@icloud.com' && <div className="s-row"><span>Admin</span><button className="tog" onClick={() => setShowAdmin(true)}>Open panel</button></div>}
       {showAdmin && <AdminPanel token={token} onClose={() => setShowAdmin(false)}/>}
       <div className="s-row"><span>What's new</span><button className="tog" onClick={()=>setShowChangelog(true)}>View</button></div>

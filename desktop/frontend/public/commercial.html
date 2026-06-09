@@ -54,7 +54,7 @@
             <span style={{ opacity: pOp, transform: `translateY(${pY}px)`, color: "var(--grn)" }}>Paula.</span>
           </div>
           <div style={{ fontSize: 20, color: "var(--dim)", marginTop: 20, opacity: subOp, transform: `translateY(${subY}px)`, letterSpacing: "0.04em" }}>
-            meet your AI trading assistant
+            your AI swing-trading copilot
           </div>
         </div>
       </div>
@@ -69,7 +69,7 @@
 
     const lines = [
       { text: "What if you could just... ask?", start: 3.7 },
-      { text: "And it actually traded for you.", start: 4.6 },
+      { text: "And it found the setups for you.", start: 4.6 },
     ];
 
     return (
@@ -99,9 +99,9 @@
     const boxY = animate({ from: 18, to: 0, start: 6.5, end: 7.0, ease: Easing.easeOutCubic })(time);
 
     const exchanges = [
-      { q: "Hey Paula, what should I invest in?", a: "NVDA is showing strong momentum. Score 86, STRONG_BUY signal.", start: 7.0 },
-      { q: "Hey Paula, buy some for me.", a: "Done. Bought 8 shares of NVDA at $142.18. Stop at $140.33.", start: 8.5 },
-      { q: "Hey Paula, how am I doing?", a: "You're up $58 this month. 33% win rate, 2.5:1 R:R. Profitable.", start: 10.0 },
+      { q: "Hey Paula, find me some swing setups.", a: "XOM — pullback to 20 SMA in an uptrend. Score 84, BUY.", start: 7.0 },
+      { q: "Why this one?", a: "Near its 52-week high, volatility coiling, strong volume. Stop 3% below, target 2:1.", start: 8.5 },
+      { q: "What's the latest news on it?", a: "Pulling live headlines — earnings beat last week, analyst upgrade this morning.", start: 10.0 },
     ];
 
     return (
@@ -153,9 +153,9 @@
              * (1 - animate({ from: 0, to: 1, start: 14.3, end: 15.0, ease: Easing.easeInCubic })(time));
 
     const features = [
-      { icon: "📊", text: "Scans 100+ stocks", start: 12.3 },
-      { icon: "🤖", text: "Trades automatically", start: 12.7 },
-      { icon: "📱", text: "Updates you on your phone", start: 13.1 },
+      { icon: "🎯", text: "Names every setup", start: 12.3 },
+      { icon: "🤖", text: "Autopilot holds for the swing", start: 12.7 },
+      { icon: "📰", text: "Knows the latest news", start: 13.1 },
       { icon: "💬", text: "Just ask in plain English", start: 13.5 },
     ];
 
@@ -235,7 +235,10 @@
             <span style={{ opacity: pOp, transform: `translateY(${pY}px)`, color: "var(--grn)" }}>Paula.</span>
           </div>
           <div style={{ fontSize: 20, color: "var(--dim)", opacity: tOp, transform: `translateY(${tY}px)` }}>
-            for <span style={{ color: "var(--fg)" }}>everything</span> trading.
+            your <span style={{ color: "var(--fg)" }}>swing-trading</span> copilot.
+          </div>
+          <div className="mono" style={{ fontSize: 12, color: "var(--dim)", letterSpacing: "0.15em", opacity: tOp, marginTop: 4 }}>
+            v3.2
           </div>
         </div>
       </div>
