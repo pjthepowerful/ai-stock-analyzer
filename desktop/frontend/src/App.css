@@ -749,25 +749,25 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 @keyframes lgTape { from { transform: translateX(0) } to { transform: translateX(-50%) } }
 
 /* Two-column grid above the background */
-.lg-grid { position: relative; z-index: 2; height: 100%; display: grid; grid-template-columns: 1fr 1fr; }
+.lg-grid { position: relative; z-index: 2; height: 100%; display: grid; grid-template-columns: 1.1fr 1fr; }
 
 /* Left — the statement */
-.lg-left { padding: 54px 50px; display: flex; flex-direction: column; justify-content: center; background: radial-gradient(680px 440px at 18% 32%, rgba(16,185,129,.10), transparent 62%); }
+.lg-left { padding: 54px 40px 54px 64px; display: flex; flex-direction: column; justify-content: center; background: radial-gradient(720px 460px at 18% 32%, rgba(16,185,129,.10), transparent 62%); }
 .lg-brand { position: absolute; top: 30px; left: 50px; display: flex; align-items: center; gap: 10px; }
 .lg-spacer { display: none; }
 .lg-statement .lg-pills { margin-top: 32px; }
 .lg-brand .logo-p { width: 30px; height: 30px; border-radius: 9px; background: #10b981; color: #04130d; display: grid; place-items: center; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
 .lg-brand-name { font-weight: 600; }
 .lg-live { font-size: 11px; color: #10b981; font-family: 'JetBrains Mono', monospace; letter-spacing: .1em; margin-left: 4px; }
-.lg-hero { font-size: 52px; font-weight: 800; line-height: 1.05; letter-spacing: -.03em; }
+.lg-hero { font-size: 62px; font-weight: 800; line-height: 1.04; letter-spacing: -.03em; }
 .lg-hero-grn { color: #10b981; }
-.lg-tagline { font-size: 16px; color: #9a9aaa; margin-top: 20px; max-width: 400px; line-height: 1.5; }
-.lg-pills { display: flex; gap: 9px; flex-wrap: wrap; }
-.lg-pill { font-size: 12px; color: #9a9aaa; border: 1px solid #2a2a35; border-radius: 999px; padding: 6px 13px; background: rgba(12,12,18,.7); backdrop-filter: blur(4px); white-space: nowrap; }
+.lg-tagline { font-size: 18px; color: #9a9aaa; margin-top: 24px; max-width: 440px; line-height: 1.55; }
+.lg-pills { display: flex; gap: 10px; flex-wrap: wrap; }
+.lg-pill { font-size: 13px; color: #9a9aaa; border: 1px solid #2a2a35; border-radius: 999px; padding: 7px 15px; background: rgba(12,12,18,.7); backdrop-filter: blur(4px); white-space: nowrap; }
 
 /* Right — frosted form card */
-.lg-right { display: flex; align-items: center; justify-content: center; padding: 0 56px; }
-.lg-card { width: 100%; max-width: 460px; background: rgba(15,15,21,.85); backdrop-filter: blur(16px); border: 1px solid #26262f; border-radius: 20px; padding: 44px 40px; }
+.lg-right { display: flex; align-items: center; justify-content: center; padding: 0 64px 0 24px; }
+.lg-card { width: 100%; max-width: 480px; background: rgba(15,15,21,.85); backdrop-filter: blur(16px); border: 1px solid #26262f; border-radius: 20px; padding: 46px 42px; }
 .lg-card-title { font-size: 28px; font-weight: 700; margin-bottom: 5px; }
 .lg-card-sub { font-size: 14px; color: #8a8a9a; margin-bottom: 28px; }
 .lg-form { display: flex; flex-direction: column; }

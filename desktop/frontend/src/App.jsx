@@ -150,7 +150,7 @@ function LoginPage({ onAuth }) {
           <div className="lg-brand"><span className="logo-p">P</span><span className="lg-brand-name">Paula</span></div>
           <div className="lg-statement">
             <h1 className="lg-hero">Markets don't<br/>sleep.<br/><span className="lg-hero-grn">Neither does<br/>Paula.</span></h1>
-            <p className="lg-tagline">Your AI swing-trading copilot finds the setups, holds for the move, and watches the tape so you don't have to.</p>
+            <p className="lg-tagline">Your AI trading assistant finds the setups, holds for the move, and watches the tape so you don't have to.</p>
             <div className="lg-pills">
               <span className="lg-pill">Named setups</span>
               <span className="lg-pill">Live news</span>
