@@ -377,6 +377,34 @@ function MainApp({ user, token, logout }) {
     }
   }
 
+  const toggleAutopilot = async () => {
+    const wasOn = autopilot
+    apToggleAtRef.current = Date.now()
+    setAutopilot(!wasOn)
+    if (wasOn) {
+      const apId = apChatRef.current
+      if (apId && chatIdRef.current !== apId) switchChat(apId)
+      setMessages(prev => [...prev, { role: 'assistant', content: '🔴 **Autopilot stopped.**', type: 'autopilot' }])
+      if (apId) persist(chatsRef.current.map(c => c.id === apId ? { ...c, title: 'Autopilot Off' } : c))
+      apChatRef.current = null
+    } else {
+      newChat()
+      const apId = chatIdRef.current
+      apChatRef.current = apId
+      persist(chatsRef.current.map(c => c.id === apId ? { ...c, title: 'Autopilot Session' } : c))
+      setMessages([{ role: 'assistant', content: '🟢 **Autopilot started.** Scanning every 5 minutes.\n\nLogs will appear here.', type: 'autopilot' }])
+    }
+    setView('chat')
+    try {
+      const r = await f(API+'/api/autopilot/'+(wasOn?'stop':'start'),{method:'POST'}).then(r=>r.json())
+      if (!r.ok) {
+        apToggleAtRef.current = 0; setAutopilot(wasOn); if (!wasOn) apChatRef.current = null
+        const msg = r.error || 'Autopilot could not start'
+        addToast(msg.includes('signed in') || msg.includes('restricted') ? 'Sign out and back in — your session expired' : msg, 'sell')
+      }
+    } catch { apToggleAtRef.current = 0; setAutopilot(wasOn); if (!wasOn) apChatRef.current = null; addToast("Can't reach backend", 'sell') }
+  }
+
   const newChat = () => {
     saveCurrentChat()
     const id = Date.now().toString()
@@ -838,65 +866,59 @@ function MainApp({ user, token, logout }) {
         </div>
       </div>}
 
-      {/* Sidebar */}
-      <aside className={'sb'+(sideOpen?'':' sb-hide')}>
-        <div className="sb-top">
-          <div className="sb-logo"><span className="logo-p">P</span>Paula<span className="sb-ver">v3.2</span></div>
-          <div className="sb-top-r">
-            <button className="sb-new" onClick={newChat} title="New chat (⌘N)">+</button>
-            <button className="sb-close" onClick={()=>setSideOpen(false)}>×</button>
-          </div>
-        </div>
+      {/* Hover-expand rail — collapsed to icons by default, expands on hover */}
+      <aside className={'rail'+(sideOpen?' rail-pinned':'')}>
+        <div className="rl-logo"><span className="logo-p rl-mark">P</span><b className="rl-name">Paula</b></div>
 
-        <button className="sb-newchat" onClick={newChat}>+ New chat</button>
-        <div className="sb-search-wrap">
-          <input className="sb-search" placeholder="Search chats..." value={chatSearch} onChange={e=>setChatSearch(e.target.value)} type="text" name="chat-search-field" autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false} data-1p-ignore data-lpignore="true" data-form-type="other"/>
-          {chatSearch&&<button className="sb-search-x" onClick={()=>setChatSearch('')}>×</button>}
-        </div>
-        <div className="chat-list">
+        <button className="rl-item rl-new" onClick={newChat} title="New chat">
+          <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg></i><span>New chat</span>
+        </button>
+
+        {[
+          ['chat','Chat',<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>],
+          ['analyze','Analyze',<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>],
+          ['stats','Portfolio',<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6"/><rect x="13" y="7" width="3" height="10"/></svg>],
+        ].map(([v,label,icon])=>(
+          <button key={v} className={'rl-item'+(view===v?' rl-on':'')} onClick={()=>{setView(v);if(v==='stats')loadDashboard()}} title={label}>
+            <i className="rl-ic">{icon}</i><span>{label}</span>
+          </button>
+        ))}
+
+        <div className="rl-scroll">
+          <div className="rl-sec">Chats</div>
           {(()=>{
             const q = chatSearch.toLowerCase()
             const filtered = chats.filter(c => !q || c.title?.toLowerCase().includes(q))
-            return <>
-          {filtered.length > 0 && <div className="cl-section">Chats</div>}
-          {filtered.slice(0, 25).map(c => (
-            <div key={c.id} className={'chat-item' + (chatId === c.id ? ' ci-active' : '')} onClick={() => {switchChat(c.id);setView('chat')}}>
-              <span className="ci-dot"/>
-              <span className="ci-title">{c.title}</span>
-              <span className="ci-time">{c.created?new Date(c.created).toLocaleDateString('en-US',{weekday:'short'}).slice(0,3):''}</span>
-              <div className="ci-acts">
-                <button className="ci-act ci-x" onClick={(e) => { e.stopPropagation(); deleteChat(c.id) }}>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            return filtered.slice(0, 25).map(c => (
+              <div key={c.id} className={'rl-chat' + (chatId === c.id ? ' rl-chat-on' : '')} onClick={() => {switchChat(c.id);setView('chat')}}>
+                <span className="rl-chat-title">{c.title}</span>
+                <button className="rl-chat-x" onClick={(e) => { e.stopPropagation(); deleteChat(c.id) }} aria-label="Delete chat">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
               </div>
-            </div>
-          ))}
-          {q && filtered.length === 0 && <div className="empty-txt">No chats match "{chatSearch}"</div>}
-          </>})()}
+            ))
+          })()}
+          {positions.length>0&&<>
+            <div className="rl-sec">Positions <span className={'rl-sec-tot '+(totalUnrealized>=0?'up':'dn')}>{totalUnrealized>=0?'+':''}${Math.abs(totalUnrealized).toFixed(0)}</span></div>
+            {positions.map((p,i)=>(
+              <div key={i} className="rl-pos" onClick={()=>{setSelectedPos(selectedPos===p.ticker?null:p.ticker);setView('chat')}}>
+                <span className="rl-pos-sym">{p.ticker}</span>
+                <span className={'rl-pos-pnl '+(p.unrealized_pnl>=0?'up':'dn')}>{p.unrealized_pnl>=0?'+':'−'}${Math.abs(p.unrealized_pnl).toFixed(0)}</span>
+              </div>
+            ))}
+          </>}
         </div>
 
-        <div className="sb-divider"/>
-        <div className="sb-pos">
-          <div className="pos-head">
-            <span>Positions</span>
-            <span className="pos-n">{positions.length}</span>
-            {positions.length>0&&<span className={'pos-tot '+(totalUnrealized>=0?'up':'dn')}>{totalUnrealized>=0?'+':''}${Math.abs(totalUnrealized).toFixed(0)}</span>}
-          </div>
-          <div className="pos-list">{positions.length>0?positions.map((p,i)=>(
-            <button key={i} className={'pi'+(selectedPos===p.ticker?' pi-sel':'')+(p.unrealized_pnl>=0?' pi-up':' pi-dn')}
-              onClick={()=>setSelectedPos(selectedPos===p.ticker?null:p.ticker)}>
-              <div className="pi-l"><span className="pi-sym">{p.ticker}</span><span className="pi-meta">{Math.abs(p.qty)} @ {p.avg_entry?.toFixed(2)||'?'}</span></div>
-              <div className="pi-r"><span className="pi-pnl">{p.unrealized_pnl>=0?'+$':'−$'}{Math.abs(p.unrealized_pnl).toFixed(2)}</span><span className="pi-pct">{p.unrealized_pnl_pct>=0?'+':''}{(p.unrealized_pnl_pct||0).toFixed(2)}%</span></div>
-            </button>)):<span className="empty-txt">No open positions</span>}</div>
-        </div>
-        <div className="sb-bottom">
-          <div className="sb-user sb-user-btn" onClick={()=>{setView('settings');if(window.innerWidth<700)setSideOpen(false)}} title="Open settings" role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')setView('settings')}}>
-            <span className="su-avatar">{(settings.userName||user?.username||'P').charAt(0).toUpperCase()}</span>
-            <div className="su-info">
-              <span className="su-name">{settings.userName||user?.username||'PJ'}</span>
-              <span className={'su-conn'+(connected?' c-on':'')}><span className="conn-dot"/>{connected?'Connected':'Offline'}</span>
-            </div>
-          </div>
+        <div className="rl-foot">
+          <button className={'rl-item rl-ap'+(autopilot?' rl-ap-on':'')} onClick={()=>toggleAutopilot()} title="Autopilot">
+            <i className="rl-ic"><span className={'rl-ap-dot'+(autopilot?' on':'')}/></i><span>Autopilot<small>{autopilot?'on':'off'}</small></span>
+          </button>
+          <button className="rl-item" onClick={()=>setView('settings')} title="Settings">
+            <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 8 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H2a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 3.6 8a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H8a1.65 1.65 0 0 0 1-1.51V2a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V8a1.65 1.65 0 0 0 1.51 1H22a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></i><span>Settings</span>
+          </button>
+          <button className="rl-item rl-profile" onClick={()=>setView('settings')} title={settings.userName||user?.username||'Account'}>
+            <i className="rl-ic"><span className="rl-av">{(settings.userName||user?.username||'P').charAt(0).toUpperCase()}</span></i><span>{settings.userName||user?.username||'PJ'}<small className={connected?'c-on':''}>{connected?'connected':'offline'}</small></span>
+          </button>
         </div>
       </aside>
 
@@ -904,60 +926,15 @@ function MainApp({ user, token, logout }) {
       <main className="main">
         {!sideOpen&&<button className="ham" onClick={()=>setSideOpen(true)}>☰</button>}
 
-        {/* Header bar — account, nav, autopilot */}
-        <div className="hdr">
-          <div className="hdr-left">
+        {/* Slim top bar — equity ticker only; nav lives in the rail */}
+        <div className="hdr hdr-slim">
+          <button className="hdr-changelog" onClick={()=>setShowChangelog(true)} title="What's new">v3.2</button>
+          <div className="hdr-ticker">
             {account&&<>
               <span className="hdr-label">EQUITY</span><span className="hdr-eq">${account.equity.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
               <span className={'hdr-pnl '+(pnl>=0?'up':'dn')}>{pnl>=0?'+':''}{pnl.toFixed(0)}</span>
               {spyTrend&&<span className={'hdr-spy '+(spyTrend.change_pct>=0?'up':'dn')}>SPY {spyTrend.change_pct>=0?'+':''}{spyTrend.change_pct}%</span>}
             </>}
-          </div>
-          <nav className="hdr-nav">
-            {[['chat','Chat'],['analyze','Analyze'],['stats','Portfolio'],['settings','Settings']].map(([v,label])=>(
-              <button key={v} className={'hdr-tab'+(view===v?' ht-on':'')} onClick={()=>{setView(v);if(v==='stats')loadDashboard()}}>{label}</button>
-            ))}
-          </nav>
-          <div className="hdr-right">
-            <button className={'hdr-ap'+(autopilot?' hap-on':'')} onClick={async ()=>{
-              const wasOn = autopilot
-              apToggleAtRef.current = Date.now()
-              setAutopilot(!wasOn)
-
-              if (wasOn) {
-                // STOPPING — stay in the autopilot chat, post stop message there
-                const apId = apChatRef.current
-                if (apId && chatIdRef.current !== apId) {
-                  // Switch to the autopilot chat
-                  switchChat(apId)
-                }
-                // Add stop message
-                setMessages(prev => [...prev, { role: 'assistant', content: '🔴 **Autopilot stopped.**', type: 'autopilot' }])
-                // Rename
-                if (apId) persist(chatsRef.current.map(c => c.id === apId ? { ...c, title: 'Autopilot Off' } : c))
-                apChatRef.current = null
-              } else {
-                // STARTING — create new chat
-                newChat()
-                const apId = chatIdRef.current
-                apChatRef.current = apId
-                persist(chatsRef.current.map(c => c.id === apId ? { ...c, title: 'Autopilot Session' } : c))
-                setMessages([{ role: 'assistant', content: '🟢 **Autopilot started.** Scanning every 5 minutes.\n\nLogs will appear here.', type: 'autopilot' }])
-              }
-
-              try {
-                const r = await f(API+'/api/autopilot/'+(wasOn?'stop':'start'),{method:'POST'}).then(r=>r.json())
-                if (!r.ok) {
-                  apToggleAtRef.current = 0; setAutopilot(wasOn); if (!wasOn) apChatRef.current = null
-                  const msg = r.error || 'Autopilot could not start'
-                  addToast(msg.includes('signed in') || msg.includes('restricted') ? 'Sign out and back in — your session expired' : msg, 'sell')
-                }
-              } catch { apToggleAtRef.current = 0; setAutopilot(wasOn); if (!wasOn) apChatRef.current = null; addToast("Can't reach backend", 'sell') }
-            }}>
-              <span className={'ap-dot'+(autopilot?' dot-on':'')}/>{autopilot?'Scanning · 412 tickers':'Autopilot'}
-            </button>
-            <button className="hdr-ver" onClick={()=>setShowChangelog(true)}>v3.2</button>
-            <button className="hdr-logout" onClick={logout}>↗</button>
           </div>
         </div>
 
