@@ -129,7 +129,7 @@ function LoginPage({ onAuth }) {
     setLoading(false)
   }
 
-  const tickTape = ['NVDA +1.8%','XOM +0.9%','AAPL +0.4%','TSLA −1.2%','AMD +2.1%','SPY −0.3%','MSFT +0.7%','META +1.1%','GOOGL +0.6%','AVGO +1.4%']
+  const tickTape = ['NVDA +1.8%','AAPL +0.4%','MSFT +0.7%','GOOGL +0.6%','AMZN +1.2%','META +1.1%','TSLA −1.2%','AVGO +1.4%','AMD +2.1%','XOM +0.9%','JPM +0.3%','NFLX +0.8%','SPY −0.3%','QQQ +0.2%','COST +0.5%']
 
   return (
     <div className="lg-root">
@@ -867,7 +867,7 @@ function MainApp({ user, token, logout }) {
       </div>}
 
       {/* Hover-expand rail — collapsed to icons by default, expands on hover */}
-      <aside className={'rail'+(sideOpen?' rail-pinned':'')}>
+      <aside className={'rail'+(sideOpen&&window.innerWidth<=760?' rail-pinned':'')}>
         <div className="rl-logo"><span className="logo-p rl-mark">P</span><b className="rl-name">Paula</b></div>
 
         <button className="rl-item rl-new" onClick={newChat} title="New chat">
@@ -933,7 +933,6 @@ function MainApp({ user, token, logout }) {
             {account&&<>
               <span className="hdr-label">EQUITY</span><span className="hdr-eq">${account.equity.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
               <span className={'hdr-pnl '+(pnl>=0?'up':'dn')}>{pnl>=0?'+':''}{pnl.toFixed(0)}</span>
-              {spyTrend&&<span className={'hdr-spy '+(spyTrend.change_pct>=0?'up':'dn')}>SPY {spyTrend.change_pct>=0?'+':''}{spyTrend.change_pct}%</span>}
             </>}
           </div>
         </div>
