@@ -863,7 +863,7 @@ function MainApp({ user, token, logout }) {
 
         <button className="sb-newchat" onClick={newChat}>+ New chat</button>
         <div className="sb-search-wrap">
-          <input className="sb-search" placeholder="Search chats..." value={chatSearch} onChange={e=>setChatSearch(e.target.value)}/>
+          <input className="sb-search" placeholder="Search chats..." value={chatSearch} onChange={e=>setChatSearch(e.target.value)} type="text" name="chat-search-field" autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false} data-1p-ignore data-lpignore="true" data-form-type="other"/>
           {chatSearch&&<button className="sb-search-x" onClick={()=>setChatSearch('')}>×</button>}
         </div>
         <div className="chat-list">
@@ -1195,6 +1195,7 @@ function AnalyzeView({ sendMessage, setView }) {
         <div className="az-input-wrap">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{color:'var(--dim)',flexShrink:0}}><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
           <input className="az-input" placeholder="Search a stock..." value={ticker}
+            name="stock-search-field" autoComplete="off" autoCorrect="off" autoCapitalize="characters" spellCheck={false} data-1p-ignore data-lpignore="true" data-form-type="other"
             onChange={e => onType(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && ticker) { setSuggestions([]); lookup(ticker) }}}
             autoFocus/>
@@ -1691,8 +1692,8 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
 
     {/* Connections */}
     {user&&<div className="card wide"><label>Connections</label><span className="card-sub">Broker and data feeds</span>
-      <div className="s-row"><div className="s-col"><span>Alpaca Key</span><span className="s-desc">Broker · trade execution</span></div><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.alpaca_key} onChange={e=>setKeys({...keys,alpaca_key:e.target.value})} placeholder={keyExists.alpaca_key?'•••••••• saved — leave blank to keep':'PKSPW...'}/></div>
-      <div className="s-row"><div className="s-col"><span>Alpaca Secret</span><span className="s-desc">Required for live trading</span></div><input className="s-inp s-wide" type="password" autoComplete="off" value={keys.alpaca_secret} onChange={e=>setKeys({...keys,alpaca_secret:e.target.value})} placeholder={keyExists.alpaca_secret?'•••••••• saved — leave blank to keep':'AzMr...'}/></div>
+      <div className="s-row"><div className="s-col"><span>Alpaca Key</span><span className="s-desc">Broker · trade execution</span></div><input className="s-inp s-wide" type="password" name="alpaca-key-field" autoComplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" value={keys.alpaca_key} onChange={e=>setKeys({...keys,alpaca_key:e.target.value})} placeholder={keyExists.alpaca_key?'•••••••• saved — leave blank to keep':'PKSPW...'}/></div>
+      <div className="s-row"><div className="s-col"><span>Alpaca Secret</span><span className="s-desc">Required for live trading</span></div><input className="s-inp s-wide" type="password" name="alpaca-secret-field" autoComplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" value={keys.alpaca_secret} onChange={e=>setKeys({...keys,alpaca_secret:e.target.value})} placeholder={keyExists.alpaca_secret?'•••••••• saved — leave blank to keep':'AzMr...'}/></div>
       <button className={'login-btn s-save'+(keySaved?' s-saved':'')} onClick={saveKeys}>{keySaved?'✓ Saved':'Save connections'}</button>
     </div>}
 
