@@ -1228,12 +1228,12 @@ function BacktestView() {
     <div className="view-scroll">
       <h2 className="view-h">Backtest</h2>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+      <div className="bt-actions">
         <button className="bt-run" onClick={runBacktest} disabled={loading}>
-          {loading ? 'Running...' : '▶ Run 90-Day Backtest'}
+          {loading ? 'Running…' : 'Run 90-day backtest'}
         </button>
         <button className="bt-run bt-ml" onClick={runML} disabled={mlLoading}>
-          {mlLoading ? 'Training...' : '🧠 Analyze Trades'}
+          {mlLoading ? 'Training…' : 'Analyze trades'}
         </button>
       </div>
 
@@ -1295,7 +1295,7 @@ function BacktestView() {
           {mlInsights.error ? (
             <div className="view-msg" style={{padding:'20px 0'}}>{mlInsights.error}</div>
           ) : (<>
-          <label>🧠 ML Insights — {mlInsights.total_trades} trades analyzed</label>
+          <label>ML insights — {mlInsights.total_trades} trades analyzed</label>
           <div className="bt-stats" style={{marginBottom: 12}}>
             <div className="bt-stat"><span className="bt-n">{mlInsights.win_rate}%</span><span className="bt-l">Win Rate</span></div>
             <div className="bt-stat"><span className="bt-n">{mlInsights.avg_winning_score || '—'}</span><span className="bt-l">Avg Win Score</span></div>

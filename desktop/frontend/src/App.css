@@ -610,6 +610,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .lr-trailer { display: block; text-align: center; margin-top: 12px; font-family: var(--mono); font-size: .44rem; color: var(--dim); text-decoration: none; letter-spacing: .06em; transition: .15s; opacity: .5 }
 .lr-trailer:hover { color: var(--grn); opacity: 1 }
 .bt-run { padding: 10px 20px; border: 1px solid var(--brd); border-radius: 10px; background: var(--c1); color: var(--grn); font-family: var(--sans); font-size: .78rem; font-weight: 600; cursor: pointer; transition: .15s }
+.bt-actions { display: flex; gap: 8px; margin-bottom: 16px; }
 .bt-run:hover { background: var(--c2); border-color: rgba(16,185,129,.2) }
 .bt-run:disabled { opacity: .4; cursor: not-allowed }
 .bt-ml { color: var(--lt) }
