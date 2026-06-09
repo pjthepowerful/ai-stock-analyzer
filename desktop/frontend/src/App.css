@@ -135,6 +135,8 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .empty-txt { font-size: .58rem; color: var(--dim); padding: 6px 10px; display: block; font-style: italic }
 .sb-bottom { padding: 12px 14px; border-top: 1px solid var(--brd) }
 .sb-user { display: flex; align-items: center; gap: 10px }
+.sb-user-btn { cursor: pointer; padding: 6px; margin: -6px; border-radius: 10px; transition: background .15s }
+.sb-user-btn:hover { background: var(--hover, rgba(255,255,255,0.05)) }
 .su-avatar { width: 30px; height: 30px; border-radius: 8px; background: var(--c3); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .62rem; color: var(--lt); font-family: var(--mono); flex-shrink: 0 }
 .su-info { display: flex; flex-direction: column; gap: 1px }
 .su-name { font-size: .62rem; font-weight: 600; color: var(--lt) }

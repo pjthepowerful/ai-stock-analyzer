@@ -34,7 +34,6 @@ const WS_URL = `${BACKEND.startsWith('https') ? 'wss:' : 'ws:'}//${new URL(BACKE
 function App() {
   const [user, setUser] = useState(null)
   const [token, setToken] = useState(localStorage.getItem('paula-token'))
-  const [onboarded, setOnboarded] = useState(true) // assume true until checked
   const [authLoading, setAuthLoading] = useState(true)
 
   // Check auth on mount
@@ -45,8 +44,6 @@ function App() {
         .then(async data => {
           if (data.ok) {
             setUser(data.user)
-            // Check onboarding — keyed per user
-            setOnboarded(localStorage.getItem('paula-onboarded-' + data.user.id) === 'true')
           } else { setToken(null); localStorage.removeItem('paula-token') }
         })
         .catch(() => {})
@@ -64,36 +61,17 @@ function App() {
       const settingsKey = 'paula-settings-' + res.user.id
       const s = JSON.parse(localStorage.getItem(settingsKey) || '{}')
       if (!s.userName) { s.userName = res.user.username; localStorage.setItem(settingsKey, JSON.stringify(s)) }
-      // Show onboarding only for brand new signups
-      if (isSignup) { setOnboarded(false) } else {
-        setOnboarded(localStorage.getItem('paula-onboarded-' + res.user.id) === 'true')
-      }
     }
     return res
   }
 
-  const completeOnboarding = async (style, bias, risk) => {
-    const settingsKey = 'paula-settings-' + (user?.id ?? '')
-    const s = JSON.parse(localStorage.getItem(settingsKey) || '{}')
-    s.tradingStyle = style; s.marketBias = bias; s.riskPct = risk
-    localStorage.setItem(settingsKey, JSON.stringify(s))
-    // Save profile
-    await f(API + '/api/profile', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ tradingStyle: style, marketBias: bias, riskPct: risk })
-    }).catch(() => {})
-
-    localStorage.setItem('paula-onboarded-' + (user?.id || 0), 'true')
-    setOnboarded(true)
-  }
-
-  const logout = () => { setUser(null); setToken(null); setOnboarded(true); localStorage.removeItem('paula-token') }
+  const logout = () => { setUser(null); setToken(null); localStorage.removeItem('paula-token') }
 
   if (authLoading) return <div className="auth-loading"><div className="logo-p">P</div></div>
   if (!user) return <LoginPage onAuth={doAuth} />
 
 
-  return <>{!onboarded && <OnboardingPage user={user} onComplete={completeOnboarding} onSkip={() => { localStorage.setItem('paula-onboarded-' + (user?.id || 0), 'true'); setOnboarded(true) }} />}<MainApp user={user} token={token} logout={logout} /></>
+  return <MainApp user={user} token={token} logout={logout} />
 }
 
 function LoginPage({ onAuth }) {
@@ -925,7 +903,7 @@ function MainApp({ user, token, logout }) {
             </button>)):<span className="empty-txt">No open positions</span>}</div>
         </div>
         <div className="sb-bottom">
-          <div className="sb-user">
+          <div className="sb-user sb-user-btn" onClick={()=>{setView('settings');if(window.innerWidth<700)setSideOpen(false)}} title="Open settings" role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')setView('settings')}}>
             <span className="su-avatar">{(settings.userName||user?.username||'P').charAt(0).toUpperCase()}</span>
             <div className="su-info">
               <span className="su-name">{settings.userName||user?.username||'PJ'}</span>
@@ -1710,16 +1688,6 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
 
   return(<div className="view-scroll"><h2 className="view-h">Settings</h2>
     <p className="view-sub">Account, integrations, and behavior</p>
-
-    {/* Trader Profile */}
-    <div className="card wide"><label>Trader Profile</label><span className="card-sub">How Paula scans and sizes for you</span>
-      <div className="s-row"><div className="s-col"><span>Display name</span><span className="s-desc">Used in greetings and recaps.</span></div><input className="s-inp" value={settings.userName||user?.username||''} onChange={e=>update('userName',e.target.value)} placeholder="Your name"/></div>
-      <div className="s-row"><div className="s-col"><span>Risk per trade</span><span className="s-desc">Max % of equity at risk on any single position.</span></div>
-        <div className="font-picks">
-          {['0.5%','1.0%','2.0%'].map(s=>(<button key={s} className={'fp-btn'+(settings.riskPct===s||(!settings.riskPct&&s==='1.0%')?' fp-on':'')} onClick={()=>{update('riskPct',s);f(API+'/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tradingStyle:'Swing',marketBias:'Auto',riskPct:s})}).catch(()=>{})}}><span className="fp-aa" style={{fontSize:13}}>{s}</span></button>))}
-        </div>
-      </div>
-    </div>
 
     {/* Connections */}
     {user&&<div className="card wide"><label>Connections</label><span className="card-sub">Broker and data feeds</span>

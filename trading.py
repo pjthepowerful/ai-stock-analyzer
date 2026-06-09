@@ -4079,6 +4079,28 @@ def load_autopilot_config() -> dict:
         params["PARTIAL_PROFIT_PCT"] = 0.04
         params["STALE_MINUTES"] = 0
         params["DAILY_LOSS_LIMIT"] = 0.04
+
+    # ── AUTO RISK ────────────────────────────────────────────────────────────
+    # Risk per trade is determined automatically from market conditions, the
+    # same way market direction is auto. Healthy/trending market -> normal risk;
+    # choppy or risk-off market -> dial risk down. Best-effort: if the regime
+    # check fails, fall back to a sensible default so sizing never breaks.
+    try:
+        regime = check_market_regime()
+        _rg = regime.get("regime", "neutral")
+        if not regime.get("safe_to_buy", True):
+            auto_risk = 0.005          # market says don't buy -> minimal risk if any
+        elif _rg in ("strong_bull", "bull"):
+            auto_risk = 0.01           # healthy trend -> normal 1%
+        elif _rg in ("weakening", "recovery", "neutral"):
+            auto_risk = 0.0075         # mixed -> cautious 0.75%
+        else:                          # bear / strong_bear / unknown
+            auto_risk = 0.005          # defensive 0.5%
+    except Exception:
+        auto_risk = 0.01
+    params["RISK_PER_TRADE"] = auto_risk
+    params["RISK_AUTO"] = True  # flag so the UI can show "Auto"
+
     try:
         cfg_path.write_text(json.dumps(params, indent=2))
     except Exception:
