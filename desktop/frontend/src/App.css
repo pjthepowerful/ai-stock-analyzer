@@ -234,7 +234,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 
 /* User messages */
 .msg-user { display: flex; justify-content: flex-end; padding: 6px 0 }
-.user-bubble { width: fit-content; background: var(--c2); border: 1px solid var(--brd); border-radius: 20px 20px 4px 20px; padding: 14px 22px; max-width: 65%; font-size: var(--chat-fs); color: var(--wh); line-height: 1.65; white-space: pre-wrap; word-wrap: break-word }
+.user-bubble { width: fit-content; background: var(--grn); border: none; border-radius: 18px 18px 4px 18px; padding: 12px 18px; max-width: 70%; font-size: var(--chat-fs); color: #04130d; font-weight: 500; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word }
 
 /* AI messages */
 .msg-assistant { padding: 12px 0 }
@@ -457,6 +457,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 
 /* @ mentions */
 .mention { background: rgba(16,185,129,.12); color: var(--grn); padding: 1px 5px; border-radius: 4px; font-family: var(--mono); font-weight: 600; font-size: .85em }
+.user-bubble .mention { background: rgba(4,19,13,.18); color: #04130d; }
 .msg-user .msg-time { text-align: right }
 .loading-state { display: flex; align-items: center; gap: 10px }
 .loading-txt { font-size: .62rem; color: var(--dim); font-style: italic; font-family: var(--sans) }
