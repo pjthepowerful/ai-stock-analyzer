@@ -147,17 +147,18 @@ function LoginPage({ onAuth }) {
       <div className="lg-grid">
         {/* Left — the statement */}
         <div className="lg-left">
-          <div className="lg-brand"><span className="logo-p">P</span><span className="lg-brand-name">Paula</span><span className="lg-live">● LIVE</span></div>
+          <div className="lg-brand"><span className="logo-p">P</span><span className="lg-brand-name">Paula</span></div>
           <div className="lg-statement">
             <h1 className="lg-hero">Markets don't<br/>sleep.<br/><span className="lg-hero-grn">Neither does<br/>Paula.</span></h1>
             <p className="lg-tagline">Your AI swing-trading copilot finds the setups, holds for the move, and watches the tape so you don't have to.</p>
+            <div className="lg-pills">
+              <span className="lg-pill">Named setups</span>
+              <span className="lg-pill">Live news</span>
+              <span className="lg-pill">Autopilot</span>
+              <span className="lg-pill">Always-on</span>
+            </div>
           </div>
-          <div className="lg-pills">
-            <span className="lg-pill">Named setups</span>
-            <span className="lg-pill">Live news</span>
-            <span className="lg-pill">Autopilot</span>
-            <span className="lg-pill">Always-on</span>
-          </div>
+          <div className="lg-spacer" aria-hidden="true"></div>
         </div>
 
         {/* Right — the form, in a frosted card */}

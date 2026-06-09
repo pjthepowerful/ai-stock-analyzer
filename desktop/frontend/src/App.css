@@ -749,11 +749,13 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 @keyframes lgTape { from { transform: translateX(0) } to { transform: translateX(-50%) } }
 
 /* Two-column grid above the background */
-.lg-grid { position: relative; z-index: 2; height: 100%; display: grid; grid-template-columns: 1.25fr 0.9fr; }
+.lg-grid { position: relative; z-index: 2; height: 100%; display: grid; grid-template-columns: 1fr 1fr; }
 
 /* Left — the statement */
-.lg-left { padding: 54px 50px; display: flex; flex-direction: column; justify-content: space-between; background: radial-gradient(680px 440px at 18% 32%, rgba(16,185,129,.10), transparent 62%); }
-.lg-brand { display: flex; align-items: center; gap: 10px; }
+.lg-left { padding: 54px 50px; display: flex; flex-direction: column; justify-content: center; background: radial-gradient(680px 440px at 18% 32%, rgba(16,185,129,.10), transparent 62%); }
+.lg-brand { position: absolute; top: 30px; left: 50px; display: flex; align-items: center; gap: 10px; }
+.lg-spacer { display: none; }
+.lg-statement .lg-pills { margin-top: 32px; }
 .lg-brand .logo-p { width: 30px; height: 30px; border-radius: 9px; background: #10b981; color: #04130d; display: grid; place-items: center; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
 .lg-brand-name { font-weight: 600; }
 .lg-live { font-size: 11px; color: #10b981; font-family: 'JetBrains Mono', monospace; letter-spacing: .1em; margin-left: 4px; }
@@ -764,20 +766,20 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .lg-pill { font-size: 12px; color: #9a9aaa; border: 1px solid #2a2a35; border-radius: 999px; padding: 6px 13px; background: rgba(12,12,18,.7); backdrop-filter: blur(4px); white-space: nowrap; }
 
 /* Right — frosted form card */
-.lg-right { display: flex; align-items: center; justify-content: center; padding: 0 42px; }
-.lg-card { width: 100%; max-width: 372px; background: rgba(15,15,21,.85); backdrop-filter: blur(16px); border: 1px solid #26262f; border-radius: 18px; padding: 30px 28px; }
-.lg-card-title { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
-.lg-card-sub { font-size: 13px; color: #8a8a9a; margin-bottom: 22px; }
+.lg-right { display: flex; align-items: center; justify-content: center; padding: 0 56px; }
+.lg-card { width: 100%; max-width: 460px; background: rgba(15,15,21,.85); backdrop-filter: blur(16px); border: 1px solid #26262f; border-radius: 20px; padding: 44px 40px; }
+.lg-card-title { font-size: 28px; font-weight: 700; margin-bottom: 5px; }
+.lg-card-sub { font-size: 14px; color: #8a8a9a; margin-bottom: 28px; }
 .lg-form { display: flex; flex-direction: column; }
 .lg-label { font-size: 12px; color: #8a8a9a; margin-bottom: 6px; font-weight: 500; }
-.lg-input { height: 46px; border: 1px solid #2a2a35; border-radius: 11px; background: #0a0a0f; color: #ececf2; padding: 0 14px; font: inherit; font-size: 14px; margin-bottom: 13px; outline: none; transition: border-color .15s, box-shadow .15s; width: 100%; }
+.lg-input { height: 50px; border: 1px solid #2a2a35; border-radius: 12px; background: #0a0a0f; color: #ececf2; padding: 0 16px; font: inherit; font-size: 15px; margin-bottom: 15px; outline: none; transition: border-color .15s, box-shadow .15s; width: 100%; }
 .lg-input:focus { border-color: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,.15); }
 .lg-pw-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 .lg-pw-row .lg-label { margin-bottom: 0; }
 .lg-forgot { background: none; border: none; color: #10b981; font: inherit; font-size: 12px; cursor: pointer; padding: 0; }
 .lg-pw-wrap { position: relative; }
-.lg-eye { position: absolute; right: 12px; top: 13px; background: none; border: none; color: #62627a; font: inherit; font-size: 12px; cursor: pointer; }
-.lg-btn { height: 46px; border-radius: 11px; background: #10b981; color: #04130d; border: none; font: inherit; font-weight: 600; font-size: 15px; cursor: pointer; margin-top: 4px; transition: filter .15s, transform .05s; }
+.lg-eye { position: absolute; right: 14px; top: 15px; background: none; border: none; color: #62627a; font: inherit; font-size: 13px; cursor: pointer; }
+.lg-btn { height: 50px; border-radius: 12px; background: #10b981; color: #04130d; border: none; font: inherit; font-weight: 600; font-size: 16px; cursor: pointer; margin-top: 6px; transition: filter .15s, transform .05s; }
 .lg-btn:hover { filter: brightness(1.08); }
 .lg-btn:active { transform: scale(.99); }
 .lg-btn:disabled { opacity: .6; cursor: default; }
