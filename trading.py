@@ -2785,8 +2785,25 @@ def fetch_scan(ticker: str) -> dict | None:
         return None
 
 
-@st.cache_data(ttl=120)
+_FULL_CACHE = {}  # ticker -> (timestamp, data) — short TTL so analyze tab & chat agree
+
 def fetch_full(ticker: str) -> dict | None:
+    # Serve a recent cached result so two independent calls for the same ticker
+    # (e.g. the Analyze tab and a chat analysis moments apart) return identical
+    # data — and therefore identical scores. 60s TTL keeps it fresh enough.
+    import time as _t
+    _key = ticker.upper()
+    _now = _t.time()
+    _hit = _FULL_CACHE.get(_key)
+    if _hit and (_now - _hit[0]) < 60:
+        return _hit[1]
+    _result = _fetch_full_uncached(ticker)
+    if _result:
+        _FULL_CACHE[_key] = (_now, _result)
+    return _result
+
+
+def _fetch_full_uncached(ticker: str) -> dict | None:
     basic = fetch_price(ticker)
     if not basic:
         return None
