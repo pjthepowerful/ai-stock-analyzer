@@ -815,7 +815,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .rl-name { font-size: 15px; font-weight: 600; white-space: nowrap; opacity: 0; transform: translateX(-6px); transition: opacity .28s ease .08s, transform .28s ease .08s; }
 .rail:hover .rl-name, .rail.rail-pinned .rl-name { opacity: 1; transform: none; }
 
-.rl-item { display: flex; align-items: center; gap: 13px; padding: 0 16px; height: 42px; margin: 1px 8px; border-radius: 10px; color: var(--dim); cursor: pointer; white-space: nowrap; background: none; border: none; font: inherit; width: calc(100% - 16px); text-align: left; transition: background .14s ease, color .14s ease; }
+.rl-item { display: flex; align-items: center; gap: 13px; padding: 0 13px; height: 42px; margin: 1px 8px; border-radius: 10px; color: var(--dim); cursor: pointer; white-space: nowrap; background: none; border: none; font: inherit; width: calc(100% - 16px); text-align: left; transition: background .14s ease, color .14s ease; }
 .rl-item:hover { background: #16161d; color: var(--lt); }
 .rl-item.rl-on { background: #16161d; color: var(--grn); }
 .rl-ic { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: transform .14s ease; }
@@ -852,7 +852,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .rl-ap-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--dim); display: block; flex-shrink: 0; box-shadow: 0 0 0 3px rgba(98,98,122,.12); }
 .rl-ap-dot.on { background: var(--grn); box-shadow: 0 0 8px var(--grn), 0 0 0 3px rgba(16,185,129,.18); }
 .rl-ap-on { color: var(--grn); }
-.rl-av { width: 24px; height: 24px; border-radius: 50%; background: var(--grn2); color: var(--bg); display: grid; place-items: center; font-weight: 600; font-size: 12px; flex-shrink: 0; }
+.rl-av { width: 22px; height: 22px; border-radius: 50%; background: var(--grn2); color: var(--bg); display: grid; place-items: center; font-weight: 700; font-size: 11px; flex-shrink: 0; }
 .rl-profile span small.c-on { color: var(--grn); }
 
 /* Slim top bar */
