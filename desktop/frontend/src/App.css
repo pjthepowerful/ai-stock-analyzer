@@ -853,6 +853,8 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .rl-ap-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--dim); display: block; flex-shrink: 0; box-shadow: 0 0 0 3px rgba(98,98,122,.12); }
 .rl-ap-dot.on { background: var(--grn); box-shadow: 0 0 8px var(--grn), 0 0 0 3px rgba(16,185,129,.18); }
 .rl-ap-on { color: var(--grn); }
+.rl-signout:hover { background: rgba(239,68,68,.1); color: #ef4444; }
+.rl-item span small.c-on { color: var(--grn); }
 .rl-av { width: 22px; height: 22px; border-radius: 50%; background: var(--grn2); color: var(--bg); display: grid; place-items: center; font-weight: 700; font-size: 11px; flex-shrink: 0; }
 .rl-profile span small.c-on { color: var(--grn); }
 
