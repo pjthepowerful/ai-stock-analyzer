@@ -129,119 +129,105 @@ function LoginPage({ onAuth }) {
     setLoading(false)
   }
 
+  const tickTape = ['NVDA +1.8%','XOM +0.9%','AAPL +0.4%','TSLA −1.2%','AMD +2.1%','SPY −0.3%','MSFT +0.7%','META +1.1%','GOOGL +0.6%','AVGO +1.4%']
+
   return (
-    <div className="login-split">
-      {/* Left — branding + live data */}
-      <div className="login-left">
-        <div className="ll-top"><span className="logo-p">P</span><span className="ll-name">Paula</span></div>
-        <div className="ll-mid">
-          <span className="ll-label">SWING TRADING COPILOT · v3.2</span>
-          <h1 className="ll-hero">Hey Paula. <span className="ll-hero-sub">Find the setups, hold for the move, and let the engine watch the market while you live your life.</span></h1>
-
-          {/* Live tape card */}
-          <div className="ll-tape">
-            <div className="lt-head"><span className="lt-live">● Live · swing watchlist</span><span className="lt-time">{new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/New_York'})} ET</span></div>
-            <svg className="lt-chart" viewBox="0 0 200 40" preserveAspectRatio="none">
-              <polyline points="0,35 10,32 20,30 30,28 40,31 50,27 60,25 70,28 80,24 90,22 100,20 110,18 120,22 130,19 140,16 150,14 160,17 170,13 180,11 190,10 200,8" fill="none" stroke="var(--grn)" strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>
-              <linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--grn)" stopOpacity=".15"/><stop offset="100%" stopColor="var(--grn)" stopOpacity="0"/></linearGradient>
-              <polygon points="0,35 10,32 20,30 30,28 40,31 50,27 60,25 70,28 80,24 90,22 100,20 110,18 120,22 130,19 140,16 150,14 160,17 170,13 180,11 190,10 200,8 200,40 0,40" fill="url(#tg)"/>
-            </svg>
-            <div className="lt-positions">
-              <div className="lt-row"><span className="lt-sym">NVDA</span><span className="lt-sig lt-buy">BUY</span><span className="lt-meta">Pullback to 20 SMA</span><span className="lt-pnl up">+$186</span></div>
-              <div className="lt-row"><span className="lt-sym">XOM</span><span className="lt-sig lt-buy">BUY</span><span className="lt-meta">Near 52-wk high</span><span className="lt-pnl up">+$94</span></div>
-              <div className="lt-row"><span className="lt-sym">AMD</span><span className="lt-sig lt-watch">WATCH</span><span className="lt-meta">Volatility coiling</span><span className="lt-pnl dn">−$42</span></div>
-            </div>
-          </div>
-        </div>
-        <div className="ll-bottom">
-          <div className="ll-feature-row">
-            <span className="ll-feat">21-factor signal engine</span>
-            <span className="ll-feat">Live news + web search</span>
-            <span className="ll-feat">Autopilot paper trading</span>
-          </div>
-          <div className="ll-market-row"><span className="ll-market">● Hosted &amp; always-on · runs while you sleep</span></div>
-        </div>
+    <div className="lg-root">
+      {/* Living terminal background — tape + breathing equity curve, behind everything */}
+      <div className="lg-bg" aria-hidden="true">
+        <div className="lg-tape lg-tape-1">{[...tickTape, ...tickTape].map((t, i) => <span key={i} className={'lg-tick' + (t.includes('−') ? ' dn' : ' up')}>{t}</span>)}</div>
+        <div className="lg-tape lg-tape-2">{[...tickTape, ...tickTape].map((t, i) => <span key={i} className={'lg-tick' + (t.includes('−') ? ' dn' : ' up')}>{t}</span>)}</div>
+        <svg className="lg-curve" viewBox="0 0 1000 600" preserveAspectRatio="none">
+          <defs><linearGradient id="lgGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity="0.18"/><stop offset="100%" stopColor="#10b981" stopOpacity="0"/></linearGradient></defs>
+          <polyline points="0,470 100,450 200,460 300,400 400,420 500,340 600,365 700,280 800,305 900,215 1000,185" fill="none" stroke="#10b981" strokeWidth="2" vectorEffect="non-scaling-stroke"/>
+          <polygon points="0,470 100,450 200,460 300,400 400,420 500,340 600,365 700,280 800,305 900,215 1000,185 1000,600 0,600" fill="url(#lgGrad)"/>
+        </svg>
       </div>
-      {/* Right — form */}
-      <div className="login-right">
-        <div className="login-card">
-          <div className="login-header">
-            <div className="logo-p lp-lg">P</div>
-            <span className="lh-name">Paula</span>
-          </div>
-          {view === 'auth' && <>
-          <h2 className="lr-title">{isSignup ? 'Create account' : 'Welcome back'}</h2>
-          <p className="lr-sub">{isSignup ? 'Takes 30 seconds. No card required for paper trading.' : 'Sign in to pick up where you left off.'}</p>
-          <div className="login-form">
-            {isSignup && <><label className="lf-label">Name</label>
-            <input className="login-input" placeholder="" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') document.querySelector('.email-input')?.focus() }} autoFocus autoComplete="name" />
-            <label className="lf-label">Email</label>
-            <input className="login-input email-input" placeholder="" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') document.querySelector('.pw-input')?.focus() }} autoComplete="email" type="email" /></>}
-            {!isSignup && <><label className="lf-label">Email</label>
-            <input className="login-input" placeholder="" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') document.querySelector('.pw-input')?.focus() }} autoFocus autoComplete="email" type="email" /></>}
-            <div className="lf-pw-row">
-              <label className="lf-label">Password</label>
-              {!isSignup && <button type="button" className="lf-forgot lt-link" onClick={() => { setView('forgot'); setError(''); setNotice(''); setEmail(username) }}>Forgot password?</button>}
-            </div>
-            <div className="pw-wrap">
-              <input className="login-input pw-input" type={showPw ? 'text' : 'password'} placeholder="" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit() }} autoComplete={isSignup ? 'new-password' : 'current-password'} />
-              <button type="button" className="pw-eye" onClick={() => setShowPw(!showPw)}>
-                {showPw ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                       : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
-              </button>
-            </div>
-            {error && <div className="login-error">{error}</div>}
-            {notice && <div className="login-notice">{notice}</div>}
-            <button className="login-btn" onClick={submit} disabled={loading}>
-              {loading ? '...' : isSignup ? 'Create account  →' : 'Sign in  →'}
-            </button>
 
-            <button className="login-toggle" onClick={() => {
-              setError(''); setNotice('')
-              if (!isSignup) {
-                // sign-in -> sign-up: the email was in `username`; move it to `email`, clear name
-                setEmail(username); setUsername('')
-              } else {
-                // sign-up -> sign-in: sign-in keeps email in `username`; move it back, drop name
-                setUsername(email)
-              }
-              setIsSignup(!isSignup)
-            }}>
-              {isSignup ? 'Already have an account? ' : 'New to Paula? '}<span className="lt-link">{isSignup ? 'Sign in' : 'Create account'}</span>
-            </button>
+      <div className="lg-grid">
+        {/* Left — the statement */}
+        <div className="lg-left">
+          <div className="lg-brand"><span className="logo-p">P</span><span className="lg-brand-name">Paula</span><span className="lg-live">● LIVE</span></div>
+          <div className="lg-statement">
+            <h1 className="lg-hero">Markets don't<br/>sleep.<br/><span className="lg-hero-grn">Neither does<br/>Paula.</span></h1>
+            <p className="lg-tagline">Your AI swing-trading copilot finds the setups, holds for the move, and watches the tape so you don't have to.</p>
           </div>
-          </>}
+          <div className="lg-pills">
+            <span className="lg-pill">Named setups</span>
+            <span className="lg-pill">Live news</span>
+            <span className="lg-pill">Autopilot</span>
+            <span className="lg-pill">Always-on</span>
+          </div>
+        </div>
 
-          {view === 'forgot' && <>
-          <h2 className="lr-title">Reset your password</h2>
-          <p className="lr-sub">Enter your account email and we'll send you a reset link.</p>
-          <div className="login-form">
-            <label className="lf-label">Email</label>
-            <input className="login-input" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submitForgot() }} autoFocus autoComplete="email" type="email" />
-            {error && <div className="login-error">{error}</div>}
-            {notice && <div className="login-notice">{notice}</div>}
-            <button className="login-btn" onClick={submitForgot} disabled={loading}>{loading ? '...' : 'Send reset link  →'}</button>
-            <button className="login-toggle" onClick={() => { setView('auth'); setError(''); setNotice('') }}><span className="lt-link">Back to sign in</span></button>
-          </div>
-          </>}
+        {/* Right — the form, in a frosted card */}
+        <div className="lg-right">
+          <div className="lg-card">
+            {view === 'auth' && <>
+              <h2 className="lg-card-title">{isSignup ? 'Create account' : 'Welcome back'}</h2>
+              <p className="lg-card-sub">{isSignup ? "Takes 30 seconds. No card required for paper trading." : "The market's moving. Let's get to work."}</p>
+              <div className="lg-form">
+                {isSignup && <>
+                  <label className="lg-label">Name</label>
+                  <input className="lg-input" name="paula-name" autoComplete="off" data-1p-ignore data-lpignore="true" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') document.querySelector('.lg-email')?.focus() }} autoFocus />
+                  <label className="lg-label">Email</label>
+                  <input className="lg-input lg-email" name="paula-email" autoComplete="off" data-1p-ignore data-lpignore="true" type="email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') document.querySelector('.lg-pw')?.focus() }} />
+                </>}
+                {!isSignup && <>
+                  <label className="lg-label">Email</label>
+                  <input className="lg-input" name="paula-email" autoComplete="off" data-1p-ignore data-lpignore="true" type="email" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') document.querySelector('.lg-pw')?.focus() }} autoFocus />
+                </>}
+                <div className="lg-pw-row">
+                  <label className="lg-label">Password</label>
+                  {!isSignup && <button type="button" className="lg-forgot" onClick={() => { setView('forgot'); setError(''); setNotice(''); setEmail(username) }}>Forgot?</button>}
+                </div>
+                <div className="lg-pw-wrap">
+                  <input className="lg-input lg-pw" type={showPw ? 'text' : 'password'} autoComplete={isSignup ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit() }} />
+                  <button type="button" className="lg-eye" onClick={() => setShowPw(!showPw)} aria-label="Toggle password visibility">{showPw ? 'Hide' : 'Show'}</button>
+                </div>
+                {error && <div className="lg-error">{error}</div>}
+                {notice && <div className="lg-notice">{notice}</div>}
+                <button className="lg-btn" onClick={submit} disabled={loading}>{loading ? '…' : isSignup ? 'Create account →' : 'Sign in →'}</button>
+                <button className="lg-toggle" onClick={() => {
+                  setError(''); setNotice('')
+                  if (!isSignup) { setEmail(username); setUsername('') } else { setUsername(email) }
+                  setIsSignup(!isSignup)
+                }}>{isSignup ? 'Already have an account? ' : 'New to Paula? '}<span className="lg-link">{isSignup ? 'Sign in' : 'Create account'}</span></button>
+              </div>
+            </>}
 
-          {view === 'reset' && <>
-          <h2 className="lr-title">Set a new password</h2>
-          <p className="lr-sub">Choose a new password for your account.</p>
-          <div className="login-form">
-            <label className="lf-label">New password</label>
-            <div className="pw-wrap">
-              <input className="login-input pw-input" type={showPw ? 'text' : 'password'} value={newPw} onChange={e => setNewPw(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submitReset() }} autoFocus autoComplete="new-password" />
-              <button type="button" className="pw-eye" onClick={() => setShowPw(!showPw)}>{showPw ? 'Hide' : 'Show'}</button>
-            </div>
-            {error && <div className="login-error">{error}</div>}
-            {notice && <div className="login-notice">{notice}</div>}
-            <button className="login-btn" onClick={submitReset} disabled={loading}>{loading ? '...' : 'Update password  →'}</button>
-            <button className="login-toggle" onClick={() => { setView('auth'); setError(''); setNotice(''); try { window.history.replaceState({}, '', window.location.pathname) } catch {} }}><span className="lt-link">Back to sign in</span></button>
+            {view === 'forgot' && <>
+              <h2 className="lg-card-title">Reset your password</h2>
+              <p className="lg-card-sub">Enter your account email and we'll send a reset link.</p>
+              <div className="lg-form">
+                <label className="lg-label">Email</label>
+                <input className="lg-input" type="email" autoComplete="off" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submitForgot() }} autoFocus />
+                {error && <div className="lg-error">{error}</div>}
+                {notice && <div className="lg-notice">{notice}</div>}
+                <button className="lg-btn" onClick={submitForgot} disabled={loading}>{loading ? '…' : 'Send reset link →'}</button>
+                <button className="lg-toggle" onClick={() => { setView('auth'); setError(''); setNotice('') }}><span className="lg-link">Back to sign in</span></button>
+              </div>
+            </>}
+
+            {view === 'reset' && <>
+              <h2 className="lg-card-title">Set a new password</h2>
+              <p className="lg-card-sub">Choose a new password for your account.</p>
+              <div className="lg-form">
+                <label className="lg-label">New password</label>
+                <div className="lg-pw-wrap">
+                  <input className="lg-input lg-pw" type={showPw ? 'text' : 'password'} autoComplete="new-password" value={newPw} onChange={e => setNewPw(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submitReset() }} autoFocus />
+                  <button type="button" className="lg-eye" onClick={() => setShowPw(!showPw)} aria-label="Toggle password visibility">{showPw ? 'Hide' : 'Show'}</button>
+                </div>
+                {error && <div className="lg-error">{error}</div>}
+                {notice && <div className="lg-notice">{notice}</div>}
+                <button className="lg-btn" onClick={submitReset} disabled={loading}>{loading ? '…' : 'Update password →'}</button>
+                <button className="lg-toggle" onClick={() => { setView('auth'); setError(''); setNotice(''); try { window.history.replaceState({}, '', window.location.pathname) } catch {} }}><span className="lg-link">Back to sign in</span></button>
+              </div>
+            </>}
+
+            <div className="lg-footer">By continuing you agree to our Terms · Privacy</div>
+            <a href="/commercial.html" target="_blank" className="lg-trailer">▶ Watch the trailer</a>
           </div>
-          </>}
-          <div className="lr-footer">By continuing you agree to our Terms · Privacy <span className="lr-sys">● All systems operational</span></div>
-          <a href="/commercial.html" target="_blank" className="lr-trailer">▶ Watch the trailer</a>
         </div>
       </div>
     </div>
