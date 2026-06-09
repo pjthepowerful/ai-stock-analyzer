@@ -778,7 +778,8 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .lg-pw-row .lg-label { margin-bottom: 0; }
 .lg-forgot { background: none; border: none; color: #10b981; font: inherit; font-size: 12px; cursor: pointer; padding: 0; }
 .lg-pw-wrap { position: relative; }
-.lg-eye { position: absolute; right: 14px; top: 15px; background: none; border: none; color: #62627a; font: inherit; font-size: 13px; cursor: pointer; }
+.lg-eye { position: absolute; right: 12px; top: 25px; transform: translateY(-50%); background: none; border: none; color: #62627a; cursor: pointer; display: flex; align-items: center; padding: 6px; transition: color .15s; }
+.lg-eye:hover { color: #ececf2; }
 .lg-btn { height: 50px; border-radius: 12px; background: #10b981; color: #04130d; border: none; font: inherit; font-weight: 600; font-size: 16px; cursor: pointer; margin-top: 6px; transition: filter .15s, transform .05s; }
 .lg-btn:hover { filter: brightness(1.08); }
 .lg-btn:active { transform: scale(.99); }

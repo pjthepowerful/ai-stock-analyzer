@@ -184,7 +184,7 @@ function LoginPage({ onAuth }) {
                 </div>
                 <div className="lg-pw-wrap">
                   <input className="lg-input lg-pw" type={showPw ? 'text' : 'password'} autoComplete={isSignup ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit() }} />
-                  <button type="button" className="lg-eye" onClick={() => setShowPw(!showPw)} aria-label="Toggle password visibility">{showPw ? 'Hide' : 'Show'}</button>
+                  <button type="button" className="lg-eye" onClick={() => setShowPw(!showPw)} aria-label={showPw ? 'Hide password' : 'Show password'}>{showPw ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg> : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}</button>
                 </div>
                 {error && <div className="lg-error">{error}</div>}
                 {notice && <div className="lg-notice">{notice}</div>}
@@ -217,7 +217,7 @@ function LoginPage({ onAuth }) {
                 <label className="lg-label">New password</label>
                 <div className="lg-pw-wrap">
                   <input className="lg-input lg-pw" type={showPw ? 'text' : 'password'} autoComplete="new-password" value={newPw} onChange={e => setNewPw(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submitReset() }} autoFocus />
-                  <button type="button" className="lg-eye" onClick={() => setShowPw(!showPw)} aria-label="Toggle password visibility">{showPw ? 'Hide' : 'Show'}</button>
+                  <button type="button" className="lg-eye" onClick={() => setShowPw(!showPw)} aria-label={showPw ? 'Hide password' : 'Show password'}>{showPw ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg> : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}</button>
                 </div>
                 {error && <div className="lg-error">{error}</div>}
                 {notice && <div className="lg-notice">{notice}</div>}
