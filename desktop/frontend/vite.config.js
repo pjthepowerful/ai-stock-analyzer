@@ -4,10 +4,14 @@ import { execSync } from 'child_process'
 
 let commit = 'dev'
 try {
-  commit = execSync('git rev-parse --short HEAD').toString().trim()
+  const out = execSync('git rev-parse --short HEAD', { stdio: ['pipe', 'pipe', 'ignore'] }).toString().trim()
+  if (out) commit = out
 } catch (e) {
-  commit = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || 'dev'
+  const sha = process.env.VERCEL_GIT_COMMIT_SHA
+  if (sha) commit = sha.slice(0, 7)
 }
+// guarantee a safe, simple token (defensive — avoids any chance of malformed define)
+commit = String(commit).replace(/[^a-zA-Z0-9]/g, '').slice(0, 12) || 'dev'
 
 export default defineConfig({
   plugins: [react()],

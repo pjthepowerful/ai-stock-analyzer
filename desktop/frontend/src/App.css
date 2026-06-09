@@ -864,11 +864,9 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .hdr-slim { justify-content: space-between; }
 .hdr-changelog { background: none; border: 1px solid var(--brd); color: var(--dim); font: inherit; font-family: var(--mono); font-size: 11px; padding: 4px 9px; border-radius: 7px; cursor: pointer; }
 .hdr-changelog:hover { color: var(--grn); border-color: var(--grn); }
-.hdr-ticker { display: flex; align-items: center; gap: 10px; }
-.hdr-ticker .hdr-label { font-family: var(--mono); font-size: 10px; letter-spacing: .12em; color: var(--dim); }
-.hdr-ticker .hdr-eq { font-family: var(--mono); font-weight: 600; }
-.hdr-ticker .hdr-pnl, .hdr-ticker .hdr-spy { font-family: var(--mono); font-size: 12px; }
-.hdr-ticker .up { color: var(--grn); } .hdr-ticker .dn { color: #ef4444; }
+.hdr-ticker { display: flex; align-items: center; gap: 12px; }
+.hdr-ticker .hdr-eq { font-family: var(--mono); font-weight: 600; font-size: 14px; color: var(--lt); }
+.hdr-ticker .hdr-eq.up { color: var(--grn); } .hdr-ticker .hdr-eq.dn { color: #ef4444; }
 
 @media (max-width: 760px) {
   .rail { position: fixed; left: 0; top: 0; bottom: 0; }

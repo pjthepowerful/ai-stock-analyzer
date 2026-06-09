@@ -943,8 +943,8 @@ function MainApp({ user, token, logout }) {
           <button className="hdr-changelog" onClick={()=>setShowChangelog(true)} title="What's new">v3.2</button>
           <div className="hdr-ticker">
             {account&&<>
-              <span className="hdr-label">EQUITY</span><span className="hdr-eq">${account.equity.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
-              <span className={'hdr-pnl '+(pnl>=0?'up':'dn')}>{pnl>=0?'+':''}{pnl.toFixed(0)}</span>
+              <span className="hdr-eq">${account.equity.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
+              <span className={'hdr-eq '+(pnl>=0?'up':'dn')}>{pnl>=0?'+':''}${Math.abs(pnl).toFixed(0)}</span>
             </>}
           </div>
         </div>
@@ -979,7 +979,7 @@ function MainApp({ user, token, logout }) {
                   {[
                     {q:'Find swing setups', a:'Scan the market for the best multi-day swing trades right now.', cmd:'Find me the 5 best swing trade setups right now'},
                     {q:'Check the market', a:'How\u2019s the overall market looking — trend, risk, what to watch.', cmd:'How is the market looking today for swing trading?'},
-                    {q:'Backtest the strategy', a:'See how the swing strategy performed over the last 2 years.', cmd:'backtest'},
+                    {q:'Recap my day', a:'Where my positions and P&L stand right now.', cmd:'Give me a recap of my portfolio and how my positions are doing'},
                   ].map((p,i)=>(
                     <button key={i} className="w-prompt" disabled={sending && sendingChatRef.current === chatIdRef.current} onClick={()=>sendMessage(p.cmd)}>
                       <div><span className="wp-q">{p.q}</span><span className="wp-a">{p.a}</span></div>
