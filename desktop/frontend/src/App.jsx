@@ -913,10 +913,12 @@ function MainApp({ user, token, logout }) {
             ))}
           </>}
 
+          {['parjan.d@icloud.com','pinakin.d@moftmail.com'].includes((user?.email||'').toLowerCase()) && <>
           <div className="rl-sec">Automation</div>
           <button className={'rl-item rl-ap'+(autopilot?' rl-ap-on':'')} onClick={()=>toggleAutopilot()} title="Autopilot">
             <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg></i><span>Autopilot<small className={autopilot?'c-on':''}>{autopilot?'on':'off'}</small></span>
           </button>
+          </>}
         </div>
 
         <div className="rl-foot">
@@ -1699,11 +1701,9 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
 
     {/* About */}
     <div className="card wide"><label>About</label>
-      <div className="s-row"><span>Version</span><span className="s-ver">v3.2</span></div>
+      <div className="s-row"><span>Version</span><span className="s-ver">v3.2 <span className="s-build">{__BUILD_COMMIT__}</span></span></div>
       {(user.email||'').toLowerCase() === 'parjan.d@icloud.com' && <div className="s-row"><span>Admin</span><button className="tog" onClick={() => setShowAdmin(true)}>Open panel</button></div>}
       {showAdmin && <AdminPanel token={token} onClose={() => setShowAdmin(false)}/>}
-      <div className="s-row"><span>What's new</span><button className="tog" onClick={()=>setShowChangelog(true)}>View</button></div>
-      <div className="s-row"><span>Sign out</span><button className="tog tog-danger" onClick={logout}>Logout</button></div>
     </div>
   </div>)
 }

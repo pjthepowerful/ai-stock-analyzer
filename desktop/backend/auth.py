@@ -83,6 +83,37 @@ def init_db():
         );
     """)
     db.commit()
+
+    # Migration: drop UNIQUE constraint on username (allow duplicate names; only email unique)
+    try:
+        ddl_row = db.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='users'"
+        ).fetchone()
+        ddl = (ddl_row[0] if ddl_row else "") or ""
+        if "username TEXT UNIQUE" in ddl:
+            db.executescript("""
+                PRAGMA foreign_keys=off;
+                BEGIN TRANSACTION;
+                CREATE TABLE users_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL COLLATE NOCASE,
+                    email TEXT UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    salt TEXT NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    last_login TEXT
+                );
+                INSERT INTO users_new (id, username, email, password_hash, salt, created_at, last_login)
+                    SELECT id, username, email, password_hash, salt, created_at, last_login FROM users;
+                DROP TABLE users;
+                ALTER TABLE users_new RENAME TO users;
+                COMMIT;
+                PRAGMA foreign_keys=on;
+            """)
+            db.commit()
+    except Exception:
+        pass
+
     db.close()
 
 
@@ -126,14 +157,19 @@ def _verify_jwt(token: str) -> dict | None:
 
 
 def signup(username: str, password: str, email: str = None) -> dict:
-    """Create a new user."""
+    """Create a new user. Email is required and must be unique; usernames may repeat."""
     if not username or len(username) < 2:
-        return {"ok": False, "error": "Username must be at least 2 characters"}
+        return {"ok": False, "error": "Name must be at least 2 characters"}
     if not password or len(password) < 4:
         return {"ok": False, "error": "Password must be at least 4 characters"}
+    email = email.strip().lower() if email else None
+    if not email:
+        return {"ok": False, "error": "Email is required"}
+    import re as _re
+    if not _re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email):
+        return {"ok": False, "error": "Enter a valid email address"}
 
     pw_hash, salt = _hash_password(password)
-    email = email.strip().lower() if email else None
     db = _get_db()
     try:
         db.execute("INSERT INTO users (username, email, password_hash, salt) VALUES (?, ?, ?, ?)",
@@ -147,7 +183,7 @@ def signup(username: str, password: str, email: str = None) -> dict:
     except sqlite3.IntegrityError as e:
         if "email" in str(e).lower():
             return {"ok": False, "error": "An account with this email already exists"}
-        return {"ok": False, "error": "An account with this name already exists"}
+        return {"ok": False, "error": "Could not create account"}
     finally:
         db.close()
 

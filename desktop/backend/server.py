@@ -48,7 +48,11 @@ except Exception:
     pass
 
 # ── State ──
-ADMIN_EMAIL = "parjan.d@icloud.com"  # Only this email gets admin + autopilot control
+ADMIN_EMAIL = "parjan.d@icloud.com"  # Only this email gets admin (admin panel, etc.)
+AUTOPILOT_EMAILS = {"parjan.d@icloud.com", "pinakin.d@moftmail.com"}  # Emails allowed to run autopilot
+
+def _can_autopilot(user) -> bool:
+    return bool(user) and user.get("email", "").lower() in AUTOPILOT_EMAILS
 # Shared set of recognizable tickers (used for chat data + news lookups)
 KNOWN_TICKERS = set(["AAPL","MSFT","NVDA","GOOGL","AMZN","META","TSLA","AMD","NFLX","SPY","QQQ","JPM","V","BA","HD","CRM","AVGO","LLY","COST","WMT","DIS","XOM","CVX","GS","BAC","INTC","PYPL","COIN","PLTR","UBER","SHOP","SOFI","MARA","CELH","NIO","RIVN","F","GM","KO","PEP","NKE","ADBE","CSCO","IBM","QCOM","TXN","MU","MA","SQ","HOOD","MS","C","WFC","UNH","JNJ","MRK","PFE","ABBV","TGT","SBUX","MCD","CMG","DASH","BKNG","ABNB","LULU","SLB","COP","CAT","GE","HON","DE","UPS","FDX","LMT","SNAP","RBLX","DKNG","MSTR","RIOT","NET","DDOG","SNOW","PANW","CRWD","TTD","SMCI","ARM","IONQ","TMDX","DUOL","FCEL","ONON","HIMS","CAVA","TOST","ELF","LCID","DELL","ROKU","NOW","INTU","PINS","CVNA","MRNA","BRK-B","RKLB","AXON"])
 autopilot_task: Optional[asyncio.Task] = None
@@ -1832,8 +1836,8 @@ async def start_autopilot(authorization: str = Header(None)):
     if not user:
         print("[autopilot] start rejected: no authenticated user", flush=True)
         return {"ok": False, "error": "Not signed in"}
-    if user.get("email", "").lower() != ADMIN_EMAIL:
-        print(f"[autopilot] start rejected: {user.get('email')!r} != admin {ADMIN_EMAIL!r}", flush=True)
+    if not _can_autopilot(user):
+        print(f"[autopilot] start rejected: {user.get('email')!r} not in autopilot allowlist", flush=True)
         return {"ok": False, "error": "Autopilot access restricted"}
     if autopilot_task and not autopilot_task.done():
         print("[autopilot] already running", flush=True)
@@ -1855,7 +1859,7 @@ async def stop_autopilot(authorization: str = Header(None)):
     """Stop the autopilot. Admin only."""
     global autopilot_task, autopilot_owner_id
     user = _get_user(authorization)
-    if not user or user.get("email", "").lower() != ADMIN_EMAIL:
+    if not _can_autopilot(user):
         return {"ok": False, "error": "Autopilot access restricted"}
     if autopilot_task and not autopilot_task.done():
         autopilot_task.cancel()

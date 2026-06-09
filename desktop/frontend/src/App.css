@@ -496,6 +496,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .s-status { font-family: var(--mono); font-size: .7rem; font-weight: 600 }
 .s-on { color: var(--grn) }
 .s-ver { font-family: var(--mono); font-size: .7rem; color: var(--dim) }
+.s-build { color: #44444f; margin-left: 4px; }
 .tog-danger { color: var(--rd) !important; border-color: rgba(239,68,68,.2) !important }
 .tog-danger:hover { background: rgba(239,68,68,.08) !important }
 
