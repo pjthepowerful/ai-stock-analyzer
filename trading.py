@@ -5286,16 +5286,16 @@ def execute(intent: dict) -> dict:
             max_price = float(_price_match.group(1))
 
         if cat == "large":
-            universe = list(dict.fromkeys(SP500_TOP + NASDAQ_100[:30]))
+            universe = list(dict.fromkeys(SP500_TOP + NASDAQ_100 + VALUE_DIVIDEND + SECTOR_PICKS))
         elif cat == "mid":
-            universe = list(dict.fromkeys(MIDCAP_GROWTH + SMALLCAP[:15]))
+            universe = list(dict.fromkeys(MIDCAP_GROWTH + SMALLCAP[:20] + TRENDING))
         elif cat == "small":
-            universe = list(dict.fromkeys(SMALLCAP + MIDCAP_GROWTH[:15]))
+            universe = list(dict.fromkeys(SMALLCAP + MIDCAP_GROWTH))
         elif cat == "tech":
             universe = ["AAPL","MSFT","NVDA","GOOGL","META","AMZN","AVGO","CRM","ADBE","AMD","INTC","ORCL","PLTR","SNOW","NET","ZS","FTNT","PANW","CRWD","NOW","MU","QCOM","TXN","AMAT","LRCX","KLAC","ADI","MRVL","SMCI","DELL"]
         else:
-            # Default broad scan — a wide cross-section of the market (~90 names)
-            universe = list(dict.fromkeys(SP500_TOP + NASDAQ_100[:30] + MIDCAP_GROWTH[:20] + TRENDING[:15]))
+            # Default broad scan — the full cross-section of the market (~200 names)
+            universe = list(dict.fromkeys(SP500_TOP + NASDAQ_100 + MIDCAP_GROWTH + SMALLCAP + TRENDING + VALUE_DIVIDEND + SECTOR_PICKS))
 
         # If user wants cheap stocks, expand universe to include more small/mid caps
         if max_price and max_price <= 100:
@@ -5646,7 +5646,14 @@ def _scrub_trade_levels_for_llm(stock_data: dict | None) -> dict | None:
             sd.pop(k, None)
             if isinstance(sd.get("trade"), dict):
                 sd["trade"].pop(k, None)
-        sd["trade_plan"] = "NONE — this is not an actionable BUY setup. Do NOT state any entry, stop, or target. There is no trade plan to give."
+        # also remove support/resistance arrays — the LLM repurposes them as fake
+        # "targets"/"stops" when asked directly ("target and stop loss for QCOM").
+        for k in ("supports", "resistances", "support_levels", "resistance_levels", "support", "resistance"):
+            sd.pop(k, None)
+        sd["trade_plan"] = ("NONE — this is not an actionable BUY setup. There is NO entry, stop, or target. "
+                            "If the user asks for a target or stop, tell them there is no trade setup here and "
+                            "why (e.g. downtrend / HOLD), and do NOT invent or derive any price level from support, "
+                            "resistance, ATR, or the current price.")
     return sd
 
 
