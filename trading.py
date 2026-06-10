@@ -2381,12 +2381,28 @@ def generate_trade_signal(data: dict) -> dict:
          round((entry - target_1) / risk, 2) if risk > 0 and entry > target_1 else 0)
     
     # Sub-scores for visual cards (0-100 scale)
-    trend_sub = min(100, max(0, 50 + (15 if is_uptrend else -15) + (10 if adx > 25 else 0) + (10 if sma50 and price > sma50 else -10) + (10 if sma20 and price > sma20 else -5)))
+    # Trend must be DIRECTIONAL: a high ADX (strong trend) only helps if price is
+    # actually trending up. In a downtrend, trend strength counts against the score.
+    _above20 = bool(sma20 and price > sma20)
+    _above50 = bool(sma50 and price > sma50)
+    # Net directional structure: how many of the key MAs price sits above
+    _ma_dir = (1 if above_200 else -1) + (1 if _above50 else -1) + (1 if _above20 else -1)  # -3..+3
+    _strong = adx > 25
+    if regime == "strong_downtrend" or _ma_dir <= -2:
+        # Confirmed downtrend — strength makes it worse
+        trend_sub = max(0, 35 - (15 if _strong else 0) + _ma_dir * 5)
+    elif regime == "strong_uptrend" or _ma_dir >= 2:
+        # Confirmed uptrend — strength helps
+        trend_sub = min(100, 60 + (15 if _strong else 0) + _ma_dir * 5)
+    else:
+        # Mixed / sideways
+        trend_sub = min(100, max(0, 50 + _ma_dir * 8))
+    trend_sub = int(min(100, max(0, trend_sub)))
     momentum_sub = min(100, max(0, int(rsi) if 30 < rsi < 70 else (30 if rsi <= 30 else 80)))
     mr_sub = min(100, max(0, 50 + (20 if has_pullback else 0) + (-15 if rsi > 75 else 10 if rsi < 40 else 0)))
     news_sub = min(100, max(0, 50 + news_score * 10))
 
-    trend_lbl = "strong uptrend" if trend_sub >= 70 else "uptrend" if trend_sub >= 55 else "sideways" if trend_sub >= 40 else "downtrend"
+    trend_lbl = "strong uptrend" if trend_sub >= 70 else "uptrend" if trend_sub >= 55 else "sideways" if trend_sub >= 42 else "downtrend" if trend_sub >= 25 else "strong downtrend"
     momentum_lbl = f"RSI {int(rsi)}, {'overbought' if rsi > 70 else 'oversold' if rsi < 30 else 'trending up' if macd_h > 0 else 'trending down'}"
     mr_lbl = "low — not overstretched" if mr_sub >= 50 else "extended — pullback likely"
     news_lbl = f"{'bullish' if news_sub >= 60 else 'neutral' if news_sub >= 40 else 'bearish'} coverage last 3d"
