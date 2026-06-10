@@ -5606,6 +5606,50 @@ Bad example (what NOT to do):
 (Too robotic, no view, dumps every number, buries the point.)"""
 
 
+def _scrub_trade_levels_for_llm(stock_data: dict | None) -> dict | None:
+    """Before handing data to the LLM, remove any trade-level fields when there
+    is NO valid trade plan (HOLD/NEUTRAL/EXIT/AVOID, or levels are 0/equal).
+
+    The LLM otherwise grabs the current price and invents an entry/stop/target
+    (often repeating the price for all three). If there is no plan, we delete the
+    fields entirely and drop in an explicit no-trade flag so the model has
+    nothing to fabricate from.
+    """
+    if not isinstance(stock_data, dict):
+        return stock_data
+    import copy as _copy
+    sd = _copy.deepcopy(stock_data)
+
+    def _has_real_plan(tr: dict) -> bool:
+        if not isinstance(tr, dict):
+            return False
+        e = tr.get("entry", 0) or 0
+        s = tr.get("stop", tr.get("stop_loss", 0)) or 0
+        t = tr.get("target", tr.get("target_1", 0)) or 0
+        side = str(tr.get("side", "")).upper()
+        if side in ("EXIT", "AVOID", "NEUTRAL", "HOLD"):
+            return False
+        if not e or not s or not t:
+            return False
+        # collapsed / hallucination-prone: all three (near) equal
+        if abs(e - s) < 0.01 and abs(s - t) < 0.01:
+            return False
+        return True
+
+    action = str(sd.get("action", "")).upper()
+    tr = sd.get("trade")
+    plan_ok = _has_real_plan(tr) and action in ("BUY", "STRONG_BUY")
+
+    if not plan_ok:
+        # strip every level field anywhere in the payload
+        for k in ("entry", "stop", "stop_loss", "target", "target_1", "target_2", "risk_reward", "rr", "risk_pct"):
+            sd.pop(k, None)
+            if isinstance(sd.get("trade"), dict):
+                sd["trade"].pop(k, None)
+        sd["trade_plan"] = "NONE — this is not an actionable BUY setup. Do NOT state any entry, stop, or target. There is no trade plan to give."
+    return sd
+
+
 def ai_response(user_msg: str, stock_data: dict | None, history: list, market: str) -> str:
     key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
     if not key:
@@ -5729,7 +5773,7 @@ RESPONSE LENGTH by request type:
     if _pm:
         content += f"\n\n---PRE-COMPUTED (state this number exactly, do NOT recalculate)---\n{_pm['phrasing']}"
     if stock_data:
-        content += f"\n\n---LIVE DATA (use ONLY these exact prices, do NOT make up numbers)---\n{json.dumps(stock_data, indent=2, default=str)}"
+        content += f"\n\n---LIVE DATA (use ONLY these exact prices, do NOT make up numbers)---\n{json.dumps(_scrub_trade_levels_for_llm(stock_data), indent=2, default=str)}"
     messages.append({"role": "user", "content": content})
 
     try:
@@ -5772,7 +5816,7 @@ FACTUAL RULES (never break these):
     if _pm:
         content += f"\n\n---PRE-COMPUTED (state this number exactly, do NOT recalculate)---\n{_pm['phrasing']}"
     if stock_data:
-        content += f"\n\n---LIVE DATA (use ONLY these exact prices, do NOT make up numbers)---\n{json.dumps(stock_data, indent=2, default=str)}"
+        content += f"\n\n---LIVE DATA (use ONLY these exact prices, do NOT make up numbers)---\n{json.dumps(_scrub_trade_levels_for_llm(stock_data), indent=2, default=str)}"
     messages.append({"role": "user", "content": content})
 
     try:

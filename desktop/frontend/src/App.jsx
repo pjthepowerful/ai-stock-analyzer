@@ -1795,19 +1795,28 @@ function chatEmoji(title) {
 
 function fmt(t){
   if(!t)return '';
-  // PERMANENT GUARD: the LLM sometimes hallucinates a trade-levels line and
-  // repeats the current price as entry, stop AND target (e.g. "Entry: $191.2 ·
-  // Stop: $191.20 · Target: $191.20"). Trade levels are shown only via the
-  // structured SignalCard, never LLM prose — so strip any such line where the
-  // numbers are missing/zero or all three are equal (the hallucination tell).
+  // PERMANENT GUARD: the LLM sometimes hallucinates trade levels and repeats the
+  // current price as entry, stop AND target. Trade levels come only from the
+  // structured SignalCard, never LLM prose. Drop any line that (a) is a
+  // structured "Entry/Stop/Target" line with zero/missing or all-equal numbers,
+  // or (b) mentions an entry AND a stop/target where the two prices are equal.
   t = t.split('\n').filter(line => {
-    const m = line.match(/entry[:\s]*\$?([\d.,]+).*stop[:\s]*\$?([\d.,]+).*target[:\s]*\$?([\d.,]+)/i)
-    if (!m) return true
-    const nums = [m[1], m[2], m[3]].map(n => parseFloat(n.replace(/,/g, '')))
-    // drop if any is non-finite/zero, or all three are (near-)equal
-    if (nums.some(n => !isFinite(n) || n === 0)) return false
-    const [a, b, c] = nums
-    if (Math.abs(a - b) < 0.01 && Math.abs(b - c) < 0.01) return false
+    const struct = line.match(/entry[:\s]*\$?([\d.,]+).*stop[:\s]*\$?([\d.,]+).*target[:\s]*\$?([\d.,]+)/i)
+    if (struct) {
+      const nums = [struct[1], struct[2], struct[3]].map(n => parseFloat(n.replace(/,/g, '')))
+      if (nums.some(n => !isFinite(n) || n === 0)) return false
+      const [a, b, c] = nums
+      if (Math.abs(a - b) < 0.01 && Math.abs(b - c) < 0.01) return false
+      return true
+    }
+    // prose form: "entry at $191.2 ... stop loss ... at $191.20" with equal prices
+    if (/\bentry\b/i.test(line) && /(stop|target)/i.test(line)) {
+      const prices = (line.match(/\$\s?([\d,]+\.?\d*)/g) || []).map(p => parseFloat(p.replace(/[$,\s]/g, '')))
+      if (prices.length >= 2) {
+        const uniq = [...new Set(prices.map(p => Math.round(p * 100)))]
+        if (uniq.length === 1) return false  // all the same price → hallucination
+      }
+    }
     return true
   }).join('\n')
   if(!t.trim())return '';
