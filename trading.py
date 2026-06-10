@@ -2370,11 +2370,22 @@ def generate_trade_signal(data: dict) -> dict:
         target_2 = round(entry - 5.0 * risk, 2)
         risk_pct = round(risk / entry * 100, 2)
     else:
+        # HOLD — no high-conviction entry. Still show indicative levels, but make
+        # them directional (down-bias if the stock is below its MAs) and never let
+        # them collapse onto the entry when ATR is tiny/zero.
         entry = price
-        stop_loss = round(price - 3.0 * atr, 2)
-        risk = 3.0 * atr
-        target_1 = round(price + 3.0 * atr, 2)
-        target_2 = round(price + 5.0 * atr, 2)
+        eff_atr = atr if atr and atr > 0 else max(round(price * 0.01, 2), 0.01)  # fallback ~1%
+        _below_mas = (bool(sma20 and price < sma20)) and (bool(sma50 and price < sma50))
+        bearish_bias = (regime == "strong_downtrend") or _below_mas
+        if bearish_bias:
+            stop_loss = round(price + 3.0 * eff_atr, 2)
+            target_1 = round(price - 3.0 * eff_atr, 2)
+            target_2 = round(price - 5.0 * eff_atr, 2)
+        else:
+            stop_loss = round(price - 3.0 * eff_atr, 2)
+            target_1 = round(price + 3.0 * eff_atr, 2)
+            target_2 = round(price + 5.0 * eff_atr, 2)
+        risk = 3.0 * eff_atr
         risk_pct = round(risk / price * 100, 2)
     
     rr = round((target_1 - entry) / risk, 2) if risk > 0 and target_1 > entry else (
