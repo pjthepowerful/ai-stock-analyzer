@@ -423,6 +423,7 @@ function MainApp({ user, token, logout }) {
     persist([{ id, title: 'New chat', messages: [], created: new Date().toISOString() }, ...chatsRef.current])
     setActiveChatId(id)
     setMessages([])
+    setView('chat')
     f(API + '/api/chat/clear', { method: 'POST' }).catch(() => {})
   }
 
@@ -935,7 +936,7 @@ function MainApp({ user, token, logout }) {
 
         <div className="rl-foot">
           <button className={'rl-item'+(view==='settings'?' rl-on':'')} onClick={()=>setView('settings')} title="Settings">
-            <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 13a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-1.4 3.42 2 2 0 0 1-1.43-.59l-.06-.06a1.65 1.65 0 0 0-2.78 1.18V21a2 2 0 0 1-4 0v-.07a1.65 1.65 0 0 0-2.78-1.18l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 13a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.07A1.65 1.65 0 0 0 4.6 6.4l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 10.6 3.09V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.78 1.18l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 11h.09a2 2 0 0 1 0 4H19.4z"/></svg></i><span>Settings</span>
+            <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="6" r="2" fill="var(--bg)"/><circle cx="15" cy="12" r="2" fill="var(--bg)"/><circle cx="8" cy="18" r="2" fill="var(--bg)"/></svg></i><span>Settings</span>
           </button>
           <button className="rl-item rl-profile" onClick={()=>setView('settings')} title={settings.userName||user?.username||'Account'}>
             <i className="rl-ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></i><span>{settings.userName||user?.username||'PJ'}</span>
@@ -1378,6 +1379,7 @@ function SignalCard({ data, onExecute }) {
   const isBuy = side === 'LONG'
   const isExit = side === 'EXIT'
   const isAvoid = side === 'AVOID'
+  const isNeutral = side === 'NEUTRAL'
 
   const ScoreBar = ({ name, sub, value }) => {
     const color = value >= 70 ? 'var(--grn)' : value >= 50 ? 'var(--amb)' : 'var(--red)'
@@ -1403,7 +1405,7 @@ function SignalCard({ data, onExecute }) {
         {scores.news && <ScoreBar name="News sentiment" sub={scores.news.label} value={scores.news.value}/>}
       </div>
 
-      {/* Bearish banner — no short-entry plan shown for EXIT/AVOID */}
+      {/* Bearish banner — show indicative levels (short framing) */}
       {(isExit || isAvoid) && (
         <div className={'sc-trade ' + (isExit ? 'sc-sell' : '')}>
           <div className="sc-trade-head">
@@ -1420,12 +1422,39 @@ function SignalCard({ data, onExecute }) {
                   : 'Bearish signal. If you hold this, consider exiting — this is not a short-entry setup.')
               : 'Bearish signal and you don\u2019t hold it. Best action is to stay flat — no long entry here.'}
           </div>
+          {trade.entry > 0 && trade.stop > 0 && trade.target > 0 && (
+            <div className="sc-levels">
+              <div className="sc-level"><span className="sc-level-l">REF</span><span className="sc-level-v">${trade.entry?.toFixed(2)}</span></div>
+              <div className="sc-level"><span className="sc-level-l">STOP</span><span className="sc-level-v sc-stop">${trade.stop?.toFixed(2)}</span></div>
+              <div className="sc-level"><span className="sc-level-l">TARGET</span><span className="sc-level-v sc-target">${trade.target?.toFixed(2)}</span></div>
+            </div>
+          )}
           {data.earnings_warning && <div className="sc-warn">⚠ {data.earnings_warning}</div>}
           {isExit && (
             <div className="sc-actions">
               <button className="sc-btn sc-exec" onClick={() => onExecute(data.ticker, 'EXIT')}>Close position</button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Neutral / HOLD — show indicative levels (no execute button) */}
+      {isNeutral && trade.entry > 0 && trade.stop > 0 && trade.target > 0 && (
+        <div className="sc-trade">
+          <div className="sc-trade-head">
+            <div className="sc-trade-left">
+              <span className="sc-side">HOLD</span>
+              <span className="sc-ticker">{data.ticker}</span>
+            </div>
+            <span className="sc-rr">Score <b>{data.score}</b></span>
+          </div>
+          <div className="sc-warn">No high-conviction entry right now — these are indicative levels if the setup develops.</div>
+          <div className="sc-levels">
+            <div className="sc-level"><span className="sc-level-l">REF</span><span className="sc-level-v">${trade.entry?.toFixed(2)}</span></div>
+            <div className="sc-level"><span className="sc-level-l">STOP</span><span className="sc-level-v sc-stop">${trade.stop?.toFixed(2)}</span></div>
+            <div className="sc-level"><span className="sc-level-l">TARGET</span><span className="sc-level-v sc-target">${trade.target?.toFixed(2)}</span></div>
+          </div>
+          {data.earnings_warning && <div className="sc-warn">⚠ {data.earnings_warning}</div>}
         </div>
       )}
 

@@ -5459,18 +5459,14 @@ def execute(intent: dict) -> dict:
 
         side = classify_analysis_side(action, orig_msg, holds_long)
 
-        # For EXIT/AVOID/NEUTRAL we omit entry/stop/target. Showing a precise
-        # trade plan on a HOLD (or a short-entry plan to someone selling a long)
-        # is misleading — and the LLM tends to hallucinate the price into all
-        # three fields. entry=0 hides the trade-levels block and tells the prompt
-        # there is no plan to state. Only a real LONG setup shows levels.
-        if side in ("EXIT", "AVOID", "NEUTRAL"):
-            t_entry = t_stop = t_target = t_rr = 0
-        else:
-            t_entry = trade.get("entry", 0)
-            t_stop = trade.get("stop_loss", 0)
-            t_target = trade.get("target_1", 0)
-            t_rr = trade.get("risk_reward", 0)
+        # The structured SignalCard shows the real computed levels for ALL sides
+        # (so a HOLD/short still displays its stop & target). The LLM is handled
+        # separately by _scrub_trade_levels_for_llm so it never writes prose
+        # levels — this is the card's data, not the model's.
+        t_entry = trade.get("entry", 0)
+        t_stop = trade.get("stop_loss", 0)
+        t_target = trade.get("target_1", 0)
+        t_rr = trade.get("risk_reward", 0)
 
         sig_data = {
             "ticker": tick,
