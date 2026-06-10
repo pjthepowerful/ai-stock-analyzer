@@ -866,7 +866,14 @@ def alpaca_orders(status: str = "open", limit: int = 10) -> list[dict]:
 def alpaca_portfolio_history(period: str = "1M") -> dict | None:
     """Fetch portfolio equity history from Alpaca."""
     try:
-        params = {"period": period, "timeframe": "1D"}
+        # Alpaca needs an intraday timeframe for a 1-day chart, else it returns
+        # a single point. Use 5Min for 1D, 1H for 1W, 1D for everything longer.
+        tf_map = {"1D": "5Min", "1W": "1H"}
+        timeframe = tf_map.get(period, "1D")
+        params = {"period": period, "timeframe": timeframe}
+        # intraday extended hours give a fuller 1D curve
+        if period == "1D":
+            params["extended_hours"] = "true"
         r = requests.get(f"{ALPACA_BASE}/v2/account/portfolio/history",
                          headers=_alpaca_headers(), params=params, timeout=10)
         if r.status_code != 200:
