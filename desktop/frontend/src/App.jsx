@@ -974,19 +974,26 @@ function MainApp({ user, token, logout }) {
             <div className="chat-inner">
             {messages.length===0&&!(sending && sendingChatRef.current === chatIdRef.current)&&(
               <div className="welcome">
-                <h1><span className="w-hi">{(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' })()}, {name},</span> <Typewriter/></h1>
-                <div className="w-prompts">
+                <span className="logo-p w-mark">P</span>
+                <h1 className="w-greet">{(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' })()}, {name}.</h1>
+                <p className="w-q">What are we trading today?</p>
+
+                {account&&<div className="w-snap">
+                  <div className="ws-cell"><span className="ws-l">Equity</span><span className="ws-v">${account.equity.toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>
+                  <div className="ws-cell"><span className="ws-l">Open P/L</span><span className={'ws-v '+(pnl>=0?'up':'dn')}>{pnl>=0?'+':'−'}${Math.abs(pnl).toFixed(0)}</span></div>
+                  {spyTrend&&<div className="ws-cell"><span className="ws-l">Market</span><span className={'ws-v '+(spyTrend.change_pct>=0?'up':'dn')}>SPY {spyTrend.change_pct>=0?'+':''}{spyTrend.change_pct}%</span></div>}
+                  <div className="ws-cell"><span className="ws-l">Positions</span><span className="ws-v">{positions.length}</span></div>
+                </div>}
+
+                <div className="w-pills">
                   {[
-                    {q:'Find swing setups', a:'Scan the market for the best multi-day swing trades right now.', cmd:'Find me the 5 best swing trade setups right now'},
-                    {q:'Check the market', a:'How\u2019s the overall market looking — trend, risk, what to watch.', cmd:'How is the market looking today for swing trading?'},
-                    {q:'Recap my day', a:'Where my positions and P&L stand right now.', cmd:'Give me a recap of my portfolio and how my positions are doing'},
+                    {q:'Find swing setups', cmd:'Find me the 5 best swing trade setups right now'},
+                    {q:'Check the market', cmd:'How is the market looking today for swing trading?'},
+                    {q:'Recap my day', cmd:'Give me a recap of my portfolio and how my positions are doing'},
                   ].map((p,i)=>(
-                    <button key={i} className="w-prompt" disabled={sending && sendingChatRef.current === chatIdRef.current} onClick={()=>sendMessage(p.cmd)}>
-                      <div><span className="wp-q">{p.q}</span><span className="wp-a">{p.a}</span></div>
-                    </button>))}
-                  <button className="w-prompt" onClick={()=>setView('analyze')}>
-                    <div><span className="wp-q">Analyze a stock</span><span className="wp-a">Look up any ticker — price, chart, score, and swing signal.</span></div>
-                  </button>
+                    <button key={i} className="w-pill" disabled={sending && sendingChatRef.current === chatIdRef.current} onClick={()=>sendMessage(p.cmd)}>{p.q}</button>
+                  ))}
+                  <button className="w-pill" onClick={()=>setView('analyze')}>Analyze a stock</button>
                 </div>
               </div>)}
             {messages.map((m,i)=>(

@@ -22,14 +22,19 @@
   .composer{max-width:660px;width:100%;margin:0 auto;padding:14px 26px 26px}
   .composer .box{border:1px solid #26262f;border-radius:15px;background:#16161d;padding:14px 16px;display:flex;align-items:center;color:#62627a;font-size:14px}
   .composer .send{margin-left:auto;width:32px;height:32px;border-radius:9px;background:#10b981}
+  .card{border:1px solid #1e1e27;border-radius:13px;background:#14141b;padding:16px 17px;cursor:pointer}
+  .ct{font-weight:600;font-size:14px;margin-bottom:4px}
+  .cd{font-size:13px;color:#62627a;line-height:1.45}
+  .pill{font-size:13px;color:#c8c8d8;border:1px solid #26262f;border-radius:999px;padding:9px 16px;cursor:pointer;background:#14141b}
 </style>
 </head>
 <body>
 <h1>Paula · welcome screen concepts</h1>
-<div class="sub">How the chat looks before you've sent anything. All in the new dark/green theme. Pick what feels right.</div>
+<div class="sub">How the chat looks before you have sent anything. All in the new dark/green theme. Pick what feels right.</div>
 <div class="seg" id="seg">
-  <button data-c="greeting" class="on">Refined greeting</button>
-  <button data-c="centered">Centered & minimal</button>
+  <button data-c="fused" class="on">★ Minimal + briefing</button>
+  <button data-c="greeting">Refined greeting</button>
+  <button data-c="centered">Centered &amp; minimal</button>
   <button data-c="briefing">Market briefing</button>
   <button data-c="suggestions">Smart suggestions</button>
 </div>
@@ -37,74 +42,130 @@
 <div class="note" id="note"></div>
 
 <script>
-const R=document.getElementById('render'),NOTE=document.getElementById('note');
-let c='greeting';
-const composer=`<div class="composer"><div class="box">Ask Paula anything…<span class="send"></span></div></div>`;
+var R = document.getElementById('render');
+var NOTE = document.getElementById('note');
+var current = 'fused';
 
-const prompts=[
-  ['Find swing setups','Scan for the best multi-day trades right now'],
-  ['Check the market','Trend, risk, and what to watch today'],
-  ['Backtest the strategy','See how it performed over 2 years'],
-  ['Analyze a stock','Price, chart, score, and signal for any ticker'],
+var composer = '<div class="composer"><div class="box">Ask Paula anything…<span class="send"></span></div></div>';
+
+var prompts = [
+  ['Find swing setups', 'Scan for the best multi-day trades right now'],
+  ['Check the market', 'Trend, risk, and what to watch today'],
+  ['Recap my day', 'Where my positions and P and L stand right now'],
+  ['Analyze a stock', 'Price, chart, score, and signal for any ticker']
 ];
 
-function greeting(){ return `<div class="frame"><div class="stage">
-  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;max-width:680px;width:100%;margin:0 auto;padding:0 26px">
-    <div style="font-size:30px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px">Good evening, <span style="color:#10b981">PJ</span>.</div>
-    <div style="font-size:16px;color:#8a8a9a;margin-bottom:28px">What are we trading today?</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      ${prompts.map(p=>`<div style="border:1px solid #1e1e27;border-radius:13px;background:#14141b;padding:16px 17px;cursor:pointer">
-        <div style="font-weight:600;font-size:14px;margin-bottom:4px">${p[0]}</div><div style="font-size:13px;color:#62627a;line-height:1.45">${p[1]}</div></div>`).join('')}
-    </div>
-  </div>${composer}</div></div>`; }
+function cardGrid() {
+  var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
+  for (var i = 0; i < prompts.length; i++) {
+    html += '<div class="card"><div class="ct">' + prompts[i][0] + '</div><div class="cd">' + prompts[i][1] + '</div></div>';
+  }
+  return html + '</div>';
+}
 
-function centered(){ return `<div class="frame"><div class="stage">
-  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 26px;text-align:center">
-    <span style="width:52px;height:52px;border-radius:15px;background:#10b981;color:#04130d;display:grid;place-items:center;font-weight:800;font-size:24px;font-family:'JetBrains Mono';margin-bottom:20px">P</span>
-    <div style="font-size:26px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px">How can I help, PJ?</div>
-    <div style="font-size:15px;color:#8a8a9a;margin-bottom:26px;max-width:420px">Ask for a swing setup, a market read, or analysis on any ticker.</div>
-    <div style="display:flex;gap:9px;flex-wrap:wrap;justify-content:center;max-width:520px">
-      ${prompts.map(p=>`<span style="font-size:13px;color:#c8c8d8;border:1px solid #26262f;border-radius:999px;padding:9px 16px;cursor:pointer;background:#14141b">${p[0]}</span>`).join('')}
-    </div>
-  </div>${composer}</div></div>`; }
+function pillRow(justify) {
+  var html = '<div style="display:flex;gap:9px;flex-wrap:wrap;' + (justify ? 'justify-content:center;max-width:520px;' : '') + '">';
+  for (var i = 0; i < prompts.length; i++) {
+    html += '<span class="pill">' + prompts[i][0] + '</span>';
+  }
+  return html + '</div>';
+}
 
-function briefing(){ return `<div class="frame"><div class="stage">
-  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;max-width:680px;width:100%;margin:0 auto;padding:0 26px">
-    <div style="font-size:28px;font-weight:700;letter-spacing:-.02em;margin-bottom:18px">Good evening, <span style="color:#10b981">PJ</span>.</div>
-    <div style="border:1px solid #1e1e27;border-radius:14px;background:#14141b;padding:18px;margin-bottom:18px">
-      <div class="mono" style="font-size:11px;letter-spacing:.1em;color:#62627a;margin-bottom:12px">TODAY'S SNAPSHOT</div>
-      <div style="display:flex;gap:26px">
-        <div><div style="font-size:12px;color:#62627a">Equity</div><div class="mono" style="font-size:18px;font-weight:600">$25,490</div></div>
-        <div><div style="font-size:12px;color:#62627a">Open P&L</div><div class="mono" style="font-size:18px;font-weight:600;color:#ef4444">−$182</div></div>
-        <div><div style="font-size:12px;color:#62627a">Market</div><div class="mono" style="font-size:18px;font-weight:600;color:#ef4444">SPY −2.1%</div></div>
-        <div><div style="font-size:12px;color:#62627a">Positions</div><div class="mono" style="font-size:18px;font-weight:600">3</div></div>
-      </div>
-    </div>
-    <div style="display:flex;gap:9px;flex-wrap:wrap">
-      ${prompts.map(p=>`<span style="font-size:13px;color:#c8c8d8;border:1px solid #26262f;border-radius:999px;padding:9px 15px;cursor:pointer;background:#14141b">${p[0]}</span>`).join('')}
-    </div>
-  </div>${composer}</div></div>`; }
+function fused() {
+  return '<div class="frame"><div class="stage">' +
+    '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 26px;text-align:center">' +
+    '<span style="width:52px;height:52px;border-radius:15px;background:#10b981;color:#04130d;display:grid;place-items:center;font-weight:800;font-size:24px;font-family:\'JetBrains Mono\';margin-bottom:18px">P</span>' +
+    '<div style="font-size:26px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px">Good evening, PJ.</div>' +
+    '<div style="font-size:15px;color:#8a8a9a;margin-bottom:24px;max-width:420px">What are we trading today?</div>' +
+    '<div style="display:flex;gap:0;border:1px solid #1e1e27;border-radius:13px;background:#14141b;overflow:hidden;margin-bottom:22px">' +
+    '<div style="padding:13px 20px"><div style="font-size:11px;color:#62627a;margin-bottom:3px">Equity</div><div class="mono" style="font-size:16px;font-weight:600">$25,490</div></div>' +
+    '<div style="padding:13px 20px;border-left:1px solid #1e1e27"><div style="font-size:11px;color:#62627a;margin-bottom:3px">Open P/L</div><div class="mono" style="font-size:16px;font-weight:600;color:#ef4444">-$182</div></div>' +
+    '<div style="padding:13px 20px;border-left:1px solid #1e1e27"><div style="font-size:11px;color:#62627a;margin-bottom:3px">Market</div><div class="mono" style="font-size:16px;font-weight:600;color:#ef4444">SPY -2.1%</div></div>' +
+    '<div style="padding:13px 20px;border-left:1px solid #1e1e27"><div style="font-size:11px;color:#62627a;margin-bottom:3px">Positions</div><div class="mono" style="font-size:16px;font-weight:600">3</div></div>' +
+    '</div>' +
+    pillRow(true) +
+    '</div>' + composer + '</div></div>';
+}
 
-function suggestions(){ return `<div class="frame"><div class="stage">
-  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;max-width:680px;width:100%;margin:0 auto;padding:0 26px">
-    <div style="font-size:28px;font-weight:700;letter-spacing:-.02em;margin-bottom:4px">Good evening, <span style="color:#10b981">PJ</span>.</div>
-    <div style="font-size:15px;color:#8a8a9a;margin-bottom:24px">Here's what I'd look at right now —</div>
-    ${[['Find swing setups','3 fresh BUY signals scanned this morning','→'],['Check on your positions','NVDA, XOM, AMD — see how they\\'re doing','→'],['Market looks weak','SPY −2.1% — want a risk read?','→']].map(p=>`
-      <div style="display:flex;align-items:center;gap:14px;border:1px solid #1e1e27;border-radius:13px;background:#14141b;padding:15px 17px;margin-bottom:10px;cursor:pointer">
-        <div style="flex:1"><div style="font-weight:600;font-size:14px;margin-bottom:3px">${p[0]}</div><div style="font-size:13px;color:#62627a">${p[1]}</div></div>
-        <span style="color:#10b981;font-size:18px">${p[2]}</span>
-      </div>`).join('')}
-  </div>${composer}</div></div>`; }
+function greeting() {
+  return '<div class="frame"><div class="stage">' +
+    '<div style="flex:1;display:flex;flex-direction:column;justify-content:center;max-width:680px;width:100%;margin:0 auto;padding:0 26px">' +
+    '<div style="font-size:30px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px">Good evening, <span style="color:#10b981">PJ</span>.</div>' +
+    '<div style="font-size:16px;color:#8a8a9a;margin-bottom:28px">What are we trading today?</div>' +
+    cardGrid() +
+    '</div>' + composer + '</div></div>';
+}
 
-const V={greeting,centered,briefing,suggestions};
-const N={
-  greeting:`<b>Refined greeting.</b> Your current layout, cleaned up — shorter warmer headline ("Good evening, PJ. What are we trading today?"), tighter prompt cards in a 2×2 grid. Familiar but more polished and less wordy.`,
-  centered:`<b>Centered & minimal.</b> Paula's mark front and center, a single friendly question, and the prompts as compact pills. Calm and focused — most like ChatGPT/Claude's empty state. The chat is clearly the star.`,
-  briefing:`<b>Market briefing.</b> Greets you with a live snapshot — equity, open P&L, market, positions — then prompt pills. Useful at-a-glance the moment you land, very "trading cockpit." Great if you want data immediately.`,
-  suggestions:`<b>Smart suggestions.</b> Instead of generic prompts, Paula proactively suggests context-aware actions ("3 fresh BUY signals", "check your positions", "market looks weak"). Feels intelligent and alive — like Paula already has a take. (Needs a bit of backend wiring to be truly dynamic.)`,
+function centered() {
+  return '<div class="frame"><div class="stage">' +
+    '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 26px;text-align:center">' +
+    '<span style="width:52px;height:52px;border-radius:15px;background:#10b981;color:#04130d;display:grid;place-items:center;font-weight:800;font-size:24px;font-family:\'JetBrains Mono\';margin-bottom:20px">P</span>' +
+    '<div style="font-size:26px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px">How can I help, PJ?</div>' +
+    '<div style="font-size:15px;color:#8a8a9a;margin-bottom:26px;max-width:420px">Ask for a swing setup, a market read, or analysis on any ticker.</div>' +
+    pillRow(true) +
+    '</div>' + composer + '</div></div>';
+}
+
+function briefing() {
+  return '<div class="frame"><div class="stage">' +
+    '<div style="flex:1;display:flex;flex-direction:column;justify-content:center;max-width:680px;width:100%;margin:0 auto;padding:0 26px">' +
+    '<div style="font-size:28px;font-weight:700;letter-spacing:-.02em;margin-bottom:18px">Good evening, <span style="color:#10b981">PJ</span>.</div>' +
+    '<div style="border:1px solid #1e1e27;border-radius:14px;background:#14141b;padding:18px;margin-bottom:18px">' +
+    '<div class="mono" style="font-size:11px;letter-spacing:.1em;color:#62627a;margin-bottom:12px">TODAY\'S SNAPSHOT</div>' +
+    '<div style="display:flex;gap:26px">' +
+    '<div><div style="font-size:12px;color:#62627a">Equity</div><div class="mono" style="font-size:18px;font-weight:600">$25,490</div></div>' +
+    '<div><div style="font-size:12px;color:#62627a">Open P/L</div><div class="mono" style="font-size:18px;font-weight:600;color:#ef4444">-$182</div></div>' +
+    '<div><div style="font-size:12px;color:#62627a">Market</div><div class="mono" style="font-size:18px;font-weight:600;color:#ef4444">SPY -2.1%</div></div>' +
+    '<div><div style="font-size:12px;color:#62627a">Positions</div><div class="mono" style="font-size:18px;font-weight:600">3</div></div>' +
+    '</div></div>' +
+    pillRow(false) +
+    '</div>' + composer + '</div></div>';
+}
+
+function suggestions() {
+  var items = [
+    ['Find swing setups', '3 fresh BUY signals scanned this morning'],
+    ['Check on your positions', 'NVDA, XOM, AMD — see how they are doing'],
+    ['Market looks weak', 'SPY -2.1% — want a risk read?']
+  ];
+  var html = '<div class="frame"><div class="stage">' +
+    '<div style="flex:1;display:flex;flex-direction:column;justify-content:center;max-width:680px;width:100%;margin:0 auto;padding:0 26px">' +
+    '<div style="font-size:28px;font-weight:700;letter-spacing:-.02em;margin-bottom:4px">Good evening, <span style="color:#10b981">PJ</span>.</div>' +
+    '<div style="font-size:15px;color:#8a8a9a;margin-bottom:24px">Here is what I would look at right now —</div>';
+  for (var i = 0; i < items.length; i++) {
+    html += '<div style="display:flex;align-items:center;gap:14px;border:1px solid #1e1e27;border-radius:13px;background:#14141b;padding:15px 17px;margin-bottom:10px;cursor:pointer">' +
+      '<div style="flex:1"><div style="font-weight:600;font-size:14px;margin-bottom:3px">' + items[i][0] + '</div><div style="font-size:13px;color:#62627a">' + items[i][1] + '</div></div>' +
+      '<span style="color:#10b981;font-size:18px">&rarr;</span></div>';
+  }
+  return html + '</div>' + composer + '</div></div>';
+}
+
+var views = { fused: fused, greeting: greeting, centered: centered, briefing: briefing, suggestions: suggestions };
+var labels = { fused: 'Minimal + briefing (fused)', greeting: 'Refined greeting', centered: 'Centered & minimal', briefing: 'Market briefing', suggestions: 'Smart suggestions' };
+var notes = {
+  fused: '<b>Minimal + briefing (fused).</b> Both of your picks together: the calm centered minimal layout — Paula mark, a friendly greeting — with the market snapshot (equity, P/L, market, positions) as a single clean strip underneath, then prompt pills. Focused and welcoming, but your key data is right there the moment you land.',
+  greeting: '<b>Refined greeting.</b> Your current layout, cleaned up — a shorter, warmer headline ("Good evening, PJ. What are we trading today?") and tighter prompt cards in a 2x2 grid. Familiar but more polished and less wordy.',
+  centered: '<b>Centered &amp; minimal.</b> Paula mark front and center, a single friendly question, prompts as compact pills. Calm and focused — most like the ChatGPT/Claude empty state. The chat is clearly the star.',
+  briefing: '<b>Market briefing.</b> Greets you with a live snapshot — equity, open P/L, market, positions — then prompt pills. Useful at a glance the moment you land, very "trading cockpit." Great if you want data immediately.',
+  suggestions: '<b>Smart suggestions.</b> Instead of generic prompts, Paula proactively suggests context-aware actions ("3 fresh BUY signals", "check your positions", "market looks weak"). Feels intelligent and alive. (Needs a bit of backend wiring to be truly dynamic.)'
 };
-function render(){ R.innerHTML=`<div class="flabel">${({greeting:'Refined greeting',centered:'Centered & minimal',briefing:'Market briefing',suggestions:'Smart suggestions'})[c]}</div>`+V[c](); NOTE.innerHTML=N[c]; }
-document.getElementById('seg').addEventListener('click',e=>{ if(e.target.dataset.c){ c=e.target.dataset.c; [...e.currentTarget.children].forEach(b=>b.classList.toggle('on',b===e.target)); render(); }});
+
+function render() {
+  R.innerHTML = '<div class="flabel">' + labels[current] + '</div>' + views[current]();
+  NOTE.innerHTML = notes[current];
+}
+
+document.getElementById('seg').addEventListener('click', function (e) {
+  var c = e.target.getAttribute('data-c');
+  if (!c) return;
+  current = c;
+  var btns = e.currentTarget.children;
+  for (var i = 0; i < btns.length; i++) {
+    if (btns[i] === e.target) { btns[i].classList.add('on'); } else { btns[i].classList.remove('on'); }
+  }
+  render();
+});
+
 render();
 </script>
 </body>
