@@ -1888,11 +1888,20 @@ def generate_intraday_signal(data: dict) -> dict:
         target_2 = round(entry - 4.0 * risk, 2)
         risk_pct = round(risk / entry * 100, 2)
     else:
+        # HOLD — no high-conviction entry. Guard against tiny/zero ATR collapsing
+        # entry=stop=target, and bias direction by intraday structure (VWAP/EMA20).
         entry = price
-        stop_loss = round(price - 3.0 * atr, 2)
-        risk = 3.0 * atr
-        target_1 = round(price + 3.0 * atr, 2)
-        target_2 = round(price + 5.0 * atr, 2)
+        eff_atr = atr if atr and atr > 0 else max(round(price * 0.01, 2), 0.01)
+        bearish_bias = (not above_vwap) and (price < ema_20)
+        if bearish_bias:
+            stop_loss = round(price + 3.0 * eff_atr, 2)
+            target_1 = round(price - 3.0 * eff_atr, 2)
+            target_2 = round(price - 5.0 * eff_atr, 2)
+        else:
+            stop_loss = round(price - 3.0 * eff_atr, 2)
+            target_1 = round(price + 3.0 * eff_atr, 2)
+            target_2 = round(price + 5.0 * eff_atr, 2)
+        risk = 3.0 * eff_atr
         risk_pct = round(risk / price * 100, 2)
 
     rr = round((target_1 - entry) / risk, 2) if risk > 0 and target_1 > entry else (
