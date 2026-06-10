@@ -987,8 +987,8 @@ function MainApp({ user, token, logout }) {
             {messages.length===0&&!(sending && sendingChatRef.current === chatIdRef.current)&&(
               <div className="welcome">
                 <span className="logo-p w-mark">P</span>
-                <h1 className="w-greet">{(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' })()}, {name}.</h1>
-                <p className="w-q">What are we trading today?</p>
+                <h1 className="w-greet"><span className="w-hi">{(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' })()}, {name}.</span></h1>
+                <p className="w-q"><Typewriter/></p>
 
                 {account&&<div className="w-snap">
                   <div className="ws-cell"><span className="ws-l">Equity</span><span className="ws-v">${account.equity.toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>
@@ -1050,7 +1050,7 @@ function MainApp({ user, token, logout }) {
     </div>)
 }
 
-const PHRASES = ["what's the play today?","ready to trade?","let's find some setups.","what are we watching?","let's get to work.","what's on your radar?","let's make some moves."]
+const PHRASES = ["what are we trading today?","what's the play today?","let's find some setups.","what are we watching?","let's get to work.","what's on your radar?","ready to make some moves?"]
 const TICKER_DB = [
   // ── Mega Cap ──
   {t:'AAPL',n:'Apple'},{t:'MSFT',n:'Microsoft'},{t:'NVDA',n:'Nvidia'},{t:'GOOGL',n:'Alphabet'},{t:'AMZN',n:'Amazon'},
