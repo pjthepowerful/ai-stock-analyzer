@@ -189,14 +189,16 @@ def signup(username: str, password: str, email: str = None) -> dict:
 
 
 def login(username: str, password: str) -> dict:
-    """Authenticate a user. Accepts username or email (email is case-insensitive)."""
+    """Authenticate a user by email + password. Email is case-insensitive."""
     db = _get_db()
     try:
-        ident = (username or "").strip()
-        row = db.execute(
-            "SELECT * FROM users WHERE username = ? OR email = ?",
-            (ident, ident.lower())
-        ).fetchone()
+        ident = (username or "").strip().lower()
+        if not ident:
+            return {"ok": False, "error": "Enter your email"}
+        import re as _re
+        if not _re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", ident):
+            return {"ok": False, "error": "Enter a valid email address"}
+        row = db.execute("SELECT * FROM users WHERE email = ?", (ident,)).fetchone()
         if not row:
             return {"ok": False, "error": "No account found with this email"}
         pw_hash, _ = _hash_password(password, row["salt"])

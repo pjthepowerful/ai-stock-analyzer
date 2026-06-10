@@ -106,6 +106,7 @@ function LoginPage({ onAuth }) {
       if (password.length < 6) { setError('Password must be at least 6 characters'); return }
     } else {
       if (!username || !password) { setError('Email and password required'); return }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(username)) { setError('Enter a valid email address'); return }
     }
     setLoading(true); setError('')
     const res = await onAuth(username, password, isSignup, email)
@@ -934,7 +935,7 @@ function MainApp({ user, token, logout }) {
 
         <div className="rl-foot">
           <button className={'rl-item'+(view==='settings'?' rl-on':'')} onClick={()=>setView('settings')} title="Settings">
-            <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 8 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H2a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 3.6 8a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H8a1.65 1.65 0 0 0 1-1.51V2a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V8a1.65 1.65 0 0 0 1.51 1H22a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></i><span>Settings</span>
+            <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 13a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-1.4 3.42 2 2 0 0 1-1.43-.59l-.06-.06a1.65 1.65 0 0 0-2.78 1.18V21a2 2 0 0 1-4 0v-.07a1.65 1.65 0 0 0-2.78-1.18l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 13a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.07A1.65 1.65 0 0 0 4.6 6.4l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 10.6 3.09V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.78 1.18l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 11h.09a2 2 0 0 1 0 4H19.4z"/></svg></i><span>Settings</span>
           </button>
           <button className="rl-item rl-profile" onClick={()=>setView('settings')} title={settings.userName||user?.username||'Account'}>
             <i className="rl-ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></i><span>{settings.userName||user?.username||'PJ'}</span>
@@ -1040,10 +1041,9 @@ function MainApp({ user, token, logout }) {
               : <button className="send" onClick={send}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9Z"/></svg></button>
             }
           </div>
-          <div className="input-hints">
-            <span className="ih-left">{autopilot&&<><span className="ih-dot"/>AUTOPILOT</>} · {(settings.tradingStyle||'SWING').toUpperCase()} TRADING</span>
-            <span className="ih-right">↵ to send · ⇧↵ for newline</span>
-          </div>
+          {autopilot&&<div className="input-hints">
+            <span className="ih-left"><span className="ih-dot"/>AUTOPILOT ACTIVE</span>
+          </div>}
           </div></div>
         </>)}
       </main>
