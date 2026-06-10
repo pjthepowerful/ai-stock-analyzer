@@ -5458,10 +5458,12 @@ def execute(intent: dict) -> dict:
 
         side = classify_analysis_side(action, orig_msg, holds_long)
 
-        # For EXIT/AVOID we deliberately omit short entry/stop/target — showing a
-        # short-entry plan to someone selling a long is exactly the bug. Sending
-        # entry=0 hides the trade-levels block in the card.
-        if side in ("EXIT", "AVOID"):
+        # For EXIT/AVOID/NEUTRAL we omit entry/stop/target. Showing a precise
+        # trade plan on a HOLD (or a short-entry plan to someone selling a long)
+        # is misleading — and the LLM tends to hallucinate the price into all
+        # three fields. entry=0 hides the trade-levels block and tells the prompt
+        # there is no plan to state. Only a real LONG setup shows levels.
+        if side in ("EXIT", "AVOID", "NEUTRAL"):
             t_entry = t_stop = t_target = t_rr = 0
         else:
             t_entry = trade.get("entry", 0)
@@ -5627,6 +5629,7 @@ CRITICAL — PRICE ACCURACY:
 - ONLY quote prices that appear in the attached data. NEVER guess or estimate a price.
 - If data shows Price: 142.50 — say $142.50. Don't round to $143 or say "around $140".
 - For trade plans (entry, stop, targets), use the EXACT entry/stop/target numbers already provided in the attached signal data. Do NOT recompute them.
+- If the trade levels are 0, missing, or the side is HOLD/NEUTRAL/EXIT/AVOID, DO NOT state any entry, stop, or target at all — there is no trade plan. Never write a line like "Entry: $X · Stop: $X · Target: $X". Just describe the setup and what to watch for. Inventing levels (e.g. repeating the current price as entry, stop, AND target) is a serious error.
 - If you don't have price data for a stock, say so — don't make up a number.
 - When listing multiple stocks, use the exact Price and Chg% from the data for each one.
 
