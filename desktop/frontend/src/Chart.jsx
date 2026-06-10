@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createChart, CrosshairMode } from 'lightweight-charts'
 
-const API_DEFAULT = (import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:3141' : 'https://scurrilously-inevasible-kailey.ngrok-free.dev')).replace(/\/+$/, '')
+const API_DEFAULT = (import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:3141' : window.location.origin)).replace(/\/+$/, '')
 
 export default function Chart({ ticker, signal, height = 360, apiUrl }) {
   const API = apiUrl || API_DEFAULT
@@ -47,10 +47,14 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
       if (!dates || dates.length === 0) { console.error('Chart: no dates returned'); return }
       console.log(`Chart ${ticker}: ${dates.length} bars, first=${dates[0]}, last=${dates[dates.length-1]}`)
 
+      const intraday = (period === '1d' || period === '5d')
       const parseTime = (d) => {
-        // Strip time portion, use just the date string YYYY-MM-DD
-        const dateOnly = d.split(' ')[0]
-        return dateOnly
+        if (intraday) {
+          // d is "YYYY-MM-DD HH:MM" — convert to unix seconds for intraday charting
+          return Math.floor(new Date(d.replace(' ', 'T')).getTime() / 1000)
+        }
+        // daily: use just the date string YYYY-MM-DD
+        return d.split(' ')[0]
       }
 
       const candles = dates.map((d, i) => ({
@@ -162,9 +166,9 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
           </span>
         )}
         <div className="chart-periods">
-          {['1mo','3mo','6mo','1y','2y'].map(p => (
+          {[['1d','1D'],['5d','5D'],['1mo','1M'],['6mo','6M'],['1y','1Y'],['2y','2Y']].map(([p,label]) => (
             <button key={p} className={'cp' + (period === p ? ' cp-on' : '')} onClick={() => setPeriod(p)}>
-              {p.replace('mo','M').replace('y','Y')}
+              {label}
             </button>
           ))}
         </div>

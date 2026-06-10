@@ -748,6 +748,30 @@ async def get_orders(status: str = "open", limit: int = 10):
     return {"ok": True, "data": orders}
 
 
+@app.get("/api/tape")
+def market_tape():
+    """Public (no-auth) endpoint: real daily % moves for the login ticker tape."""
+    import yfinance as yf
+    import warnings
+    syms = ["NVDA","AAPL","MSFT","GOOGL","AMZN","META","TSLA","AVGO","AMD","XOM","JPM","NFLX","SPY","QQQ","COST"]
+    out = []
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            data = yf.download(syms, period="2d", interval="1d", progress=False, group_by="ticker", threads=True)
+        for s in syms:
+            try:
+                closes = data[s]["Close"].dropna()
+                if len(closes) >= 2:
+                    pct = (float(closes.iloc[-1]) - float(closes.iloc[-2])) / float(closes.iloc[-2]) * 100
+                    out.append({"sym": s, "pct": round(pct, 1)})
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return {"ok": True, "tape": out}
+
+
 @app.get("/api/price/{ticker}")
 async def get_price(ticker: str):
     """Get current price for a ticker."""
@@ -1015,6 +1039,41 @@ def get_profile():
         return {"ok": False, "error": str(e)[:100]}
 
 
+_COMPANY_CACHE = {}
+
+def _company_info(ticker: str) -> dict:
+    """Fetch company name, CEO, sector, and a short description (cached)."""
+    t = ticker.upper()
+    if t in _COMPANY_CACHE:
+        return _COMPANY_CACHE[t]
+    info_out = {"name": None, "ceo": None, "sector": None, "summary": None}
+    try:
+        import yfinance as yf
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            info = yf.Ticker(t).info or {}
+        info_out["name"] = info.get("longName") or info.get("shortName")
+        info_out["sector"] = info.get("sector")
+        summary = info.get("longBusinessSummary")
+        if summary:
+            # keep it short — first 2 sentences
+            parts = summary.split(". ")
+            info_out["summary"] = ". ".join(parts[:2]).strip().rstrip(".") + "."
+        officers = info.get("companyOfficers") or []
+        for o in officers:
+            title = (o.get("title") or "").lower()
+            if "chief executive" in title or title.strip() == "ceo":
+                info_out["ceo"] = o.get("name")
+                break
+        if not info_out["ceo"] and officers:
+            info_out["ceo"] = officers[0].get("name")
+    except Exception:
+        pass
+    _COMPANY_CACHE[t] = info_out
+    return info_out
+
+
 @app.get("/api/quick/{ticker}")
 def quick_lookup(ticker: str):
     """Quick ticker lookup — uses the SAME signal engine as chat for consistent scores."""
@@ -1056,12 +1115,15 @@ def quick_lookup(ticker: str):
         else:
             sig = "HOLD"
 
+        reasons = signal.get("signals", []) or signal.get("reasons", [])
         return {
             "ok": True, "ticker": ticker.upper(),
             "price": round(price, 2),
             "change": round(change, 2),
             "change_pct": round(change_pct, 2),
             "score": score, "signal": sig,
+            "company": _company_info(ticker),
+            "reasons": reasons[:5],
         }
     except Exception as e:
         return {"ok": False, "error": str(e)[:100]}
@@ -1082,17 +1144,24 @@ def chart_data(ticker: str, period: str = "1y"):
     """Get chart OHLCV data — sync endpoint, auto-threaded by FastAPI."""
     import yfinance as yf
     import warnings
+    # Intraday periods need a finer interval and keep the time portion;
+    # daily periods use date-only keys.
+    INTRADAY = {"1d": "5m", "5d": "30m"}
+    interval = INTRADAY.get(period)
+    intraday = interval is not None
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            hist = yf.Ticker(ticker.upper()).history(period=period)
+            tk = yf.Ticker(ticker.upper())
+            hist = tk.history(period=period, interval=interval) if intraday else tk.history(period=period)
         if hist is None or hist.empty:
             return {"ok": False, "error": "No data"}
-        raw_dates = [str(d)[:10] for d in hist.index]
+        # Key: full timestamp for intraday, date-only otherwise
+        raw_keys = [str(d)[:16] if intraday else str(d)[:10] for d in hist.index]
         seen = set()
         indices = []
         clean_dates = []
-        for i, d in enumerate(raw_dates):
+        for i, d in enumerate(raw_keys):
             if d not in seen:
                 seen.add(d)
                 indices.append(i)

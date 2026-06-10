@@ -88,6 +88,16 @@ function LoginPage({ onAuth }) {
   const [notice, setNotice] = useState('')
   const [newPw, setNewPw] = useState('')
 
+  const FALLBACK_TAPE = ['NVDA','AAPL','MSFT','GOOGL','AMZN','META','TSLA','AVGO','AMD','XOM','JPM','NFLX','SPY','QQQ','COST']
+  const [tape, setTape] = useState(FALLBACK_TAPE.map(s => ({ sym: s, pct: null })))
+  useEffect(() => {
+    let alive = true
+    fetch(API + '/api/tape').then(r => r.json()).then(d => {
+      if (alive && d.ok && d.tape && d.tape.length) setTape(d.tape)
+    }).catch(() => {})
+    return () => { alive = false }
+  }, [])
+
   const submit = async (e) => {
     e?.preventDefault()
     if (isSignup) {
@@ -129,14 +139,15 @@ function LoginPage({ onAuth }) {
     setLoading(false)
   }
 
-  const tickTape = ['NVDA +1.8%','AAPL +0.4%','MSFT +0.7%','GOOGL +0.6%','AMZN +1.2%','META +1.1%','TSLA −1.2%','AVGO +1.4%','AMD +2.1%','XOM +0.9%','JPM +0.3%','NFLX +0.8%','SPY −0.3%','QQQ +0.2%','COST +0.5%']
+  const fmtTape = (t) => t.pct == null ? t.sym : `${t.sym} ${t.pct >= 0 ? '+' : '−'}${Math.abs(t.pct)}%`
+  const tapeIsDown = (t) => t.pct != null && t.pct < 0
 
   return (
     <div className="lg-root">
       {/* Living terminal background — tape + breathing equity curve, behind everything */}
       <div className="lg-bg" aria-hidden="true">
-        <div className="lg-tape lg-tape-1">{[...tickTape, ...tickTape].map((t, i) => <span key={i} className={'lg-tick' + (t.includes('−') ? ' dn' : ' up')}>{t}</span>)}</div>
-        <div className="lg-tape lg-tape-2">{[...tickTape, ...tickTape].map((t, i) => <span key={i} className={'lg-tick' + (t.includes('−') ? ' dn' : ' up')}>{t}</span>)}</div>
+        <div className="lg-tape lg-tape-1">{[...tape, ...tape].map((t, i) => <span key={i} className={'lg-tick' + (tapeIsDown(t) ? ' dn' : ' up')}>{fmtTape(t)}</span>)}</div>
+        <div className="lg-tape lg-tape-2">{[...tape, ...tape].map((t, i) => <span key={i} className={'lg-tick' + (tapeIsDown(t) ? ' dn' : ' up')}>{fmtTape(t)}</span>)}</div>
         <svg className="lg-curve" viewBox="0 0 1000 600" preserveAspectRatio="none">
           <defs><linearGradient id="lgGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity="0.18"/><stop offset="100%" stopColor="#10b981" stopOpacity="0"/></linearGradient></defs>
           <polyline points="0,470 100,450 200,460 300,400 400,420 500,340 600,365 700,280 800,305 900,215 1000,185" fill="none" stroke="#10b981" strokeWidth="2" vectorEffect="non-scaling-stroke"/>
@@ -1204,7 +1215,16 @@ function AnalyzeView({ sendMessage, setView }) {
           <div><span className="az-sym">{result.ticker}</span><span className={'az-signal az-'+result.signal.toLowerCase()}>{result.signal} · {result.score}</span></div>
           <div className="az-price-wrap"><span className="az-price">${result.price}</span><span className={'az-chg '+(result.change>=0?'up':'dn')}>{result.change>=0?'+':''}{result.change} ({result.change_pct}%)</span></div>
         </div>
+        {result.company&&(result.company.name||result.company.ceo||result.company.summary)&&<div className="az-company">
+          {result.company.name&&<div className="az-co-name">{result.company.name}{result.company.sector&&<span className="az-co-sector">{result.company.sector}</span>}</div>}
+          {result.company.ceo&&<div className="az-co-ceo">CEO · {result.company.ceo}</div>}
+          {result.company.summary&&<p className="az-co-sum">{result.company.summary}</p>}
+        </div>}
         <div className="az-chart"><Chart ticker={result.ticker} height={320}/></div>
+        {result.reasons&&result.reasons.length>0&&<div className="az-why">
+          <div className="az-why-h">Why this score</div>
+          <ul className="az-why-list">{result.reasons.map((r,i)=><li key={i}>{r}</li>)}</ul>
+        </div>}
         <div className="az-actions"><button className="az-btn az-deep" onClick={()=>{sendMessage('Analyze '+result.ticker);setView('chat')}}>Deep dive in chat →</button></div>
       </div>}
 
