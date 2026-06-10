@@ -1000,6 +1000,7 @@ function MainApp({ user, token, logout }) {
                 <div className="w-pills">
                   {[
                     {q:'Find swing setups', cmd:'Find me the 5 best swing trade setups right now'},
+                    {q:'Blue-chip pick', cmd:'Analyze the single best large-cap stock setup right now and explain why'},
                     {q:'Check the market', cmd:'How is the market looking today for swing trading?'},
                     {q:'Recap my day', cmd:'Give me a recap of my portfolio and how my positions are doing'},
                   ].map((p,i)=>(
@@ -1794,6 +1795,22 @@ function chatEmoji(title) {
 
 function fmt(t){
   if(!t)return '';
+  // PERMANENT GUARD: the LLM sometimes hallucinates a trade-levels line and
+  // repeats the current price as entry, stop AND target (e.g. "Entry: $191.2 ·
+  // Stop: $191.20 · Target: $191.20"). Trade levels are shown only via the
+  // structured SignalCard, never LLM prose — so strip any such line where the
+  // numbers are missing/zero or all three are equal (the hallucination tell).
+  t = t.split('\n').filter(line => {
+    const m = line.match(/entry[:\s]*\$?([\d.,]+).*stop[:\s]*\$?([\d.,]+).*target[:\s]*\$?([\d.,]+)/i)
+    if (!m) return true
+    const nums = [m[1], m[2], m[3]].map(n => parseFloat(n.replace(/,/g, '')))
+    // drop if any is non-finite/zero, or all three are (near-)equal
+    if (nums.some(n => !isFinite(n) || n === 0)) return false
+    const [a, b, c] = nums
+    if (Math.abs(a - b) < 0.01 && Math.abs(b - c) < 0.01) return false
+    return true
+  }).join('\n')
+  if(!t.trim())return '';
   let s = t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   // Markdown links [label](url) -> compact anchor
   s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,

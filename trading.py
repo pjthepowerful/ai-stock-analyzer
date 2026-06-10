@@ -5286,15 +5286,16 @@ def execute(intent: dict) -> dict:
             max_price = float(_price_match.group(1))
 
         if cat == "large":
-            universe = SP500_TOP[:30]
+            universe = list(dict.fromkeys(SP500_TOP + NASDAQ_100[:30]))
         elif cat == "mid":
-            universe = MIDCAP_GROWTH[:20]
+            universe = list(dict.fromkeys(MIDCAP_GROWTH + SMALLCAP[:15]))
         elif cat == "small":
-            universe = SMALLCAP[:20]
+            universe = list(dict.fromkeys(SMALLCAP + MIDCAP_GROWTH[:15]))
         elif cat == "tech":
-            universe = ["AAPL","MSFT","NVDA","GOOGL","META","AMZN","AVGO","CRM","ADBE","AMD","INTC","ORCL","PLTR","SNOW","NET","ZS","FTNT","PANW","CRWD","NOW"]
+            universe = ["AAPL","MSFT","NVDA","GOOGL","META","AMZN","AVGO","CRM","ADBE","AMD","INTC","ORCL","PLTR","SNOW","NET","ZS","FTNT","PANW","CRWD","NOW","MU","QCOM","TXN","AMAT","LRCX","KLAC","ADI","MRVL","SMCI","DELL"]
         else:
-            universe = SP500_TOP[:15] + MIDCAP_GROWTH[:5] + TRENDING[:5]
+            # Default broad scan — a wide cross-section of the market (~90 names)
+            universe = list(dict.fromkeys(SP500_TOP + NASDAQ_100[:30] + MIDCAP_GROWTH[:20] + TRENDING[:15]))
 
         # If user wants cheap stocks, expand universe to include more small/mid caps
         if max_price and max_price <= 100:
