@@ -54,7 +54,7 @@
             <span style={{ opacity: pOp, transform: `translateY(${pY}px)`, color: "var(--grn)" }}>Paula.</span>
           </div>
           <div style={{ fontSize: 20, color: "var(--dim)", marginTop: 20, opacity: subOp, transform: `translateY(${subY}px)`, letterSpacing: "0.04em" }}>
-            your AI swing-trading copilot
+            your AI trading assistant
           </div>
         </div>
       </div>
@@ -99,9 +99,9 @@
     const boxY = animate({ from: 18, to: 0, start: 6.5, end: 7.0, ease: Easing.easeOutCubic })(time);
 
     const exchanges = [
-      { q: "Hey Paula, find me some swing setups.", a: "XOM — pullback to 20 SMA in an uptrend. Score 84, BUY.", start: 7.0 },
+      { q: "Hey Paula, scan the market for swing setups.", a: "Scanned 1,000+ stocks. Top pick: XOM — pullback to 20 SMA in an uptrend. Score 84, BUY.", start: 7.0 },
       { q: "Why this one?", a: "Near its 52-week high, volatility coiling, strong volume. Stop 3% below, target 2:1.", start: 8.5 },
-      { q: "What's the latest news on it?", a: "Pulling live headlines — earnings beat last week, analyst upgrade this morning.", start: 10.0 },
+      { q: "What's the latest news on it?", a: "Live headlines — earnings beat last week, analyst upgrade this morning.", start: 10.0 },
     ];
 
     return (
@@ -153,10 +153,10 @@
              * (1 - animate({ from: 0, to: 1, start: 14.3, end: 15.0, ease: Easing.easeInCubic })(time));
 
     const features = [
-      { icon: "🎯", text: "Names every setup", start: 12.3 },
-      { icon: "🤖", text: "Autopilot holds for the swing", start: 12.7 },
-      { icon: "📰", text: "Knows the latest news", start: 13.1 },
-      { icon: "💬", text: "Just ask in plain English", start: 13.5 },
+      { text: "Scans 1,000+ stocks in seconds", start: 12.3 },
+      { text: "Autopilot trades the swing for you", start: 12.7 },
+      { text: "Reads the news as it breaks", start: 13.1 },
+      { text: "Just ask in plain English", start: 13.5 },
     ];
 
     return (
@@ -177,7 +177,7 @@
                   borderRadius: 12, padding: "14px 16px",
                   opacity: fOp, transform: `translateY(${fY}px)`,
                 }}>
-                  <span style={{ fontSize: 22 }}>{f.icon}</span>
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--grn)", flexShrink: 0, boxShadow: "0 0 8px rgba(16,185,129,0.5)" }} />
                   <span style={{ fontSize: 17, color: "var(--fg)", fontWeight: 500 }}>{f.text}</span>
                 </div>
               );
@@ -235,10 +235,10 @@
             <span style={{ opacity: pOp, transform: `translateY(${pY}px)`, color: "var(--grn)" }}>Paula.</span>
           </div>
           <div style={{ fontSize: 20, color: "var(--dim)", opacity: tOp, transform: `translateY(${tY}px)` }}>
-            your <span style={{ color: "var(--fg)" }}>swing-trading</span> copilot.
+            your <span style={{ color: "var(--fg)" }}>AI trading</span> assistant.
           </div>
           <div className="mono" style={{ fontSize: 12, color: "var(--dim)", letterSpacing: "0.15em", opacity: tOp, marginTop: 4 }}>
-            v3.2
+            ai-stock-analyzer-six.vercel.app
           </div>
         </div>
       </div>
