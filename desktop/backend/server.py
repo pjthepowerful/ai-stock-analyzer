@@ -351,16 +351,73 @@ async def signup(req: AuthRequest):
     if not req.password or len(req.password) < 6:
         return {"ok": False, "error": "Password must be at least 6 characters"}
     result = auth.signup(req.username.strip(), req.password, req.email.strip().lower())
+    if result.get("ok"):
+        # Send a 6-digit email verification code.
+        try:
+            code = auth.create_email_code(req.email.strip().lower(), "verify")
+            if code:
+                _send_code_email(req.email.strip().lower(), code, "verify")
+            result["needs_verification"] = True
+            result["email"] = req.email.strip().lower()
+        except Exception:
+            pass
     return result
 
 @app.post("/api/auth/login")
 async def login(req: AuthRequest):
-    # Login accepts email or username
+    # Login is email-only (validated in auth.login)
     identifier = req.email or req.username
     if not identifier:
         return {"ok": False, "error": "Email is required"}
     result = auth.login(identifier.strip(), req.password)
+    if result.get("ok"):
+        # 2FA: password was correct — but require an emailed code before issuing
+        # the real session token. Withhold the token; send a code instead.
+        email = (result.get("user", {}) or {}).get("email", "").strip().lower()
+        if email:
+            try:
+                code = auth.create_email_code(email, "2fa")
+                if code:
+                    _send_code_email(email, code, "2fa")
+                return {"ok": True, "needs_2fa": True, "email": email}
+            except Exception:
+                pass
     return result
+
+
+@app.post("/api/auth/verify-code")
+async def verify_code(req: AuthRequest):
+    """Verify a 6-digit code for signup verification or 2FA login.
+    Expects email, code (in password field), and purpose (in username field)."""
+    email = (req.email or "").strip().lower()
+    code = (req.password or "").strip()
+    purpose = (req.username or "2fa").strip()
+    if purpose not in ("verify", "2fa"):
+        purpose = "2fa"
+    vr = auth.verify_email_code(email, code, purpose)
+    if not vr.get("ok"):
+        return vr
+    if purpose == "2fa":
+        # Code good — now issue the real session token.
+        return auth.issue_token_for_email(email)
+    return {"ok": True, "verified": True}
+
+
+@app.post("/api/auth/resend-code")
+async def resend_code(req: AuthRequest):
+    email = (req.email or "").strip().lower()
+    purpose = (req.username or "2fa").strip()
+    if purpose not in ("verify", "2fa"):
+        purpose = "2fa"
+    if not email:
+        return {"ok": False, "error": "Email required"}
+    try:
+        code = auth.create_email_code(email, purpose)
+        if code:
+            _send_code_email(email, code, purpose)
+    except Exception:
+        pass
+    return {"ok": True, "message": "A new code has been sent."}
 
 
 # ── Password reset ───────────────────────────────────────────────────────────
@@ -400,6 +457,37 @@ def _send_reset_email(to_email: str, token: str) -> bool:
         return resp.status_code in (200, 201)
     except Exception as e:
         print(f"[password-reset] email send failed: {e}", flush=True)
+        return False
+
+
+def _send_code_email(to_email: str, code: str, purpose: str) -> bool:
+    """Send a 6-digit verification or 2FA code. Falls back to logging in dev."""
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    from_addr = os.environ.get("RESET_FROM_EMAIL", "Paula <onboarding@resend.dev>")
+    label = "Verify your email" if purpose == "verify" else "Your Paula sign-in code"
+    if not api_key:
+        print(f"[{purpose}] (no RESEND_API_KEY) code for {to_email}: {code}", flush=True)
+        return False
+    try:
+        import requests as r
+        resp = r.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "from": from_addr,
+                "to": [to_email],
+                "subject": label,
+                "html": (
+                    f"<p>{label}.</p>"
+                    f'<p style="font-size:28px;font-weight:700;letter-spacing:4px">{code}</p>'
+                    "<p>This code expires in 10 minutes. If you didn't request it, ignore this email.</p>"
+                ),
+            },
+            timeout=10,
+        )
+        return resp.status_code in (200, 201)
+    except Exception as e:
+        print(f"[{purpose}] email send failed: {e}", flush=True)
         return False
 
 
@@ -476,7 +564,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "full-market-nyse-v20",  # bump marker — confirms running code
+        "build": "2fa-email-verify-v21",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),

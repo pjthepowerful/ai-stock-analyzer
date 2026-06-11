@@ -56,7 +56,10 @@ function App() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: isSignup ? username : undefined, password, email: isSignup ? email : username })
     }).then(r => r.json())
-    if (res.ok) {
+    // 2FA / email verification: a code was emailed; don't log in yet — the
+    // LoginPage will collect the code and call finishAuth() below.
+    if (res.ok && (res.needs_2fa || res.needs_verification)) return res
+    if (res.ok && res.token) {
       setToken(res.token); setUser(res.user); localStorage.setItem('paula-token', res.token)
       const settingsKey = 'paula-settings-' + res.user.id
       const s = JSON.parse(localStorage.getItem(settingsKey) || '{}')
@@ -65,16 +68,26 @@ function App() {
     return res
   }
 
+  // Called after a 2FA code verifies — completes the session with the issued token.
+  const finishAuth = (res) => {
+    if (res.ok && res.token) {
+      setToken(res.token); setUser(res.user); localStorage.setItem('paula-token', res.token)
+      const settingsKey = 'paula-settings-' + res.user.id
+      const s = JSON.parse(localStorage.getItem(settingsKey) || '{}')
+      if (!s.userName) { s.userName = res.user.username; localStorage.setItem(settingsKey, JSON.stringify(s)) }
+    }
+  }
+
   const logout = () => { setUser(null); setToken(null); localStorage.removeItem('paula-token') }
 
   if (authLoading) return <div className="auth-loading"><div className="logo-p">P</div></div>
-  if (!user) return <LoginPage onAuth={doAuth} />
+  if (!user) return <LoginPage onAuth={doAuth} onFinishAuth={finishAuth} />
 
 
   return <MainApp user={user} token={token} logout={logout} />
 }
 
-function LoginPage({ onAuth }) {
+function LoginPage({ onAuth, onFinishAuth }) {
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -82,6 +95,10 @@ function LoginPage({ onAuth }) {
   const [isSignup, setIsSignup] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  // 2FA / email-verification code step
+  const [codeStep, setCodeStep] = useState(null) // null | '2fa' | 'verify'
+  const [code, setCode] = useState('')
+  const [codeEmail, setCodeEmail] = useState('')
   // Password reset
   const resetToken = (() => { try { return new URLSearchParams(window.location.search).get('reset') } catch { return null } })()
   const [view, setView] = useState(resetToken ? 'reset' : 'auth') // 'auth' | 'forgot' | 'reset'
@@ -110,8 +127,42 @@ function LoginPage({ onAuth }) {
     }
     setLoading(true); setError('')
     const res = await onAuth(username, password, isSignup, email)
-    if (!res.ok) setError(res.error)
+    if (!res.ok) { setError(res.error); setLoading(false); return }
+    if (res.needs_2fa) { setCodeStep('2fa'); setCodeEmail(res.email); setError(''); setLoading(false); return }
+    if (res.needs_verification) { setCodeStep('verify'); setCodeEmail(res.email || email); setError(''); setLoading(false); return }
     setLoading(false)
+  }
+
+  const submitCode = async (e) => {
+    e?.preventDefault()
+    if (!/^\d{6}$/.test(code.trim())) { setError('Enter the 6-digit code'); return }
+    setLoading(true); setError('')
+    try {
+      const r = await f(API + '/api/auth/verify-code', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: codeEmail, password: code.trim(), username: codeStep })
+      }).then(r => r.json())
+      if (!r.ok) { setError(r.error || 'Invalid code'); setLoading(false); return }
+      if (codeStep === '2fa') {
+        onFinishAuth(r)  // r has the real token now
+      } else {
+        // email verified on signup — drop back to login so they can sign in
+        setCodeStep(null); setCode(''); setIsSignup(false)
+        setError(''); setNotice && setNotice('Email verified — sign in to continue.')
+      }
+    } catch { setError("Can't connect to backend") }
+    setLoading(false)
+  }
+
+  const resendCode = async () => {
+    setError(''); setNotice && setNotice('')
+    try {
+      await f(API + '/api/auth/resend-code', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: codeEmail, username: codeStep })
+      })
+      setNotice && setNotice('A new code has been sent.')
+    } catch { setError("Can't connect to backend") }
   }
 
   const submitForgot = async (e) => {
@@ -176,7 +227,23 @@ function LoginPage({ onAuth }) {
         {/* Right — the form, in a frosted card */}
         <div className="lg-right">
           <div className="lg-card">
-            {view === 'auth' && <>
+            {view === 'auth' && codeStep && <>
+              <h2 className="lg-card-title">{codeStep === '2fa' ? 'Verify it\u2019s you' : 'Verify your email'}</h2>
+              <p className="lg-card-sub">We sent a 6-digit code to <b>{codeEmail}</b>. Enter it below{codeStep === '2fa' ? ' to finish signing in.' : ' to verify your account.'}</p>
+              <div className="lg-form">
+                <label className="lg-label">6-digit code</label>
+                <input className="lg-input lg-code" inputMode="numeric" maxLength={6} value={code} autoFocus
+                  onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  onKeyDown={e => { if (e.key === 'Enter') submitCode() }} />
+                {error && <div className="lg-error">{error}</div>}
+                {notice && <div className="lg-notice">{notice}</div>}
+                <button className="lg-btn" onClick={submitCode} disabled={loading}>{loading ? '…' : 'Verify →'}</button>
+                <button className="lg-toggle" onClick={resendCode}>Didn't get it? <span className="lg-link">Resend code</span></button>
+                <button className="lg-toggle" onClick={() => { setCodeStep(null); setCode(''); setError(''); setNotice('') }}><span className="lg-link">← Back</span></button>
+              </div>
+            </>}
+
+            {view === 'auth' && !codeStep && <>
               <h2 className="lg-card-title">{isSignup ? 'Create account' : 'Welcome back'}</h2>
               <p className="lg-card-sub">{isSignup ? "Takes 30 seconds. No card required for paper trading." : "The market's moving. Let's get to work."}</p>
               <div className="lg-form">

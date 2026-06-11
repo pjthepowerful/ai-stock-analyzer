@@ -81,8 +81,29 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id)
         );
+        CREATE TABLE IF NOT EXISTS email_codes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT NOT NULL,
+            code_hash TEXT NOT NULL,
+            purpose TEXT NOT NULL,
+            expires_at INTEGER NOT NULL,
+            used INTEGER DEFAULT 0,
+            attempts INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
     """)
     db.commit()
+
+    # Migration: add email_verified + twofa_enabled columns if missing
+    try:
+        cols = [r["name"] for r in db.execute("PRAGMA table_info(users)").fetchall()]
+        if "email_verified" not in cols:
+            db.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0")
+        if "twofa_enabled" not in cols:
+            db.execute("ALTER TABLE users ADD COLUMN twofa_enabled INTEGER DEFAULT 1")
+        db.commit()
+    except Exception:
+        pass
 
     # Migration: drop UNIQUE constraint on username (allow duplicate names; only email unique)
     try:
@@ -339,6 +360,87 @@ def create_reset_token(email: str) -> dict | None:
                    (row["id"], _hash_token(token), expires_at))
         db.commit()
         return {"token": token, "email": row["email"], "username": row["username"]}
+    finally:
+        db.close()
+
+
+CODE_TTL_SECONDS = 600  # 6-digit codes valid 10 minutes
+
+def _hash_code(code: str) -> str:
+    return hashlib.sha256(code.encode()).hexdigest()
+
+
+def create_email_code(email: str, purpose: str) -> str | None:
+    """Generate a 6-digit code for 'verify' (signup) or '2fa' (login). Stores the
+    hash; returns the raw code for the caller to email. Invalidates prior codes."""
+    if not email:
+        return None
+    email = email.strip().lower()
+    code = f"{secrets.randbelow(1000000):06d}"
+    db = _get_db()
+    try:
+        db.execute("UPDATE email_codes SET used = 1 WHERE email = ? AND purpose = ? AND used = 0",
+                   (email, purpose))
+        db.execute(
+            "INSERT INTO email_codes (email, code_hash, purpose, expires_at) VALUES (?, ?, ?, ?)",
+            (email, _hash_code(code), purpose, int(time.time()) + CODE_TTL_SECONDS),
+        )
+        db.commit()
+        return code
+    finally:
+        db.close()
+
+
+def verify_email_code(email: str, code: str, purpose: str) -> dict:
+    """Check a 6-digit code. On success for 'verify', marks the user verified."""
+    if not email or not code:
+        return {"ok": False, "error": "Enter the 6-digit code"}
+    email = email.strip().lower()
+    code = code.strip()
+    db = _get_db()
+    try:
+        row = db.execute(
+            "SELECT id, code_hash, expires_at, used, attempts FROM email_codes "
+            "WHERE email = ? AND purpose = ? AND used = 0 ORDER BY id DESC LIMIT 1",
+            (email, purpose),
+        ).fetchone()
+        if not row:
+            return {"ok": False, "error": "No active code — request a new one"}
+        if row["attempts"] >= 5:
+            db.execute("UPDATE email_codes SET used = 1 WHERE id = ?", (row["id"],))
+            db.commit()
+            return {"ok": False, "error": "Too many attempts — request a new code"}
+        if row["expires_at"] < int(time.time()):
+            return {"ok": False, "error": "Code expired — request a new one"}
+        if _hash_code(code) != row["code_hash"]:
+            db.execute("UPDATE email_codes SET attempts = attempts + 1 WHERE id = ?", (row["id"],))
+            db.commit()
+            return {"ok": False, "error": "Incorrect code"}
+        db.execute("UPDATE email_codes SET used = 1 WHERE id = ?", (row["id"],))
+        if purpose == "verify":
+            db.execute("UPDATE users SET email_verified = 1 WHERE email = ?", (email,))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+def issue_token_for_email(email: str) -> dict:
+    """Issue a session token for an already-authenticated email (used after a
+    2FA code is verified — the password was already checked in login())."""
+    if not email:
+        return {"ok": False, "error": "Missing email"}
+    db = _get_db()
+    try:
+        row = db.execute("SELECT * FROM users WHERE email = ?", (email.strip().lower(),)).fetchone()
+        if not row:
+            return {"ok": False, "error": "Account not found"}
+        db.execute("UPDATE users SET last_login = ? WHERE id = ?",
+                   (datetime.utcnow().isoformat(), row["id"]))
+        db.commit()
+        token = _make_jwt({"user_id": row["id"], "username": row["username"], "email": row["email"] or ""})
+        return {"ok": True, "token": token,
+                "user": {"id": row["id"], "username": row["username"], "email": row["email"] or ""}}
     finally:
         db.close()
 
