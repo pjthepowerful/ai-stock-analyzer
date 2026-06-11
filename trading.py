@@ -2863,6 +2863,7 @@ def _fetch_full_uncached(ticker: str) -> dict | None:
             pass
         return {
             **basic, "ticker": ticker.replace(".NS", ""), "full_ticker": ticker,
+            "history_days": int(len(hist)) if hist is not None else 0,
             "peg_ratio": info.get("pegRatio"), "roe": info.get("returnOnEquity"),
             "profit_margin": info.get("profitMargins"),
             "revenue_growth": info.get("revenueGrowth"),

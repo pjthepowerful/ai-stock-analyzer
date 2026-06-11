@@ -476,7 +476,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "chat-isolation-groq-fallback-v14",  # bump marker — confirms running code
+        "build": "ipo-guard-v15",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1104,6 +1104,28 @@ def quick_lookup(ticker: str):
         prev = data.get("prev_close", price)
         change = price - prev if prev else 0
         change_pct = (change / prev * 100) if prev else 0
+
+        # IPO / brand-new-listing guard: the engine relies on history (20/50/200
+        # SMAs, RSI, ADX, ATR, volume trend). Too few bars, or flat OHLC with zero
+        # volume, means there's nothing real to score — don't fake a HOLD·0.
+        tech = data.get("technicals", {}) or {}
+        hist_days = data.get("history_days", 999)
+        day_high = tech.get("day_high") or tech.get("high")
+        day_low = tech.get("day_low") or tech.get("low")
+        flat = (day_high is not None and day_low is not None and abs(float(day_high) - float(day_low)) < 1e-6)
+        no_vol = (tech.get("volume", 0) or 0) == 0
+        if hist_days < 50 or (flat and no_vol):
+            return {
+                "ok": True, "ticker": ticker.upper(),
+                "price": round(price, 2),
+                "change": round(change, 2),
+                "change_pct": round(change_pct, 2),
+                "score": None, "signal": "NEW",
+                "too_new": True,
+                "history_days": hist_days,
+                "company": _company_info(ticker),
+                "reasons": [],
+            }
 
         score = signal.get("score", 50)
         action = signal.get("action", "HOLD")

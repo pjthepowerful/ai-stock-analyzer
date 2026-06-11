@@ -1215,7 +1215,31 @@ function AnalyzeView({ sendMessage, setView }) {
         </div>}
       </div>
 
-      {result && <div className="az-result">
+      {result && result.too_new && <div className="az-result">
+        <div className="az-card">
+          <div className="az-top">
+            <div className="az-top-l">
+              <div className="az-id">
+                <span className="az-sym">{result.ticker}</span>
+                <span className="az-signal az-new">TOO NEW</span>
+              </div>
+              {result.company&&result.company.name&&<div className="az-co-name">{result.company.name}{result.company.sector&&<span className="az-co-sector">{result.company.sector}</span>}</div>}
+            </div>
+            <div className="az-price-wrap">
+              <span className="az-price">${result.price}</span>
+            </div>
+          </div>
+          {result.company&&(result.company.ceo||result.company.summary)&&<div className="az-company">
+            {result.company.ceo&&<div className="az-co-ceo"><span className="az-co-k">CEO</span>{result.company.ceo}</div>}
+            {result.company.summary&&<p className="az-co-sum">{result.company.summary}</p>}
+          </div>}
+          <div className="az-newnote">
+            Not enough trading history to analyze yet{typeof result.history_days==='number'?` — only ${result.history_days} day${result.history_days===1?'':'s'} of data`:''}. The signal engine needs at least ~50 days of price action (for moving averages, RSI, trend, and volume) before it can score a setup. Check back once it's been trading longer.
+          </div>
+        </div>
+      </div>}
+
+      {result && !result.too_new && <div className="az-result">
         <div className="az-card">
           <div className="az-top">
             <div className="az-top-l">

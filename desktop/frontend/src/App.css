@@ -602,6 +602,8 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .az-hold { background: rgba(245,158,11,.15); color: #f5a623 }
 .az-avoid, .az-sell, .az-strong_sell { background: rgba(239,68,68,.15); color: var(--red) }
 .az-strong_buy { background: rgba(16,185,129,.2); color: var(--grn3) }
+.az-new { background: rgba(139,92,246,.15); color: #a78bfa }
+.az-newnote { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--brd); font-size: .84rem; color: var(--lt); line-height: 1.6 }
 .az-price-wrap { text-align: right; flex-shrink: 0 }
 .az-price { font-family: var(--mono); font-size: 1.45rem; font-weight: 700; color: var(--wh); display: block; letter-spacing: -.01em; line-height: 1.1 }
 .az-chg { font-family: var(--mono); font-size: .72rem; font-weight: 600; margin-top: 2px; display: inline-block }
