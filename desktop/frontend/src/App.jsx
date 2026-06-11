@@ -939,7 +939,7 @@ function MainApp({ user, token, logout }) {
 
         <div className="rl-foot">
           <button className={'rl-item'+(view==='settings'?' rl-on':'')} onClick={()=>setView('settings')} title="Settings">
-            <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"><path d="M11 2.2h2l.42 2.3 1.9.8 1.95-1.32 1.4 1.4-1.32 1.95.8 1.9 2.3.42v2l-2.3.42-.8 1.9 1.32 1.95-1.4 1.4-1.95-1.32-1.9.8L13 21.8h-2l-.42-2.3-1.9-.8-1.95 1.32-1.4-1.4 1.32-1.95-.8-1.9L2.2 13v-2l2.3-.42.8-1.9L3.98 6.73l1.4-1.4 1.95 1.32 1.9-.8z"/><circle cx="12" cy="12" r="3.2"/></svg></i><span>Settings</span>
+            <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" clipRule="evenodd" d="M10.5 1.5h3v2.04a8.5 8.5 0 0 1 2.06.86l1.44-1.44 2.12 2.12-1.44 1.44c.37.64.66 1.33.86 2.06H22.5v3h-2.04a8.5 8.5 0 0 1-.86 2.06l1.44 1.44-2.12 2.12-1.44-1.44a8.5 8.5 0 0 1-2.06.86V22.5h-3v-2.04a8.5 8.5 0 0 1-2.06-.86l-1.44 1.44-2.12-2.12 1.44-1.44a8.5 8.5 0 0 1-.86-2.06H1.5v-3h2.04c.2-.73.49-1.42.86-2.06L2.96 6.92l2.12-2.12 1.44 1.44c.64-.37 1.33-.66 2.06-.86V1.5zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg></i><span>Settings</span>
           </button>
           <button className="rl-item rl-profile" onClick={()=>setView('settings')} title={settings.userName||user?.username||'Account'}>
             <i className="rl-ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></i><span>{settings.userName||user?.username||'PJ'}</span>
