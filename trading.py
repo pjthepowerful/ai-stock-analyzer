@@ -2891,6 +2891,66 @@ Headlines:
 
 _DELISTED_CACHE = set()
 
+def batch_fetch_scan(tickers: list, skip_news: bool = True) -> dict:
+    """Bulk-fetch 1-year history for MANY tickers in a few HTTP requests using
+    yf.download (multi-ticker). Returns {ticker: scan_data_dict}. Far faster than
+    per-ticker fetch_scan for big universes — one network round-trip per chunk
+    instead of one per stock. News is skipped here (fetched only for top picks).
+    """
+    out = {}
+    tickers = [t for t in tickers if t not in _DELISTED_CACHE]
+    if not tickers:
+        return out
+    CHUNK = 150  # yfinance handles a few hundred symbols per call comfortably
+    for i in range(0, len(tickers), CHUNK):
+        chunk = tickers[i:i + CHUNK]
+        try:
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                df = yf.download(
+                    chunk, period="1y", interval="1d",
+                    group_by="ticker", auto_adjust=True,
+                    threads=True, progress=False,
+                )
+        except Exception as e:
+            _log.warning(f"batch_fetch_scan chunk failed ({len(chunk)} tickers): {e}")
+            continue
+        if df is None or df.empty:
+            continue
+        for t in chunk:
+            try:
+                # Multi-ticker frame is column-keyed by ticker; single-ticker isn't.
+                sub = df[t] if len(chunk) > 1 else df
+                sub = sub.dropna(how="all")
+                if sub is None or sub.empty or len(sub) < 50:
+                    if sub is None or sub.empty:
+                        _DELISTED_CACHE.add(t)
+                    continue
+                price = float(sub["Close"].iloc[-1])
+                prev = float(sub["Close"].iloc[-2]) if len(sub) >= 2 else price
+                if not price or price < 1:
+                    continue
+                tech = compute_technicals(sub)
+                if not tech:
+                    continue
+                rs = _calc_relative_strength(sub)
+                data = {
+                    "price": round(price, 2),
+                    "prev_close": round(prev, 2),
+                    "change_pct": round((price - prev) / prev * 100, 2) if prev else 0,
+                    "name": t, "ticker": t, "full_ticker": t,
+                    "technicals": tech,
+                    "relative_strength": rs,
+                    "sector_etf": TICKER_SECTOR.get(t),
+                    "news_sentiment": {} if skip_news else _news_sentiment(t),
+                }
+                out[t] = data
+            except Exception:
+                continue
+    return out
+
+
 def fetch_scan(ticker: str) -> dict | None:
     """Lightweight fetch for scanning — skips slow .info calls, just gets history + technicals."""
     if ticker in _DELISTED_CACHE:
@@ -5432,11 +5492,8 @@ def execute(intent: dict) -> dict:
 
         picks = []
 
-        def _scan_one(ticker):
+        def _score_data(ticker, data):
             try:
-                # Use the SAME daily/swing scorer as the Analyze tab so a stock
-                # scores identically in both places.
-                data = fetch_scan(ticker)
                 if not data:
                     return None
                 sig = generate_trade_signal(data)
@@ -5456,17 +5513,25 @@ def execute(intent: dict) -> dict:
                 return None
             return None
 
-        # Parallel fetch+score — the bottleneck is network I/O on each ticker, so
-        # a thread pool cuts a 200-stock scan from ~60s to ~10s. Workers capped to
-        # stay polite to the data provider and avoid rate-limiting.
-        from concurrent.futures import ThreadPoolExecutor
-        # Scale worker count with universe size — more parallelism for the big
-        # ~600-name scan, but capped to stay polite to the data provider.
-        _workers = 24 if len(universe) > 300 else 12
-        with ThreadPoolExecutor(max_workers=_workers) as _ex:
-            for _r in _ex.map(_scan_one, universe):
+        if len(universe) > 120:
+            # BIG scan — bulk-download all history in a few HTTP requests
+            # (yf.download), then score locally. This is what makes 600-1000+
+            # stocks fast: one round-trip per ~150 tickers instead of one per
+            # stock. News is skipped here; it's fetched only for the top picks.
+            batch = batch_fetch_scan(universe, skip_news=True)
+            for _tk, _data in batch.items():
+                _r = _score_data(_tk, _data)
                 if _r:
                     picks.append(_r)
+        else:
+            # Smaller themed scans — per-ticker thread pool (keeps news inline).
+            def _scan_one(ticker):
+                return _score_data(ticker, fetch_scan(ticker))
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=12) as _ex:
+                for _r in _ex.map(_scan_one, universe):
+                    if _r:
+                        picks.append(_r)
 
         picks.sort(key=lambda x: x["score"], reverse=True)
         # Apply price filter if user specified one
