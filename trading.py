@@ -14,6 +14,13 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from groq import Groq
 from dotenv import load_dotenv
+import logging as _logging
+_log = _logging.getLogger("paula")
+if not _log.handlers:
+    _h = _logging.StreamHandler()
+    _h.setFormatter(_logging.Formatter("%(asctime)s [paula] %(levelname)s %(message)s"))
+    _log.addHandler(_h)
+    _log.setLevel(_logging.INFO)
 import os
 import json
 import re
@@ -625,6 +632,85 @@ def alpaca_positions() -> list[dict]:
         return positions
     except Exception:
         return []
+
+
+@st.cache_data(ttl=300)
+def trade_track_record(days: int = 30) -> dict:
+    """Build a track record from recently CLOSED Alpaca orders so the AI can give
+    advice grounded in the user's actual results, not generic platitudes.
+    Returns win rate, counts, avg win/loss, and a short recent-trades summary."""
+    try:
+        from datetime import timedelta
+        after = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        r = requests.get(
+            f"{ALPACA_BASE}/v2/orders",
+            headers=_alpaca_headers(),
+            params={"status": "closed", "limit": 200, "after": after, "direction": "desc"},
+            timeout=10,
+        )
+        if r.status_code != 200:
+            return {"ok": False}
+        orders = r.json()
+        # Pair fills per symbol to realize P&L (FIFO). Sells/covers close longs/shorts.
+        fills = [o for o in orders if o.get("filled_at") and o.get("filled_avg_price")]
+        fills.sort(key=lambda o: o.get("filled_at", ""))
+        from collections import defaultdict, deque
+        lots = defaultdict(deque)  # symbol -> deque of (qty, price, side)
+        realized = []  # list of pnl per closed trade
+        for o in fills:
+            sym = o.get("symbol")
+            side = o.get("side")
+            qty = float(o.get("filled_qty", 0) or 0)
+            px = float(o.get("filled_avg_price", 0) or 0)
+            if qty <= 0 or px <= 0:
+                continue
+            if side == "buy":
+                # closes a short lot if one is open, else opens a long
+                if lots[sym] and lots[sym][0][2] == "short":
+                    while qty > 0 and lots[sym] and lots[sym][0][2] == "short":
+                        lq, lp, _ = lots[sym][0]
+                        m = min(qty, lq)
+                        realized.append((lp - px) * m)  # short: entry-exit
+                        qty -= m
+                        if m >= lq: lots[sym].popleft()
+                        else: lots[sym][0] = (lq - m, lp, "short")
+                    if qty > 0: lots[sym].append((qty, px, "long"))
+                else:
+                    lots[sym].append((qty, px, "long"))
+            else:  # sell
+                if lots[sym] and lots[sym][0][2] == "long":
+                    while qty > 0 and lots[sym] and lots[sym][0][2] == "long":
+                        lq, lp, _ = lots[sym][0]
+                        m = min(qty, lq)
+                        realized.append((px - lp) * m)  # long: exit-entry
+                        qty -= m
+                        if m >= lq: lots[sym].popleft()
+                        else: lots[sym][0] = (lq - m, lp, "long")
+                    if qty > 0: lots[sym].append((qty, px, "short"))
+                else:
+                    lots[sym].append((qty, px, "short"))
+        closed = len(realized)
+        if closed == 0:
+            return {"ok": True, "closed_trades": 0, "summary": "No closed trades in the last %d days." % days}
+        wins = [p for p in realized if p > 0]
+        losses = [p for p in realized if p <= 0]
+        win_rate = round(len(wins) / closed * 100, 1)
+        avg_win = round(sum(wins) / len(wins), 2) if wins else 0
+        avg_loss = round(sum(losses) / len(losses), 2) if losses else 0
+        total = round(sum(realized), 2)
+        return {
+            "ok": True,
+            "closed_trades": closed,
+            "wins": len(wins), "losses": len(losses),
+            "win_rate": win_rate,
+            "avg_win": avg_win, "avg_loss": avg_loss,
+            "total_realized": total,
+            "summary": f"Last {days}d: {closed} closed trades, {win_rate}% win rate "
+                       f"({len(wins)}W/{len(losses)}L), avg win ${avg_win}, avg loss ${avg_loss}, "
+                       f"net ${total}.",
+        }
+    except Exception:
+        return {"ok": False}
 
 
 def alpaca_buy(ticker: str, qty: int = None, notional: float = None,
@@ -2733,7 +2819,7 @@ def _news_sentiment(ticker: str) -> dict:
         return {"score": 0, "sentiment": "neutral", "headlines": [], "count": 0}
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=1800)
 def _ai_news_analysis(ticker: str) -> dict:
     """Use Groq LLM to deeply analyze news headlines for a ticker."""
     try:
@@ -2933,12 +3019,14 @@ def build_chart(ticker: str, period: str = "6mo", trade_signal: dict | None = No
 
 # ── Intent routing ───────────────────────────────────────────────────────────
 
+@st.cache_data(ttl=900)
 def _llm_classify_intent(msg: str) -> dict | None:
     """Second-opinion intent classifier for messages the keyword router can't
     confidently place (it only runs on the chat fallthrough). Restricted to
     SAFE, non-destructive intents — never trades or autopilot, so a
     misclassification can't execute an order. Returns an intent dict or None
-    (caller then falls back to plain chat)."""
+    (caller then falls back to plain chat). Cached so repeated identical short
+    queries don't re-hit the LLM (helps with Groq rate limits)."""
     try:
         key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
     except Exception:
@@ -5303,18 +5391,18 @@ def execute(intent: dict) -> dict:
             universe = list(set(universe + MIDCAP_GROWTH + SMALLCAP + TRENDING))
 
         picks = []
-        for ticker in universe:
+
+        def _scan_one(ticker):
             try:
                 # Use the SAME daily/swing scorer as the Analyze tab so a stock
-                # scores identically in both places (was using the old intraday
-                # scorer here, which produced mismatched scores + VWAP/EMA text).
+                # scores identically in both places.
                 data = fetch_scan(ticker)
                 if not data:
-                    continue
+                    return None
                 sig = generate_trade_signal(data)
                 if sig and sig.get("score", 0) >= 50:
                     reasons = sig.get("signals", [])
-                    picks.append({
+                    return {
                         "ticker": ticker,
                         "score": sig["score"],
                         "action": sig["action"],
@@ -5323,9 +5411,19 @@ def execute(intent: dict) -> dict:
                         "change_pct": data.get("change_pct", 0),
                         "signals": reasons[:3],
                         "trade": sig.get("trade", {}),
-                    })
+                    }
             except Exception:
-                continue
+                return None
+            return None
+
+        # Parallel fetch+score — the bottleneck is network I/O on each ticker, so
+        # a thread pool cuts a 200-stock scan from ~60s to ~10s. Workers capped to
+        # stay polite to the data provider and avoid rate-limiting.
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=12) as _ex:
+            for _r in _ex.map(_scan_one, universe):
+                if _r:
+                    picks.append(_r)
 
         picks.sort(key=lambda x: x["score"], reverse=True)
         # Apply price filter if user specified one
@@ -5834,6 +5932,16 @@ FACTUAL RULES (never break these):
         content += f"\n\n---PRE-COMPUTED (state this number exactly, do NOT recalculate)---\n{_pm['phrasing']}"
     if stock_data:
         content += f"\n\n---LIVE DATA (use ONLY these exact prices, do NOT make up numbers)---\n{json.dumps(_scrub_trade_levels_for_llm(stock_data), indent=2, default=str)}"
+    # Ground advice in the user's REAL results when they're weighing a decision.
+    _ml = user_msg.lower()
+    if any(w in _ml for w in ["should i", "worth it", "good idea", "take this", "buy", "sell", "short", "how am i", "doing", "track record", "win rate", "performance"]):
+        try:
+            _tr = trade_track_record(30)
+            if _tr.get("ok") and _tr.get("closed_trades", 0) > 0:
+                content += (f"\n\n---YOUR ACTUAL TRADING RESULTS (last 30 days — reference these "
+                            f"when giving advice; be honest about what's working)---\n{_tr['summary']}")
+        except Exception:
+            pass
     messages.append({"role": "user", "content": content})
 
     # Model fallback chain: if the primary is rate-limited (429), drop to the
