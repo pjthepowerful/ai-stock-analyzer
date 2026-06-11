@@ -5417,8 +5417,14 @@ def execute(intent: dict) -> dict:
         elif cat == "value":
             universe = list(dict.fromkeys(VALUE_DIVIDEND + ["JPM","BAC","WFC","KO","PEP","PG","JNJ","WMT","HD","MCD","VZ","T"]))
         else:
-            # Default broad scan — the full cross-section of the market (~200 names)
-            universe = list(dict.fromkeys(SP500_TOP + NASDAQ_100 + MIDCAP_GROWTH + SMALLCAP + TRENDING + VALUE_DIVIDEND + SECTOR_PICKS))
+            # Default broad scan — the full liquid US universe (~600 names:
+            # entire S&P 500 + liquid growth/fintech/semis/miners). Big coverage,
+            # kept clean of delisted tickers.
+            try:
+                from universe import large_universe
+                universe = large_universe()
+            except Exception:
+                universe = list(dict.fromkeys(SP500_TOP + NASDAQ_100 + MIDCAP_GROWTH + SMALLCAP + TRENDING + VALUE_DIVIDEND + SECTOR_PICKS))
 
         # If user wants cheap stocks, expand universe to include more small/mid caps
         if max_price and max_price <= 100:
@@ -5454,7 +5460,10 @@ def execute(intent: dict) -> dict:
         # a thread pool cuts a 200-stock scan from ~60s to ~10s. Workers capped to
         # stay polite to the data provider and avoid rate-limiting.
         from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=12) as _ex:
+        # Scale worker count with universe size — more parallelism for the big
+        # ~600-name scan, but capped to stay polite to the data provider.
+        _workers = 24 if len(universe) > 300 else 12
+        with ThreadPoolExecutor(max_workers=_workers) as _ex:
             for _r in _ex.map(_scan_one, universe):
                 if _r:
                     picks.append(_r)
