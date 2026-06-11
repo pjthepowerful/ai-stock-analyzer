@@ -46,32 +46,37 @@ SP500_TOP = [
     "AAPL","MSFT","AMZN","NVDA","GOOGL","META","BRK-B","LLY","TSLA","UNH",
     "JPM","XOM","V","JNJ","PG","MA","AVGO","HD","MRK","CVX",
     "COST","ABBV","PEP","KO","WMT","ADBE","MCD","CSCO","CRM","BAC",
+    "ORCL","NFLX","AMD","TMUS","ACN","LIN","DHR","TXN","WFC","DIS",
+    "ABT","PM","INTU","VZ","QCOM","IBM","CAT","GE","NOW","ISRG",
 ]
 
 # ── Mid-cap & small-cap growth ──
 MIDCAP_GROWTH = [
     "AXON","DUOL","CELH","TMDX","RELY","HIMS","CAVA","ONON","BIRK","ELF",
-    "WFRD","FTNT","ZS","MNDY","CFLT","GLBE","TOST","BROS","DT","ESTC",
-    "FRSH","PYCR","INTA","VERX","ALKT","PAYC","LMND","ROOT","OSCR","GDRX",
+    "WFRD","FTNT","ZS","MNDY","GLBE","TOST","BROS","DT","ESTC","DDOG",
+    "FRSH","INTA","VERX","ALKT","PAYC","LMND","ROOT","OSCR","GDRX","CRDO",
+    "APP","RDDT","TEM","ALAB","NBIS","RBRK","CART","NU","GRAB","SE",
 ]
 # ── Small-cap high-potential ──
 SMALLCAP = [
     "UPST","AFRM","JOBY","LUNR","ASTS","RKLB","ACHR","VERI","BBAI","SOUN",
-    "BIGC","DM","OUST","IREN","CLSK","MARA","RIOT","HUT","BTBT","BITF",
-    "MVST","QS","PTRA","GOEV","PSNY","BLNK","CHPT","EVGO","SPWR","ARRY",
-    "DNA","RXRX","BEAM","CRSP","NTLA","EDIT","VERA","SDGR","TWST","TGTX",
+    "OUST","IREN","CLSK","MARA","RIOT","HUT","BTBT","WULF","CIFR","CORZ",
+    "MVST","QS","PSNY","BLNK","CHPT","EVGO","ARRY","NXT","SHLS","FLNC",
+    "DNA","RXRX","BEAM","CRSP","NTLA","VERA","SDGR","TWST","TGTX","RNA",
 ]
 # ── Value / Dividend ──
 VALUE_DIVIDEND = [
     "O","SCHD","VZ","T","MO","PM","BTI","AGNC","NLY","STAG",
     "EPD","ET","MPLX","OKE","WMB","KMI","EMR","ITW","GPC","SWK",
     "DOW","LYB","NUE","CLF","AA","FCX","VALE","RIO","BHP",
+    "PFE","KHC","GIS","K","CAG","HRL","KMB","CL","ED","SO",
 ]
 # ── Sector-specific (energy, biotech, fintech, defense, space) ──
 SECTOR_PICKS = [
-    "FSLR","ENPH","SEDG","NEE","CEG","VST","SMR","NNE","OKLO","LEU",
+    "FSLR","ENPH","NEE","CEG","VST","SMR","NNE","OKLO","LEU","GEV",
     "LMT","RTX","NOC","GD","HII","KTOS","LDOS","BWXT","RCAT","PLTR",
-    "MRNA","BNTX","REGN","VRTX","ARGX","ALNY","BMRN","IONS","SGEN","RARE",
+    "MRNA","BNTX","REGN","VRTX","ARGX","ALNY","BMRN","IONS","RARE","NBIX",
+    "ANET","MRVL","MU","LRCX","KLAC","AMAT","ASML","TSM","DELL","SMCI",
 ]
 
 NIFTY_50 = [
@@ -83,8 +88,9 @@ NIFTY_50 = [
 ]
 TRENDING = [
     "PLTR","SMCI","ARM","IONQ","RGTI","MSTR","COIN","HOOD","SOFI","RKLB",
-    "RIVN","LCID","NIO","GME","AMC","DKNG","SNOW","NET","OKTA",
+    "RIVN","LCID","NIO","GME","DKNG","SNOW","NET","OKTA","QBTS","APP",
     "HIMS","CAVA","DUOL","CELH","LUNR","ASTS","SOUN","JOBY","UPST","AFRM",
+    "RDDT","TSLA","NVDA","AMD","MU","AVGO","DELL","ANET","VST","CEG",
 ]
 
 # All US tickers for recognition
@@ -2883,12 +2889,20 @@ Headlines:
         return {**basic, "ai_summary": "", "ai_score": 0, "macro_risk": False}
 
 
+_DELISTED_CACHE = set()
+
 def fetch_scan(ticker: str) -> dict | None:
     """Lightweight fetch for scanning — skips slow .info calls, just gets history + technicals."""
+    if ticker in _DELISTED_CACHE:
+        return None
     try:
         stk = yf.Ticker(ticker)
         hist = stk.history(period="1y")
         if hist is None or hist.empty or len(hist) < 50:
+            # No / too-little data — likely delisted or too new. Remember it so we
+            # don't re-fetch and spam the logs on every scan.
+            if hist is None or hist.empty:
+                _DELISTED_CACHE.add(ticker)
             return None
         price = float(hist["Close"].iloc[-1])
         prev = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else price
@@ -3146,8 +3160,18 @@ def route(msg: str) -> dict:
             cat = "mid"
         elif any(w in m for w in ["small cap", "small-cap", "smallcap", "penny", "cheap"]):
             cat = "small"
-        elif any(w in m for w in ["tech", "technology", "software", "ai ", "semiconductor"]):
+        elif any(w in m for w in ["tech", "technology", "software", "ai ", "semiconductor", "chips", "chip "]):
             cat = "tech"
+        elif any(w in m for w in ["energy", "solar", "nuclear", "clean energy", "utilities", "oil"]):
+            cat = "energy"
+        elif any(w in m for w in ["defense", "defence", "military", "aerospace", "weapons"]):
+            cat = "defense"
+        elif any(w in m for w in ["biotech", "biotechnology", "pharma", "healthcare", "drug"]):
+            cat = "biotech"
+        elif any(w in m for w in ["crypto", "bitcoin", "miner", "mining", "blockchain"]):
+            cat = "crypto"
+        elif any(w in m for w in ["dividend", "income", "value", "safe"]):
+            cat = "value"
         return {"type": "stock_ideas", "category": cat, "_original_msg": msg}
 
     # ── Position queries — check before is_question short-circuits to analyze ──
@@ -5381,7 +5405,17 @@ def execute(intent: dict) -> dict:
         elif cat == "small":
             universe = list(dict.fromkeys(SMALLCAP + MIDCAP_GROWTH))
         elif cat == "tech":
-            universe = ["AAPL","MSFT","NVDA","GOOGL","META","AMZN","AVGO","CRM","ADBE","AMD","INTC","ORCL","PLTR","SNOW","NET","ZS","FTNT","PANW","CRWD","NOW","MU","QCOM","TXN","AMAT","LRCX","KLAC","ADI","MRVL","SMCI","DELL"]
+            universe = ["AAPL","MSFT","NVDA","GOOGL","META","AMZN","AVGO","CRM","ADBE","AMD","INTC","ORCL","PLTR","SNOW","NET","ZS","FTNT","PANW","CRWD","NOW","MU","QCOM","TXN","AMAT","LRCX","KLAC","ADI","MRVL","SMCI","DELL","ANET","ARM","ASML","TSM","APP","DDOG"]
+        elif cat == "energy":
+            universe = ["XOM","CVX","COP","EOG","SLB","OXY","PSX","MPC","VLO","KMI","WMB","OKE","ET","EPD","FSLR","ENPH","NEE","CEG","VST","SMR","OKLO","NNE","LEU","GEV","NXT","SHLS","FLNC"]
+        elif cat == "defense":
+            universe = ["LMT","RTX","NOC","GD","HII","KTOS","LDOS","BWXT","RCAT","PLTR","AVAV","AXON","BA","HWM","TDG","LHX","CW","HEI"]
+        elif cat == "biotech":
+            universe = ["LLY","MRK","ABBV","JNJ","PFE","BMY","AMGN","GILD","VRTX","REGN","MRNA","BNTX","ARGX","ALNY","BMRN","IONS","RARE","NBIX","BEAM","CRSP","NTLA","TGTX","VERA","SDGR"]
+        elif cat == "crypto":
+            universe = list(dict.fromkeys(["COIN","MSTR","MARA","RIOT","CLSK","HUT","BTBT","WULF","CIFR","CORZ","IREN","HOOD"]))
+        elif cat == "value":
+            universe = list(dict.fromkeys(VALUE_DIVIDEND + ["JPM","BAC","WFC","KO","PEP","PG","JNJ","WMT","HD","MCD","VZ","T"]))
         else:
             # Default broad scan — the full cross-section of the market (~200 names)
             universe = list(dict.fromkeys(SP500_TOP + NASDAQ_100 + MIDCAP_GROWTH + SMALLCAP + TRENDING + VALUE_DIVIDEND + SECTOR_PICKS))
