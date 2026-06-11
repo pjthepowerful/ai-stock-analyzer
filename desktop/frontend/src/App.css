@@ -592,10 +592,11 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .az-result { animation: clSlide .3s cubic-bezier(.16,1,.3,1) }
 .az-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px }
 .az-sym { font-family: var(--mono); font-size: 1.6rem; font-weight: 700; color: var(--wh); margin-right: 12px; letter-spacing: -.01em }
-.az-signal { font-family: var(--mono); font-size: .56rem; font-weight: 700; padding: 3px 10px; border-radius: 5px; letter-spacing: .04em }
-.az-buy { background: rgba(16,185,129,.12); color: var(--grn) }
-.az-hold { background: rgba(255,255,255,.06); color: var(--dim) }
-.az-avoid { background: rgba(239,68,68,.1); color: var(--red) }
+.az-signal { font-family: var(--mono); font-size: .9rem; font-weight: 700; padding: 6px 14px; border-radius: 8px; letter-spacing: .03em; vertical-align: middle }
+.az-buy { background: rgba(16,185,129,.15); color: var(--grn) }
+.az-hold { background: rgba(245,158,11,.15); color: #f5a623 }
+.az-avoid, .az-sell, .az-strong_sell { background: rgba(239,68,68,.15); color: var(--red) }
+.az-strong_buy { background: rgba(16,185,129,.2); color: var(--grn3) }
 .az-price-wrap { text-align: right }
 .az-price { font-family: var(--mono); font-size: 1.4rem; font-weight: 700; color: var(--wh); display: block; letter-spacing: -.01em }
 .az-chg { font-family: var(--mono); font-size: .68rem; font-weight: 700 }
