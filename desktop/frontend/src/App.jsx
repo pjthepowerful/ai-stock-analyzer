@@ -1216,20 +1216,34 @@ function AnalyzeView({ sendMessage, setView }) {
       </div>
 
       {result && <div className="az-result">
-        <div className="az-header">
-          <div><span className="az-sym">{result.ticker}</span><span className={'az-signal az-'+result.signal.toLowerCase()}>{result.signal} · {result.score}</span></div>
-          <div className="az-price-wrap"><span className="az-price">${result.price}</span><span className={'az-chg '+(result.change>=0?'up':'dn')}>{result.change>=0?'+':''}{result.change} ({result.change_pct}%)</span></div>
+        <div className="az-card">
+          <div className="az-top">
+            <div className="az-top-l">
+              <div className="az-id">
+                <span className="az-sym">{result.ticker}</span>
+                <span className={'az-signal az-'+result.signal.toLowerCase()}>{result.signal} · {result.score}</span>
+              </div>
+              {result.company&&result.company.name&&<div className="az-co-name">{result.company.name}{result.company.sector&&<span className="az-co-sector">{result.company.sector}</span>}</div>}
+            </div>
+            <div className="az-price-wrap">
+              <span className="az-price">${result.price}</span>
+              <span className={'az-chg '+(result.change>=0?'up':'dn')}>{result.change>=0?'+':''}{result.change} ({result.change_pct}%)</span>
+            </div>
+          </div>
+
+          {result.company&&(result.company.ceo||result.company.summary)&&<div className="az-company">
+            {result.company.ceo&&<div className="az-co-ceo"><span className="az-co-k">CEO</span>{result.company.ceo}</div>}
+            {result.company.summary&&<p className="az-co-sum">{result.company.summary}</p>}
+          </div>}
         </div>
-        {result.company&&(result.company.name||result.company.ceo||result.company.summary)&&<div className="az-company">
-          {result.company.name&&<div className="az-co-name">{result.company.name}{result.company.sector&&<span className="az-co-sector">{result.company.sector}</span>}</div>}
-          {result.company.ceo&&<div className="az-co-ceo">CEO · {result.company.ceo}</div>}
-          {result.company.summary&&<p className="az-co-sum">{result.company.summary}</p>}
-        </div>}
+
         <div className="az-chart"><Chart ticker={result.ticker} height={320}/></div>
+
         {result.reasons&&result.reasons.length>0&&<div className="az-why">
           <div className="az-why-h">Why this score</div>
           <ul className="az-why-list">{result.reasons.map((r,i)=><li key={i}>{r}</li>)}</ul>
         </div>}
+
         <div className="az-actions"><button className="az-btn az-deep" onClick={()=>{sendMessage('Analyze '+result.ticker);setView('chat')}}>Deep dive in chat →</button></div>
       </div>}
 
