@@ -5781,8 +5781,21 @@ RESPONSE LENGTH by request type:
 
     try:
         client = Groq(api_key=key)
-        resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=messages, max_tokens=500, temperature=0.3)
-        return resp.choices[0].message.content
+        _models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+        _last_err = None
+        for _mi, _model in enumerate(_models):
+            try:
+                resp = client.chat.completions.create(model=_model, messages=messages, max_tokens=500, temperature=0.3)
+                return resp.choices[0].message.content
+            except Exception as e:
+                _last_err = e
+                _msg = str(e).lower()
+                if ("429" in _msg or "rate limit" in _msg or "rate_limit" in _msg) and _mi < len(_models) - 1:
+                    import time as _t; _t.sleep(0.6); continue
+                if "429" in _msg or "rate limit" in _msg or "rate_limit" in _msg:
+                    return "⚠️ Paula's AI is busy right now (rate limit). Give it a few seconds and try again."
+                return f"⚠️ AI error: {str(e)[:120]}"
+        return f"⚠️ AI error: {str(_last_err)[:120]}"
     except Exception as e:
         return f"⚠️ AI error: {str(e)[:120]}"
 
@@ -5822,17 +5835,35 @@ FACTUAL RULES (never break these):
         content += f"\n\n---LIVE DATA (use ONLY these exact prices, do NOT make up numbers)---\n{json.dumps(_scrub_trade_levels_for_llm(stock_data), indent=2, default=str)}"
     messages.append({"role": "user", "content": content})
 
-    try:
-        client = Groq(api_key=key)
-        stream = client.chat.completions.create(
-            model="llama-3.3-70b-versatile", messages=messages,
-            max_tokens=500, temperature=0.3, stream=True
-        )
-        for chunk in stream:
-            if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
-                yield chunk.choices[0].delta.content
-    except Exception as e:
-        yield f"⚠️ AI error: {str(e)[:120]}"
+    # Model fallback chain: if the primary is rate-limited (429), drop to the
+    # next model automatically. Each Groq model has its own rate bucket, so a
+    # smaller model is usually still available when the big one is capped.
+    _models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama-3.3-70b-versatile"]
+    client = Groq(api_key=key)
+    _last_err = None
+    for _mi, _model in enumerate(_models):
+        try:
+            stream = client.chat.completions.create(
+                model=_model, messages=messages,
+                max_tokens=500, temperature=0.3, stream=True
+            )
+            for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+            return  # success — stop after a working model finishes
+        except Exception as e:
+            _last_err = e
+            _msg = str(e).lower()
+            # Only fall through to the next model on rate-limit/429; otherwise stop.
+            if "429" in _msg or "rate limit" in _msg or "rate_limit" in _msg:
+                if _mi < len(_models) - 1:
+                    import time as _t
+                    _t.sleep(0.6)
+                    continue
+                yield "⚠️ Paula's AI is busy right now (rate limit). Give it a few seconds and try again."
+                return
+            yield f"⚠️ AI error: {str(e)[:120]}"
+            return
 
 
 # ── UI ───────────────────────────────────────────────────────────────────────

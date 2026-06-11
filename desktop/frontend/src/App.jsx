@@ -419,7 +419,7 @@ function MainApp({ user, token, logout }) {
 
   const newChat = () => {
     saveCurrentChat()
-    const id = Date.now().toString()
+    const id = Date.now().toString() + "-" + Math.random().toString(36).slice(2, 8)
     persist([{ id, title: 'New chat', messages: [], created: new Date().toISOString() }, ...chatsRef.current])
     setActiveChatId(id)
     setMessages([])
@@ -601,7 +601,7 @@ function MainApp({ user, token, logout }) {
     if (exists) return currentId
 
     // Create new chat
-    const id = Date.now().toString()
+    const id = Date.now().toString() + "-" + Math.random().toString(36).slice(2, 8)
     persist([{ id, title: 'New chat', messages: [], created: new Date().toISOString() }, ...chatsRef.current])
     setActiveChatId(id)
     setMessages([])
@@ -725,6 +725,9 @@ function MainApp({ user, token, logout }) {
             setMessages(prev => {
               const m = [...prev]; const last = m[m.length - 1]
               if (last) m[m.length - 1] = { ...last, streaming: false, content: text }
+              // Immediately persist this chat's full message list into chatsRef so
+              // switching away can't lose or cross-contaminate it.
+              persist(chatsRef.current.map(c => c.id === targetId ? { ...c, messages: m, updated: new Date().toISOString() } : c))
               return m
             })
           }
