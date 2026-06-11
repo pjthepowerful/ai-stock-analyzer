@@ -2931,6 +2931,16 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True) -> dict:
                 prev = float(sub["Close"].iloc[-2]) if len(sub) >= 2 else price
                 if not price or price < 1:
                     continue
+                # Liquidity filter — drop illiquid junk so a full-market scan only
+                # surfaces names you could actually trade. Require ~$5M+ average
+                # daily dollar volume over the last 20 sessions.
+                try:
+                    recent = sub.tail(20)
+                    avg_dollar_vol = float((recent["Close"] * recent["Volume"]).mean())
+                    if avg_dollar_vol < 5_000_000:
+                        continue
+                except Exception:
+                    pass
                 tech = compute_technicals(sub)
                 if not tech:
                     continue
@@ -3232,6 +3242,8 @@ def route(msg: str) -> dict:
             cat = "crypto"
         elif any(w in m for w in ["dividend", "income", "value", "safe"]):
             cat = "value"
+        elif any(w in m for w in ["all stocks", "every stock", "entire market", "whole market", "nyse", "nasdaq", "all nyse", "everything", "full market", "all of nyse", "scan everything"]):
+            cat = "full"
         return {"type": "stock_ideas", "category": cat, "_original_msg": msg}
 
     # ── Position queries — check before is_question short-circuits to analyze ──
@@ -5476,6 +5488,16 @@ def execute(intent: dict) -> dict:
             universe = list(dict.fromkeys(["COIN","MSTR","MARA","RIOT","CLSK","HUT","BTBT","WULF","CIFR","CORZ","IREN","HOOD"]))
         elif cat == "value":
             universe = list(dict.fromkeys(VALUE_DIVIDEND + ["JPM","BAC","WFC","KO","PEP","PG","JNJ","WMT","HD","MCD","VZ","T"]))
+        elif cat == "full":
+            # ENTIRE market — live NYSE + NASDAQ common-stock listing (~5-7k
+            # symbols). The batch fetch + liquidity filter below drop the
+            # illiquid/dead junk so only real tradeable names get scored.
+            try:
+                from universe import all_exchange_tickers
+                universe = all_exchange_tickers(include_nasdaq=True)
+            except Exception:
+                from universe import large_universe
+                universe = large_universe()
         else:
             # Default broad scan — the full liquid US universe (~600 names:
             # entire S&P 500 + liquid growth/fintech/semis/miners). Big coverage,

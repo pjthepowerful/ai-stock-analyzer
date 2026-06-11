@@ -73,3 +73,46 @@ def large_universe() -> list:
         if t and t not in seen:
             seen[t] = True
     return list(seen.keys())
+
+
+_LISTING_CACHE = {"ts": 0, "tickers": None}
+
+def all_exchange_tickers(include_nasdaq: bool = True) -> list:
+    """Fetch the FULL current NYSE (+ optionally NASDAQ) common-stock listing
+    from a maintained public source. Cached 24h. Falls back to large_universe()
+    if the network is unavailable.
+
+    The raw listing has thousands of symbols incl. illiquid names; the scanner's
+    batch fetch + price/liquidity filters drop the junk so only real tradeable
+    stocks reach scoring.
+    """
+    import time as _t
+    now = _t.time()
+    if _LISTING_CACHE["tickers"] is not None and (now - _LISTING_CACHE["ts"]) < 86400:
+        return _LISTING_CACHE["tickers"]
+    import urllib.request
+    base = "https://raw.githubusercontent.com/rreichel3/US-Stock-Symbols/main"
+    urls = [f"{base}/nyse/nyse_tickers.txt"]
+    if include_nasdaq:
+        urls.append(f"{base}/nasdaq/nasdaq_tickers.txt")
+    collected = {}
+    for url in urls:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            data = urllib.request.urlopen(req, timeout=15).read().decode()
+            for line in data.splitlines():
+                t = line.strip().upper()
+                # Common stock only: skip warrants/units/preferred/rights and blanks.
+                if not t or len(t) > 5:
+                    continue
+                if any(c in t for c in (".", "^", "$", "/", " ")):
+                    continue
+                collected[t] = True
+        except Exception:
+            continue
+    if collected:
+        tickers = list(collected.keys())
+        _LISTING_CACHE["tickers"] = tickers
+        _LISTING_CACHE["ts"] = now
+        return tickers
+    return large_universe()
