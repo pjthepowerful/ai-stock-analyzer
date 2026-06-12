@@ -16,6 +16,11 @@ const BACKEND = (
       : window.location.origin
 ).replace(/\/+$/, '')
 const API = BACKEND
+// ── Version: bump this on every shipped change (semver: major.minor.patch) ──
+// patch = fix, minor = feature, major = big release. Shown in the header, the
+// settings About row, and the "What's new" modal.
+const VERSION = '3.3.1'
+const VERSION_DATE = 'June 2026'
 // Email-dependent auth (2FA, signup verification, password reset) is OFF until a
 // sending domain is verified in Resend. Keep in sync with the backend's
 // EMAIL_AUTH_ENABLED. Flip to true when email works.
@@ -417,12 +422,11 @@ function MainApp({ user, token, logout }) {
   const [view, setView] = useState('chat')
   const [perf, setPerf] = useState(null)
   const [showChangelog, setShowChangelog] = useState(() => {
-    const v = '3.2'
     const seen = localStorage.getItem('paula-changelog-seen')
-    if (seen !== v) return true
+    if (seen !== VERSION) return true
     return false
   })
-  const dismissChangelog = () => { setShowChangelog(false); localStorage.setItem('paula-changelog-seen', '3.2') }
+  const dismissChangelog = () => { setShowChangelog(false); localStorage.setItem('paula-changelog-seen', VERSION) }
   
   const [sideOpen, setSideOpen] = useState(window.innerWidth > 768)
   const [pinnedChats, setPinnedChats] = useState(() => {
@@ -916,8 +920,8 @@ function MainApp({ user, token, logout }) {
             <div className="cl-top-l">
               <span className="logo-p cl-logo">P</span>
               <div>
-                <span className="cl-ver-title">Paula v3.2</span>
-                <span className="cl-date">June 2026</span>
+                <span className="cl-ver-title">Paula v{VERSION}</span>
+                <span className="cl-date">{VERSION_DATE}</span>
               </div>
             </div>
             <button className="cl-close" onClick={dismissChangelog}>
@@ -926,33 +930,30 @@ function MainApp({ user, token, logout }) {
           </div>
 
           <div className="cl-hero">
-            <h2>What's new in 3.2</h2>
-            <p>Paula is now a full swing-trading copilot — deeper signals, live information, and always-on hosting.</p>
+            <h2>What's new in {VERSION}</h2>
+            <p>A faster, smarter Paula — scan the whole market, a redesigned look, and signals you can trust.</p>
           </div>
 
           <div className="cl-body">
             <div className="cl-group">
-              <span className="cl-group-title">Smarter swing engine</span>
-              <div className="cl-item"><span className="cl-dot cl-dot-grn"/><div><b>Named setups</b><p>Every pick comes with its thesis — pullback to 20 SMA, breakout, oversold bounce, or volatility coiling.</p></div></div>
-              <div className="cl-item"><span className="cl-dot cl-dot-grn"/><div><b>52-week-high &amp; VCP detection</b><p>Paula favors strength near highs and spots tightening ranges before a move.</p></div></div>
-              <div className="cl-item"><span className="cl-dot cl-dot-grn"/><div><b>Honest backtest</b><p>Multi-position simulation with realistic drawdown — no more inflated, all-100 scores.</p></div></div>
-              <div className="cl-item"><span className="cl-dot cl-dot-grn"/><div><b>Positions held overnight</b><p>Autopilot now trades true swing — multi-day holds, no end-of-day force-close.</p></div></div>
+              <span className="cl-group-title">Scan wider, faster</span>
+              <div className="cl-item"><span className="cl-dot cl-dot-grn"/><div><b>1,000+ stocks</b><p>The scanner now covers the full S&amp;P 500 plus a thousand-plus liquid names — and a full-market mode for the entire NYSE.</p></div></div>
+              <div className="cl-item"><span className="cl-dot cl-dot-grn"/><div><b>Much faster scans</b><p>Bulk data fetching scans hundreds of stocks in seconds instead of minutes.</p></div></div>
+              <div className="cl-item"><span className="cl-dot cl-dot-grn"/><div><b>Themed scans</b><p>Ask for energy, defense, biotech, crypto, or dividend setups specifically.</p></div></div>
             </div>
 
             <div className="cl-group">
-              <span className="cl-group-title">Knows what's happening now</span>
-              <div className="cl-item"><span className="cl-dot cl-dot-blu"/><div><b>Live news</b><p>Ask "what's the latest on NVDA" and Paula pulls current headlines, not stale data.</p></div></div>
-              <div className="cl-item"><span className="cl-dot cl-dot-blu"/><div><b>Web search</b><p>Questions beyond the ticker tape — like the SpaceX IPO — get answered from the live web.</p></div></div>
-              <div className="cl-item"><span className="cl-dot cl-dot-blu"/><div><b>Private companies</b><p>Paula recognizes pre-IPO names and answers conversationally instead of guessing.</p></div></div>
-              <div className="cl-item"><span className="cl-dot cl-dot-blu"/><div><b>Market awareness</b><p>She knows when the market's open, closed, or after-hours and answers accordingly.</p></div></div>
+              <span className="cl-group-title">Signals you can trust</span>
+              <div className="cl-item"><span className="cl-dot cl-dot-blu"/><div><b>No more bad picks</b><p>Delisted, acquired, and brand-new IPO stocks are filtered out — no fake scores on names you can't trade.</p></div></div>
+              <div className="cl-item"><span className="cl-dot cl-dot-blu"/><div><b>Accurate direction</b><p>Downtrends read as downtrends, and trade levels never collapse or get invented.</p></div></div>
+              <div className="cl-item"><span className="cl-dot cl-dot-blu"/><div><b>Learns from your results</b><p>Paula references your real win rate and recent trades when you ask for advice.</p></div></div>
             </div>
 
             <div className="cl-group">
-              <span className="cl-group-title">Polish &amp; reliability</span>
-              <div className="cl-item"><span className="cl-dot cl-dot-pur"/><div><b>Per-chat memory</b><p>Each conversation stays its own — no more context bleeding between chats.</p></div></div>
-              <div className="cl-item"><span className="cl-dot cl-dot-pur"/><div><b>Stop anytime</b><p>Cancel a response mid-stream with the stop button.</p></div></div>
-              <div className="cl-item"><span className="cl-dot cl-dot-pur"/><div><b>Always-on hosting</b><p>Paula now runs in the cloud — available any time, no laptop required.</p></div></div>
-              <div className="cl-item"><span className="cl-dot cl-dot-pur"/><div><b>Consistent scores</b><p>The Analyze tab and chat now always agree on a stock's score.</p></div></div>
+              <span className="cl-group-title">A fresh look</span>
+              <div className="cl-item"><span className="cl-dot cl-dot-pur"/><div><b>Redesigned welcome &amp; Analyze</b><p>A cleaner home screen and a unified stock card with company info, CEO, and reasoning.</p></div></div>
+              <div className="cl-item"><span className="cl-dot cl-dot-pur"/><div><b>New navigation</b><p>A hover-expand rail keeps things tidy, with per-account autopilot sounds.</p></div></div>
+              <div className="cl-item"><span className="cl-dot cl-dot-pur"/><div><b>Accurate everywhere</b><p>Real market data on the login screen and live intraday charts (1D/5D).</p></div></div>
             </div>
           </div>
 
@@ -1036,7 +1037,7 @@ function MainApp({ user, token, logout }) {
 
         {/* Slim top bar — equity ticker only; nav lives in the rail */}
         <div className="hdr hdr-slim">
-          <button className="hdr-changelog" onClick={()=>setShowChangelog(true)} title="What's new">v3.2</button>
+          <button className="hdr-changelog" onClick={()=>setShowChangelog(true)} title="What's new">v{VERSION}</button>
           <div className="hdr-ticker">
             {account&&<>
               <span className="hdr-eq">${account.equity.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
@@ -1896,7 +1897,7 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
 
     {/* About */}
     <div className="card wide"><label>About</label>
-      <div className="s-row"><span>Version</span><span className="s-ver">v3.2 <span className="s-build">{__BUILD_COMMIT__}</span></span></div>
+      <div className="s-row"><span>Version</span><span className="s-ver">v{VERSION} <span className="s-build">{__BUILD_COMMIT__}</span></span></div>
       {(user.email||'').toLowerCase() === 'parjan.d@icloud.com' && <div className="s-row"><span>Admin</span><button className="tog" onClick={() => setShowAdmin(true)}>Open panel</button></div>}
       {showAdmin && <AdminPanel token={token} onClose={() => setShowAdmin(false)}/>}
     </div>
