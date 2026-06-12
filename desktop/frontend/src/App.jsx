@@ -1295,6 +1295,23 @@ function AnalyzeView({ sendMessage, setView }) {
         </div>}
       </div>
 
+      {result && result.delisted && <div className="az-result">
+        <div className="az-card">
+          <div className="az-top">
+            <div className="az-top-l">
+              <div className="az-id">
+                <span className="az-sym">{result.ticker}</span>
+                <span className="az-signal az-avoid">DELISTED</span>
+              </div>
+              {result.company&&result.company.name&&<div className="az-co-name">{result.company.name}{result.company.sector&&<span className="az-co-sector">{result.company.sector}</span>}</div>}
+            </div>
+          </div>
+          <div className="az-newnote">
+            {result.ticker} is no longer trading — it looks like the stock has been delisted, acquired, or halted (no new price data for {result.stale_days||'several'} days). You can't analyze or trade it. If you held shares, your broker will convert them per the corporate action.
+          </div>
+        </div>
+      </div>}
+
       {result && result.too_new && <div className="az-result">
         <div className="az-card">
           <div className="az-top">
@@ -1319,7 +1336,7 @@ function AnalyzeView({ sendMessage, setView }) {
         </div>
       </div>}
 
-      {result && !result.too_new && <div className="az-result">
+      {result && !result.too_new && !result.delisted && <div className="az-result">
         <div className="az-card">
           <div className="az-top">
             <div className="az-top-l">

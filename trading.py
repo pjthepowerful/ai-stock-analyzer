@@ -2931,6 +2931,22 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True) -> dict:
                 prev = float(sub["Close"].iloc[-2]) if len(sub) >= 2 else price
                 if not price or price < 1:
                     continue
+                # STALE-DATA / DELISTED guard: a stock that was acquired, delisted,
+                # or halted stops printing new bars, but still has months of valid
+                # history (so the IPO/min-history guard misses it). If the most
+                # recent bar is several days stale, it's no longer trading — skip
+                # it so we never recommend a dead ticker (e.g. MASI after the
+                # Danaher buyout). Allow ~5 days to cover weekends + holidays.
+                try:
+                    import pandas as _pd
+                    last_dt = sub.index[-1]
+                    last_ts = _pd.Timestamp(last_dt)
+                    now_ts = _pd.Timestamp.now(tz=last_ts.tz) if last_ts.tz else _pd.Timestamp.now()
+                    if (now_ts - last_ts).days > 5:
+                        _DELISTED_CACHE.add(t)
+                        continue
+                except Exception:
+                    pass
                 # Liquidity filter — drop illiquid junk so a full-market scan only
                 # surfaces names you could actually trade. Require ~$5M+ average
                 # daily dollar volume over the last 20 sessions.
@@ -2978,6 +2994,16 @@ def fetch_scan(ticker: str) -> dict | None:
         prev = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else price
         if not price or price < 1:
             return None
+        # Delisted/halted guard: stale last bar = no longer trading (see batch scan).
+        try:
+            import pandas as _pd
+            last_ts = _pd.Timestamp(hist.index[-1])
+            now_ts = _pd.Timestamp.now(tz=last_ts.tz) if last_ts.tz else _pd.Timestamp.now()
+            if (now_ts - last_ts).days > 5:
+                _DELISTED_CACHE.add(ticker)
+                return None
+        except Exception:
+            pass
         tech = compute_technicals(hist)
         rs = _calc_relative_strength(hist)
         sector_etf = TICKER_SECTOR.get(ticker)
@@ -3025,6 +3051,16 @@ def _fetch_full_uncached(ticker: str) -> dict | None:
         info = stk.info or {}
         hist = stk.history(period="1y")
         tech = compute_technicals(hist)
+        # Detect delisted/halted: how stale is the most recent bar?
+        stale_days = 0
+        try:
+            if hist is not None and not hist.empty:
+                import pandas as _pd
+                last_ts = _pd.Timestamp(hist.index[-1])
+                now_ts = _pd.Timestamp.now(tz=last_ts.tz) if last_ts.tz else _pd.Timestamp.now()
+                stale_days = (now_ts - last_ts).days
+        except Exception:
+            pass
         news = []
         try:
             for n in (stk.news or [])[:5]:
@@ -3034,6 +3070,8 @@ def _fetch_full_uncached(ticker: str) -> dict | None:
         return {
             **basic, "ticker": ticker.replace(".NS", ""), "full_ticker": ticker,
             "history_days": int(len(hist)) if hist is not None else 0,
+            "stale_days": int(stale_days),
+            "delisted": bool(stale_days > 5),
             "peg_ratio": info.get("pegRatio"), "roe": info.get("returnOnEquity"),
             "profit_margin": info.get("profitMargins"),
             "revenue_growth": info.get("revenueGrowth"),

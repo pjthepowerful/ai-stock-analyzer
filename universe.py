@@ -52,7 +52,7 @@ EXTRAS = [
     "JAZZ","JEF","JHG","JLL","JWN","JXN",
     "KBR","KD","KEX","KFY","KGS","KNF","KNSL","KNX","KRC","KRG","KRYS",
     "LAD","LAMR","LANC","LAZ","LBRDK","LECO","LEG","LFUS","LITE","LNC","LNW","LOPE","LPLA","LSCC","LSTR","LYFT",
-    "M","MAN","MANH","MASI","MAT","MC","MDGL","MEDP","MGY","MHO","MIDD","MKSI","MLI","MMS","MOD","MORN","MP","MRCY","MSA","MSGS","MTG","MTH","MTSI","MUR","MUSA",
+    "M","MAN","MANH","MAT","MC","MDGL","MEDP","MGY","MHO","MIDD","MKSI","MLI","MMS","MOD","MORN","MP","MRCY","MSA","MSGS","MTG","MTH","MTSI","MUR","MUSA",
     "NBIX","NCNO","NEU","NFG","NJR","NOG","NOV","NSA","NSP","NTRA","NVST","NVT","NWE","NXST","NYT",
     "OGE","OHI","OLED","OLN","OLLI","OMCL","ONB","ONTO","ORA","ORI","OSK","OVV","OZK",
     "PAG","PB","PBF","PCTY","PCVX","PEGA","PEN","PFGC","PII","PINC","PJT","PLNT","PNFP","POST","POWI","PR","PRGO","PRI","PRIM","PSN","PVH",
