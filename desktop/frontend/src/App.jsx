@@ -569,7 +569,10 @@ function MainApp({ user, token, logout }) {
             // Build the message
             let apMsg = null
             if (data.status === 'scanned' && data.log && data.log.length > 0) {
-              if (settingsRef.current.scanSound !== false) playNotify()
+              // Only the client that STARTED autopilot owns its sounds — apChatRef
+              // is set only on the activating client. Without this, every logged-in
+              // user hears autopilot scans on the shared backend.
+              if (apChatRef.current && settingsRef.current.scanSound !== false) playNotify()
               const summary = data.log.slice(0, 8).join('\n')
               const extra = data.buys || data.sells || data.shorts
                 ? `\n\n**Trades:** ${data.buys||0} bought, ${data.sells||0} sold, ${data.shorts||0} shorted`
@@ -614,11 +617,17 @@ function MainApp({ user, token, logout }) {
           }
           if (event === 'trade') {
             const act = data.action, ticker = data.ticker || data.symbol || ''
-            if (act === 'buy') { snd(playBuy); addToast('Bought ' + ticker, 'buy') }
-            else if (act === 'sell') { snd(playSell); addToast('Sold ' + ticker, 'sell') }
-            else if (act === 'short') { snd(playSell); addToast('Shorted ' + ticker, 'sell') }
-            else if (act === 'cover') { snd(playProfit); addToast('Covered ' + ticker, 'buy') }
-            else if (act === 'close_all') { snd(playAlert); addToast('All positions closed', 'warn') }
+            // Broadcast trades fan out to ALL clients on the shared backend. Only
+            // the autopilot owner (apChatRef set) should HEAR autopilot/EOD trade
+            // sounds — otherwise every logged-in user hears them. Manual trades you
+            // make play their own sound locally (see the trade API calls). Toasts
+            // still show for everyone so they can see shared-account activity.
+            const owns = !!apChatRef.current
+            if (act === 'buy') { if (owns) snd(playBuy); addToast('Bought ' + ticker, 'buy') }
+            else if (act === 'sell') { if (owns) snd(playSell); addToast('Sold ' + ticker, 'sell') }
+            else if (act === 'short') { if (owns) snd(playSell); addToast('Shorted ' + ticker, 'sell') }
+            else if (act === 'cover') { if (owns) snd(playProfit); addToast('Covered ' + ticker, 'buy') }
+            else if (act === 'close_all') { if (owns) snd(playAlert); addToast('All positions closed', 'warn') }
             refreshData()
           }
         } catch {}
