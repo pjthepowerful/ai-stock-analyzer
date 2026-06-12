@@ -377,11 +377,21 @@ async def login(req: AuthRequest):
         if email:
             try:
                 code = auth.create_email_code(email, "2fa")
+                sent = False
                 if code:
-                    _send_code_email(email, code, "2fa")
-                return {"ok": True, "needs_2fa": True, "email": email}
-            except Exception:
-                pass
+                    sent = _send_code_email(email, code, "2fa")
+                if sent:
+                    return {"ok": True, "needs_2fa": True, "email": email}
+                # SAFETY VALVE: if the code email could NOT be sent (e.g. Resend
+                # misconfigured), do NOT lock the user out — the password was
+                # already verified, so issue the session directly and flag it.
+                print(f"[2fa] email NOT sent for {email} — falling back to direct login (password was valid)", flush=True)
+                direct = auth.issue_token_for_email(email)
+                direct["twofa_skipped"] = True
+                return direct
+            except Exception as e:
+                print(f"[2fa] error, falling back to direct login: {e}", flush=True)
+                return auth.issue_token_for_email(email)
     return result
 
 
@@ -485,9 +495,16 @@ def _send_code_email(to_email: str, code: str, purpose: str) -> bool:
             },
             timeout=10,
         )
-        return resp.status_code in (200, 201)
+        ok = resp.status_code in (200, 201)
+        if ok:
+            print(f"[{purpose}] email sent to {to_email} (from={from_addr})", flush=True)
+        else:
+            # Surface the REAL reason Resend rejected it (unverified domain,
+            # bad key, restricted from-address, etc.) so it's debuggable.
+            print(f"[{purpose}] RESEND REJECTED ({resp.status_code}) from={from_addr} to={to_email}: {resp.text[:400]}", flush=True)
+        return ok
     except Exception as e:
-        print(f"[{purpose}] email send failed: {e}", flush=True)
+        print(f"[{purpose}] email send EXCEPTION: {e}", flush=True)
         return False
 
 
@@ -564,7 +581,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "2fa-email-verify-v21",  # bump marker — confirms running code
+        "build": "2fa-failopen-emaillog-v22",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
