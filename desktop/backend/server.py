@@ -51,6 +51,13 @@ except Exception:
 ADMIN_EMAIL = "parjan.d@icloud.com"  # Only this email gets admin (admin panel, etc.)
 AUTOPILOT_EMAILS = {"parjan.d@icloud.com", "pinakin.d@moftmail.com"}  # Emails allowed to run autopilot
 
+# Email-dependent auth features (2FA + signup email verification). OFF until a
+# domain is verified in Resend — the sandbox onboarding@resend.dev can only mail
+# the Resend account owner, so codes never reach testers. Flip to "1" (env
+# EMAIL_AUTH_ENABLED=1) once a real sending domain is set up. Password reset is
+# also gated on this since it relies on the same email delivery.
+EMAIL_AUTH_ENABLED = os.environ.get("EMAIL_AUTH_ENABLED", "0") == "1"
+
 def _can_autopilot(user) -> bool:
     return bool(user) and user.get("email", "").lower() in AUTOPILOT_EMAILS
 # Shared set of recognizable tickers (used for chat data + news lookups)
@@ -351,8 +358,8 @@ async def signup(req: AuthRequest):
     if not req.password or len(req.password) < 6:
         return {"ok": False, "error": "Password must be at least 6 characters"}
     result = auth.signup(req.username.strip(), req.password, req.email.strip().lower())
-    if result.get("ok"):
-        # Send a 6-digit email verification code.
+    if result.get("ok") and EMAIL_AUTH_ENABLED:
+        # Send a 6-digit email verification code (only when email is configured).
         try:
             code = auth.create_email_code(req.email.strip().lower(), "verify")
             if code:
@@ -370,7 +377,7 @@ async def login(req: AuthRequest):
     if not identifier:
         return {"ok": False, "error": "Email is required"}
     result = auth.login(identifier.strip(), req.password)
-    if result.get("ok"):
+    if result.get("ok") and EMAIL_AUTH_ENABLED:
         # 2FA: password was correct — but require an emailed code before issuing
         # the real session token. Withhold the token; send a code instead.
         email = (result.get("user", {}) or {}).get("email", "").strip().lower()
@@ -581,7 +588,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "2fa-failopen-emaillog-v22",  # bump marker — confirms running code
+        "build": "email-auth-off-v23",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),

@@ -16,6 +16,10 @@ const BACKEND = (
       : window.location.origin
 ).replace(/\/+$/, '')
 const API = BACKEND
+// Email-dependent auth (2FA, signup verification, password reset) is OFF until a
+// sending domain is verified in Resend. Keep in sync with the backend's
+// EMAIL_AUTH_ENABLED. Flip to true when email works.
+const EMAIL_AUTH = false
 try {
   console.log('[Paula] Using backend:', BACKEND, '| page host:', window.location.hostname)
   if (!_envApi && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
@@ -259,7 +263,7 @@ function LoginPage({ onAuth, onFinishAuth }) {
                 </>}
                 <div className="lg-pw-row">
                   <label className="lg-label">Password</label>
-                  {!isSignup && <button type="button" className="lg-forgot" onClick={() => { setView('forgot'); setError(''); setNotice(''); setEmail(username) }}>Forgot?</button>}
+                  {!isSignup && EMAIL_AUTH && <button type="button" className="lg-forgot" onClick={() => { setView('forgot'); setError(''); setNotice(''); setEmail(username) }}>Forgot?</button>}
                 </div>
                 <div className="lg-pw-wrap">
                   <input className="lg-input lg-pw" type={showPw ? 'text' : 'password'} autoComplete={isSignup ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit() }} />
