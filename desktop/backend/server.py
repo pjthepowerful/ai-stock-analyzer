@@ -212,6 +212,11 @@ class CoverRequest(BaseModel):
 
 async def broadcast(event: str, data: dict):
     """Send event to all connected WebSocket clients."""
+    # Tag autopilot/trade events with the account that owns autopilot, so each
+    # client can decide whether to play sounds (only the owning ACCOUNT should
+    # hear them — works across all of that account's sessions/devices).
+    if event in ("autopilot", "trade") and isinstance(data, dict) and "ap_owner_id" not in data:
+        data = {**data, "ap_owner_id": autopilot_owner_id}
     msg = json.dumps({"event": event, "data": data})
     disconnected = []
     for ws in connected_clients:
@@ -588,7 +593,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "email-auth-off-v23",  # bump marker — confirms running code
+        "build": "ap-sound-per-account-v24",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
