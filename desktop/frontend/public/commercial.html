@@ -78,23 +78,20 @@
     );
   }
 
-  // ── SCENE 1 (0–3.6): "Hey Paula." cold open ──
+  // ── SCENE 1 (0–3.6): "Paula." cold open ──
   function Scene1() {
     const { time } = useTimeline();
     const op = sceneOpacity(time, 0.2, 0.8, 3.0, 3.6);
-    const hOp = animate({ from: 0, to: 1, start: 0.3, end: 0.9, ease: Easing.easeOutCubic })(time);
-    const hY  = animate({ from: 26, to: 0, start: 0.3, end: 1.0, ease: Easing.easeOutCubic })(time);
-    const pOp = animate({ from: 0, to: 1, start: 0.7, end: 1.3, ease: Easing.easeOutCubic })(time);
-    const pY  = animate({ from: 26, to: 0, start: 0.7, end: 1.4, ease: Easing.easeOutCubic })(time);
+    const mS  = animate({ from: 0.5, to: 1, start: 0.2, end: 1.0, ease: Easing.easeOutBack })(time);
+    const pOp = animate({ from: 0, to: 1, start: 0.5, end: 1.2, ease: Easing.easeOutCubic })(time);
+    const pY  = animate({ from: 26, to: 0, start: 0.5, end: 1.3, ease: Easing.easeOutCubic })(time);
     const sOp = animate({ from: 0, to: 1, start: 1.6, end: 2.2, ease: Easing.easeOutCubic })(time);
     const line = animate({ from: 0, to: 1, start: 1.5, end: 2.3, ease: Easing.easeOutCubic })(time);
     return (
       <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op }}>
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 120, fontWeight: 800, letterSpacing: "-0.05em", lineHeight: 1, display: "flex", gap: 22, justifyContent: "center" }}>
-            <span style={{ opacity: hOp, transform: `translateY(${hY}px)` }}>Hey</span>
-            <span style={{ opacity: pOp, transform: `translateY(${pY}px)`, background: "linear-gradient(120deg,var(--grn3),var(--grn))", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}>Paula.</span>
-          </div>
+          <span className="mark" style={{ width: 96, height: 96, borderRadius: 26, fontSize: 46, transform: `scale(${mS})`, boxShadow: "0 0 50px rgba(16,185,129,0.4)", marginBottom: 28 }}>P</span>
+          <div style={{ fontSize: 120, fontWeight: 800, letterSpacing: "-0.05em", lineHeight: 1, opacity: pOp, transform: `translateY(${pY}px)`, background: "linear-gradient(120deg,var(--grn3),var(--grn))", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}>Paula</div>
           <div style={{ height: 2, width: 220 * line, background: "linear-gradient(90deg,transparent,var(--grn),transparent)", margin: "26px auto 0" }} />
           <div style={{ fontSize: 22, color: "var(--dim)", marginTop: 20, opacity: sOp, letterSpacing: "0.05em" }}>
             your AI trading assistant
@@ -132,7 +129,7 @@
     const op = sceneOpacity(time, 6.4, 7.0, 12.3, 13.0);
     const boxY = animate({ from: 22, to: 0, start: 6.4, end: 7.1, ease: Easing.easeOutCubic })(time);
     const ex = [
-      { q: "Hey Paula, scan the market for swing setups.", a: "Scanned 1,000+ stocks. Top pick: XOM \u2014 pullback to the 20-day in an uptrend. Score 84 \u00b7 BUY.", s: 7.1 },
+      { q: "Scan the market for swing setups.", a: "Scanned 1,000+ stocks. Top pick: XOM \u2014 pullback to the 20-day in an uptrend. Score 84 \u00b7 BUY.", s: 7.1 },
       { q: "Why that one?", a: "Near its 52-week high, volatility coiling, volume confirming. Stop 3% below, target 2:1.", s: 9.0 },
       { q: "Any news I should know?", a: "Live headlines \u2014 earnings beat last week, an analyst upgrade this morning. Catalyst is intact.", s: 10.7 },
     ];
@@ -243,10 +240,7 @@
       <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", opacity: op }}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 22 }}>
           <span className="mark" style={{ width: 92, height: 92, borderRadius: 24, fontSize: 42, transform: `scale(${mS * pulse})`, boxShadow: "0 0 50px rgba(16,185,129,0.4)" }}>P</span>
-          <div style={{ fontSize: 88, fontWeight: 800, letterSpacing: "-0.05em", lineHeight: 1, display: "flex", gap: 18 }}>
-            <span style={{ opacity: hOp, transform: `translateY(${hY}px)` }}>Hey</span>
-            <span style={{ opacity: pOp, transform: `translateY(${pY}px)`, background: "linear-gradient(120deg,var(--grn3),var(--grn))", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}>Paula.</span>
-          </div>
+          <div style={{ fontSize: 96, fontWeight: 800, letterSpacing: "-0.05em", lineHeight: 1, opacity: pOp, transform: `translateY(${pY}px)`, background: "linear-gradient(120deg,var(--grn3),var(--grn))", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}>Paula</div>
           <div style={{ fontSize: 22, color: "var(--dim)", opacity: tOp }}>
             your <span style={{ color: "var(--fg)" }}>AI trading</span> assistant
           </div>
