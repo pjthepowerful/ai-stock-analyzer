@@ -4,6 +4,10 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 3.4.0 — June 2026
+- Autopilot now scans a much wider universe (up to ~400 names via the large
+  liquid list) using fast batch fetching, instead of a hardcoded 80.
+
 ## 3.3.1 — June 2026
 - Delisted/acquired guard (e.g. MASI after the Danaher buyout) — stale-data
   stocks are filtered from scans and flagged in Analyze.

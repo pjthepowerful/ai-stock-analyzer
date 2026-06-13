@@ -4965,8 +4965,16 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             "BLDR","VMC","MLM","CX","SRCL","WCN","RSG","WM","CLH","ECOL",
         ]
         fallback = [t for t in FULL_UNIVERSE if t not in held_tickers and t not in set(candidates)]
+        # Widen with the same large liquid universe the manual scanner uses, so
+        # autopilot considers 500+ names instead of just this hardcoded list.
+        try:
+            from universe import large_universe
+            extra = [t for t in large_universe() if t not in held_tickers and t not in set(candidates) and t not in set(fallback)]
+            fallback.extend(extra)
+        except Exception:
+            pass
         random.shuffle(fallback)
-        candidates.extend(fallback[:150])
+        candidates.extend(fallback[:600])
         log.append(f"Large-cap universe → {len(candidates)} candidates")
 
     # ── SECTOR ROTATION FILTER — prioritize hot sectors ──
@@ -4999,11 +5007,25 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     all_scores = []
     analyzed = 0
     errors = 0
-    MAX_ANALYZE = 80
-    for ticker in scan_list[:MAX_ANALYZE]:
+    # Swing mode can analyze a big universe fast via batch download; intraday mode
+    # stays per-ticker (needs live intraday bars + per-name momentum checks).
+    MAX_ANALYZE = 400 if SWING_MODE else 80
+    scan_list = scan_list[:MAX_ANALYZE]
+
+    # In swing mode, bulk-fetch all candidates in a few requests (same fast path
+    # as the manual scanner) instead of one slow fetch per ticker.
+    swing_batch = {}
+    if SWING_MODE and len(scan_list) > 40:
+        try:
+            swing_batch = batch_fetch_scan(scan_list, skip_news=True)
+            log.append(f"Batch-fetched {len(swing_batch)} stocks")
+        except Exception:
+            swing_batch = {}
+
+    for ticker in scan_list:
         try:
             if SWING_MODE:
-                data = fetch_scan(ticker)
+                data = swing_batch.get(ticker) if swing_batch else fetch_scan(ticker)
                 if not data:
                     errors += 1
                     continue
