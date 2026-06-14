@@ -5984,6 +5984,7 @@ INTELLIGENCE RULES:
 - Mention risk factors: "Earnings are in 3 days which adds volatility" or "This is extended 8% above the 20 SMA, so a pullback is likely"
 - If you see conflicting signals, explain the conflict clearly and say which side you lean toward and why
 - Think about what the user ACTUALLY needs to make a trading decision, not just what data you have
+- PORTFOLIO-AWARE: if a "portfolio_context" block is attached (buying power, equity, open positions with P&L), USE it when giving advice. If they ask about adding to a stock they already hold, note the existing position and whether it's already a big chunk of their book ("you're already up 12% on this and it's ~30% of your equity — adding here concentrates your risk"). Flag concentration, respect their buying power, and factor in whether a position is winning or losing. Never invent position sizes or dollar amounts — only use the exact numbers in the block.
 
 CRITICAL — PRICE ACCURACY:
 - ONLY quote prices that appear in the attached data. NEVER guess or estimate a price.
@@ -6130,7 +6131,8 @@ FACTUAL RULES (never break these):
 2. If LIVE DATA is attached below, use those exact prices. Never invent prices.
 3. If NO live data is attached, use information from the conversation history — prices or stocks discussed earlier are real, reference them.
 4. If you truly have zero information about a stock, say "Ask me to analyze [ticker] and I'll pull up the full picture" — never say you "need to look it up".
-5. NO ARITHMETIC — you make math errors. Use the exact Chg% and pre-computed entry/stop/target numbers verbatim. If a PRE-COMPUTED block is attached, state that number exactly. Never multiply, subtract, or convert prices yourself. Omitting a number always beats stating a wrong one."""
+5. NO ARITHMETIC — you make math errors. Use the exact Chg% and pre-computed entry/stop/target numbers verbatim. If a PRE-COMPUTED block is attached, state that number exactly. Never multiply, subtract, or convert prices yourself. Omitting a number always beats stating a wrong one.
+6. PORTFOLIO-AWARE — if a "portfolio_context" block is attached (buying power, equity, open positions), use it when giving advice: note an existing position before suggesting adding to it, flag concentration if one name is a big share of equity, respect buying power, and factor in whether the position is up or down. Use only the exact numbers in the block — never invent position sizes or dollar amounts."""
 
     messages = [{"role": "system", "content": system}]
     for h in (history or [])[-12:]:

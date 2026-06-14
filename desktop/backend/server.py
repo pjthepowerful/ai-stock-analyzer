@@ -601,7 +601,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.6.0",  # bump marker — confirms running code
+        "build": "v3.7.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1428,6 +1428,47 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
         resp = f"⚠️ {result['error']}"
         chat_history.append({"role": "assistant", "content": resp})
         return {"ok": True, "message": resp, "stream": False, "type": "chat"}
+
+    # ── Make the AI portfolio-aware for DECISION questions ──
+    # If the user is weighing a move ("should I add to NVDA", "trim my winners",
+    # "how's my risk"), attach a lightweight account + positions snapshot so the
+    # AI can reason about buying power, concentration, and existing exposure —
+    # not blind generic advice. Skip for pure idea-discovery ("find me setups"),
+    # where mixing in the portfolio is explicitly unwanted.
+    try:
+        _ml = user_msg.lower()
+        _wants_ideas = intent.get("type") in ("stock_ideas", "gainers", "losers")
+        _decision = any(p in _ml for p in [
+            "should i", "add to", "buy more", "trim", "sell some", "take profit",
+            "my position", "my risk", "my portfolio", "my exposure", "concentrated",
+            "too much", "rebalance", "cut", "hold or", "average down", "double down",
+            "how am i", "am i too", "diversif",
+        ])
+        if _decision and not _wants_ideas:
+            acct = engine.alpaca_account() or {}
+            poss = engine.alpaca_positions() or []
+            snapshot = {
+                "buying_power": acct.get("buying_power"),
+                "equity": acct.get("equity"),
+                "cash": acct.get("cash"),
+                "open_pl": acct.get("unrealized_pl") or acct.get("open_pl"),
+                "positions": [
+                    {"ticker": p.get("ticker") or p.get("symbol"),
+                     "qty": p.get("qty"),
+                     "market_value": p.get("market_value"),
+                     "unrealized_pl": p.get("unrealized_pnl") or p.get("unrealized_pl"),
+                     "unrealized_pl_pct": p.get("unrealized_pnl_pct") or p.get("unrealized_plpc"),
+                     "side": p.get("side", "long")}
+                    for p in poss
+                ],
+                "position_count": len(poss),
+            }
+            if stock_data is None:
+                stock_data = {}
+            if isinstance(stock_data, dict):
+                stock_data = {**stock_data, "portfolio_context": snapshot}
+    except Exception:
+        pass
 
     # Stream AI response
     async def generate():

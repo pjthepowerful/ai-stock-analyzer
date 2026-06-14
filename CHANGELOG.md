@@ -4,6 +4,11 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 3.7.0 — June 2026
+- Portfolio-aware AI: when you ask about adding to, trimming, or your risk on a
+  position, Paula now sees your real buying power, equity, and open positions
+  (with P&L) and factors in concentration + existing exposure — not blind advice.
+
 ## 3.6.0 — June 2026
 - AI understands more of what you ask: the intent router now handles longer,
   more natural phrasings (up to ~25 words) instead of only short exact phrases.
