@@ -19,7 +19,7 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.5.0'
+const VERSION = '3.5.1'
 const VERSION_DATE = 'June 2026'
 // Email-dependent auth (2FA, signup verification, password reset) is OFF until a
 // sending domain is verified in Resend. Keep in sync with the backend's
@@ -1863,8 +1863,9 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
 
     {/* Connections */}
     {user&&<div className="card wide"><label>Connections</label><span className="card-sub">Broker and data feeds</span>
+      <p className="s-hint">Add your own Alpaca paper keys to trade <b>your own account</b>. Leave blank to use the shared demo account. Keys are encrypted and never shown again.</p>
       <div className="s-row"><div className="s-col"><span>Alpaca Key</span><span className="s-desc">Broker · trade execution</span></div><input className="s-inp s-wide" type="password" name="alpaca-key-field" autoComplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" value={keys.alpaca_key} onChange={e=>setKeys({...keys,alpaca_key:e.target.value})} placeholder={keyExists.alpaca_key?'•••••••• saved — leave blank to keep':'PKSPW...'}/></div>
-      <div className="s-row"><div className="s-col"><span>Alpaca Secret</span><span className="s-desc">Required for live trading</span></div><input className="s-inp s-wide" type="password" name="alpaca-secret-field" autoComplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" value={keys.alpaca_secret} onChange={e=>setKeys({...keys,alpaca_secret:e.target.value})} placeholder={keyExists.alpaca_secret?'•••••••• saved — leave blank to keep':'AzMr...'}/></div>
+      <div className="s-row"><div className="s-col"><span>Alpaca Secret</span><span className="s-desc">From your Alpaca dashboard</span></div><input className="s-inp s-wide" type="password" name="alpaca-secret-field" autoComplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" value={keys.alpaca_secret} onChange={e=>setKeys({...keys,alpaca_secret:e.target.value})} placeholder={keyExists.alpaca_secret?'•••••••• saved — leave blank to keep':'AzMr...'}/></div>
       <button className={'login-btn s-save'+(keySaved?' s-saved':'')} onClick={saveKeys}>{keySaved?'✓ Saved':'Save connections'}</button>
     </div>}
 
