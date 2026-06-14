@@ -3449,9 +3449,12 @@ def route(msg: str) -> dict:
     # Keyword routing didn't confidently place this. Before defaulting to chat,
     # ask the LLM for a second opinion — but ONLY on safe, non-destructive
     # intents (never trades/autopilot). If it's unsure or errors, fall to chat.
-    # Skip the LLM for obvious chitchat/news to save a call.
-    _skip_llm = any(w in m for w in ["hi", "hey", "hello", "thanks", "news", "what is", "what's", "explain", "how do", "why"])
-    if not _skip_llm and len(m.split()) <= 12:
+    # Skip the LLM for obvious chitchat/explainer questions (those are real chat).
+    _skip_llm = any(m.startswith(w) for w in ["hi ", "hey", "hello", "thanks", "explain", "how do", "how does", "tell me about", "what is a", "what is an", "what does", "why is", "why are"])
+    # Up to ~25 words covers natural phrasings like "I've got 5k and want a couple
+    # swing trades for next week" that the keyword router misses; longer messages
+    # are usually genuine conversation/explainers, so leave those to chat.
+    if not _skip_llm and len(m.split()) <= 25:
         _llm = _llm_classify_intent(msg)
         if _llm:
             return _llm
@@ -5901,6 +5904,7 @@ Voice rules:
 - SOUND HUMAN. Use natural rhythm — mix short punchy lines with a longer one. Contractions, plain words. "Here's the thing" / "What I like" / "The catch is".
 - NO DATA DUMPS. Never list 6 indicators in a row. Never use headers like "VERDICT:" or "RISK:". Write in flowing prose, not a spec sheet.
 - END WITH THE TRADE or the next step when relevant: where you'd get in, where the stop goes, what you're watching.
+- ANSWER WHAT THEY ACTUALLY ASKED. Read the request carefully and respond to the real question — if they ask "is now a good time to add to my NVDA?", weigh their existing position and the current setup, don't just re-run a generic analysis. If they ask something the attached data genuinely doesn't cover, say so in one honest line and answer with what you do know — never pad with invented specifics to seem complete.
 
 Good example (analysis):
 "NVDA's setting up nicely. It's pulled back to the 20-day after a strong run, RSI's at 49 so there's room to move, and it's still well above the 200-day — the uptrend's intact. I'd look to get in around $211 with a stop at $205; first target's $230. The one thing I'd watch is volume, which has been light on the bounce."

@@ -4,6 +4,13 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 3.6.0 — June 2026
+- AI understands more of what you ask: the intent router now handles longer,
+  more natural phrasings (up to ~25 words) instead of only short exact phrases.
+- AI answers the real question and admits when data does not cover it, instead
+  of padding with invented specifics.
+- Fewer starter prompts on the welcome screen (2 instead of 5).
+
 ## 3.5.1 — June 2026
 - Polish: removed an orphaned old Settings screen; added a clear note in Settings
   explaining that your own Alpaca keys trade your own account.

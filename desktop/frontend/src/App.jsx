@@ -19,7 +19,7 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.5.1'
+const VERSION = '3.6.0'
 const VERSION_DATE = 'June 2026'
 // Email-dependent auth (2FA, signup verification, password reset) is OFF until a
 // sending domain is verified in Resend. Keep in sync with the backend's
@@ -1085,9 +1085,7 @@ function MainApp({ user, token, logout }) {
                 <div className="w-pills">
                   {[
                     {q:'Find swing setups', cmd:'Find me the 5 best swing trade setups right now'},
-                    {q:'Blue-chip pick', cmd:'Analyze the single best large-cap stock setup right now and explain why'},
                     {q:'Check the market', cmd:'How is the market looking today for swing trading?'},
-                    {q:'Recap my day', cmd:'Give me a recap of my portfolio and how my positions are doing'},
                   ].map((p,i)=>(
                     <button key={i} className="w-pill" disabled={sending && sendingChatRef.current === chatIdRef.current} onClick={()=>sendMessage(p.cmd)}>{p.q}</button>
                   ))}
