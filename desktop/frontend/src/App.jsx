@@ -19,7 +19,7 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.4.0'
+const VERSION = '3.5.0'
 const VERSION_DATE = 'June 2026'
 // Email-dependent auth (2FA, signup verification, password reset) is OFF until a
 // sending domain is verified in Resend. Keep in sync with the backend's
@@ -1826,8 +1826,8 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
           // Never load the actual secret values into the inputs — only note
           // which ones are already saved, so we can show a masked placeholder.
           setKeyExists({
-            alpaca_key: !!d.settings.alpaca_key,
-            alpaca_secret: !!d.settings.alpaca_secret,
+            alpaca_key: !!(d.settings.alpaca_key_set || d.settings.alpaca_key),
+            alpaca_secret: !!(d.settings.alpaca_secret_set || d.settings.alpaca_secret),
             groq_key: !!d.settings.groq_key,
             polygon_key: !!d.settings.polygon_key,
           })

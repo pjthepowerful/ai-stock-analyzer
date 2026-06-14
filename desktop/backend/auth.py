@@ -32,6 +32,44 @@ if not JWT_SECRET:
     JWT_SECRET = secrets.token_hex(32)
 TOKEN_EXPIRY_DAYS = 30
 
+# ── Encryption for stored API secrets (Alpaca keys) ──
+# Derive a Fernet key from JWT_SECRET so secrets aren't stored in plaintext.
+# Tied to JWT_SECRET (already required to be stable in hosting), so no new env
+# var. If decryption ever fails (e.g. secret rotated), we treat the key as unset.
+def _fernet():
+    from cryptography.fernet import Fernet
+    digest = hashlib.sha256(("paula-keys::" + JWT_SECRET).encode()).digest()
+    return Fernet(base64.urlsafe_b64encode(digest))
+
+def encrypt_secret(plain: str) -> str:
+    if not plain:
+        return ""
+    try:
+        return _fernet().encrypt(plain.encode()).decode()
+    except Exception:
+        return ""
+
+def decrypt_secret(token: str) -> str:
+    if not token:
+        return ""
+    try:
+        return _fernet().decrypt(token.encode()).decode()
+    except Exception:
+        return ""  # not decryptable (plaintext legacy or rotated secret)
+
+
+def get_user_alpaca_creds(user_id: int) -> dict:
+    """Return a user's decrypted Alpaca creds, or empty strings if unset."""
+    db = _get_db()
+    try:
+        row = db.execute("SELECT alpaca_key, alpaca_secret FROM user_settings WHERE user_id = ?", (user_id,)).fetchone()
+        if not row:
+            return {"key_id": "", "secret": ""}
+        return {"key_id": decrypt_secret(row["alpaca_key"] or ""),
+                "secret": decrypt_secret(row["alpaca_secret"] or "")}
+    finally:
+        db.close()
+
 
 def _get_db():
     db = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=10)
@@ -250,8 +288,10 @@ def get_settings(user_id: int) -> dict:
         if not row:
             return {}
         return {
-            "alpaca_key": row["alpaca_key"] or "",
-            "alpaca_secret": row["alpaca_secret"] or "",
+            # Never expose stored secrets back to the client — just signal whether
+            # each is configured so the UI can show "saved".
+            "alpaca_key_set": bool(row["alpaca_key"]),
+            "alpaca_secret_set": bool(row["alpaca_secret"]),
             "groq_key": row["groq_key"] or "",
             "polygon_key": row["polygon_key"] or "",
             "display_name": row["display_name"] or "",
@@ -278,8 +318,8 @@ def save_settings(user_id: int, settings: dict) -> dict:
                 settings_json = ?
             WHERE user_id = ?
         """, (
-            settings.get("alpaca_key", ""),
-            settings.get("alpaca_secret", ""),
+            encrypt_secret(settings.get("alpaca_key", "")) if settings.get("alpaca_key", "") else "",
+            encrypt_secret(settings.get("alpaca_secret", "")) if settings.get("alpaca_secret", "") else "",
             settings.get("groq_key", ""),
             settings.get("polygon_key", ""),
             settings.get("display_name", ""),

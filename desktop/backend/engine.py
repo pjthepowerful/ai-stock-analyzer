@@ -87,6 +87,7 @@ from trading import (
 
     # Alpaca trading
     alpaca_account,
+    set_alpaca_creds,
     alpaca_positions,
     trade_track_record,
     alpaca_orders,

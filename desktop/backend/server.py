@@ -333,7 +333,9 @@ class ResetRequest(BaseModel):
     password: str
 
 def _get_user(authorization: str = Header(None)):
-    """Extract user from Authorization header. Always fetches email from DB."""
+    """Extract user from Authorization header. Always fetches email from DB.
+    Also applies the user's OWN Alpaca creds for this request (per-user trading);
+    falls back to the shared account when the user hasn't set their own keys."""
     if not authorization:
         return None
     token = authorization.replace("Bearer ", "")
@@ -347,6 +349,12 @@ def _get_user(authorization: str = Header(None)):
                 user["email"] = row["email"]
             db.close()
         except: pass
+        # Apply this user's Alpaca keys for the request (per-account trading).
+        try:
+            creds = auth.get_user_alpaca_creds(user["id"])
+            engine.set_alpaca_creds(creds.get("key_id"), creds.get("secret"))
+        except Exception:
+            engine.set_alpaca_creds(None, None)
     return user
 
 @app.post("/api/auth/signup")
@@ -593,7 +601,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.4.0",  # bump marker — confirms running code
+        "build": "v3.5.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -843,8 +851,9 @@ async def clear_chat(authorization: str = Header(None)):
 
 
 @app.get("/api/account")
-async def get_account():
-    """Get Alpaca account info."""
+async def get_account(authorization: str = Header(None)):
+    """Get Alpaca account info (per-user account when keys are set)."""
+    _get_user(authorization)  # sets this user's Alpaca creds for the request
     acc = engine.alpaca_account()
     if not acc:
         return {"ok": False, "error": "Can't connect to Alpaca"}
@@ -852,15 +861,17 @@ async def get_account():
 
 
 @app.get("/api/positions")
-async def get_positions():
-    """Get all open positions."""
+async def get_positions(authorization: str = Header(None)):
+    """Get all open positions (per-user account when keys are set)."""
+    _get_user(authorization)
     positions = engine.alpaca_positions()
     return {"ok": True, "data": positions}
 
 
 @app.get("/api/orders")
-async def get_orders(status: str = "open", limit: int = 10):
-    """Get recent orders."""
+async def get_orders(status: str = "open", limit: int = 10, authorization: str = Header(None)):
+    """Get recent orders (per-user account when keys are set)."""
+    _get_user(authorization)
     orders = engine.alpaca_orders(status=status, limit=limit)
     return {"ok": True, "data": orders}
 
@@ -1954,9 +1965,24 @@ async def _autopilot_loop():
                 await asyncio.sleep(60)
                 continue
 
-            # Run the scan in a thread pool (yfinance is blocking)
+            # Run the scan in a thread pool (yfinance is blocking). Apply the
+            # autopilot OWNER's Alpaca creds inside the thread (contextvars don't
+            # propagate into executor threads), so autopilot trades the owner's
+            # own account, not the shared one.
             loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(None, engine.run_autopilot)
+            _owner_creds = None
+            try:
+                if autopilot_owner_id:
+                    _owner_creds = auth.get_user_alpaca_creds(autopilot_owner_id)
+            except Exception:
+                _owner_creds = None
+
+            def _run_with_creds():
+                if _owner_creds:
+                    engine.set_alpaca_creds(_owner_creds.get("key_id"), _owner_creds.get("secret"))
+                return engine.run_autopilot()
+
+            result = await loop.run_in_executor(None, _run_with_creds)
 
             buys = result.get("buys", 0)
             sells = result.get("sells", 0)

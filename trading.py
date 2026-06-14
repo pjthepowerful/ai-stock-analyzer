@@ -553,9 +553,28 @@ SWING_MAX_POSITIONS = 4      # backtest: ~+11% / 14% max DD — balanced; leaves
 
 
 
+import contextvars
+# Per-user Alpaca credentials for the current request/scan. When set, overrides
+# the shared env-var account so each user trades their OWN Alpaca paper account.
+# Falls back to the shared env account when unset (None).
+_current_alpaca_creds: contextvars.ContextVar = contextvars.ContextVar("alpaca_creds", default=None)
+
+def set_alpaca_creds(key_id: str | None, secret: str | None):
+    """Set the Alpaca creds for the current context (per-request). Pass None/empty
+    to clear and fall back to the shared account."""
+    if key_id and secret:
+        _current_alpaca_creds.set({"key_id": key_id, "secret": secret})
+    else:
+        _current_alpaca_creds.set(None)
+
+
 def _alpaca_headers() -> dict:
-    key_id = st.secrets.get("ALPACA_KEY_ID") or os.environ.get("ALPACA_KEY_ID", "")
-    secret = st.secrets.get("ALPACA_SECRET") or os.environ.get("ALPACA_SECRET", "")
+    creds = _current_alpaca_creds.get()
+    if creds and creds.get("key_id") and creds.get("secret"):
+        key_id, secret = creds["key_id"], creds["secret"]
+    else:
+        key_id = st.secrets.get("ALPACA_KEY_ID") or os.environ.get("ALPACA_KEY_ID", "")
+        secret = st.secrets.get("ALPACA_SECRET") or os.environ.get("ALPACA_SECRET", "")
     return {
         "APCA-API-KEY-ID": key_id,
         "APCA-API-SECRET-KEY": secret,

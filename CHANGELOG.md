@@ -4,6 +4,11 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 3.5.0 — June 2026
+- Per-user Alpaca accounts: add your own paper keys in Settings and Paula trades
+  YOUR account (encrypted at rest). Falls back to the shared account if unset.
+  Autopilot uses the owner's keys too. Track record is now per-account.
+
 ## 3.4.0 — June 2026
 - Autopilot now scans a much wider universe (up to ~400 names via the large
   liquid list) using fast batch fetching, instead of a hardcoded 80.
