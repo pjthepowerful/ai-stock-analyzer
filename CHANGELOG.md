@@ -4,6 +4,11 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 3.7.1 — June 2026
+- Fixed the AI repeating the entry price as the target (e.g. CSCO showing entry
+  $121.10 / target $121.10). Valid buy setups now hand the AI one exact
+  pre-formatted trade line to quote verbatim, so levels cant get garbled.
+
 ## 3.7.0 — June 2026
 - Portfolio-aware AI: when you ask about adding to, trimming, or your risk on a
   position, Paula now sees your real buying power, equity, and open positions

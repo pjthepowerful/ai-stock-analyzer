@@ -5948,6 +5948,24 @@ def _scrub_trade_levels_for_llm(stock_data: dict | None) -> dict | None:
     tr = sd.get("trade")
     plan_ok = _has_real_plan(tr) and action in ("BUY", "STRONG_BUY")
 
+    if plan_ok:
+        # Hand the LLM a single, unambiguous pre-formatted line to quote verbatim,
+        # so it can't accidentally repeat the entry as the target (a recurring
+        # hallucination). Numbers come straight from the validated trade dict.
+        e = tr.get("entry", 0)
+        s = tr.get("stop", tr.get("stop_loss", 0))
+        t1 = tr.get("target", tr.get("target_1", 0))
+        t2 = tr.get("target_2", 0)
+        rr = tr.get("risk_reward", tr.get("rr", 0))
+        plan = f"Entry ${e} · Stop ${s} · Target ${t1}"
+        if t2 and abs(float(t2) - float(t1)) > 0.01:
+            plan += f" (then ${t2})"
+        if rr:
+            plan += f" · about {rr}:1 risk-reward"
+        sd["trade_plan"] = (
+            "USE THESE EXACT LEVELS — do not recompute or repeat the entry as the target: " + plan
+        )
+
     if not plan_ok:
         # strip every level field anywhere in the payload
         for k in ("entry", "stop", "stop_loss", "target", "target_1", "target_2", "risk_reward", "rr", "risk_pct"):
@@ -6052,7 +6070,7 @@ When asked to suggest, name, or recommend stocks, NEVER just list the same borin
 
 {PAULA_VOICE}
 
-When you have a trade plan, weave it in naturally: "I'd look around $X with a stop at $Y, first target $Z — about 2:1 risk-reward." Use the score conversationally ("I'd rate this a 72 — solidly in buy territory"), not as a label. Call out confluence or conflicts honestly, and mention news sentiment or key support/resistance only when it actually matters to the decision.
+When you have a trade plan, weave it in naturally: "I'd look around $X with a stop at $Y, first target $Z — about 2:1 risk-reward." If a "trade_plan" line is attached in the data, those are the ONLY correct entry/stop/target numbers — copy them exactly and NEVER repeat the entry price as the target (a target must be meaningfully above the entry for a buy). Use the score conversationally ("I'd rate this a 72 — solidly in buy territory"), not as a label. Call out confluence or conflicts honestly, and mention news sentiment or key support/resistance only when it actually matters to the decision.
 
 CRITICAL — Market awareness:
 - You know today's date and can determine if the market is open (8:30 AM - 3:00 PM CT, Mon-Fri)
