@@ -19,7 +19,7 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.9.1'
+const VERSION = '3.9.2'
 const VERSION_DATE = 'June 2026'
 const ADMIN_EMAIL = 'parjan.d@icloud.com'
 // Email-dependent auth (2FA, signup verification, password reset) is OFF until a
@@ -1152,7 +1152,7 @@ function MainApp({ user, token, logout, setUser }) {
 
         :view==='stats'?<DashView perf={perf}/>
         
-        :view==='settings'?<SetView settings={settings} update={updateSetting} user={user} token={token} logout={logout} autopilot={autopilot} setAutopilot={setAutopilot} persist={persist} setActiveChatId={setActiveChatId} setMessages={setMessages} setShowChangelog={setShowChangelog}/>
+        :view==='settings'?<SetView settings={settings} update={updateSetting} user={user} token={token} logout={logout} autopilot={autopilot} setAutopilot={setAutopilot} persist={persist} setActiveChatId={setActiveChatId} setMessages={setMessages} setShowChangelog={setShowChangelog} setUser={setUser}/>
         :(<>
           {selectedPos&&(()=>{const p=positions.find(x=>x.ticker===selectedPos);if(!p)return null;return(
             <div className="detail-bar">
@@ -1934,12 +1934,14 @@ function DashView({perf}){
   </div>)
 }
 
-function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persist,setActiveChatId,setMessages,setShowChangelog}){
+function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persist,setActiveChatId,setMessages,setShowChangelog,setUser}){
   const [keys, setKeys] = useState({alpaca_key:'',alpaca_secret:'',groq_key:'',polygon_key:''})
   const [keyExists, setKeyExists] = useState({alpaca_key:false,alpaca_secret:false,groq_key:false,polygon_key:false})
   const [keySaved, setKeySaved] = useState(false)
   const [keyLoaded, setKeyLoaded] = useState(false)
   const [showAdmin, setShowAdmin] = useState(false)
+  const [showPlus, setShowPlus] = useState(false)
+  const isPlus = !!(user && (user.plus || user.is_admin))
 
   useEffect(()=>{
     if(token&&!keyLoaded){
@@ -2024,7 +2026,7 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
       <div className="s-row"><span>Paula Plus</span>{isPlus?<span className="s-plus-on">✓ Active</span>:<button className="tog s-upgrade" onClick={() => setShowPlus(true)}>Upgrade · $9.99/mo</button>}</div>
       {(user.email||'').toLowerCase() === 'parjan.d@icloud.com' && <div className="s-row"><span>Admin</span><button className="tog" onClick={() => setShowAdmin(true)}>Open panel</button></div>}
       {showAdmin && <AdminPanel token={token} onClose={() => setShowAdmin(false)}/>}
-      {showPlus && <PlusModal token={token} onClose={() => setShowPlus(false)} onUnlocked={() => setUser(u => ({ ...u, plus: true }))}/>}
+      {showPlus && <PlusModal token={token} onClose={() => setShowPlus(false)} onUnlocked={() => setUser && setUser(u => ({ ...u, plus: true }))}/>}
     </div>
   </div>)
 }
