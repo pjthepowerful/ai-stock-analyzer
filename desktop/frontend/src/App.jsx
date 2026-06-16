@@ -19,8 +19,9 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.7.1'
+const VERSION = '3.8.0'
 const VERSION_DATE = 'June 2026'
+const ADMIN_EMAIL = 'parjan.d@icloud.com'
 // Email-dependent auth (2FA, signup verification, password reset) is OFF until a
 // sending domain is verified in Resend. Keep in sync with the backend's
 // EMAIL_AUTH_ENABLED. Flip to true when email works.
@@ -44,6 +45,16 @@ function App() {
   const [user, setUser] = useState(null)
   const [token, setToken] = useState(localStorage.getItem('paula-token'))
   const [authLoading, setAuthLoading] = useState(true)
+  const [maint, setMaint] = useState({ on: false, message: '' })
+
+  // Poll maintenance status (everyone sees it; admin is exempt from the block).
+  useEffect(() => {
+    let alive = true
+    const check = () => f(API + '/api/maintenance').then(r => r.json()).then(d => { if (alive && d.ok) setMaint({ on: d.on, message: d.message || '' }) }).catch(() => {})
+    check()
+    const id = setInterval(check, 30000)
+    return () => { alive = false; clearInterval(id) }
+  }, [])
 
   // Check auth on mount
   useEffect(() => {
@@ -90,6 +101,17 @@ function App() {
   const logout = () => { setUser(null); setToken(null); localStorage.removeItem('paula-token') }
 
   if (authLoading) return <div className="auth-loading"><div className="logo-p">P</div></div>
+  // Maintenance mode: block everyone except the admin account.
+  if (maint.on && (!user || (user.email || '').toLowerCase() !== ADMIN_EMAIL)) {
+    return <div className="maint-screen">
+      <div className="maint-card">
+        <div className="maint-logo">P</div>
+        <h1>Down for maintenance</h1>
+        <p>{maint.message || "Paula is getting an upgrade. We'll be back shortly — thanks for your patience."}</p>
+        <div className="maint-pulse"><span></span><span></span><span></span></div>
+      </div>
+    </div>
+  }
   if (!user) return <LoginPage onAuth={doAuth} onFinishAuth={finishAuth} />
 
 
@@ -1624,16 +1646,20 @@ function AdminPanel({ token, onClose }) {
   const [users, setUsers] = useState([])
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [maintOn, setMaintOn] = useState(false)
+  const [maintMsg, setMaintMsg] = useState('')
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [u, s] = await Promise.all([
+        const [u, s, m] = await Promise.all([
           f(API + '/api/admin/users', { headers: { Authorization: 'Bearer ' + token } }).then(r => r.json()),
           f(API + '/api/admin/stats', { headers: { Authorization: 'Bearer ' + token } }).then(r => r.json()),
+          f(API + '/api/maintenance').then(r => r.json()),
         ])
         if (u.ok) setUsers(u.users)
         if (s.ok) setStats(s)
+        if (m.ok) { setMaintOn(m.on); setMaintMsg(m.message || '') }
       } catch {
         // network/parse error — leave existing data, just stop the spinner
       } finally {
@@ -1642,6 +1668,14 @@ function AdminPanel({ token, onClose }) {
     }
     load()
   }, [])
+
+  const toggleMaint = async (on) => {
+    setMaintOn(on)
+    await f(API + '/api/admin/maintenance', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ on, message: maintMsg })
+    }).catch(() => {})
+  }
 
   const deleteUser = async (id, name) => {
     if (!confirm('Delete user "' + name + '" and all their data?')) return
@@ -1660,6 +1694,16 @@ function AdminPanel({ token, onClose }) {
       <div className="cl-modal" onClick={e => e.stopPropagation()} style={{width: 600, maxHeight: '80vh'}}>
         <div className="cl-head"><span className="cl-ver-title">Admin Panel</span><button className="cl-x" onClick={onClose}>×</button></div>
         <div className="cl-pad" style={{overflowY: 'auto'}}>
+          <div style={{background: maintOn?'rgba(245,158,11,.12)':'var(--c2)', border:'1px solid '+(maintOn?'#f5a623':'var(--brd)'), borderRadius:10, padding:'14px 16px', marginBottom:16}}>
+            <div style={{display:'flex',alignItems:'center',gap:12}}>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:700,fontSize:'.8rem',color: maintOn?'#f5a623':'var(--wh)'}}>Maintenance mode {maintOn?'· ON':''}</div>
+                <div style={{fontSize:'.6rem',color:'var(--dim)',marginTop:2}}>Blocks the app for everyone except you.</div>
+              </div>
+              <button onClick={() => toggleMaint(!maintOn)} style={{background: maintOn?'#f5a623':'var(--grn)', border:'none', borderRadius:8, padding:'8px 18px', color:'#04130d', fontSize:'.7rem', fontWeight:700, cursor:'pointer'}}>{maintOn ? 'Turn off' : 'Turn on'}</button>
+            </div>
+            <input value={maintMsg} onChange={e => setMaintMsg(e.target.value)} onBlur={() => maintOn && toggleMaint(true)} placeholder="Optional message shown to users…" style={{marginTop:10,width:'100%',background:'var(--c1)',border:'1px solid var(--brd)',borderRadius:8,padding:'8px 12px',color:'var(--fg)',fontSize:'.72rem'}} />
+          </div>
           {stats && <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,marginBottom:16}}>
             <div className="card"><div className="stat-sub">Users</div><div className="stat-n">{stats.total_users}</div></div>
             <div className="card"><div className="stat-sub">Messages</div><div className="stat-n">{stats.total_messages}</div></div>

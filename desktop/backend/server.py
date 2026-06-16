@@ -69,6 +69,21 @@ _user_sessions: dict[int, list[dict]] = {}  # {user_id: [chat messages]}
 _session_lock = asyncio.Lock()
 autopilot_owner_id: Optional[int] = None  # Only one user can own autopilot
 
+# ── Maintenance mode ── (admin-only toggle; blocks the app for everyone but admin)
+_MAINT_FILE = os.path.join(os.environ.get("DB_DIR", os.path.dirname(os.path.abspath(__file__))), "maintenance.json")
+def _maint_state() -> dict:
+    try:
+        with open(_MAINT_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {"on": False, "message": ""}
+def _set_maint(on: bool, message: str = ""):
+    try:
+        with open(_MAINT_FILE, "w") as f:
+            json.dump({"on": bool(on), "message": message or ""}, f)
+    except Exception:
+        pass
+
 def _get_user_history(user_id: int) -> list:
     """Get chat history for a specific user. Creates if needed."""
     if user_id not in _user_sessions:
@@ -601,7 +616,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.7.1",  # bump marker — confirms running code
+        "build": "v3.8.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1373,8 +1388,8 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
 
     # Autopilot start/stop — admin only
     if itype == "autopilot":
-        if not user or user.get("email", "").lower() != ADMIN_EMAIL:
-            return {"ok": True, "message": "Autopilot is restricted to admin accounts.", "stream": False, "type": "chat", "autopilot": False}
+        if not _can_autopilot(user):
+            return {"ok": True, "message": "Autopilot is restricted to authorized accounts.", "stream": False, "type": "chat", "autopilot": False}
         if not autopilot_task or autopilot_task.done():
             autopilot_owner_id = user_id
             autopilot_task = _spawn_autopilot()
@@ -1383,8 +1398,8 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
         return {"ok": True, "message": resp, "stream": False, "type": "trade", "autopilot": True}
 
     if itype == "stop_autopilot":
-        if not user or user.get("email", "").lower() != ADMIN_EMAIL:
-            return {"ok": True, "message": "Autopilot is restricted to admin accounts.", "stream": False, "type": "chat", "autopilot": False}
+        if not _can_autopilot(user):
+            return {"ok": True, "message": "Autopilot is restricted to authorized accounts.", "stream": False, "type": "chat", "autopilot": False}
         if autopilot_task and not autopilot_task.done():
             autopilot_task.cancel()
             autopilot_task = None
@@ -2190,6 +2205,22 @@ if __name__ == "__main__":
 
 
 # ═══ Admin Panel ═══
+
+@app.get("/api/maintenance")
+async def maintenance_status():
+    """Public — frontend polls this to show the maintenance screen to everyone."""
+    return {"ok": True, **_maint_state()}
+
+
+@app.post("/api/admin/maintenance")
+async def admin_set_maintenance(req: dict, authorization: str = Header(None)):
+    """Admin-only: turn maintenance mode on/off."""
+    user = _get_user(authorization)
+    if not user or user.get("email", "").lower() != ADMIN_EMAIL:
+        return {"ok": False, "error": "Unauthorized"}
+    _set_maint(bool(req.get("on")), req.get("message", ""))
+    return {"ok": True, **_maint_state()}
+
 
 @app.get("/api/admin/users")
 async def admin_list_users(authorization: str = Header(None)):
