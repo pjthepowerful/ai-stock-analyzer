@@ -19,7 +19,7 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.9.4'
+const VERSION = '3.9.5'
 const VERSION_DATE = 'June 2026'
 const ADMIN_EMAIL = 'parjan.d@icloud.com'
 // Email-dependent auth (2FA, signup verification, password reset) is OFF until a
@@ -552,6 +552,19 @@ function MainApp({ user, token, logout, setUser }) {
     localStorage.setItem(chatKey, JSON.stringify(updated))
   }
 
+  // New account / no chats yet → open a fresh blank chat (welcome screen) by
+  // default so the user lands in a ready-to-type conversation, not an empty void.
+  useEffect(() => {
+    if (chatsRef.current.length === 0) {
+      const id = Date.now().toString() + "-" + Math.random().toString(36).slice(2, 8)
+      const fresh = [{ id, title: 'New chat', messages: [], created: new Date().toISOString() }]
+      persist(fresh)
+      chatIdRef.current = id; _setChatId(id)
+      localStorage.setItem('paula-chat-id-' + user.id, id)
+      setMessages([])
+    }
+  }, [])
+
   const setActiveChatId = (id) => {
     chatIdRef.current = id
     _setChatId(id)
@@ -866,7 +879,8 @@ function MainApp({ user, token, logout, setUser }) {
       const data = await res.json()
       try { clearInterval(abortRef.current?._thinkTimer) } catch {}
 
-      // Free-tier daily limit hit — surface the Plus upsell instead of a reply.
+      // Free-tier daily limit hit on a PRIOR message — backend blocked this one
+      // outright. Surface the Plus upsell instead of a reply.
       if (data.limit_reached) {
         setSending(false)
         setShowPlus(true)
@@ -951,6 +965,12 @@ function MainApp({ user, token, logout, setUser }) {
         } else { snd(playTick) }
 
         if (data.autopilot !== undefined && Date.now() - apToggleAtRef.current > 10000) setAutopilot(data.autopilot)
+
+        // That was the user's last free message — they got the answer above, now
+        // prompt them to upgrade (the next message will be blocked outright).
+        if (data.free_limit_hit) {
+          setTimeout(() => setShowPlus(true), 600)
+        }
       } else {
         if (chatIdRef.current === targetId) {
           setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ ' + (data.error || 'Something went wrong') }])
@@ -1087,7 +1107,7 @@ function MainApp({ user, token, logout, setUser }) {
         <div className="rl-logo"><span className="logo-p rl-mark">P</span><b className="rl-name">Paula</b></div>
 
         <button className={"rl-item rl-new"+(!isPlus && chats.length>=1?' rl-locked':'')} onClick={newChat} title={!isPlus && chats.length>=1?"New chat (Paula Plus)":"New chat"}>
-          <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg></i><span>New chat{!isPlus && chats.length>=1&&<span className="rl-lock">🔒</span>}</span>
+          <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg></i><span>New chat{!isPlus && chats.length>=1&&<svg className="rl-lock" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>}</span>
         </button>
 
         {[
@@ -1098,7 +1118,7 @@ function MainApp({ user, token, logout, setUser }) {
           const locked = !isPlus && (v==='analyze'||v==='stats')
           return (
           <button key={v} className={'rl-item'+(view===v?' rl-on':'')+(locked?' rl-locked':'')} onClick={()=>{ if(locked){setShowPlus(true);return} setView(v);if(v==='stats')loadDashboard()}} title={locked?label+' (Paula Plus)':label}>
-            <i className="rl-ic">{icon}</i><span>{label}{locked&&<span className="rl-lock">🔒</span>}</span>
+            <i className="rl-ic">{icon}</i><span>{label}{locked&&<svg className="rl-lock" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>}</span>
           </button>
         )})}
 
@@ -1252,6 +1272,7 @@ function MainApp({ user, token, logout, setUser }) {
           </div></div>
         </>)}
       </main>
+      {showPlus && <PlusModal token={token} onClose={() => setShowPlus(false)} onUnlocked={() => setUser && setUser(u => ({ ...u, plus: true }))}/>}
     </div>)
 }
 
