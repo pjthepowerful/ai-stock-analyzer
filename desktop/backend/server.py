@@ -616,7 +616,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.8.0",  # bump marker — confirms running code
+        "build": "v3.8.1",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1709,14 +1709,21 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                 # News injection for news-oriented questions
                 _fl = user_msg.lower()
                 _is_news = any(w in _fl for w in ["news","latest","happening","headline","earnings","why is","why did","catalyst","recent","update"])
+                # Explicit user request to look something up / search the web.
+                _wants_search = any(p in _fl for p in [
+                    "look it up", "look up", "search for", "search the web", "google",
+                    "can you find", "find out", "look into", "check online", "search online",
+                    "what's the latest on", "whats the latest on",
+                ])
                 if _is_news:
                     _ntk = _cur[0] if _cur else None
                     _fnews = engine.fetch_news(_ntk, limit=5)
                     if _fnews:
                         _fl2 = "\n".join(f"- ({n['date']}) {n['title']} — {n['publisher']}: {n['summary']}" for n in _fnews)
                         _fmsg = _fmsg + f"\n\n[LIVE NEWS (use these recent headlines, cite dates):\n{_fl2}\n]"
-                # If no ticker and it's a current-info question, fall back to open web.
-                if not _cur and _is_news:
+                # Fire a web search whenever the user explicitly asks to look it up,
+                # OR for a current-info question with no ticker attached.
+                if _wants_search or (not _cur and _is_news):
                     _ws = engine.web_search(user_msg, max_results=5)
                     if _ws:
                         _wl = "\n".join(f"- {w['title']}: {w['content']}" + (f" [source]({w['url']})" if w['url'] else "") for w in _ws)

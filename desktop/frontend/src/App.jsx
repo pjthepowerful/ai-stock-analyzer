@@ -19,7 +19,7 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.8.0'
+const VERSION = '3.8.1'
 const VERSION_DATE = 'June 2026'
 const ADMIN_EMAIL = 'parjan.d@icloud.com'
 // Email-dependent auth (2FA, signup verification, password reset) is OFF until a
@@ -568,6 +568,7 @@ function MainApp({ user, token, logout }) {
   const snd = (fn) => { if (settingsRef.current.sounds !== false) fn() }
 
   const messagesEnd = useRef(null)
+  const chatScrollRef = useRef(null)
   const wsRef = useRef(null)
   const inputRef = useRef(null)
   const toastId = useRef(0)
@@ -688,7 +689,15 @@ function MainApp({ user, token, logout }) {
     const i = setInterval(refreshData, 5000)
     return () => clearInterval(i)
   }, [refreshData])
-  useEffect(() => { messagesEnd.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  useEffect(() => {
+    // Smart auto-scroll: only pull to the bottom if the user is ALREADY near the
+    // bottom. If they've scrolled up to read while a reply streams, leave them be
+    // (no more fighting the scroll / yanking them back down).
+    const el = chatScrollRef.current
+    if (!el) { messagesEnd.current?.scrollIntoView({ behavior: 'smooth' }); return }
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120
+    if (nearBottom) messagesEnd.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -1089,7 +1098,7 @@ function MainApp({ user, token, logout }) {
               </div>
               <div className="db-chart"><Chart ticker={p.ticker} signal={null} height={200}/></div>
             </div>)})()}
-          <div className="chat">
+          <div className="chat" ref={chatScrollRef}>
             <div className="chat-inner">
             {messages.length===0&&!(sending && sendingChatRef.current === chatIdRef.current)&&(
               <div className="welcome">

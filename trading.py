@@ -5965,6 +5965,13 @@ def _scrub_trade_levels_for_llm(stock_data: dict | None) -> dict | None:
         sd["trade_plan"] = (
             "USE THESE EXACT LEVELS — do not recompute or repeat the entry as the target: " + plan
         )
+        # Remove the raw numeric level fields so the model can't accidentally grab
+        # the wrong one (e.g. echo the entry as the target). The clean sentence
+        # above is now the single source of levels.
+        for k in ("entry", "stop", "stop_loss", "target", "target_1", "target_2", "risk_reward", "rr", "risk_pct"):
+            sd.pop(k, None)
+            if isinstance(sd.get("trade"), dict):
+                sd["trade"].pop(k, None)
 
     if not plan_ok:
         # strip every level field anywhere in the payload
