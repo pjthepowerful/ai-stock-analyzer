@@ -19,7 +19,7 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.9.3'
+const VERSION = '3.9.4'
 const VERSION_DATE = 'June 2026'
 const ADMIN_EMAIL = 'parjan.d@icloud.com'
 // Email-dependent auth (2FA, signup verification, password reset) is OFF until a
@@ -148,16 +148,19 @@ function LoginPage({ onAuth, onFinishAuth }) {
 
   const submit = async (e) => {
     e?.preventDefault()
+    let nameToUse = username
     if (isSignup) {
-      if (!username || !email || !password) { setError('All fields required'); return }
+      if (!email || !password) { setError('Email and password are required'); return }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('Enter a valid email address'); return }
       if (password.length < 6) { setError('Password must be at least 6 characters'); return }
+      // Display name is optional — default to the part of the email before the @.
+      if (!username.trim()) { nameToUse = email.split('@')[0]; setUsername(nameToUse) }
     } else {
       if (!username || !password) { setError('Email and password required'); return }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(username)) { setError('Enter a valid email address'); return }
     }
     setLoading(true); setError('')
-    const res = await onAuth(username, password, isSignup, email)
+    const res = await onAuth(nameToUse, password, isSignup, email)
     if (!res.ok) { setError(res.error); setLoading(false); return }
     if (res.needs_2fa) { setCodeStep('2fa'); setCodeEmail(res.email); setError(''); setLoading(false); return }
     if (res.needs_verification) { setCodeStep('verify'); setCodeEmail(res.email || email); setError(''); setLoading(false); return }
@@ -279,21 +282,21 @@ function LoginPage({ onAuth, onFinishAuth }) {
               <p className="lg-card-sub">{isSignup ? "Takes 30 seconds. No card required for paper trading." : "The market's moving. Let's get to work."}</p>
               <div className="lg-form">
                 {isSignup && <>
-                  <label className="lg-label">Name</label>
-                  <input className="lg-input" name="paula-name" autoComplete="off" data-1p-ignore data-lpignore="true" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') document.querySelector('.lg-email')?.focus() }} autoFocus />
                   <label className="lg-label">Email</label>
-                  <input className="lg-input lg-email" name="paula-email" autoComplete="off" data-1p-ignore data-lpignore="true" type="email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') document.querySelector('.lg-pw')?.focus() }} />
+                  <input className="lg-input lg-email" name="paula-email" autoComplete="off" data-1p-ignore data-lpignore="true" type="email" inputMode="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') document.querySelector('.lg-pw')?.focus() }} autoFocus />
+                  <label className="lg-label">Display name <span className="lg-opt">(optional)</span></label>
+                  <input className="lg-input" name="paula-name" autoComplete="off" data-1p-ignore data-lpignore="true" placeholder="What should Paula call you?" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') document.querySelector('.lg-pw')?.focus() }} />
                 </>}
                 {!isSignup && <>
                   <label className="lg-label">Email</label>
-                  <input className="lg-input" name="paula-email" autoComplete="off" data-1p-ignore data-lpignore="true" type="email" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') document.querySelector('.lg-pw')?.focus() }} autoFocus />
+                  <input className="lg-input" name="paula-email" autoComplete="off" data-1p-ignore data-lpignore="true" type="email" inputMode="email" placeholder="you@example.com" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') document.querySelector('.lg-pw')?.focus() }} autoFocus />
                 </>}
                 <div className="lg-pw-row">
                   <label className="lg-label">Password</label>
                   {!isSignup && EMAIL_AUTH && <button type="button" className="lg-forgot" onClick={() => { setView('forgot'); setError(''); setNotice(''); setEmail(username) }}>Forgot?</button>}
                 </div>
                 <div className="lg-pw-wrap">
-                  <input className="lg-input lg-pw" type={showPw ? 'text' : 'password'} autoComplete={isSignup ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit() }} />
+                  <input className="lg-input lg-pw" type={showPw ? 'text' : 'password'} placeholder={isSignup ? 'At least 6 characters' : 'Your password'} autoComplete={isSignup ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit() }} />
                   <button type="button" className="lg-eye" onClick={() => setShowPw(!showPw)} aria-label={showPw ? 'Hide password' : 'Show password'}>{showPw ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg> : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}</button>
                 </div>
                 {error && <div className="lg-error">{error}</div>}
