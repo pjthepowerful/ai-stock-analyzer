@@ -630,7 +630,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.9.2",  # bump marker — confirms running code
+        "build": "v3.9.3",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -2243,6 +2243,20 @@ async def maintenance_status():
     return {"ok": True, **_maint_state()}
 
 
+@app.post("/api/admin/set-plus")
+async def admin_set_plus(req: dict, authorization: str = Header(None)):
+    """Admin-only: grant or revoke Paula Plus for a user."""
+    user = _get_user(authorization)
+    if not user or user.get("email", "").lower() != ADMIN_EMAIL:
+        return {"ok": False, "error": "Unauthorized"}
+    target_id = req.get("user_id")
+    on = bool(req.get("on", True))
+    if not target_id:
+        return {"ok": False, "error": "Missing user_id"}
+    auth.set_plus(int(target_id), on)
+    return {"ok": True, "user_id": target_id, "plus": on}
+
+
 @app.post("/api/admin/maintenance")
 async def admin_set_maintenance(req: dict, authorization: str = Header(None)):
     """Admin-only: turn maintenance mode on/off."""
@@ -2260,9 +2274,10 @@ async def admin_list_users(authorization: str = Header(None)):
         return {"ok": False, "error": "Unauthorized"}
     db = auth._get_db()
     try:
-        rows = db.execute("SELECT id, username, email, created_at, last_login FROM users ORDER BY id DESC").fetchall()
+        rows = db.execute("SELECT id, username, email, created_at, last_login, plus FROM users ORDER BY id DESC").fetchall()
         users = [{"id": r["id"], "username": r["username"], "email": r["email"],
-                  "created_at": r["created_at"], "last_login": r["last_login"]} for r in rows]
+                  "created_at": r["created_at"], "last_login": r["last_login"],
+                  "plus": bool(r["plus"]) if "plus" in r.keys() else False} for r in rows]
         # Get session counts
         for u in users:
             u["messages"] = db.execute("SELECT COUNT(*) FROM chat_history WHERE user_id = ?", (u["id"],)).fetchone()[0]

@@ -19,7 +19,7 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.9.2'
+const VERSION = '3.9.3'
 const VERSION_DATE = 'June 2026'
 const ADMIN_EMAIL = 'parjan.d@icloud.com'
 // Email-dependent auth (2FA, signup verification, password reset) is OFF until a
@@ -408,7 +408,23 @@ function PlusModal({ token, onClose, onUnlocked }) {
         <p>Unlimited messages, new chats, and full access — all yours.</p>
         <button className="plus-done" onClick={() => { onUnlocked(); onClose() }}>Let's go →</button>
       </div>
-      {[...Array(24)].map((_, i) => <span key={i} className="plus-confetti" style={{ left: (i * 4.3) + '%', animationDelay: (i % 8) * 0.12 + 's', background: ['#10b981', '#34d399', '#6ee7b7', '#f5a623'][i % 4] }} />)}
+      {[...Array(60)].map((_, i) => {
+        const left = Math.random() * 100
+        const delay = Math.random() * 0.6
+        const dur = 2.4 + Math.random() * 1.6
+        const size = 6 + Math.random() * 8
+        const drift = (Math.random() - 0.5) * 240
+        const colors = ['#10b981', '#34d399', '#6ee7b7', '#f5a623', '#ffffff', '#a7f3d0']
+        return <span key={i} className="plus-confetti" style={{
+          left: left + '%', top: '-24px',
+          width: size + 'px', height: (size * (0.6 + Math.random())) + 'px',
+          background: colors[i % colors.length],
+          borderRadius: i % 3 === 0 ? '50%' : '2px',
+          animationDelay: delay + 's',
+          animationDuration: dur + 's',
+          '--drift': drift + 'px',
+        }} />
+      })}
     </div>
   }
 
@@ -835,7 +851,7 @@ function MainApp({ user, token, logout, setUser }) {
 
     try {
       const res = await f(API + '/api/chat', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
         signal: abortRef.current.signal,
         body: JSON.stringify({
           message: msg,
@@ -1067,8 +1083,8 @@ function MainApp({ user, token, logout, setUser }) {
       <aside className={'rail'+(sideOpen&&window.innerWidth<=760?' rail-pinned':'')}>
         <div className="rl-logo"><span className="logo-p rl-mark">P</span><b className="rl-name">Paula</b></div>
 
-        <button className="rl-item rl-new" onClick={newChat} title="New chat">
-          <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg></i><span>New chat</span>
+        <button className={"rl-item rl-new"+(!isPlus && chats.length>=1?' rl-locked':'')} onClick={newChat} title={!isPlus && chats.length>=1?"New chat (Paula Plus)":"New chat"}>
+          <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg></i><span>New chat{!isPlus && chats.length>=1&&<span className="rl-lock">🔒</span>}</span>
         </button>
 
         {[
@@ -1757,6 +1773,15 @@ function AdminPanel({ token, onClose }) {
     }).catch(() => {})
   }
 
+  const togglePlus = async (u) => {
+    const on = !u.plus
+    setUsers(prev => prev.map(x => x.id === u.id ? { ...x, plus: on } : x))
+    await f(API + '/api/admin/set-plus', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ user_id: u.id, on })
+    }).catch(() => {})
+  }
+
   const deleteUser = async (id, name) => {
     if (!confirm('Delete user "' + name + '" and all their data?')) return
     const r = await f(API + '/api/admin/users/' + id, { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } }).then(r => r.json())
@@ -1803,6 +1828,7 @@ function AdminPanel({ token, onClose }) {
                 <span style={{fontSize:'.56rem',color:'var(--dim)',flex:1}}>{u.email || 'no email'}</span>
                 <span style={{fontFamily:'var(--mono)',fontSize:'.52rem',color:'var(--dim)'}}>{u.messages} msgs</span>
                 <span style={{fontSize:'.48rem',color:'var(--dim)'}}>{u.last_login ? new Date(u.last_login).toLocaleDateString() : 'never'}</span>
+                <button onClick={() => togglePlus(u)} style={{background: u.plus?'var(--grn)':'none', border:'1px solid '+(u.plus?'var(--grn)':'var(--brd)'), borderRadius:6, padding:'4px 10px', color: u.plus?'#04130d':'var(--lt)', fontSize:'.52rem', fontWeight:700, cursor:'pointer'}}>{u.plus?'Plus ✓':'Grant Plus'}</button>
                 <button onClick={() => deleteUser(u.id, u.username)} style={{background:'none',border:'1px solid var(--brd)',borderRadius:6,padding:'4px 10px',color:'var(--red)',fontSize:'.52rem',fontWeight:600,cursor:'pointer'}}>Delete</button>
               </div>
             ))}
