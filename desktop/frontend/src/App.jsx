@@ -19,7 +19,7 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.9.0'
+const VERSION = '3.9.1'
 const VERSION_DATE = 'June 2026'
 const ADMIN_EMAIL = 'parjan.d@icloud.com'
 // Email-dependent auth (2FA, signup verification, password reset) is OFF until a
@@ -450,6 +450,9 @@ function MainApp({ user, token, logout, setUser }) {
   const [chatSearch, setChatSearch] = useState('')
   const [listening, setListening] = useState(false)
   const recognitionRef = useRef(null)
+  const [showPlus, setShowPlus] = useState(false)
+  // Plus access: Plus subscribers, the admin, and authorized accounts are unlocked.
+  const isPlus = !!(user.plus || user.is_admin)
 
   const toggleVoice = () => {
     if (listening) {
@@ -1937,9 +1940,6 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
   const [keySaved, setKeySaved] = useState(false)
   const [keyLoaded, setKeyLoaded] = useState(false)
   const [showAdmin, setShowAdmin] = useState(false)
-  const [showPlus, setShowPlus] = useState(false)
-  // Plus access: Plus subscribers, the admin, and authorized accounts are unlocked.
-  const isPlus = !!(user.plus || user.is_admin)
 
   useEffect(()=>{
     if(token&&!keyLoaded){
