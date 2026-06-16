@@ -58,6 +58,40 @@ def decrypt_secret(token: str) -> str:
         return ""  # not decryptable (plaintext legacy or rotated secret)
 
 
+def is_plus(user_id: int) -> bool:
+    """Whether the user has Paula Plus."""
+    db = _get_db()
+    try:
+        row = db.execute("SELECT plus FROM users WHERE id = ?", (user_id,)).fetchone()
+        return bool(row and row["plus"])
+    finally:
+        db.close()
+
+
+def set_plus(user_id: int, on: bool = True) -> bool:
+    db = _get_db()
+    try:
+        db.execute("UPDATE users SET plus = ? WHERE id = ?", (1 if on else 0, user_id))
+        db.commit()
+        return True
+    finally:
+        db.close()
+
+
+def messages_today(user_id: int) -> int:
+    """Count this user's messages sent today (for the free-tier daily limit)."""
+    db = _get_db()
+    try:
+        row = db.execute(
+            "SELECT COUNT(*) AS c FROM chat_history WHERE user_id = ? AND role = 'user' "
+            "AND date(created_at) = date('now')",
+            (user_id,),
+        ).fetchone()
+        return int(row["c"]) if row else 0
+    finally:
+        db.close()
+
+
 def get_user_alpaca_creds(user_id: int) -> dict:
     """Return a user's decrypted Alpaca creds, or empty strings if unset."""
     db = _get_db()
@@ -139,6 +173,8 @@ def init_db():
             db.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0")
         if "twofa_enabled" not in cols:
             db.execute("ALTER TABLE users ADD COLUMN twofa_enabled INTEGER DEFAULT 1")
+        if "plus" not in cols:
+            db.execute("ALTER TABLE users ADD COLUMN plus INTEGER DEFAULT 0")
         db.commit()
     except Exception:
         pass

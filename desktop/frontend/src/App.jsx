@@ -19,7 +19,7 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.8.1'
+const VERSION = '3.9.0'
 const VERSION_DATE = 'June 2026'
 const ADMIN_EMAIL = 'parjan.d@icloud.com'
 // Email-dependent auth (2FA, signup verification, password reset) is OFF until a
@@ -63,7 +63,7 @@ function App() {
         .then(r => r.json())
         .then(async data => {
           if (data.ok) {
-            setUser(data.user)
+            setUser({ ...data.user, plus: !!data.plus, is_admin: !!data.is_admin })
           } else { setToken(null); localStorage.removeItem('paula-token') }
         })
         .catch(() => {})
@@ -115,7 +115,7 @@ function App() {
   if (!user) return <LoginPage onAuth={doAuth} onFinishAuth={finishAuth} />
 
 
-  return <MainApp user={user} token={token} logout={logout} />
+  return <MainApp user={user} token={token} logout={logout} setUser={setUser} />
 }
 
 function LoginPage({ onAuth, onFinishAuth }) {
@@ -384,7 +384,64 @@ function OnboardingPage({ user, onComplete, onSkip }) {
   )
 }
 
-function MainApp({ user, token, logout }) {
+function PlusModal({ token, onClose, onUnlocked }) {
+  const [stage, setStage] = useState('offer') // offer | processing | confirmed | unlocked
+  const buy = async () => {
+    setStage('processing')
+    // Mock payment — no real charge. Simulate a processing delay, then confirm.
+    await new Promise(r => setTimeout(r, 2200))
+    try {
+      await f(API + '/api/plus/purchase', { method: 'POST', headers: { Authorization: 'Bearer ' + token } })
+    } catch {}
+    setStage('confirmed')
+    await new Promise(r => setTimeout(r, 1100))
+    setStage('unlocked')
+  }
+
+  if (stage === 'unlocked') {
+    return <div className="plus-unlock" onClick={() => { onUnlocked(); onClose() }}>
+      <div className="plus-burst"></div>
+      <div className="plus-unlock-inner">
+        <div className="plus-check">✓</div>
+        <div className="plus-crown">PAULA <span>PLUS</span></div>
+        <h1>You're unlocked.</h1>
+        <p>Unlimited messages, new chats, and full access — all yours.</p>
+        <button className="plus-done" onClick={() => { onUnlocked(); onClose() }}>Let's go →</button>
+      </div>
+      {[...Array(24)].map((_, i) => <span key={i} className="plus-confetti" style={{ left: (i * 4.3) + '%', animationDelay: (i % 8) * 0.12 + 's', background: ['#10b981', '#34d399', '#6ee7b7', '#f5a623'][i % 4] }} />)}
+    </div>
+  }
+
+  return <div className="cl-overlay" onClick={stage === 'offer' ? onClose : undefined}>
+    <div className="plus-modal" onClick={e => e.stopPropagation()}>
+      {stage === 'offer' && <>
+        <div className="plus-badge">PAULA <span>PLUS</span></div>
+        <div className="plus-price"><span className="plus-amt">$9.99</span><span className="plus-per">/month</span></div>
+        <ul className="plus-feats">
+          <li><span className="plus-dot"/>Unlimited messages — no daily cap</li>
+          <li><span className="plus-dot"/>Create unlimited chats</li>
+          <li><span className="plus-dot"/>Full Analyze access &amp; deep dives</li>
+          <li><span className="plus-dot"/>Everything Paula can do, unlocked</li>
+        </ul>
+        <button className="plus-buy" onClick={buy}>Upgrade for $9.99/mo</button>
+        <button className="plus-cancel" onClick={onClose}>Maybe later</button>
+        <div className="plus-fine">Demo checkout — no real payment is processed.</div>
+      </>}
+      {stage === 'processing' && <div className="plus-proc">
+        <div className="plus-spinner"></div>
+        <h2>Processing payment…</h2>
+        <p>Securing your subscription</p>
+      </div>}
+      {stage === 'confirmed' && <div className="plus-proc">
+        <div className="plus-check-sm">✓</div>
+        <h2>Payment confirmed</h2>
+        <p>Unlocking Paula Plus…</p>
+      </div>}
+    </div>
+  </div>
+}
+
+function MainApp({ user, token, logout, setUser }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [quickTicker, setQuickTicker] = useState('')
@@ -516,6 +573,8 @@ function MainApp({ user, token, logout }) {
   }
 
   const newChat = () => {
+    // Free tier: only one chat. Creating new chats is a Plus feature.
+    if (!isPlus && chatsRef.current.length >= 1) { setShowPlus(true); return }
     saveCurrentChat()
     const id = Date.now().toString() + "-" + Math.random().toString(36).slice(2, 8)
     persist([{ id, title: 'New chat', messages: [], created: new Date().toISOString() }, ...chatsRef.current])
@@ -785,6 +844,13 @@ function MainApp({ user, token, logout }) {
       const data = await res.json()
       try { clearInterval(abortRef.current?._thinkTimer) } catch {}
 
+      // Free-tier daily limit hit — surface the Plus upsell instead of a reply.
+      if (data.limit_reached) {
+        setSending(false)
+        setShowPlus(true)
+        return
+      }
+
       if (data.ok) {
         const text = data.message || ''
         const assistantMsg = {
@@ -1006,11 +1072,13 @@ function MainApp({ user, token, logout }) {
           ['chat','Chat',<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>],
           ['analyze','Analyze',<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>],
           ['stats','Portfolio',<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6"/><rect x="13" y="7" width="3" height="10"/></svg>],
-        ].map(([v,label,icon])=>(
-          <button key={v} className={'rl-item'+(view===v?' rl-on':'')} onClick={()=>{setView(v);if(v==='stats')loadDashboard()}} title={label}>
-            <i className="rl-ic">{icon}</i><span>{label}</span>
+        ].map(([v,label,icon])=>{
+          const locked = !isPlus && (v==='analyze'||v==='stats')
+          return (
+          <button key={v} className={'rl-item'+(view===v?' rl-on':'')+(locked?' rl-locked':'')} onClick={()=>{ if(locked){setShowPlus(true);return} setView(v);if(v==='stats')loadDashboard()}} title={locked?label+' (Paula Plus)':label}>
+            <i className="rl-ic">{icon}</i><span>{label}{locked&&<span className="rl-lock">🔒</span>}</span>
           </button>
-        ))}
+        )})}
 
         <div className="rl-scroll">
           <div className="rl-sec">Chats</div>
@@ -1869,6 +1937,9 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
   const [keySaved, setKeySaved] = useState(false)
   const [keyLoaded, setKeyLoaded] = useState(false)
   const [showAdmin, setShowAdmin] = useState(false)
+  const [showPlus, setShowPlus] = useState(false)
+  // Plus access: Plus subscribers, the admin, and authorized accounts are unlocked.
+  const isPlus = !!(user.plus || user.is_admin)
 
   useEffect(()=>{
     if(token&&!keyLoaded){
@@ -1950,8 +2021,10 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
     {/* About */}
     <div className="card wide"><label>About</label>
       <div className="s-row"><span>Version</span><span className="s-ver">v{VERSION} <span className="s-build">{__BUILD_COMMIT__}</span></span></div>
+      <div className="s-row"><span>Paula Plus</span>{isPlus?<span className="s-plus-on">✓ Active</span>:<button className="tog s-upgrade" onClick={() => setShowPlus(true)}>Upgrade · $9.99/mo</button>}</div>
       {(user.email||'').toLowerCase() === 'parjan.d@icloud.com' && <div className="s-row"><span>Admin</span><button className="tog" onClick={() => setShowAdmin(true)}>Open panel</button></div>}
       {showAdmin && <AdminPanel token={token} onClose={() => setShowAdmin(false)}/>}
+      {showPlus && <PlusModal token={token} onClose={() => setShowPlus(false)} onUnlocked={() => setUser(u => ({ ...u, plus: true }))}/>}
     </div>
   </div>)
 }

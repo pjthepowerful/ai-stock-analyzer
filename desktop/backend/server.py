@@ -569,7 +569,21 @@ async def me(authorization: str = Header(None)):
     if not user:
         return {"ok": False, "error": "Not authenticated"}
     settings = auth.get_settings(user["id"])
-    return {"ok": True, "user": user, "settings": settings}
+    plus = auth.is_plus(user["id"])
+    return {"ok": True, "user": user, "settings": settings,
+            "plus": plus,
+            "messages_today": auth.messages_today(user["id"]),
+            "is_admin": (user.get("email", "").lower() == ADMIN_EMAIL)}
+
+
+@app.post("/api/plus/purchase")
+async def plus_purchase(authorization: str = Header(None)):
+    """Mock checkout — grants Paula Plus. (No real payment is processed.)"""
+    user = _get_user(authorization)
+    if not user:
+        return {"ok": False, "error": "Not authenticated"}
+    auth.set_plus(user["id"], True)
+    return {"ok": True, "plus": True}
 
 @app.post("/api/auth/settings")
 async def save_user_settings(req: SettingsRequest, authorization: str = Header(None)):
@@ -616,7 +630,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.8.1",  # bump marker — confirms running code
+        "build": "v3.9.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1538,6 +1552,16 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
     # Get user if authenticated
     user = _get_user(authorization)
     user_id = user["id"] if user else 0
+    # Free-tier daily message limit (Paula Plus, admin, and authorized accounts
+    # are exempt). Counts the user's own messages sent today.
+    if user:
+        _exempt = auth.is_plus(user["id"]) or _can_autopilot(user) or (user.get("email", "").lower() == ADMIN_EMAIL)
+        if not _exempt and auth.messages_today(user["id"]) >= 5:
+            return {
+                "ok": True, "stream": False, "type": "limit",
+                "limit_reached": True,
+                "message": "You've used your 5 free messages for today. Upgrade to Paula Plus for unlimited messages, new chats, and full access.",
+            }
     if user:
         auth.save_chat(user["id"], "user", user_msg)
 
