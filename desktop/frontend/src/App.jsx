@@ -19,7 +19,7 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.9.5'
+const VERSION = '3.9.6'
 const VERSION_DATE = 'June 2026'
 const ADMIN_EMAIL = 'parjan.d@icloud.com'
 // Email-dependent auth (2FA, signup verification, password reset) is OFF until a
@@ -247,7 +247,7 @@ function LoginPage({ onAuth, onFinishAuth }) {
           <div className="lg-brand"><span className="logo-p">P</span><span className="lg-brand-name">Paula</span></div>
           <div className="lg-statement">
             <h1 className="lg-hero">Markets don't<br/>sleep.<br/><span className="lg-hero-grn">Neither does<br/>Paula.</span></h1>
-            <p className="lg-tagline">Your AI trading assistant finds the setups, holds for the move, and watches the tape so you don't have to.</p>
+            <p className="lg-tagline">Hey Paula — for everything trading. She finds the setups, holds for the move, and watches the tape so you don't have to.</p>
             <div className="lg-pills">
               <span className="lg-pill">Named setups</span>
               <span className="lg-pill">Live news</span>
@@ -965,12 +965,6 @@ function MainApp({ user, token, logout, setUser }) {
         } else { snd(playTick) }
 
         if (data.autopilot !== undefined && Date.now() - apToggleAtRef.current > 10000) setAutopilot(data.autopilot)
-
-        // That was the user's last free message — they got the answer above, now
-        // prompt them to upgrade (the next message will be blocked outright).
-        if (data.free_limit_hit) {
-          setTimeout(() => setShowPlus(true), 600)
-        }
       } else {
         if (chatIdRef.current === targetId) {
           setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ ' + (data.error || 'Something went wrong') }])

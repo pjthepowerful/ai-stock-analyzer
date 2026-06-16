@@ -630,7 +630,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.9.5",  # bump marker — confirms running code
+        "build": "v3.9.6",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1553,24 +1553,15 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
     user = _get_user(authorization)
     user_id = user["id"] if user else 0
     # Free-tier daily message limit (Paula Plus, admin, and authorized accounts
-    # are exempt). The user gets 5 free answers; the 6th message still gets
-    # answered but triggers the Plus prompt (so it's effectively their last one).
-    # The 7th+ is blocked outright.
-    _free_limit_hit = False  # set when this is the last allowed (6th) message
+    # are exempt). 5 free messages per day; the 6th is blocked with the Plus prompt.
     if user:
         _exempt = auth.is_plus(user["id"]) or _can_autopilot(user) or (user.get("email", "").lower() == ADMIN_EMAIL)
-        if not _exempt:
-            _sent = auth.messages_today(user["id"])
-            if _sent >= 6:
-                # Already used the 6 they get — block entirely, prompt Plus.
-                return {
-                    "ok": True, "stream": False, "type": "limit",
-                    "limit_reached": True,
-                    "message": "You've used all your free messages for today. Upgrade to Paula Plus for unlimited messages, new chats, and full access.",
-                }
-            elif _sent >= 5:
-                # This is the 6th — let it answer, but flag it as the last one.
-                _free_limit_hit = True
+        if not _exempt and auth.messages_today(user["id"]) >= 5:
+            return {
+                "ok": True, "stream": False, "type": "limit",
+                "limit_reached": True,
+                "message": "You've used your 5 free messages for today. Upgrade to Paula Plus for unlimited messages, new chats, and full access.",
+            }
     if user:
         auth.save_chat(user["id"], "user", user_msg)
 
@@ -1829,11 +1820,6 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
             pass
         if known:
             response["tickers"] = [t for t in dict.fromkeys(found) if t in known][:6]
-
-    # If this was the user's last free (6th) message, flag it so the frontend
-    # shows the answer AND then prompts Plus.
-    if _free_limit_hit:
-        response["free_limit_hit"] = True
 
     return response
 
