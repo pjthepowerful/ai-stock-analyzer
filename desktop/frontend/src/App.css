@@ -960,3 +960,16 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .s-plus-on { color: var(--grn); font-weight: 700; font-size: .8rem }
 
 .lg-opt { color: var(--dim); font-weight: 400; font-size: .85em }
+
+/* ── What's-new scrollable version history ── */
+.cl-history { max-height: 52vh; overflow-y: auto; padding-right: 6px }
+.cl-release { padding: 18px 0; border-bottom: 1px solid var(--brd) }
+.cl-release:last-child { border-bottom: none }
+.cl-rel-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px }
+.cl-rel-ver { font-family: var(--mono); font-weight: 800; font-size: 1.05rem; color: var(--wh); display: inline-flex; align-items: center; gap: 8px }
+.cl-rel-latest { color: var(--grn) }
+.cl-rel-tag { font-family: var(--font); font-size: .55rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; background: var(--grn); color: #04130d; padding: 2px 7px; border-radius: 5px }
+.cl-rel-date { font-size: .78rem; color: var(--dim) }
+.cl-rel-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 9px }
+.cl-rel-item { display: flex; align-items: flex-start; gap: 11px; font-size: .86rem; color: var(--lt); line-height: 1.45 }
+.cl-rel-item .cl-dot { margin-top: 6px; flex-shrink: 0 }
