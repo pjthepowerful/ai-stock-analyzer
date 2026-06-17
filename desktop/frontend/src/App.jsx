@@ -19,60 +19,60 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.9.7'
-const VERSION_DATE = 'June 2026'
+const VERSION = '3.9.8'
+const VERSION_DATE = 'June 16, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
-  { v: '3.9.7', d: 'June 2026', changes: [
+  { v: '3.9.8', d: 'June 16, 2026', changes: [
     'The "What\u2019s new" screen is now a full scrollable history \u2014 every version, its date, and what changed.',
   ]},
-  { v: '3.9.6', d: 'June 2026', changes: [
+  { v: '3.9.6', d: 'June 16, 2026', changes: [
     'New "Hey Paula — for everything trading" branding on the trailer and login.',
     'Free tier is a clean 5 messages per day.',
   ]},
-  { v: '3.9.0', d: 'June 2026', changes: [
+  { v: '3.9.0', d: 'June 15, 2026', changes: [
     'Introducing Paula Plus ($9.99/mo): unlimited messages, unlimited chats, and full access.',
     'Free tier: 5 messages a day, one chat, with Analyze & Portfolio reserved for Plus.',
     'Smooth upgrade flow with an unlock celebration.',
     'Admins can grant or revoke Plus from the admin panel.',
   ]},
-  { v: '3.8.0', d: 'June 2026', changes: [
+  { v: '3.8.0', d: 'June 14, 2026', changes: [
     'Maintenance mode — a clean full-screen notice when Paula is getting an upgrade.',
     '"Look it up" now actually searches the web for current info.',
     'Trade levels never collapse — entry, stop, and target are always distinct.',
     'Smoother chat scrolling that no longer fights you while a reply streams in.',
   ]},
-  { v: '3.7.0', d: 'June 2026', changes: [
+  { v: '3.7.0', d: 'June 13, 2026', changes: [
     'Portfolio-aware advice — ask about adding to or trimming a position and Paula factors in your real buying power, holdings, and risk.',
     'Sharper understanding of what you actually asked.',
   ]},
-  { v: '3.5.0', d: 'June 2026', changes: [
+  { v: '3.5.0', d: 'June 11, 2026', changes: [
     'Per-account trading — connect your own Alpaca keys and Paula trades your account (encrypted, private to you).',
     'Your win rate and recent trades inform Paula\u2019s advice.',
   ]},
-  { v: '3.4.0', d: 'June 2026', changes: [
+  { v: '3.4.0', d: 'June 10, 2026', changes: [
     'Autopilot now scans a much wider universe — hundreds of names per cycle via fast batch fetching.',
   ]},
-  { v: '3.3.0', d: 'June 2026', changes: [
+  { v: '3.3.0', d: 'June 8, 2026', changes: [
     'Scanner widened to 1,000+ liquid stocks, plus a full-NYSE mode.',
     'Themed scans: energy, defense, biotech, crypto, value.',
     'Delisted, acquired, and brand-new IPO stocks filtered out — no fake scores.',
     'Redesigned welcome screen and Analyze view; new hover navigation rail.',
     'Real market data on login; live intraday (1D/5D) charts.',
   ]},
-  { v: '3.2.0', d: 'May 2026', changes: [
+  { v: '3.2.0', d: 'May 28, 2026', changes: [
     'Named setups — every pick comes with its thesis (pullback, breakout, oversold bounce, coiling).',
     '52-week-high & VCP detection; honest multi-position backtest.',
     'True swing trading — positions held overnight, no end-of-day force-close.',
     'Live news, web search, market-hours awareness.',
   ]},
-  { v: '3.1.0', d: 'May 2026', changes: [
+  { v: '3.1.0', d: 'May 20, 2026', changes: [
     'Per-chat memory — each conversation stays its own.',
     'Stop a reply mid-stream; always-on cloud hosting.',
     'Consistent scores between Analyze and chat.',
   ]},
-  { v: '3.0.0', d: 'May 2026', changes: [
+  { v: '3.0.0', d: 'May 12, 2026', changes: [
     'Paula reborn as a desktop app — a full swing-trading copilot.',
     'Multi-factor scoring engine: RSI, MACD, Bollinger Bands, ATR, momentum, fundamentals.',
     'Alpaca paper trading, AI news analysis, and an autopilot that trades for you.',
