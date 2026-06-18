@@ -19,11 +19,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.14.0'
+const VERSION = '3.15.0'
 const VERSION_DATE = 'June 16, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.15.0', d: 'June 17, 2026', changes: [
+    'Light theme — switch between dark and light in Settings \u2192 Appearance. Your choice is remembered.',
+  ]},
   { v: '3.14.0', d: 'June 17, 2026', changes: [
     'Earnings calendar — ask "when does NVDA report earnings" and Paula tells you the date, how soon it is, and warns if it\u2019s close.',
   ]},
@@ -138,6 +141,14 @@ function App() {
   const [token, setToken] = useState(localStorage.getItem('paula-token'))
   const [authLoading, setAuthLoading] = useState(true)
   const [maint, setMaint] = useState({ on: false, message: '' })
+  const [theme, setTheme] = useState(() => localStorage.getItem('paula-theme') || 'dark')
+
+  // Apply the theme to the document root and persist it.
+  useEffect(() => {
+    if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light')
+    else document.documentElement.removeAttribute('data-theme')
+    localStorage.setItem('paula-theme', theme)
+  }, [theme])
 
   // Poll maintenance status (everyone sees it; admin is exempt from the block).
   useEffect(() => {
@@ -207,7 +218,7 @@ function App() {
   if (!user) return <LoginPage onAuth={doAuth} onFinishAuth={finishAuth} />
 
 
-  return <MainApp user={user} token={token} logout={logout} setUser={setUser} />
+  return <MainApp user={user} token={token} logout={logout} setUser={setUser} theme={theme} setTheme={setTheme} />
 }
 
 function LoginPage({ onAuth, onFinishAuth }) {
@@ -552,7 +563,7 @@ function PlusModal({ token, onClose, onUnlocked }) {
   </div>
 }
 
-function MainApp({ user, token, logout, setUser }) {
+function MainApp({ user, token, logout, setUser, theme, setTheme }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [quickTicker, setQuickTicker] = useState('')
@@ -1260,7 +1271,7 @@ function MainApp({ user, token, logout, setUser }) {
 
         :view==='stats'?<DashView perf={perf}/>
         
-        :view==='settings'?<SetView settings={settings} update={updateSetting} user={user} token={token} logout={logout} autopilot={autopilot} setAutopilot={setAutopilot} persist={persist} setActiveChatId={setActiveChatId} setMessages={setMessages} setShowChangelog={setShowChangelog} setUser={setUser}/>
+        :view==='settings'?<SetView settings={settings} update={updateSetting} user={user} token={token} logout={logout} autopilot={autopilot} setAutopilot={setAutopilot} persist={persist} setActiveChatId={setActiveChatId} setMessages={setMessages} setShowChangelog={setShowChangelog} setUser={setUser} theme={theme} setTheme={setTheme}/>
         :(<>
           {selectedPos&&(()=>{const p=positions.find(x=>x.ticker===selectedPos);if(!p)return null;return(
             <div className="detail-bar">
@@ -2053,7 +2064,7 @@ function DashView({perf}){
   </div>)
 }
 
-function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persist,setActiveChatId,setMessages,setShowChangelog,setUser}){
+function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persist,setActiveChatId,setMessages,setShowChangelog,setUser,theme,setTheme}){
   const [keys, setKeys] = useState({alpaca_key:'',alpaca_secret:'',groq_key:'',polygon_key:''})
   const [keyExists, setKeyExists] = useState({alpaca_key:false,alpaca_secret:false,groq_key:false,polygon_key:false})
   const [keySaved, setKeySaved] = useState(false)
@@ -2114,6 +2125,18 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
 
     {/* Appearance */}
     <div className="card wide"><label>Appearance</label>
+      <div className="s-row"><span>Theme</span>
+        <div className="theme-picks">
+          <button className={'tp-btn'+(theme!=='light'?' tp-on':'')} onClick={()=>setTheme&&setTheme('dark')}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            <span>Dark</span>
+          </button>
+          <button className={'tp-btn'+(theme==='light'?' tp-on':'')} onClick={()=>setTheme&&setTheme('light')}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/></svg>
+            <span>Light</span>
+          </button>
+        </div>
+      </div>
       <div className="s-row"><span>Font Size</span>
         <div className="font-picks">
           {fontSizes.map(s=>(
