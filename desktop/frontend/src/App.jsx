@@ -19,11 +19,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.12.0'
+const VERSION = '3.13.0'
 const VERSION_DATE = 'June 16, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.13.0', d: 'June 17, 2026', changes: [
+    'The "What\u2019s new" history is now collapsible — tap any version to expand its changes, with the date shown next to each version.',
+  ]},
   { v: '3.12.0', d: 'June 17, 2026', changes: [
     'Position sizing — ask "how many shares of NVDA if I risk $200" and Paula calculates the share count from the stop distance.',
   ]},
@@ -106,6 +109,26 @@ const f = (url, opts = {}) => {
   return fetch(url, { ...opts, headers })
 }
 const WS_URL = `${BACKEND.startsWith('https') ? 'wss:' : 'ws:'}//${new URL(BACKEND).host}/ws`
+
+function ChangelogRelease({ rel, defaultOpen, latest }) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className={"cl-release" + (open ? " cl-open" : "")}>
+      <button className="cl-rel-head" onClick={() => setOpen(o => !o)}>
+        <span className={"cl-rel-ver" + (latest ? " cl-rel-latest" : "")}>
+          v{rel.v}{latest && <span className="cl-rel-tag">Latest</span>}
+        </span>
+        <span className="cl-rel-date">{rel.d}</span>
+        <svg className="cl-rel-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      {open && <ul className="cl-rel-list">
+        {rel.changes.map((c, j) => (
+          <li className="cl-rel-item" key={j}><span className="cl-dot cl-dot-grn"/><span>{c}</span></li>
+        ))}
+      </ul>}
+    </div>
+  )
+}
 
 function App() {
   const [user, setUser] = useState(null)
@@ -1135,17 +1158,7 @@ function MainApp({ user, token, logout, setUser }) {
 
           <div className="cl-body cl-history">
             {CHANGELOG_DATA.map((rel, i) => (
-              <div className="cl-release" key={rel.v}>
-                <div className="cl-rel-head">
-                  <span className={"cl-rel-ver"+(i===0?" cl-rel-latest":"")}>v{rel.v}{i===0&&<span className="cl-rel-tag">Latest</span>}</span>
-                  <span className="cl-rel-date">{rel.d}</span>
-                </div>
-                <ul className="cl-rel-list">
-                  {rel.changes.map((c, j) => (
-                    <li className="cl-rel-item" key={j}><span className="cl-dot cl-dot-grn"/><span>{c}</span></li>
-                  ))}
-                </ul>
-              </div>
+              <ChangelogRelease key={rel.v} rel={rel} defaultOpen={i === 0} latest={i === 0} />
             ))}
           </div>
 
