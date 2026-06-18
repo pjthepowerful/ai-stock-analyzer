@@ -19,11 +19,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.16.3'
+const VERSION = '3.16.4'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.16.4', d: 'June 18, 2026', changes: [
+    'Nicer loading screen \u2014 an animated logo, the Paula wordmark, and a progress shimmer instead of a bare black screen.',
+  ]},
   { v: '3.16.3', d: 'June 18, 2026', changes: [
     'Small fixes: corrected a few theme color variables, and position sizing now explains clearly when your risk budget is too small for even one share.',
   ]},
@@ -216,7 +219,16 @@ function App() {
 
   const logout = () => { setUser(null); setToken(null); localStorage.removeItem('paula-token') }
 
-  if (authLoading) return <div className="auth-loading"><div className="logo-p">P</div></div>
+  if (authLoading) return (
+    <div className="auth-loading">
+      <div className="al-glow" />
+      <div className="al-inner">
+        <div className="al-logo">P</div>
+        <div className="al-name">Paula</div>
+        <div className="al-bar"><span /></div>
+      </div>
+    </div>
+  )
   // Maintenance mode: block everyone except the admin account.
   if (maint.on && (!user || (user.email || '').toLowerCase() !== ADMIN_EMAIL)) {
     return <div className="maint-screen">
