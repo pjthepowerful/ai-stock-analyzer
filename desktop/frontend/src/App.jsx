@@ -19,11 +19,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.16.2'
+const VERSION = '3.16.3'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.16.3', d: 'June 18, 2026', changes: [
+    'Small fixes: corrected a few theme color variables, and position sizing now explains clearly when your risk budget is too small for even one share.',
+  ]},
   { v: '3.16.2', d: 'June 18, 2026', changes: [
     'Light theme now covers the sidebar too, with a smooth color fade when you switch themes.',
   ]},
@@ -1977,7 +1980,7 @@ function AdminPanel({ token, onClose }) {
               </div>
               <button onClick={() => toggleMaint(!maintOn)} style={{background: maintOn?'#f5a623':'var(--grn)', border:'none', borderRadius:8, padding:'8px 18px', color:'#04130d', fontSize:'.7rem', fontWeight:700, cursor:'pointer'}}>{maintOn ? 'Turn off' : 'Turn on'}</button>
             </div>
-            <input value={maintMsg} onChange={e => setMaintMsg(e.target.value)} onBlur={() => maintOn && toggleMaint(true)} placeholder="Optional message shown to users…" style={{marginTop:10,width:'100%',background:'var(--c1)',border:'1px solid var(--brd)',borderRadius:8,padding:'8px 12px',color:'var(--fg)',fontSize:'.72rem'}} />
+            <input value={maintMsg} onChange={e => setMaintMsg(e.target.value)} onBlur={() => maintOn && toggleMaint(true)} placeholder="Optional message shown to users…" style={{marginTop:10,width:'100%',background:'var(--c1)',border:'1px solid var(--brd)',borderRadius:8,padding:'8px 12px',color:'var(--lt)',fontSize:'.72rem'}} />
           </div>
           {stats && <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,marginBottom:16}}>
             <div className="card"><div className="stat-sub">Users</div><div className="stat-n">{stats.total_users}</div></div>

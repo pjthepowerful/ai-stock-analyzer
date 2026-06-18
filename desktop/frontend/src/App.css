@@ -536,7 +536,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .s-on { color: var(--grn) }
 .s-ver { font-family: var(--mono); font-size: .7rem; color: var(--dim) }
 .s-build { color: #44444f; margin-left: 4px; }
-.tog-danger { color: var(--rd) !important; border-color: rgba(239,68,68,.2) !important }
+.tog-danger { color: var(--red) !important; border-color: rgba(239,68,68,.2) !important }
 .tog-danger:hover { background: rgba(239,68,68,.08) !important }
 
 /* ═══ Backtest ═══ */
@@ -1004,7 +1004,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .cl-rel-head:hover .cl-rel-ver { color: var(--grn) }
 .cl-rel-ver { font-family: var(--mono); font-weight: 800; font-size: 1.05rem; color: var(--wh); display: inline-flex; align-items: center; gap: 8px; transition: color .15s }
 .cl-rel-latest { color: var(--grn) }
-.cl-rel-tag { font-family: var(--font); font-size: .55rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; background: var(--grn); color: #04130d; padding: 2px 7px; border-radius: 5px }
+.cl-rel-tag { font-family: var(--sans); font-size: .55rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; background: var(--grn); color: #04130d; padding: 2px 7px; border-radius: 5px }
 .cl-rel-date { font-size: .78rem; color: var(--dim); margin-left: auto }
 .cl-rel-chev { color: var(--dim); transition: transform .2s; flex-shrink: 0 }
 .cl-open .cl-rel-chev { transform: rotate(180deg) }

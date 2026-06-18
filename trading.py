@@ -5931,6 +5931,12 @@ def execute(intent: dict) -> dict:
         per_share_risk = max(0.01, round((entry or price) - stop, 2))
         shares = int(risk // per_share_risk) if per_share_risk > 0 else 0
         cost = round(shares * (entry or price), 2)
+        # Edge case: risk budget too small to buy even one share at this stop.
+        note = ""
+        if shares < 1:
+            note = (f"Your ${risk:,.0f} risk is smaller than the ${per_share_risk:.2f} "
+                    f"risk per share at this stop, so it doesn't cover even one share. "
+                    f"You'd need a tighter stop or a larger risk budget.")
         return {
             "ok": True, "type": "position_size",
             "ticker": tick,
@@ -5940,6 +5946,7 @@ def execute(intent: dict) -> dict:
                 "per_share_risk": per_share_risk, "risk_budget": risk,
                 "shares": shares, "position_cost": cost,
                 "action": sig.get("action", "HOLD"), "score": sig.get("score", 0),
+                "note": note,
             },
         }
 
