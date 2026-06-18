@@ -3260,6 +3260,13 @@ def route(msg: str) -> dict:
     if any(p in m for p in PRIVATE_COMPANIES):
         return {"type": "chat", "private_company": True, "market": "US"}
 
+    # ── Earnings calendar ── ("when does NVDA report earnings", "AAPL earnings date")
+    if "earnings" in m and any(w in m for w in ["when", "date", "next", "report", "reporting", "calendar", "upcoming"]):
+        import re as _re_e
+        _et = [t for t in _re_e.findall(r"\b([A-Z]{1,5})\b", msg) if t in ALL_US_TICKERS]
+        if _et:
+            return {"type": "earnings", "ticker": _et[0], "market": "US", "_original_msg": msg}
+
     # ── Position sizing ── ("how many shares of NVDA if I risk $200")
     # Must mention RISK specifically — "how many shares can I buy with $5k" is an
     # affordability question (handled elsewhere), not risk-based sizing.
@@ -3755,6 +3762,38 @@ def _has_upcoming_earnings(ticker: str, days: int = 7) -> tuple[bool, str | None
         return False, None
     except Exception:
         return False, None
+
+
+def next_earnings_date(ticker: str) -> dict | None:
+    """Return the next earnings date for a ticker: {date, days_away, when}."""
+    try:
+        stk = yf.Ticker(ticker)
+        cal = stk.calendar
+        earn_date = None
+        if isinstance(cal, dict):
+            ed = cal.get("Earnings Date")
+            earn_date = ed[0] if isinstance(ed, list) and ed else ed
+        elif isinstance(cal, pd.DataFrame) and not cal.empty:
+            if "Earnings Date" in cal.columns:
+                earn_date = cal["Earnings Date"].iloc[0]
+            elif "Earnings Date" in cal.index:
+                earn_date = cal.loc["Earnings Date"].iloc[0]
+        if earn_date is None:
+            return None
+        if isinstance(earn_date, str):
+            earn_date = pd.to_datetime(earn_date)
+        elif hasattr(earn_date, "to_pydatetime"):
+            earn_date = earn_date.to_pydatetime()
+        now = datetime.now(earn_date.tzinfo) if getattr(earn_date, "tzinfo", None) else datetime.now()
+        days_away = (earn_date.date() - now.date()).days if hasattr(earn_date, "date") else None
+        return {
+            "ticker": ticker.upper(),
+            "date": earn_date.strftime("%B %d, %Y"),
+            "days_away": days_away,
+            "when": "today" if days_away == 0 else (f"in {days_away} days" if days_away and days_away > 0 else "recently"),
+        }
+    except Exception:
+        return None
 
 
 # ── Trailing stops ───────────────────────────────────────────────────────────
@@ -5849,6 +5888,21 @@ def execute(intent: dict) -> dict:
         arrow = "▲" if data["change_pct"] >= 0 else "▼"
         return {"ok": True, "type": "price", "market": market, "ticker": tick, "data": data,
                 "msg": f"**{data['name']}** ({intent['ticker']})\n\n`{sym}{data['price']:,.2f}` {arrow} {data['change_pct']:+.2f}%"}
+
+    if t == "earnings":
+        tick = _ensure_suffix(intent["ticker"], market)
+        ed = next_earnings_date(tick)
+        if not ed:
+            return {"ok": True, "type": "chat",
+                    "msg": f"I couldn't find a confirmed upcoming earnings date for {intent['ticker']} right now — it may not be scheduled yet, or the data isn't available."}
+        when = ed["when"]
+        days = ed.get("days_away")
+        warn = ""
+        if days is not None and 0 <= days <= 5:
+            warn = f"\n\n⚠️ That's soon — holding a position through earnings means overnight gap risk in either direction. Size accordingly."
+        return {"ok": True, "type": "earnings",
+                "ticker": tick,
+                "msg": f"**{intent['ticker']}** next reports earnings on **{ed['date']}** ({when}).{warn}"}
 
     if t == "position_size":
         tick = _ensure_suffix(intent["ticker"], market)

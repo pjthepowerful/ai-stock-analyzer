@@ -19,11 +19,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.13.0'
+const VERSION = '3.14.0'
 const VERSION_DATE = 'June 16, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.14.0', d: 'June 17, 2026', changes: [
+    'Earnings calendar — ask "when does NVDA report earnings" and Paula tells you the date, how soon it is, and warns if it\u2019s close.',
+  ]},
   { v: '3.13.0', d: 'June 17, 2026', changes: [
     'The "What\u2019s new" history is now collapsible — tap any version to expand its changes, with the date shown next to each version.',
   ]},
