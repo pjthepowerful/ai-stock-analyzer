@@ -922,6 +922,37 @@ def alpaca_short(ticker: str, qty: int = 1,
         return {"ok": False, "error": str(e)[:100]}
 
 
+def _update_stop_order(ticker: str, new_stop: float, qty: int) -> dict:
+    """Move a long position's protective stop UP (trailing stop). Cancels any
+    existing open stop/sell orders for the symbol, then places a fresh stop
+    order at new_stop. Long-only."""
+    sym = ticker.upper()
+    try:
+        # Cancel existing open orders for this symbol (the old stop sits here).
+        r = requests.get(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(),
+                         params={"status": "open", "symbols": sym}, timeout=10)
+        if r.status_code == 200:
+            for o in r.json():
+                oid = o.get("id")
+                if oid:
+                    requests.delete(f"{ALPACA_BASE}/v2/orders/{oid}", headers=_alpaca_headers(), timeout=10)
+        # Place the new stop (sell stop below market protects a long).
+        order = {
+            "symbol": sym,
+            "qty": str(int(qty)),
+            "side": "sell",
+            "type": "stop",
+            "stop_price": str(round(new_stop, 2)),
+            "time_in_force": "gtc",
+        }
+        r = requests.post(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(), json=order, timeout=10)
+        if r.status_code in (200, 201):
+            return {"ok": True, "stop": new_stop}
+        return {"ok": False, "error": (r.json().get("message", "") if r.text else "rejected")}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:100]}
+
+
 def alpaca_cover(ticker: str, qty: int = None, cover_all: bool = False) -> dict:
     """Cover a short position — buy back shares to close."""
     # Always use DELETE endpoint — it handles qty correctly
@@ -4807,6 +4838,54 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         log.append(p)
     if not partials:
         log.append(f"No positions hit +{PARTIAL_PROFIT_PCT*100:.1f}% for partial profit yet")
+
+    # ── 2c. Trailing stop (autopilot only) ──
+    # Once a long is up enough, ratchet its stop UP to lock in gains: track each
+    # position's high-water price and keep the stop a fixed % below that high.
+    # The stop only ever moves up, never down. Autopilot-managed positions only.
+    TRAIL_KEY = "autopilot_trail_high"
+    if TRAIL_KEY not in st.session_state:
+        st.session_state[TRAIL_KEY] = {}
+    TRAIL_ACTIVATE_PCT = params.get("TRAIL_ACTIVATE_PCT", 3.0)   # start trailing after +3%
+    TRAIL_DISTANCE_PCT = params.get("TRAIL_DISTANCE_PCT", 2.5)   # stop sits 2.5% below the high
+    # Forget high-water marks for positions we no longer hold.
+    _held = {p["ticker"] for p in positions}
+    st.session_state[TRAIL_KEY] = {k: v for k, v in st.session_state[TRAIL_KEY].items() if k in _held}
+
+    trails = []
+    for pos in positions:
+        if pos.get("side") == "short":
+            continue  # trailing logic here is long-only
+        ticker = pos["ticker"]
+        pnl_pct = pos.get("unrealized_pnl_pct", 0)
+        cur_price = float(pos.get("current_price", 0) or 0)
+        if cur_price <= 0:
+            continue
+        # Only trail once the trade is working.
+        if pnl_pct < TRAIL_ACTIVATE_PCT:
+            continue
+        prev_high = st.session_state[TRAIL_KEY].get(ticker, 0)
+        high = max(prev_high, cur_price)
+        st.session_state[TRAIL_KEY][ticker] = high
+        new_stop = round(high * (1 - TRAIL_DISTANCE_PCT / 100), 2)
+        # Current stop (from open stop orders), so we only ever raise it.
+        cur_stop = 0.0
+        try:
+            cur_stop = float(pos.get("stop_loss", 0) or 0)
+        except Exception:
+            cur_stop = 0.0
+        if new_stop <= cur_stop + 0.01:
+            continue  # would not raise the stop — leave it
+        if dry_run:
+            trails.append(f"🪜 Would trail {ticker} stop → ${new_stop} (high ${high:.2f}, +{pnl_pct:.1f}%)")
+        else:
+            res = _update_stop_order(ticker, new_stop, int(abs(pos.get("qty", 0))))
+            if res.get("ok"):
+                trails.append(f"🪜 Trailed {ticker} stop up → ${new_stop} (locking in below ${high:.2f})")
+            else:
+                trails.append(f"⚠️ Trail failed for {ticker}: {res.get('error', '')[:50]}")
+    for tr in trails:
+        log.append(tr)
 
     # ── 3. Check existing positions — close if signal flipped ──
     log.append("")
