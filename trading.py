@@ -3229,6 +3229,18 @@ def route(msg: str) -> dict:
     if any(p in m for p in PRIVATE_COMPANIES):
         return {"type": "chat", "private_company": True, "market": "US"}
 
+    # ── Compare two stocks ── ("NVDA vs AMD", "compare AAPL and MSFT", "X or Y")
+    import re as _re_cmp
+    _compare_trigger = (" vs " in m or " vs. " in m or "versus" in m
+                        or m.startswith("compare ") or " compare " in m
+                        or (" or " in m and any(w in m for w in ["better", "stronger", "buy", "which", "pick", "rather", "instead"])))
+    if _compare_trigger:
+        _ct = [t for t in _re_cmp.findall(r"\b([A-Z]{1,5})\b", msg) if t in ALL_US_TICKERS]
+        # de-dupe preserving order
+        _seen = set(); _ct = [x for x in _ct if not (x in _seen or _seen.add(x))]
+        if len(_ct) >= 2:
+            return {"type": "compare", "tickers": _ct[:2], "market": "US", "_original_msg": msg}
+
     # ── Detect questions/advice requests → send to AI, not execute commands ──
     is_question = any(q in m for q in [
         "should i", "which", "what should", "can you tell", "can you suggest",
@@ -5742,6 +5754,39 @@ def execute(intent: dict) -> dict:
         return {"ok": True, "type": "price", "market": market, "ticker": tick, "data": data,
                 "msg": f"**{data['name']}** ({intent['ticker']})\n\n`{sym}{data['price']:,.2f}` {arrow} {data['change_pct']:+.2f}%"}
 
+    if t == "compare":
+        tickers = intent.get("tickers", [])[:2]
+        if len(tickers) < 2:
+            return {"ok": False, "error": "Need two tickers to compare."}
+        compared = []
+        for tk in tickers:
+            tick = _ensure_suffix(tk, market)
+            data = fetch_full(tick)
+            if not data:
+                return {"ok": False, "error": f"No data for {tk}."}
+            sig = generate_trade_signal(data)
+            tr = sig.get("trade", {})
+            compared.append({
+                "ticker": tick,
+                "name": data.get("name", tick),
+                "price": data.get("price", 0),
+                "change_pct": data.get("change_pct", 0),
+                "action": sig.get("action", "HOLD"),
+                "score": sig.get("score", 0),
+                "rsi": data.get("rsi"),
+                "trend": data.get("trend_regime") or data.get("trend"),
+                "pct_from_52w_high": data.get("pct_from_52w_high"),
+                "rr": tr.get("risk_reward", 0),
+                "reasons": sig.get("reasons", [])[:4],
+            })
+        # Let the AI write the comparison from the two structured scorecards.
+        better = max(compared, key=lambda x: x.get("score", 0))
+        return {
+            "ok": True, "type": "compare",
+            "data": {"compare": compared, "higher_score": better["ticker"]},
+            "tickers": [c["ticker"] for c in compared],
+        }
+
     if t == "analyze":
         tick = _ensure_suffix(intent["ticker"], market)
         data = fetch_full(tick)
@@ -6010,6 +6055,7 @@ INTELLIGENCE RULES:
 - If you see conflicting signals, explain the conflict clearly and say which side you lean toward and why
 - Think about what the user ACTUALLY needs to make a trading decision, not just what data you have
 - PORTFOLIO-AWARE: if a "portfolio_context" block is attached (buying power, equity, open positions with P&L), USE it when giving advice. If they ask about adding to a stock they already hold, note the existing position and whether it's already a big chunk of their book ("you're already up 12% on this and it's ~30% of your equity — adding here concentrates your risk"). Flag concentration, respect their buying power, and factor in whether a position is winning or losing. Never invent position sizes or dollar amounts — only use the exact numbers in the block.
+- COMPARING TWO STOCKS: if a "compare" block is attached (two scorecards with score, action, RSI, trend, R/R, reasons), give a clear head-to-head: call out which has the stronger setup and WHY, using the exact scores/numbers provided. End with a clear pick ("I'd lean NVDA here — score 78 vs 64, cleaner trend, better risk-reward"), but note what would make the other one the better choice. Use only the numbers in the block.
 
 CRITICAL — PRICE ACCURACY:
 - ONLY quote prices that appear in the attached data. NEVER guess or estimate a price.

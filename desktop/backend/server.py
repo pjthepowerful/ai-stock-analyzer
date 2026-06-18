@@ -630,7 +630,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.9.8",  # bump marker — confirms running code
+        "build": "v3.10.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1647,6 +1647,10 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                         resp = fix_prices(resp, price, ticker)
                 else:
                     resp = ai_text
+        elif rtype == "compare":
+            # Two structured scorecards → let the AI write a head-to-head verdict.
+            cmp_data = result.get("data", {})
+            resp = await loop.run_in_executor(None, engine.ai_response, user_msg, cmp_data, chat_history, "US")
         elif rtype == "list":
             # Send list data to AI for real analysis instead of just showing a table
             list_data = result.get("data", [])
