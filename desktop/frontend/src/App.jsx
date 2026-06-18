@@ -19,11 +19,17 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.16.1'
-const VERSION_DATE = 'June 16, 2026'
+const VERSION = '3.16.2'
+const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.16.2', d: 'June 18, 2026', changes: [
+    'Light theme now covers the sidebar too, with a smooth color fade when you switch themes.',
+  ]},
+  { v: '3.16.1', d: 'June 18, 2026', changes: [
+    'Fixed compare/earnings/position-sizing not working with lowercase tickers (e.g. "compare tsla and nvda").',
+  ]},
   { v: '3.16.0', d: 'June 17, 2026', changes: [
     'Annual Paula Plus \u2014 $99/year (2 months free) alongside the $9.99/mo plan.',
     'A dedicated Plus page with full plan comparison, reachable from Settings.',

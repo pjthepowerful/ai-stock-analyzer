@@ -22,6 +22,8 @@
   --pur: #8b5cf6;
   --ubg: #0a1420;
   --ubrd: #122238;
+  --rail: #0b0b10;
+  --rail-hover: #16161d;
   --mono: 'JetBrains Mono', monospace;
   --sans: 'Outfit', system-ui, sans-serif;
 }
@@ -48,10 +50,18 @@
   --pur: #7c3aed;
   --ubg: #eaf2ff;
   --ubrd: #cfe0ff;
+  --rail: #eef0f4;
+  --rail-hover: #e2e6ee;
 }
 [data-theme="light"] .up { color: #059669 } [data-theme="light"] .dn { color: #dc2626 }
 
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+/* Smooth theme switch — animate color/background changes under 0.5s. */
+body, .rail, .app, .hdr, .card, .chat, .msg, .rl-item, .rl-chat, .rl-pos,
+.az-card, .cl-modal, .plus-modal, .s-inp, .s-row, main, input, textarea,
+.detail-bar, .w-snap, .plus-page, .plus-page-card, .plus-page-feats {
+  transition: background-color .35s ease, border-color .35s ease, color .35s ease;
+}
 body { background: var(--bg); color: var(--txt); font-family: var(--sans); height: 100vh; overflow: hidden; -webkit-font-smoothing: antialiased; }
 .up { color: var(--grn3) } .dn { color: var(--red2) }
 b, strong { font-weight: 600; color: var(--lt) }
@@ -847,7 +857,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 /* ═══════════════════════════════════════════════════════════════
    RAIL — hover-expand navigation (v3.2 redesign)
    ═══════════════════════════════════════════════════════════════ */
-.rail { width: 62px; flex-shrink: 0; background: #0b0b10; border-right: 1px solid var(--brd); display: flex; flex-direction: column; padding: 14px 0 12px; overflow: hidden; transition: width .36s cubic-bezier(.22,1,.36,1); z-index: 50; will-change: width; }
+.rail { width: 62px; flex-shrink: 0; background: var(--rail); border-right: 1px solid var(--brd); display: flex; flex-direction: column; padding: 14px 0 12px; overflow: hidden; transition: width .36s cubic-bezier(.22,1,.36,1); z-index: 50; will-change: width; }
 .rail:hover, .rail.rail-pinned { width: 236px; }
 .rl-logo { display: flex; align-items: center; height: 44px; margin-bottom: 12px; }
 .rl-logo .rl-mark { margin-left: 16px; }
@@ -856,8 +866,8 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .rail:hover .rl-name, .rail.rail-pinned .rl-name { opacity: 1; transform: none; }
 
 .rl-item { display: flex; align-items: center; height: 42px; margin: 1px 8px; border-radius: 10px; color: var(--dim); cursor: pointer; white-space: nowrap; background: none; border: none; font: inherit; text-align: left; transition: background .14s ease, color .14s ease; overflow: hidden; }
-.rl-item:hover { background: #16161d; color: var(--lt); }
-.rl-item.rl-on { background: #16161d; color: var(--grn); }
+.rl-item:hover { background: var(--rail-hover); color: var(--lt); }
+.rl-item.rl-on { background: var(--rail-hover); color: var(--grn); }
 .rl-ic { width: 46px; height: 42px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: transform .14s ease; }
 .rl-item:hover .rl-ic { transform: scale(1.12); }
 .rl-item span { opacity: 0; transform: translateX(-6px); transition: opacity .28s ease .06s, transform .28s ease .06s; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 6px; flex: 1; padding-right: 14px; }
@@ -875,15 +885,15 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .rl-sec-tot.up { color: var(--grn); } .rl-sec-tot.dn { color: #ef4444; }
 .rl-chat { display: flex; align-items: center; padding: 8px 16px; margin: 0 8px; border-radius: 8px; color: var(--dim); font-size: 13px; white-space: nowrap; overflow: hidden; cursor: pointer; opacity: 0; transform: translateX(-6px); transition: opacity .28s ease .06s, transform .28s ease .06s, background .14s ease, color .14s ease; }
 .rail:hover .rl-chat, .rail.rail-pinned .rl-chat { opacity: 1; transform: none; }
-.rl-chat:hover { background: #16161d; color: var(--lt); }
-.rl-chat-on { background: #16161d; color: var(--lt); }
+.rl-chat:hover { background: var(--rail-hover); color: var(--lt); }
+.rl-chat-on { background: var(--rail-hover); color: var(--lt); }
 .rl-chat-title { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .rl-chat-x { background: none; border: none; color: var(--dim); cursor: pointer; opacity: 0; display: flex; padding: 2px; transition: opacity .12s, color .12s; }
 .rl-chat:hover .rl-chat-x { opacity: .6; }
 .rl-chat-x:hover { color: #ef4444; opacity: 1; }
 .rl-pos { display: flex; align-items: center; justify-content: space-between; padding: 7px 16px; margin: 0 8px; border-radius: 8px; font-size: 13px; white-space: nowrap; cursor: pointer; opacity: 0; transform: translateX(-6px); transition: opacity .28s ease .06s, transform .28s ease .06s, background .14s ease; }
 .rail:hover .rl-pos, .rail.rail-pinned .rl-pos { opacity: 1; transform: none; }
-.rl-pos:hover { background: #16161d; }
+.rl-pos:hover { background: var(--rail-hover); }
 .rl-pos-sym { font-weight: 500; color: var(--lt); }
 .rl-pos-pnl { font-family: var(--mono); font-size: 12px; }
 .rl-pos-pnl.up { color: var(--grn); } .rl-pos-pnl.dn { color: #ef4444; }
