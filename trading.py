@@ -3263,7 +3263,8 @@ def route(msg: str) -> dict:
     # ── Earnings calendar ── ("when does NVDA report earnings", "AAPL earnings date")
     if "earnings" in m and any(w in m for w in ["when", "date", "next", "report", "reporting", "calendar", "upcoming"]):
         import re as _re_e
-        _et = [t for t in _re_e.findall(r"\b([A-Z]{1,5})\b", msg) if t in ALL_US_TICKERS]
+        _et = [t.upper() for t in _re_e.findall(r"\b([A-Za-z]{1,5})\b", msg)
+               if t.upper() in ALL_US_TICKERS and (t.isupper() or t.upper() not in {"A","AN","IS","IT","ON","AT","TO","DO","BE","ME","MY","SO","UP","ALL","ANY","FOR","ARE","WHEN","NEXT","DOES"})]
         if _et:
             return {"type": "earnings", "ticker": _et[0], "market": "US", "_original_msg": msg}
 
@@ -3275,7 +3276,8 @@ def route(msg: str) -> dict:
                      and ("risk" in m) and ("$" in msg or "dollar" in m or any(c.isdigit() for c in msg)))
     if _size_trigger:
         import re as _re_sz
-        _szt = [t for t in _re_sz.findall(r"\b([A-Z]{1,5})\b", msg) if t in ALL_US_TICKERS]
+        _szt = [t.upper() for t in _re_sz.findall(r"\b([A-Za-z]{1,5})\b", msg)
+                if t.upper() in ALL_US_TICKERS and (t.isupper() or t.upper() not in {"A","AN","IS","IT","ON","AT","TO","DO","BE","ME","MY","SO","UP","ALL","ANY","FOR","ARE","BUY","CAN","HOW","IF","I"})]
         _risk = None
         _rm = _re_sz.search(r"\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:dollars|bucks)?", msg.replace(",", ""))
         if _rm:
@@ -3290,8 +3292,16 @@ def route(msg: str) -> dict:
                         or m.startswith("compare ") or " compare " in m
                         or (" or " in m and any(w in m for w in ["better", "stronger", "buy", "which", "pick", "rather", "instead"])))
     if _compare_trigger:
-        _ct = [t for t in _re_cmp.findall(r"\b([A-Z]{1,5})\b", msg) if t in ALL_US_TICKERS]
-        # de-dupe preserving order
+        # Case-insensitive ticker match, but skip common English words that happen
+        # to be valid tickers (AND, OR, ALL, ON, IT, etc.) unless typed in caps.
+        _CMP_STOP = {"AND", "OR", "VS", "THE", "A", "AN", "IS", "IT", "ON", "AT", "TO",
+                     "ALL", "ANY", "BE", "BY", "DO", "GO", "HAS", "ME", "MY", "SO",
+                     "UP", "WHO", "ARE", "FOR", "BUY", "CAN", "GET", "NOW", "ONE", "OUT", "SEE", "TWO"}
+        _ct = []
+        for w in _re_cmp.findall(r"\b([A-Za-z]{1,5})\b", msg):
+            up = w.upper()
+            if up in ALL_US_TICKERS and (w.isupper() or up not in _CMP_STOP):
+                _ct.append(up)
         _seen = set(); _ct = [x for x in _ct if not (x in _seen or _seen.add(x))]
         if len(_ct) >= 2:
             return {"type": "compare", "tickers": _ct[:2], "market": "US", "_original_msg": msg}
