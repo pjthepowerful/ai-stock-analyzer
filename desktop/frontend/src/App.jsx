@@ -19,11 +19,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.15.0'
+const VERSION = '3.16.0'
 const VERSION_DATE = 'June 16, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.16.0', d: 'June 17, 2026', changes: [
+    'Annual Paula Plus \u2014 $99/year (2 months free) alongside the $9.99/mo plan.',
+    'A dedicated Plus page with full plan comparison, reachable from Settings.',
+  ]},
   { v: '3.15.0', d: 'June 17, 2026', changes: [
     'Light theme — switch between dark and light in Settings \u2192 Appearance. Your choice is remembered.',
   ]},
@@ -490,14 +494,56 @@ function OnboardingPage({ user, onComplete, onSkip }) {
   )
 }
 
+function PlusPage({ isPlus, onBuy, setView }) {
+  return (
+    <div className="plus-page">
+      <div className="plus-page-inner">
+        <div className="plus-badge plus-page-badge">PAULA <span>PLUS</span></div>
+        <h1 className="plus-page-title">{isPlus ? "You're on Paula Plus" : "Trade with everything unlocked"}</h1>
+        <p className="plus-page-sub">{isPlus ? "Thanks for being a Plus member — everything's unlocked for you." : "Unlimited access to every part of Paula, for less than a coffee a week."}</p>
+
+        {!isPlus && <div className="plus-page-cards">
+          <div className="plus-page-card">
+            <div className="ppc-name">Monthly</div>
+            <div className="ppc-price">$9.99<span>/mo</span></div>
+            <div className="ppc-note">Billed monthly</div>
+          </div>
+          <div className="plus-page-card ppc-feature">
+            <div className="ppc-tag">Best value · 2 months free</div>
+            <div className="ppc-name">Annual</div>
+            <div className="ppc-price">$99<span>/yr</span></div>
+            <div className="ppc-note">Works out to $8.25/mo</div>
+          </div>
+        </div>}
+
+        <div className="plus-page-feats">
+          {[
+            ['Unlimited messages', 'No daily cap — ask Paula as much as you want.'],
+            ['Unlimited chats', 'Organize your trades and ideas across as many chats as you like.'],
+            ['Full Analyze', 'Deep dives, company breakdowns, and the full signal picture on any stock.'],
+            ['Everything, unlocked', 'Every feature Paula has, with no limits.'],
+          ].map(([t, d], i) => (
+            <div className="ppf" key={i}><span className="cl-dot cl-dot-grn"/><div><b>{t}</b><p>{d}</p></div></div>
+          ))}
+        </div>
+
+        {!isPlus
+          ? <button className="plus-buy plus-page-cta" onClick={onBuy}>Choose a plan →</button>
+          : <button className="plus-cancel" onClick={() => setView('chat')}>Back to Paula</button>}
+      </div>
+    </div>
+  )
+}
+
 function PlusModal({ token, onClose, onUnlocked }) {
   const [stage, setStage] = useState('offer') // offer | processing | confirmed | unlocked
+  const [plan, setPlan] = useState('annual') // 'monthly' | 'annual'
   const buy = async () => {
     setStage('processing')
     // Mock payment — no real charge. Simulate a processing delay, then confirm.
     await new Promise(r => setTimeout(r, 2200))
     try {
-      await f(API + '/api/plus/purchase', { method: 'POST', headers: { Authorization: 'Bearer ' + token } })
+      await f(API + '/api/plus/purchase', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ plan }) })
     } catch {}
     setStage('confirmed')
     await new Promise(r => setTimeout(r, 1100))
@@ -538,14 +584,26 @@ function PlusModal({ token, onClose, onUnlocked }) {
     <div className="plus-modal" onClick={e => e.stopPropagation()}>
       {stage === 'offer' && <>
         <div className="plus-badge">PAULA <span>PLUS</span></div>
-        <div className="plus-price"><span className="plus-amt">$9.99</span><span className="plus-per">/month</span></div>
+
+        <div className="plus-plans">
+          <button className={"plus-plan"+(plan==='monthly'?" plus-plan-on":"")} onClick={()=>setPlan('monthly')}>
+            <span className="plus-plan-name">Monthly</span>
+            <span className="plus-plan-price">$9.99<span>/mo</span></span>
+          </button>
+          <button className={"plus-plan"+(plan==='annual'?" plus-plan-on":"")} onClick={()=>setPlan('annual')}>
+            <span className="plus-plan-badge">2 months free</span>
+            <span className="plus-plan-name">Annual</span>
+            <span className="plus-plan-price">$99<span>/yr</span></span>
+          </button>
+        </div>
+
         <ul className="plus-feats">
           <li><span className="plus-dot"/>Unlimited messages — no daily cap</li>
           <li><span className="plus-dot"/>Create unlimited chats</li>
           <li><span className="plus-dot"/>Full Analyze access &amp; deep dives</li>
           <li><span className="plus-dot"/>Everything Paula can do, unlocked</li>
         </ul>
-        <button className="plus-buy" onClick={buy}>Upgrade for $9.99/mo</button>
+        <button className="plus-buy" onClick={buy}>{plan==='annual'?'Get Plus — $99/year':'Get Plus — $9.99/month'}</button>
         <button className="plus-cancel" onClick={onClose}>Maybe later</button>
         <div className="plus-fine">Demo checkout — no real payment is processed.</div>
       </>}
@@ -1270,8 +1328,10 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
         {view==='analyze'?<AnalyzeView sendMessage={sendMessage} setView={setView}/>
 
         :view==='stats'?<DashView perf={perf}/>
-        
-        :view==='settings'?<SetView settings={settings} update={updateSetting} user={user} token={token} logout={logout} autopilot={autopilot} setAutopilot={setAutopilot} persist={persist} setActiveChatId={setActiveChatId} setMessages={setMessages} setShowChangelog={setShowChangelog} setUser={setUser} theme={theme} setTheme={setTheme}/>
+
+        :view==='plus'?<PlusPage isPlus={isPlus} onBuy={()=>setShowPlus(true)} setView={setView}/>
+
+        :view==='settings'?<SetView settings={settings} update={updateSetting} user={user} token={token} logout={logout} autopilot={autopilot} setAutopilot={setAutopilot} persist={persist} setActiveChatId={setActiveChatId} setMessages={setMessages} setShowChangelog={setShowChangelog} setUser={setUser} theme={theme} setTheme={setTheme} setView={setView}/>
         :(<>
           {selectedPos&&(()=>{const p=positions.find(x=>x.ticker===selectedPos);if(!p)return null;return(
             <div className="detail-bar">
@@ -2064,7 +2124,7 @@ function DashView({perf}){
   </div>)
 }
 
-function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persist,setActiveChatId,setMessages,setShowChangelog,setUser,theme,setTheme}){
+function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persist,setActiveChatId,setMessages,setShowChangelog,setUser,theme,setTheme,setView}){
   const [keys, setKeys] = useState({alpaca_key:'',alpaca_secret:'',groq_key:'',polygon_key:''})
   const [keyExists, setKeyExists] = useState({alpaca_key:false,alpaca_secret:false,groq_key:false,polygon_key:false})
   const [keySaved, setKeySaved] = useState(false)
@@ -2165,7 +2225,7 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
     {/* About */}
     <div className="card wide"><label>About</label>
       <div className="s-row"><span>Version</span><span className="s-ver">v{VERSION} <span className="s-build">{__BUILD_COMMIT__}</span></span></div>
-      <div className="s-row"><span>Paula Plus</span>{isPlus?<span className="s-plus-on">✓ Active</span>:<button className="tog s-upgrade" onClick={() => setShowPlus(true)}>Upgrade · $9.99/mo</button>}</div>
+      <div className="s-row"><span>Paula Plus</span>{isPlus?<span className="s-plus-on">✓ Active</span>:<button className="tog s-upgrade" onClick={() => setView && setView('plus')}>View plans →</button>}</div>
       {(user.email||'').toLowerCase() === 'parjan.d@icloud.com' && <div className="s-row"><span>Admin</span><button className="tog" onClick={() => setShowAdmin(true)}>Open panel</button></div>}
       {showAdmin && <AdminPanel token={token} onClose={() => setShowAdmin(false)}/>}
       {showPlus && <PlusModal token={token} onClose={() => setShowPlus(false)} onUnlocked={() => setUser && setUser(u => ({ ...u, plus: true }))}/>}
