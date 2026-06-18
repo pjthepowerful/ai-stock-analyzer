@@ -3260,7 +3260,24 @@ def route(msg: str) -> dict:
     if any(p in m for p in PRIVATE_COMPANIES):
         return {"type": "chat", "private_company": True, "market": "US"}
 
-    # ── Compare two stocks ── ("NVDA vs AMD", "compare AAPL and MSFT", "X or Y")
+    # ── Position sizing ── ("how many shares of NVDA if I risk $200")
+    # Must mention RISK specifically — "how many shares can I buy with $5k" is an
+    # affordability question (handled elsewhere), not risk-based sizing.
+    _size_trigger = (("how many shares" in m or "position size" in m or "size a position" in m
+                      or "shares should i" in m or "size my position" in m)
+                     and ("risk" in m) and ("$" in msg or "dollar" in m or any(c.isdigit() for c in msg)))
+    if _size_trigger:
+        import re as _re_sz
+        _szt = [t for t in _re_sz.findall(r"\b([A-Z]{1,5})\b", msg) if t in ALL_US_TICKERS]
+        _risk = None
+        _rm = _re_sz.search(r"\$?\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:dollars|bucks)?", msg.replace(",", ""))
+        if _rm:
+            try: _risk = float(_rm.group(1))
+            except Exception: _risk = None
+        if _szt and _risk:
+            return {"type": "position_size", "ticker": _szt[0], "risk": _risk, "market": "US", "_original_msg": msg}
+
+
     import re as _re_cmp
     _compare_trigger = (" vs " in m or " vs. " in m or "versus" in m
                         or m.startswith("compare ") or " compare " in m
@@ -5833,6 +5850,35 @@ def execute(intent: dict) -> dict:
         return {"ok": True, "type": "price", "market": market, "ticker": tick, "data": data,
                 "msg": f"**{data['name']}** ({intent['ticker']})\n\n`{sym}{data['price']:,.2f}` {arrow} {data['change_pct']:+.2f}%"}
 
+    if t == "position_size":
+        tick = _ensure_suffix(intent["ticker"], market)
+        risk = float(intent.get("risk", 0) or 0)
+        data = fetch_full(tick)
+        if not data:
+            return {"ok": False, "error": f"No data for {intent['ticker']}."}
+        sig = generate_trade_signal(data)
+        tr = sig.get("trade", {})
+        entry = float(tr.get("entry") or data.get("price", 0) or 0)
+        stop = float(tr.get("stop_loss") or 0)
+        price = float(data.get("price", 0) or 0)
+        # Fall back to a 2% stop if the signal didn't produce one (e.g. HOLD).
+        if not stop or stop >= entry:
+            stop = round((entry or price) * 0.98, 2)
+        per_share_risk = max(0.01, round((entry or price) - stop, 2))
+        shares = int(risk // per_share_risk) if per_share_risk > 0 else 0
+        cost = round(shares * (entry or price), 2)
+        return {
+            "ok": True, "type": "position_size",
+            "ticker": tick,
+            "data": {
+                "ticker": tick, "name": data.get("name", tick),
+                "price": price, "entry": entry, "stop": stop,
+                "per_share_risk": per_share_risk, "risk_budget": risk,
+                "shares": shares, "position_cost": cost,
+                "action": sig.get("action", "HOLD"), "score": sig.get("score", 0),
+            },
+        }
+
     if t == "compare":
         tickers = intent.get("tickers", [])[:2]
         if len(tickers) < 2:
@@ -6135,6 +6181,7 @@ INTELLIGENCE RULES:
 - Think about what the user ACTUALLY needs to make a trading decision, not just what data you have
 - PORTFOLIO-AWARE: if a "portfolio_context" block is attached (buying power, equity, open positions with P&L), USE it when giving advice. If they ask about adding to a stock they already hold, note the existing position and whether it's already a big chunk of their book ("you're already up 12% on this and it's ~30% of your equity — adding here concentrates your risk"). Flag concentration, respect their buying power, and factor in whether a position is winning or losing. Never invent position sizes or dollar amounts — only use the exact numbers in the block.
 - COMPARING TWO STOCKS: if a "compare" block is attached (two scorecards with score, action, RSI, trend, R/R, reasons), give a clear head-to-head: call out which has the stronger setup and WHY, using the exact scores/numbers provided. End with a clear pick ("I'd lean NVDA here — score 78 vs 64, cleaner trend, better risk-reward"), but note what would make the other one the better choice. Use only the numbers in the block.
+- POSITION SIZING: if a "position_size" block is attached (price, entry, stop, per_share_risk, risk_budget, shares, position_cost), tell them plainly how many shares to buy to risk exactly that dollar amount, and show the math simply: "To risk $X on TICKER with a stop at $S (about $R/share), buy N shares (~$cost). If it hits your stop you lose ~$X." Use the exact numbers. Add a one-line caveat that this assumes the stop fills at that level.
 
 CRITICAL — PRICE ACCURACY:
 - ONLY quote prices that appear in the attached data. NEVER guess or estimate a price.

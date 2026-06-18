@@ -19,11 +19,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.11.0'
+const VERSION = '3.12.0'
 const VERSION_DATE = 'June 16, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.12.0', d: 'June 17, 2026', changes: [
+    'Position sizing — ask "how many shares of NVDA if I risk $200" and Paula calculates the share count from the stop distance.',
+  ]},
   { v: '3.11.0', d: 'June 17, 2026', changes: [
     'Autopilot trailing stops — once a position is up ~3%, the stop ratchets up to lock in gains (and never moves back down).',
   ]},
