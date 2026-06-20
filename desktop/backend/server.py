@@ -631,7 +631,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.16.4",  # bump marker — confirms running code
+        "build": "v3.17.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -906,9 +906,16 @@ async def get_orders(status: str = "open", limit: int = 10, authorization: str =
     return {"ok": True, "data": orders}
 
 
+_TAPE_CACHE = {"at": 0, "data": []}
+
 @app.get("/api/tape")
 def market_tape():
-    """Public (no-auth) endpoint: real daily % moves for the login ticker tape."""
+    """Public (no-auth) endpoint: real daily % moves for the login ticker tape.
+    Cached for 60s — the login screen can be hit a lot, and this data barely
+    moves minute-to-minute, so we avoid a 15-ticker yfinance download per visit."""
+    import time as _t
+    if _TAPE_CACHE["data"] and (_t.time() - _TAPE_CACHE["at"] < 60):
+        return {"ok": True, "tape": _TAPE_CACHE["data"], "cached": True}
     import yfinance as yf
     import warnings
     syms = ["NVDA","AAPL","MSFT","GOOGL","AMZN","META","TSLA","AVGO","AMD","XOM","JPM","NFLX","SPY","QQQ","COST"]
@@ -927,7 +934,10 @@ def market_tape():
                 continue
     except Exception:
         pass
-    return {"ok": True, "tape": out}
+    if out:
+        _TAPE_CACHE["data"] = out
+        _TAPE_CACHE["at"] = _t.time()
+    return {"ok": True, "tape": out or _TAPE_CACHE["data"]}
 
 
 @app.get("/api/price/{ticker}")

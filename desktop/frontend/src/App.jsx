@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import Chart from './Chart'
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
+const Chart = lazy(() => import('./Chart'))
+const ChartFallback = () => <div className="chart-loading"><div className="chart-shimmer"/></div>
 import { playBuy, playSell, playNotify, playAlert, playProfit, playTick } from './sounds'
 import './App.css'
 
@@ -19,11 +20,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.16.4'
+const VERSION = '3.17.0'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.17.0', d: 'June 18, 2026', changes: [
+    'Faster first load \u2014 the charting code now loads only when a chart is shown, cutting the initial download roughly in half.',
+    'Less battery + data use \u2014 Paula pauses background refreshing when the tab isn\u2019t visible, and the login ticker is cached.',
+  ]},
   { v: '3.16.4', d: 'June 18, 2026', changes: [
     'Nicer loading screen \u2014 an animated logo, the Paula wordmark, and a progress shimmer instead of a bare black screen.',
   ]},
@@ -171,7 +176,7 @@ function App() {
     let alive = true
     const check = () => f(API + '/api/maintenance').then(r => r.json()).then(d => { if (alive && d.ok) setMaint({ on: d.on, message: d.message || '' }) }).catch(() => {})
     check()
-    const id = setInterval(check, 30000)
+    const id = setInterval(() => { if (!document.hidden) check() }, 30000)
     return () => { alive = false; clearInterval(id) }
   }, [])
 
@@ -962,8 +967,13 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
       if (chat?.messages) setMessages(chat.messages)
     }
     refreshData()
-    const i = setInterval(refreshData, 5000)
-    return () => clearInterval(i)
+    // Poll account/positions every 5s — but skip refreshes while the tab is
+    // hidden (background), and fire one immediately when the user returns. Saves
+    // battery, bandwidth, and backend load when Paula isn't on screen.
+    const i = setInterval(() => { if (!document.hidden) refreshData() }, 5000)
+    const onVis = () => { if (!document.hidden) refreshData() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => { clearInterval(i); document.removeEventListener('visibilitychange', onVis) }
   }, [refreshData])
   useEffect(() => {
     // Smart auto-scroll: only pull to the bottom if the user is ALREADY near the
@@ -1367,7 +1377,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                 <button className="btn-sm btn-r" onClick={()=>{sendMessage((p.side==='short'?'cover ':'sell ')+p.ticker);setSelectedPos(null)}}>{p.side==='short'?'Cover':'Sell'}</button>
                 <button className="btn-x" onClick={()=>setSelectedPos(null)}>×</button>
               </div>
-              <div className="db-chart"><Chart ticker={p.ticker} signal={null} height={200}/></div>
+              <div className="db-chart"><Suspense fallback={<ChartFallback/>}><Chart ticker={p.ticker} signal={null} height={200}/></Suspense></div>
             </div>)})()}
           <div className="chat" ref={chatScrollRef}>
             <div className="chat-inner">
@@ -1405,7 +1415,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                       {m.showChart && m.tickers?.length>1?(
                         <ChartTabs tickers={m.tickers} signal={m.signal}/>
                       ):m.showChart && (m.ticker||m.tickers?.[0])?(
-                        <div className="ai-chart"><Chart ticker={m.ticker||m.tickers[0]} signal={m.signal} height={260}/></div>
+                        <div className="ai-chart"><Suspense fallback={<ChartFallback/>}><Chart ticker={m.ticker||m.tickers[0]} signal={m.signal} height={260}/></Suspense></div>
                       ):null}
                       {m.signalData && <SignalCard data={m.signalData} onExecute={(ticker, side) => sendMessage((side === 'EXIT' ? 'Sell ' : 'Buy ') + ticker)}/>}
                       {m.time&&!m.streaming&&<div className="msg-time">{m.time}</div>}
@@ -1660,7 +1670,7 @@ function AnalyzeView({ sendMessage, setView }) {
           </div>}
         </div>
 
-        <div className="az-chart"><Chart ticker={result.ticker} height={320}/></div>
+        <div className="az-chart"><Suspense fallback={<ChartFallback/>}><Chart ticker={result.ticker} height={320}/></Suspense></div>
 
         {result.reasons&&result.reasons.length>0&&<div className="az-why">
           <div className="az-why-h">Why this score</div>
@@ -1806,7 +1816,7 @@ function ChartTabs({ tickers, signal }) {
           <button key={t} className={'ct-tab' + (i === active ? ' ct-on' : '')} onClick={() => setActive(i)}>{t}</button>
         ))}
       </div>
-      <Chart key={safeTicker} ticker={safeTicker} signal={active === 0 ? signal : null} height={240} />
+      <Suspense fallback={<ChartFallback/>}><Chart key={safeTicker} ticker={safeTicker} signal={active === 0 ? signal : null} height={240} /></Suspense>
     </div>
   )
 }
