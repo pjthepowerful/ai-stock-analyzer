@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.17.0'
+const VERSION = '3.17.1'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.17.1', d: 'June 18, 2026', changes: [
+    'Fixed the mobile layout \u2014 the sidebar is now a proper slide-in menu (tap the \u2630 to open, tap outside to close) instead of a stuck strip of icons, and content fills the screen.',
+  ]},
   { v: '3.17.0', d: 'June 18, 2026', changes: [
     'Faster first load \u2014 the charting code now loads only when a chart is shown, cutting the initial download roughly in half.',
     'Less battery + data use \u2014 Paula pauses background refreshing when the tab isn\u2019t visible, and the login ticker is cached.',
@@ -716,7 +719,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
   })
   const dismissChangelog = () => { setShowChangelog(false); localStorage.setItem('paula-changelog-seen', VERSION) }
   
-  const [sideOpen, setSideOpen] = useState(window.innerWidth > 768)
+  const [sideOpen, setSideOpen] = useState(window.innerWidth > 760)
   const [pinnedChats, setPinnedChats] = useState(() => {
     try { return JSON.parse(localStorage.getItem('paula-pinned') || '[]') } catch { return [] }
   })
@@ -1271,8 +1274,11 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
         </div>
       </div>}
 
-      {/* Hover-expand rail — collapsed to icons by default, expands on hover */}
-      <aside className={'rail'+(sideOpen&&window.innerWidth<=760?' rail-pinned':'')}>
+      {/* Backdrop behind the mobile slide-in rail — tap to close */}
+      <div className={'rail-backdrop'+(sideOpen?' rail-backdrop-on':'')} onClick={()=>setSideOpen(false)} />
+
+      {/* Hover-expand rail (desktop) / slide-in drawer (mobile) */}
+      <aside className={'rail'+((sideOpen&&window.innerWidth<=760)?' rail-pinned rail-mobile-open':'')}>
         <div className="rl-logo"><span className="logo-p rl-mark">P</span><b className="rl-name">Paula</b></div>
 
         <button className={"rl-item rl-new"+(!isPlus && chats.length>=1?' rl-locked':'')} onClick={newChat} title={!isPlus && chats.length>=1?"New chat (Paula Plus)":"New chat"}>
@@ -1286,7 +1292,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
         ].map(([v,label,icon])=>{
           const locked = !isPlus && (v==='analyze'||v==='stats')
           return (
-          <button key={v} className={'rl-item'+(view===v?' rl-on':'')+(locked?' rl-locked':'')} onClick={()=>{ if(locked){setShowPlus(true);return} setView(v);if(v==='stats')loadDashboard()}} title={locked?label+' (Paula Plus)':label}>
+          <button key={v} className={'rl-item'+(view===v?' rl-on':'')+(locked?' rl-locked':'')} onClick={()=>{ if(locked){setShowPlus(true);return} setView(v);if(v==='stats')loadDashboard();if(window.innerWidth<=760)setSideOpen(false)}} title={locked?label+' (Paula Plus)':label}>
             <i className="rl-ic">{icon}</i><span>{label}{locked&&<svg className="rl-lock" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>}</span>
           </button>
         )})}
@@ -1343,10 +1349,9 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
 
       {/* Main */}
       <main className="main">
-        {!sideOpen&&<button className="ham" onClick={()=>setSideOpen(true)}>☰</button>}
-
-        {/* Slim top bar — equity ticker only; nav lives in the rail */}
+        {/* Slim top bar — hamburger (mobile) + equity ticker; nav lives in the rail */}
         <div className="hdr hdr-slim">
+          <button className="ham" onClick={()=>setSideOpen(true)} aria-label="Open menu">☰</button>
           <button className="hdr-changelog" onClick={()=>setShowChangelog(true)} title="What's new">v{VERSION}</button>
           <div className="hdr-ticker">
             {account&&<>

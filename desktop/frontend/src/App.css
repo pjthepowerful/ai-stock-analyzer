@@ -766,10 +766,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
   .login-card { width: 100%; max-width: 400px; margin: 0 auto; padding-top: 40px }
   .login-input, .login-btn { box-sizing: border-box }
 
-  .sb { position: fixed; left: 0; top: 0; bottom: 0; z-index: 200; box-shadow: 8px 0 24px rgba(0,0,0,.4); width: 260px }
-  .sb-close { display: flex }
-  .sb-close { display: block } .ham { display: block }
-  .hdr { padding: 6px 12px; gap: 8px; padding-left: 44px }
+  .hdr { padding: 6px 12px; gap: 8px }
   .hdr-eq { font-size: .72rem } .hdr-pnl { font-size: .58rem } .hdr-spy { display: none }
   .hdr-tab { padding: 4px 10px; font-size: .6rem }
   .chat { padding: 0 }
@@ -916,9 +913,60 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .hdr-ticker .hdr-eq.up { color: var(--grn); } .hdr-ticker .hdr-eq.dn { color: #ef4444; }
 
 @media (max-width: 760px) {
-  .rail { position: fixed; left: 0; top: 0; bottom: 0; }
-  .rail:hover { width: 62px; }
-  .rail.rail-pinned { width: 236px; }
+  /* ── Rail becomes an off-canvas slide-in drawer (phones have no hover) ── */
+  .rail { position: fixed; left: 0; top: 0; bottom: 0; width: 248px !important;
+          transform: translateX(-100%); transition: transform .28s cubic-bezier(.22,1,.36,1);
+          z-index: 200; box-shadow: 6px 0 30px rgba(0,0,0,.4); }
+  .rail.rail-mobile-open { transform: translateX(0); }
+  .rail:hover { width: 248px !important; }              /* hover does nothing on mobile, but keep stable */
+  /* Force the expanded (labelled) look whenever the drawer is open */
+  .rail-mobile-open .rl-name, .rail-mobile-open .rl-item span,
+  .rail-mobile-open .rl-sec, .rail-mobile-open .rl-chat, .rail-mobile-open .rl-pos { opacity: 1 !important; transform: none !important; }
+
+  /* Backdrop */
+  .rail-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 150;
+                   opacity: 0; pointer-events: none; transition: opacity .25s; }
+  .rail-backdrop-on { opacity: 1; pointer-events: auto; }
+
+  /* Content takes the full width — rail no longer squeezes it */
+  .main { margin-left: 0 !important; width: 100% !important; }
+  .ham { display: flex !important; align-items: center; justify-content: center;
+         width: 38px; height: 38px; border-radius: 10px; background: var(--c2);
+         border: 1px solid var(--brd); color: var(--lt); font-size: 18px; cursor: pointer; flex-shrink: 0; }
+
+  /* Header: compact, room for the hamburger */
+  .hdr { padding: 8px 12px; gap: 8px; }
+  .hdr-changelog { font-size: .6rem; padding: 3px 7px; }
+  .hdr-eq { font-size: .82rem; } .hdr-pnl { font-size: .64rem; }
+
+  /* Chat + messages fill the screen */
+  .chat { padding: 0 6px; }
+  .msg { max-width: 92% !important; }
+  .composer, .chat-input-wrap { padding: 8px 10px; }
+
+  /* Cards / settings / analyze fit narrow screens */
+  .card, .card.wide { padding: 16px 14px; }
+  .s-row { flex-wrap: wrap; gap: 8px; }
+  .az-card, .az-chart, .ai-chart, .db-chart { width: 100%; }
+
+  /* Plus modal + page */
+  .plus-modal { padding: 26px 20px; }
+  .plus-plans { flex-direction: column; }
+  .plus-page { padding: 28px 16px; }
+  .plus-page-cards { flex-direction: column; }
+  .plus-page-title { font-size: 1.7rem; }
+
+  /* Changelog modal fits the viewport */
+  .cl-modal, .cl-overlay > div { width: 94vw !important; max-width: 94vw !important; }
+  .cl-history { max-height: 60vh; }
+
+  /* Theme picker + font buttons wrap */
+  .theme-picks { flex-wrap: wrap; }
+}
+
+@media (min-width: 761px) {
+  .ham { display: none; }
+  .rail-backdrop { display: none; }
 }
 
 /* Analyze — company info + score reasoning */
