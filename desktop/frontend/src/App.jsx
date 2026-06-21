@@ -20,11 +20,36 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.24.1'
+const VERSION = '3.24.2'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.24.2', d: 'June 21, 2026', changes: [
+    'Fixed the "What\u2019s new" list not showing the newest versions, and gave Plus members a nicer star icon.',
+  ]},
+  { v: '3.24.1', d: 'June 21, 2026', changes: [
+    'Plus members now get a clean star icon by their name instead of the stacked text.',
+  ]},
+  { v: '3.24.0', d: 'June 18, 2026', changes: [
+    'Paula will now honestly tell you when NOT to trade \u2014 no forcing a mediocre idea just to have one.',
+    'Fixed the version number sometimes showing stale after an update.',
+  ]},
+  { v: '3.23.0', d: 'June 18, 2026', changes: [
+    'Plus members can pick a gradient background theme for the whole app \u2014 midnight, forest, deep sea, twilight, ember, and more.',
+    'Cleaned up how Plus shows in the sidebar.',
+  ]},
+  { v: '3.22.1', d: 'June 18, 2026', changes: [
+    'Chat sticks to the bottom while a reply streams in \u2014 but scrolling up stops it, so you can read freely.',
+    'Definition popups now close when you scroll.',
+  ]},
+  { v: '3.22.0', d: 'June 18, 2026', changes: [
+    'Fixed market-cap scans \u2014 "small caps under $1 billion" now filters by company size, not share price.',
+    'Trading terms in Paula\u2019s replies (RSI, oversold, death cross\u2026) are highlighted \u2014 tap one for a plain-English definition.',
+  ]},
+  { v: '3.21.6', d: 'June 18, 2026', changes: [
+    'Made the Plus badge a bit bigger.',
+  ]},
   { v: '3.21.5', d: 'June 18, 2026', changes: [
     'The Plus "+" badge is now a clean glowing green mark, no background.',
   ]},
@@ -1625,7 +1650,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
           <button className="rl-item rl-profile" onClick={()=>setView('settings')} title={(settings.userName||user?.username||'Account')+(isPlus?' · Paula Plus':'')}>
             <i className="rl-ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></i>
             <span className="rl-name">{settings.userName||user?.username||'PJ'}</span>
-            {isPlus&&<i className="rl-plus-ic" title="Paula Plus"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.6 6.8L21.5 9l-5.2 4.6 1.7 7L12 17.3 5.9 20.6l1.7-7L2.5 9l6.9-.2z"/></svg></i>}
+            {isPlus&&<i className="rl-plus-ic" title="Paula Plus"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3c.3 3.9 2.1 5.7 6 6-3.9.3-5.7 2.1-6 6-.3-3.9-2.1-5.7-6-6 3.9-.3 5.7-2.1 6-6z" fill="currentColor"/><circle cx="18.5" cy="5.5" r="1.3" fill="currentColor" opacity="0.7"/></svg></i>}
           </button>
           <button className="rl-item rl-signout" onClick={logout} title="Sign out">
             <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></i><span>Sign out</span>
