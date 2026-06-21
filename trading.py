@@ -2940,20 +2940,41 @@ Headlines:
 
 
 _DELISTED_CACHE = set()
+# Short-lived cache of scored scan data per ticker. Daily-bar data barely moves
+# minute to minute, so reusing it across back-to-back scans (e.g. a broad scan
+# then a themed one) avoids re-downloading the same 1y history. 90s TTL.
+_SCAN_DATA_CACHE = {}   # ticker -> (timestamp, data)
+_SCAN_CACHE_TTL = 90
 
 def batch_fetch_scan(tickers: list, skip_news: bool = True) -> dict:
     """Bulk-fetch 1-year history for MANY tickers in a few HTTP requests using
     yf.download (multi-ticker). Returns {ticker: scan_data_dict}. Far faster than
     per-ticker fetch_scan for big universes — one network round-trip per chunk
     instead of one per stock. News is skipped here (fetched only for top picks).
+    Chunks are downloaded IN PARALLEL so a 1000-name scan isn't 7 sequential
+    round-trips but a handful of concurrent ones.
     """
     out = {}
     tickers = [t for t in tickers if t not in _DELISTED_CACHE]
     if not tickers:
         return out
-    CHUNK = 150  # yfinance handles a few hundred symbols per call comfortably
-    for i in range(0, len(tickers), CHUNK):
-        chunk = tickers[i:i + CHUNK]
+    # Serve fresh-cached tickers immediately; only download the misses.
+    import time as _t
+    _now = _t.time()
+    _need = []
+    for t in tickers:
+        cached = _SCAN_DATA_CACHE.get(t)
+        if cached and (_now - cached[0]) < _SCAN_CACHE_TTL:
+            out[t] = cached[1]
+        else:
+            _need.append(t)
+    tickers = _need
+    if not tickers:
+        return out
+    CHUNK = 200  # yfinance handles a few hundred symbols per call comfortably
+    chunks = [tickers[i:i + CHUNK] for i in range(0, len(tickers), CHUNK)]
+
+    def _fetch_chunk(chunk):
         try:
             import warnings
             with warnings.catch_warnings():
@@ -2963,9 +2984,18 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True) -> dict:
                     group_by="ticker", auto_adjust=True,
                     threads=True, progress=False,
                 )
+            return chunk, df
         except Exception as e:
             _log.warning(f"batch_fetch_scan chunk failed ({len(chunk)} tickers): {e}")
-            continue
+            return chunk, None
+
+    from concurrent.futures import ThreadPoolExecutor
+    # Download up to 4 chunks concurrently (network-bound), then parse.
+    results = []
+    with ThreadPoolExecutor(max_workers=min(4, len(chunks))) as _ex:
+        results = list(_ex.map(_fetch_chunk, chunks))
+
+    for chunk, df in results:
         if df is None or df.empty:
             continue
         for t in chunk:
@@ -3022,6 +3052,7 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True) -> dict:
                     "news_sentiment": {} if skip_news else _news_sentiment(t),
                 }
                 out[t] = data
+                _SCAN_DATA_CACHE[t] = (_now, data)
             except Exception:
                 continue
     return out
