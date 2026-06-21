@@ -1192,10 +1192,6 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .jargon-term { font-weight: 800; color: var(--grn); font-size: .82rem; margin-bottom: 5px; }
 .jargon-def { font-size: .78rem; color: var(--lt); line-height: 1.5; }
 
-/* Plus profile subtitle in the rail */
-.rl-profile-text { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
-.rl-profile-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rl-profile-plus { font-size: .62rem; font-weight: 600; color: var(--grn); letter-spacing: .02em; }
 
 /* Plus-only background theme picker */
 .theme-bg-picks { display: flex; gap: 9px; flex-wrap: wrap; }
@@ -1214,3 +1210,7 @@ body.has-bg-theme .hdr,
 body.has-bg-theme .rail,
 body.has-bg-theme .chat { background: transparent; }
 body.has-bg-theme .rail { background: rgba(0,0,0,.18); }
+
+/* Plus star icon next to the username in the rail (matches the collapsed/expand behavior of rl-name) */
+.rl-plus-ic { display: inline-flex; align-items: center; color: var(--grn); margin-left: 6px; opacity: 0; transition: opacity .2s ease .06s; filter: drop-shadow(0 0 4px rgba(16,185,129,.5)); }
+.rail:hover .rl-plus-ic, .rail.rail-pinned .rl-plus-ic, .rail-mobile-open .rl-plus-ic { opacity: 1; }
