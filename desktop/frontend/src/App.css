@@ -1116,3 +1116,10 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .chart-loading { width: 100%; min-height: 200px; border-radius: 12px; background: var(--c1); border: 1px solid var(--brd); overflow: hidden; position: relative }
 .chart-shimmer { position: absolute; inset: 0; background: linear-gradient(90deg, transparent, var(--c2), transparent); animation: chartShimmer 1.3s ease-in-out infinite }
 @keyframes chartShimmer { 0% { transform: translateX(-100%) } 100% { transform: translateX(100%) } }
+
+/* Guest mode — login screen */
+.lg-or { display: flex; align-items: center; gap: 12px; margin: 18px 0; color: #62627a; font-size: 12px }
+.lg-or::before, .lg-or::after { content: ''; flex: 1; height: 1px; background: #2a2a35 }
+.lg-guest { width: 100%; height: 48px; border-radius: 12px; background: transparent; border: 1px solid #2a2a35; color: #ececf2; font: inherit; font-weight: 500; font-size: 15px; cursor: pointer; transition: border-color .15s, background .15s }
+.lg-guest:hover { border-color: #10b981; background: rgba(16,185,129,.06) }
+.lg-guest-note { font-size: 11px; color: #62627a; text-align: center; margin-top: 10px; line-height: 1.5 }

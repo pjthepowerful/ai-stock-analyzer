@@ -626,12 +626,30 @@ async def save_chat_msg(authorization: str = Header(None)):
     return {"ok": True}
 
 
+@app.post("/api/chat/import")
+async def import_guest_chats(req: dict = None, authorization: str = Header(None)):
+    """Migrate a guest's locally-saved messages into their new account."""
+    user = _get_user(authorization)
+    if not user:
+        return {"ok": False, "error": "Not authenticated"}
+    msgs = (req or {}).get("messages", []) if isinstance(req, dict) else []
+    saved = 0
+    for m in msgs[:100]:
+        if isinstance(m, str) and m.strip():
+            try:
+                auth.save_chat(user["id"], "user", m.strip()[:2000], msg_type="imported")
+                saved += 1
+            except Exception:
+                pass
+    return {"ok": True, "imported": saved}
+
+
 @app.get("/api/health")
 async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.17.1",  # bump marker — confirms running code
+        "build": "v3.18.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),

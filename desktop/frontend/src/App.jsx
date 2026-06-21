@@ -20,11 +20,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.17.1'
+const VERSION = '3.18.0'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.18.0', d: 'June 18, 2026', changes: [
+    'Use Paula without signing in \u2014 tap "Continue as guest" to try it with 5 messages a day.',
+    'Guest chats are saved on your device, and move into your account when you sign up.',
+  ]},
   { v: '3.17.1', d: 'June 18, 2026', changes: [
     'Fixed the mobile layout \u2014 the sidebar is now a proper slide-in menu (tap the \u2630 to open, tap outside to close) instead of a stuck strip of icons, and content fills the screen.',
   ]},
@@ -207,6 +211,7 @@ function App() {
     // LoginPage will collect the code and call finishAuth() below.
     if (res.ok && (res.needs_2fa || res.needs_verification)) return res
     if (res.ok && res.token) {
+      await migrateGuestChats(res.token)
       setToken(res.token); setUser(res.user); localStorage.setItem('paula-token', res.token)
       const settingsKey = 'paula-settings-' + res.user.id
       const s = JSON.parse(localStorage.getItem(settingsKey) || '{}')
@@ -216,8 +221,9 @@ function App() {
   }
 
   // Called after a 2FA code verifies — completes the session with the issued token.
-  const finishAuth = (res) => {
+  const finishAuth = async (res) => {
     if (res.ok && res.token) {
+      await migrateGuestChats(res.token)
       setToken(res.token); setUser(res.user); localStorage.setItem('paula-token', res.token)
       const settingsKey = 'paula-settings-' + res.user.id
       const s = JSON.parse(localStorage.getItem(settingsKey) || '{}')
@@ -226,6 +232,34 @@ function App() {
   }
 
   const logout = () => { setUser(null); setToken(null); localStorage.removeItem('paula-token') }
+
+  // ── Guest mode ── Let people use Paula without an account. A guest is a
+  // synthetic user (no token); their chats + daily message count live in
+  // localStorage on this device. Casual limit — clearing storage resets it.
+  const GUEST_USER = { id: 'guest', username: 'Guest', email: '', isGuest: true, plus: false, is_admin: false }
+  const enterGuest = () => setUser(GUEST_USER)
+
+  // When a guest signs in/up, migrate their locally-saved chats into the account.
+  const migrateGuestChats = async (newToken) => {
+    try {
+      const raw = localStorage.getItem('paula-guest-chats')
+      if (!raw) return
+      const chats = JSON.parse(raw)
+      const msgs = []
+      for (const c of (chats || [])) for (const m of (c.messages || [])) {
+        if (m.role === 'user' && m.content) msgs.push(m.content)
+      }
+      if (msgs.length) {
+        await f(API + '/api/chat/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + newToken },
+          body: JSON.stringify({ messages: msgs.slice(0, 100) })
+        }).catch(() => {})
+      }
+      localStorage.removeItem('paula-guest-chats')
+      localStorage.removeItem('paula-guest-usage')
+    } catch {}
+  }
 
   if (authLoading) return (
     <div className="auth-loading">
@@ -248,13 +282,13 @@ function App() {
       </div>
     </div>
   }
-  if (!user) return <LoginPage onAuth={doAuth} onFinishAuth={finishAuth} />
+  if (!user) return <LoginPage onAuth={doAuth} onFinishAuth={finishAuth} onGuest={enterGuest} />
 
 
   return <MainApp user={user} token={token} logout={logout} setUser={setUser} theme={theme} setTheme={setTheme} />
 }
 
-function LoginPage({ onAuth, onFinishAuth }) {
+function LoginPage({ onAuth, onFinishAuth, onGuest }) {
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -443,6 +477,12 @@ function LoginPage({ onAuth, onFinishAuth }) {
                   if (!isSignup) { setEmail(username); setUsername('') } else { setUsername(email) }
                   setIsSignup(!isSignup)
                 }}>{isSignup ? 'Already have an account? ' : 'New to Paula? '}<span className="lg-link">{isSignup ? 'Sign in' : 'Create account'}</span></button>
+
+                {onGuest && <>
+                  <div className="lg-or"><span>or</span></div>
+                  <button className="lg-guest" onClick={onGuest}>Continue as guest</button>
+                  <p className="lg-guest-note">Try Paula with 5 messages a day. Your chats stay on this device until you sign up.</p>
+                </>}
               </div>
             </>}
 
@@ -660,6 +700,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
   const [listening, setListening] = useState(false)
   const recognitionRef = useRef(null)
   const [showPlus, setShowPlus] = useState(false)
+  const [guestGate, setGuestGate] = useState(false)
   // Plus access: Plus subscribers, the admin, and authorized accounts are unlocked.
   const isPlus = !!(user.plus || user.is_admin)
 
@@ -730,6 +771,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
   }
 
   // ── Chat system ──
+  const isGuest = !!user.isGuest
   const chatKey = 'paula-chats-' + user.id
   const chatsRef = useRef(JSON.parse(localStorage.getItem(chatKey) || '[]'))
   const [chats, _setChats] = useState(chatsRef.current)
@@ -740,6 +782,8 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
     chatsRef.current = updated
     _setChats(updated)
     localStorage.setItem(chatKey, JSON.stringify(updated))
+    // Guests: mirror to the migration key so a later sign-up can import them.
+    if (isGuest) localStorage.setItem('paula-guest-chats', JSON.stringify(updated))
   }
 
   // New account / no chats yet → open a fresh blank chat (welcome screen) by
@@ -1013,8 +1057,28 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
     return id
   }
 
+  // Guest daily limit (localStorage). Casual cap — resets daily, per device.
+  const guestUsage = () => {
+    try {
+      const today = new Date().toISOString().slice(0, 10)
+      const u = JSON.parse(localStorage.getItem('paula-guest-usage') || '{}')
+      return (u.date === today) ? (u.count || 0) : 0
+    } catch { return 0 }
+  }
+  const bumpGuestUsage = () => {
+    try {
+      const today = new Date().toISOString().slice(0, 10)
+      const u = JSON.parse(localStorage.getItem('paula-guest-usage') || '{}')
+      const count = (u.date === today ? (u.count || 0) : 0) + 1
+      localStorage.setItem('paula-guest-usage', JSON.stringify({ date: today, count }))
+    } catch {}
+  }
+
   const sendMessage = async (msg) => {
     if (!msg || (sending && sendingChatRef.current === chatIdRef.current)) return
+    // Guests get 5 messages/day on this device; then prompt to sign up.
+    if (isGuest && guestUsage() >= 5) { setGuestGate(true); return }
+    if (isGuest) bumpGuestUsage()
     setSending(true)
     cancelledRef.current = false
     abortRef.current = new AbortController()
@@ -1449,6 +1513,15 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
         </>)}
       </main>
       {showPlus && <PlusModal token={token} onClose={() => setShowPlus(false)} onUnlocked={() => setUser && setUser(u => ({ ...u, plus: true }))}/>}
+      {guestGate && <div className="cl-overlay" onClick={() => setGuestGate(false)}>
+        <div className="plus-modal" onClick={e => e.stopPropagation()}>
+          <div className="plus-badge">PAULA <span>PLUS</span></div>
+          <h2 style={{fontSize:'1.3rem',margin:'14px 0 8px',color:'var(--wh)'}}>You've used your 5 free messages</h2>
+          <p style={{fontSize:'.9rem',color:'var(--lt)',marginBottom:'20px',lineHeight:1.5}}>Create a free account to keep chatting — your conversations here will come with you.</p>
+          <button className="plus-buy" onClick={() => { setGuestGate(false); logout() }}>Sign up free →</button>
+          <button className="plus-cancel" onClick={() => setGuestGate(false)}>Not now</button>
+        </div>
+      </div>}
     </div>)
 }
 
