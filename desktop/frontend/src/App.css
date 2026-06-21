@@ -1212,5 +1212,6 @@ body.has-bg-theme .chat { background: transparent; }
 body.has-bg-theme .rail { background: rgba(0,0,0,.18); }
 
 /* Plus star icon next to the username in the rail (matches the collapsed/expand behavior of rl-name) */
-.rl-plus-ic { display: inline-flex; align-items: center; color: #fbbf24; margin-left: 6px; opacity: 0; transition: opacity .2s ease .06s; filter: drop-shadow(0 0 4px rgba(251,191,36,.55)); }
+.rl-plus-ic { display: inline-flex; align-items: center; flex-shrink: 0; color: #fbbf24; margin-left: 7px; opacity: 0; transition: opacity .2s ease .06s; filter: drop-shadow(0 0 4px rgba(251,191,36,.55)); }
+.rl-profile { padding-right: 14px; }
 .rail:hover .rl-plus-ic, .rail.rail-pinned .rl-plus-ic, .rail-mobile-open .rl-plus-ic { opacity: 1; }
