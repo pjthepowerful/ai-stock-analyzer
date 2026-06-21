@@ -2971,7 +2971,10 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True) -> dict:
     tickers = _need
     if not tickers:
         return out
-    CHUNK = 200  # yfinance handles a few hundred symbols per call comfortably
+    # Smaller chunks = more of them = more we can run truly in parallel. 100
+    # symbols per yf.download is still one round-trip, but with ~8 workers a
+    # 1000-name scan fires all chunks at once instead of in waves of 4.
+    CHUNK = 100
     chunks = [tickers[i:i + CHUNK] for i in range(0, len(tickers), CHUNK)]
 
     def _fetch_chunk(chunk):
@@ -2990,9 +2993,11 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True) -> dict:
             return chunk, None
 
     from concurrent.futures import ThreadPoolExecutor
-    # Download up to 4 chunks concurrently (network-bound), then parse.
+    # Fire all chunks concurrently (network-bound), capped at 8 workers so we
+    # don't hammer the data source. For a ~1000-name scan that's ~10 chunks all
+    # downloading at once instead of in sequential waves.
     results = []
-    with ThreadPoolExecutor(max_workers=min(4, len(chunks))) as _ex:
+    with ThreadPoolExecutor(max_workers=min(8, len(chunks))) as _ex:
         results = list(_ex.map(_fetch_chunk, chunks))
 
     for chunk, df in results:

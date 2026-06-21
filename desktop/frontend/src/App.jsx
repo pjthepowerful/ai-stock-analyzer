@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.25.0'
+const VERSION = '3.25.1'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.25.1', d: 'June 21, 2026', changes: [
+    'Scans are faster again \u2014 the whole market now downloads fully in parallel instead of in waves.',
+  ]},
   { v: '3.25.0', d: 'June 21, 2026', changes: [
     'Faster scans \u2014 the market is now downloaded in parallel chunks and briefly cached, so big scans finish quicker.',
     'Definition popups now have an × button to close them.',
