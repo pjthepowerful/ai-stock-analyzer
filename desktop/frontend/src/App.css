@@ -1159,18 +1159,10 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .ppf-ic { width: 34px; height: 34px; border-radius: 9px; background: rgba(16,185,129,.12); color: var(--grn); display: grid; place-items: center; flex-shrink: 0; }
 
 /* Plus crown badges (yellow, stands out) */
-.plus-mark-badge { margin-left: 7px; color: var(--grn); font-family: var(--mono); font-weight: 800; font-size: 21px; line-height: 1; vertical-align: -3px; text-shadow: 0 0 8px var(--grn), 0 0 16px rgba(16,185,129,.6); }
 .hdr-plus { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: .56rem; font-weight: 800; letter-spacing: .06em; color: #fbbf24; background: rgba(251,191,36,.12); border: 1px solid rgba(251,191,36,.3); border-radius: 6px; padding: 3px 8px; cursor: pointer; transition: background .15s; }
 .hdr-plus:hover { background: rgba(251,191,36,.2); }
 .hdr-plus svg { filter: drop-shadow(0 0 3px rgba(251,191,36,.5)); }
 
-/* Plus-only accent color picker */
-.accent-picks { display: flex; gap: 8px; flex-wrap: wrap; }
-.ac-swatch { width: 30px; height: 30px; border-radius: 8px; border: 2px solid transparent; cursor: pointer; display: grid; place-items: center; transition: transform .12s, border-color .15s; }
-.ac-swatch:hover { transform: scale(1.1); }
-.ac-on { border-color: var(--wh); }
-.ac-locked { opacity: .55; }
-.ac-locked:hover { opacity: .8; }
 .inline-lock { color: var(--dim); margin-left: 5px; vertical-align: -1px; }
 
 /* Selectable plan cards on the Plus page */
@@ -1199,3 +1191,26 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 @keyframes jargonIn { from { opacity: 0; transform: translateX(-50%) translateY(-4px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
 .jargon-term { font-weight: 800; color: var(--grn); font-size: .82rem; margin-bottom: 5px; }
 .jargon-def { font-size: .78rem; color: var(--lt); line-height: 1.5; }
+
+/* Plus profile subtitle in the rail */
+.rl-profile-text { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+.rl-profile-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rl-profile-plus { font-size: .62rem; font-weight: 600; color: var(--grn); letter-spacing: .02em; }
+
+/* Plus-only background theme picker */
+.theme-bg-picks { display: flex; gap: 9px; flex-wrap: wrap; }
+.bg-swatch { position: relative; width: 56px; height: 44px; border-radius: 9px; border: 2px solid var(--brd); cursor: pointer; display: grid; place-items: center; overflow: hidden; transition: transform .12s, border-color .15s; }
+.bg-swatch:hover { transform: scale(1.06); }
+.bg-on { border-color: var(--grn); }
+.bg-locked { opacity: .6; }
+.bg-locked:hover { opacity: .85; }
+.bg-label { position: absolute; bottom: 0; left: 0; right: 0; font-size: .5rem; font-weight: 600; text-align: center; padding: 1px 0; background: rgba(0,0,0,.45); color: #fff; letter-spacing: .02em; }
+.inline-lock { color: var(--dim); margin-left: 5px; vertical-align: -1px; }
+
+/* When a Plus background gradient is active, let it show through the main
+   surfaces (they normally paint solid --bg over it). */
+body.has-bg-theme .main,
+body.has-bg-theme .hdr,
+body.has-bg-theme .rail,
+body.has-bg-theme .chat { background: transparent; }
+body.has-bg-theme .rail { background: rgba(0,0,0,.18); }
