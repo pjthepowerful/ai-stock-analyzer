@@ -1181,3 +1181,8 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .rl-getplus .rl-ic { color: #fbbf24; }
 .rl-getplus:hover { background: rgba(251,191,36,.1); }
 .rl-getplus span { color: #fbbf24; font-weight: 600; }
+
+/* Inline Plus unlock celebration (on the Plus page, not a fullscreen overlay) */
+.plus-unlock-inline { position: relative; min-height: 420px; display: grid; place-items: center; overflow: hidden; border-radius: 18px; background: radial-gradient(circle at 50% 35%, rgba(16,185,129,.10), transparent 70%); animation: plusFade .4s ease; }
+.plus-unlock-inline .plus-unlock-inner { position: relative; z-index: 2; }
+.plus-unlock-inline .plus-confetti { position: absolute; opacity: .9; animation: plusFall linear forwards; }

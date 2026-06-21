@@ -20,11 +20,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.21.0'
+const VERSION = '3.21.1'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.21.1', d: 'June 18, 2026', changes: [
+    'Buying Plus now ends with the full unlock celebration, right on the page.',
+    'Cleaned up the Plus crown placement \u2014 it now sits neatly by your name.',
+  ]},
   { v: '3.21.0', d: 'June 18, 2026', changes: [
     'Buy Paula Plus right on the Plus page \u2014 pick monthly or annual and confirm, no extra popup.',
     'A "Get Plus" shortcut in the sidebar so upgrading is always one tap away.',
@@ -638,7 +642,34 @@ function PlusPage({ isPlus, token, setView, onUnlocked }) {
       <div className="plus-page-inner">
         <div className="plus-badge plus-page-badge">PAULA <span>PLUS</span></div>
 
-        {stage === 'done' || isPlus ? (
+        {stage === 'done' ? (
+          <div className="plus-unlock-inline">
+            <div className="plus-burst"></div>
+            <div className="plus-unlock-inner">
+              <div className="plus-check">✓</div>
+              <div className="plus-crown">PAULA <span>PLUS</span></div>
+              <h1>You're unlocked.</h1>
+              <p>Unlimited messages, full Analyze, autopilot, and every setting — all yours.</p>
+              <button className="plus-done" onClick={() => setView('chat')}>Start trading →</button>
+            </div>
+            {[...Array(60)].map((_, i) => {
+              const left = Math.random() * 100
+              const delay = Math.random() * 0.6
+              const dur = 2.4 + Math.random() * 1.6
+              const size = 6 + Math.random() * 8
+              const drift = (Math.random() - 0.5) * 240
+              const colors = ['#10b981', '#34d399', '#6ee7b7', '#fbbf24', '#ffffff', '#a7f3d0']
+              return <span key={i} className="plus-confetti" style={{
+                left: left + '%', top: '-24px',
+                width: size + 'px', height: (size * (0.6 + Math.random())) + 'px',
+                background: colors[i % colors.length],
+                borderRadius: i % 3 === 0 ? '50%' : '2px',
+                animationDelay: delay + 's', animationDuration: dur + 's',
+                '--drift': drift + 'px',
+              }} />
+            })}
+          </div>
+        ) : isPlus ? (
           <>
             <h1 className="plus-page-title">You're on Paula Plus 🎉</h1>
             <p className="plus-page-sub">Everything's unlocked — unlimited messages, full Analyze, autopilot, and every setting.</p>
@@ -1531,7 +1562,6 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
         <div className="hdr hdr-slim">
           <button className="ham" onClick={()=>setSideOpen(true)} aria-label="Open menu">☰</button>
           <button className="hdr-changelog" onClick={()=>setShowChangelog(true)} title="What's new">v{VERSION}</button>
-          {isPlus&&<button className="hdr-plus" onClick={()=>setView('plus')} title="Paula Plus member"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M2 18h20l-1.5-9-5 4-3.5-7-3.5 7-5-4z"/></svg>PLUS</button>}
           <div className="hdr-ticker">
             {account&&<>
               <span className="hdr-eq">${account.equity.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
