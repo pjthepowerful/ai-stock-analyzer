@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.24.2'
+const VERSION = '3.24.3'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.24.3', d: 'June 21, 2026', changes: [
+    'Brought back the gold crown for Plus members.',
+  ]},
   { v: '3.24.2', d: 'June 21, 2026', changes: [
     'Fixed the "What\u2019s new" list not showing the newest versions, and gave Plus members a nicer star icon.',
   ]},
@@ -1650,7 +1653,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
           <button className="rl-item rl-profile" onClick={()=>setView('settings')} title={(settings.userName||user?.username||'Account')+(isPlus?' · Paula Plus':'')}>
             <i className="rl-ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></i>
             <span className="rl-name">{settings.userName||user?.username||'PJ'}</span>
-            {isPlus&&<i className="rl-plus-ic" title="Paula Plus"><svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3c.3 3.9 2.1 5.7 6 6-3.9.3-5.7 2.1-6 6-.3-3.9-2.1-5.7-6-6 3.9-.3 5.7-2.1 6-6z" fill="currentColor"/><circle cx="18.5" cy="5.5" r="1.3" fill="currentColor" opacity="0.7"/></svg></i>}
+            {isPlus&&<i className="rl-plus-ic" title="Paula Plus"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M2 18h20l-1.5-9-5 4-3.5-7-3.5 7-5-4z"/></svg></i>}
           </button>
           <button className="rl-item rl-signout" onClick={logout} title="Sign out">
             <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></i><span>Sign out</span>
