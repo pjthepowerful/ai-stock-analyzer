@@ -20,7 +20,7 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.22.0'
+const VERSION = '3.22.1'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
@@ -858,7 +858,14 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
       setJargon(null)
     }
     document.addEventListener('click', onClick)
-    return () => document.removeEventListener('click', onClick)
+    // Close the definition popover if the user scrolls (its anchor would move
+    // away from the popover, which is pinned to fixed coords).
+    const onScrollClose = () => setJargon(null)
+    window.addEventListener('scroll', onScrollClose, true)
+    return () => {
+      document.removeEventListener('click', onClick)
+      window.removeEventListener('scroll', onScrollClose, true)
+    }
   }, [])
   // Gift notification — when an admin gifts Plus with a message, show it once.
   const [giftNote, setGiftNote] = useState(null)
@@ -1196,14 +1203,41 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
     document.addEventListener('visibilitychange', onVis)
     return () => { clearInterval(i); document.removeEventListener('visibilitychange', onVis) }
   }, [refreshData])
+  // Auto-scroll: while a reply is streaming we keep the view pinned to the
+  // bottom — UNLESS the user scrolls up themselves, which cancels the lock so
+  // we stop yanking them down. Sending a fresh message re-engages the lock.
+  const scrollLockRef = useRef(true)
   useEffect(() => {
-    // Smart auto-scroll: only pull to the bottom if the user is ALREADY near the
-    // bottom. If they've scrolled up to read while a reply streams, leave them be
-    // (no more fighting the scroll / yanking them back down).
     const el = chatScrollRef.current
-    if (!el) { messagesEnd.current?.scrollIntoView({ behavior: 'smooth' }); return }
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120
-    if (nearBottom) messagesEnd.current?.scrollIntoView({ behavior: 'smooth' })
+    if (!el) return
+    // Detect a user-initiated scroll: if they move away from the bottom, release
+    // the lock; if they return to the bottom, re-engage it.
+    const onScroll = () => {
+      const dist = el.scrollHeight - el.scrollTop - el.clientHeight
+      scrollLockRef.current = dist < 80
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    // Also treat wheel/touch as an explicit intent to take over scrolling.
+    const release = () => {
+      const dist = el.scrollHeight - el.scrollTop - el.clientHeight
+      if (dist >= 80) scrollLockRef.current = false
+    }
+    el.addEventListener('wheel', release, { passive: true })
+    el.addEventListener('touchmove', release, { passive: true })
+    return () => {
+      el.removeEventListener('scroll', onScroll)
+      el.removeEventListener('wheel', release)
+      el.removeEventListener('touchmove', release)
+    }
+  }, [])
+  useEffect(() => {
+    // On every message update (including each streamed token), if the lock is
+    // still engaged, keep the bottom in view. The user scrolling up breaks it.
+    if (scrollLockRef.current) {
+      const el = chatScrollRef.current
+      if (el) el.scrollTop = el.scrollHeight
+      else messagesEnd.current?.scrollIntoView()
+    }
   }, [messages])
 
   // Keyboard shortcuts
@@ -1253,6 +1287,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
     // Guests get 5 messages/day on this device; then prompt to sign up.
     if (isGuest && guestUsage() >= 5) { setGuestGate(true); return }
     if (isGuest) bumpGuestUsage()
+    scrollLockRef.current = true  // sending a message re-pins to the bottom
     setSending(true)
     cancelledRef.current = false
     abortRef.current = new AbortController()
