@@ -1167,3 +1167,17 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .ac-locked { opacity: .55; }
 .ac-locked:hover { opacity: .8; }
 .inline-lock { color: var(--dim); margin-left: 5px; vertical-align: -1px; }
+
+/* Selectable plan cards on the Plus page */
+.pp-select { cursor: pointer; text-align: left; position: relative; transition: border-color .15s, background .15s, transform .12s; }
+.pp-select:hover { transform: translateY(-2px); }
+.pp-on { border-color: var(--grn) !important; box-shadow: 0 0 0 1px var(--grn), 0 12px 40px rgba(16,185,129,.12); background: rgba(16,185,129,.04); }
+.pp-radio { position: absolute; top: 14px; right: 14px; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--brd); display: grid; place-items: center; }
+.pp-on .pp-radio { border-color: var(--grn); }
+.pp-radio span { width: 10px; height: 10px; border-radius: 50%; background: var(--grn); }
+.plus-page-fine { font-size: .72rem; color: var(--dim); text-align: center; margin-top: 12px; }
+
+/* Get Plus rail entry (gold to stand out) */
+.rl-getplus .rl-ic { color: #fbbf24; }
+.rl-getplus:hover { background: rgba(251,191,36,.1); }
+.rl-getplus span { color: #fbbf24; font-weight: 600; }

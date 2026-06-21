@@ -20,11 +20,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.20.0'
+const VERSION = '3.21.0'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.21.0', d: 'June 18, 2026', changes: [
+    'Buy Paula Plus right on the Plus page \u2014 pick monthly or annual and confirm, no extra popup.',
+    'A "Get Plus" shortcut in the sidebar so upgrading is always one tap away.',
+  ]},
   { v: '3.20.0', d: 'June 18, 2026', changes: [
     'A gold crown now marks Paula Plus members in the sidebar and header.',
     'Plus members can pick an accent color \u2014 emerald, ocean, violet, amber, rose, or cyan.',
@@ -608,47 +612,89 @@ function OnboardingPage({ user, onComplete, onSkip }) {
   )
 }
 
-function PlusPage({ isPlus, onBuy, setView }) {
+function PlusPage({ isPlus, token, setView, onUnlocked }) {
+  const [plan, setPlan] = useState('annual') // monthly | annual
+  const [stage, setStage] = useState('browse') // browse | processing | done
+  const planInfo = {
+    monthly: { label: 'Monthly', price: '$9.99', per: '/mo', note: 'Billed monthly · cancel anytime' },
+    annual:  { label: 'Annual',  price: '$99',   per: '/yr', note: 'Just $8.25/mo · 2 months free' },
+  }
+  const buy = async () => {
+    setStage('processing')
+    await new Promise(r => setTimeout(r, 1800)) // mock checkout — no real charge
+    try {
+      await f(API + '/api/plus/purchase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ plan })
+      })
+    } catch {}
+    onUnlocked && onUnlocked()
+    setStage('done')
+  }
+
   return (
     <div className="plus-page">
       <div className="plus-page-inner">
         <div className="plus-badge plus-page-badge">PAULA <span>PLUS</span></div>
-        <h1 className="plus-page-title">{isPlus ? "You're on Paula Plus" : "Trade with everything unlocked"}</h1>
-        <p className="plus-page-sub">{isPlus ? "Thanks for being a Plus member — everything's unlocked for you." : "Unlimited access to every part of Paula, for less than a coffee a week."}</p>
 
-        {!isPlus && <div className="plus-page-cards">
-          <div className="plus-page-card">
-            <div className="ppc-name">Monthly</div>
-            <div className="ppc-price">$9.99<span>/mo</span></div>
-            <div className="ppc-note">Billed monthly</div>
+        {stage === 'done' || isPlus ? (
+          <>
+            <h1 className="plus-page-title">You're on Paula Plus 🎉</h1>
+            <p className="plus-page-sub">Everything's unlocked — unlimited messages, full Analyze, autopilot, and every setting.</p>
+            <button className="plus-buy plus-page-cta" onClick={() => setView('chat')}>Start trading →</button>
+          </>
+        ) : stage === 'processing' ? (
+          <div className="plus-proc" style={{padding:'48px 0'}}>
+            <div className="plus-spinner" />
+            <h2>Processing…</h2>
+            <p>Setting up your {planInfo[plan].label.toLowerCase()} plan</p>
           </div>
-          <div className="plus-page-card ppc-feature">
-            <div className="ppc-tag">Best value · 2 months free</div>
-            <div className="ppc-name">Annual</div>
-            <div className="ppc-price">$99<span>/yr</span></div>
-            <div className="ppc-note">Works out to $8.25/mo</div>
-          </div>
-        </div>}
+        ) : (
+          <>
+            <h1 className="plus-page-title">Trade with everything unlocked</h1>
+            <p className="plus-page-sub">Pick a plan and you're set — unlimited access to every part of Paula.</p>
 
-        <div className="plus-page-feats">
-          {[
-            ['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z', 'Unlimited messages', 'No daily cap — ask Paula as much as you want, whenever you want.'],
-            ['M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01', 'Unlimited chats', 'Keep a separate thread for every strategy, watchlist, and idea.'],
-            ['M3 3v18h18M7 14l4-4 4 4 5-6', 'Full Analyze & deep dives', 'Company breakdowns, the full signal picture, and reasoning on any stock.'],
-            ['M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M5 19l3-3M16 8l3-3', 'Autopilot trading', 'Let Paula scan, enter, and manage positions — with trailing stops.'],
-            ['M15 7a4 4 0 0 1 0 8M9 17a4 4 0 0 1 0-8M5 12h14', 'Connect your own broker', 'Trade your own Alpaca account with encrypted, private keys.'],
-            ['M20 6L9 17l-5-5', 'Every setting unlocked', 'Sounds, connections, and all the controls — fully yours.'],
-          ].map(([icon, t, d], i) => (
-            <div className="ppf" key={i}>
-              <span className="ppf-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={icon}/></svg></span>
-              <div><b>{t}</b><p>{d}</p></div>
+            {/* Selectable plan cards */}
+            <div className="plus-page-cards">
+              <button className={'plus-page-card pp-select'+(plan==='monthly'?' pp-on':'')} onClick={()=>setPlan('monthly')}>
+                <div className="pp-radio">{plan==='monthly'&&<span/>}</div>
+                <div className="ppc-name">Monthly</div>
+                <div className="ppc-price">$9.99<span>/mo</span></div>
+                <div className="ppc-note">Billed monthly</div>
+              </button>
+              <button className={'plus-page-card pp-select'+(plan==='annual'?' pp-on':'')} onClick={()=>setPlan('annual')}>
+                <div className="ppc-tag">Best value · 2 months free</div>
+                <div className="pp-radio">{plan==='annual'&&<span/>}</div>
+                <div className="ppc-name">Annual</div>
+                <div className="ppc-price">$99<span>/yr</span></div>
+                <div className="ppc-note">$8.25/mo</div>
+              </button>
             </div>
-          ))}
-        </div>
 
-        {!isPlus
-          ? <button className="plus-buy plus-page-cta" onClick={onBuy}>Choose a plan →</button>
-          : <button className="plus-cancel" onClick={() => setView('chat')}>Back to Paula</button>}
+            <div className="plus-page-feats">
+              {[
+                ['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z', 'Unlimited messages', 'No daily cap — ask Paula as much as you want, whenever you want.'],
+                ['M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01', 'Unlimited chats', 'Keep a separate thread for every strategy, watchlist, and idea.'],
+                ['M3 3v18h18M7 14l4-4 4 4 5-6', 'Full Analyze & deep dives', 'Company breakdowns, the full signal picture, and reasoning on any stock.'],
+                ['M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M5 19l3-3M16 8l3-3', 'Autopilot trading', 'Let Paula scan, enter, and manage positions — with trailing stops.'],
+                ['M15 7a4 4 0 0 1 0 8M9 17a4 4 0 0 1 0-8M5 12h14', 'Connect your own broker', 'Trade your own Alpaca account with encrypted, private keys.'],
+                ['M20 6L9 17l-5-5', 'Accent colors & every setting', 'Personalize the look, plus sounds, connections, and all controls.'],
+              ].map(([icon, t, d], i) => (
+                <div className="ppf" key={i}>
+                  <span className="ppf-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={icon}/></svg></span>
+                  <div><b>{t}</b><p>{d}</p></div>
+                </div>
+              ))}
+            </div>
+
+            {/* Confirm purchase right here */}
+            <button className="plus-buy plus-page-cta" onClick={buy}>
+              Get Plus — {planInfo[plan].price}{planInfo[plan].per}
+            </button>
+            <p className="plus-page-fine">{planInfo[plan].note} · demo checkout, no real payment is taken.</p>
+          </>
+        )}
       </div>
     </div>
   )
@@ -1464,6 +1510,9 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
         </div>
 
         <div className="rl-foot">
+          {!isPlus&&!isGuest&&<button className={'rl-item rl-getplus'+(view==='plus'?' rl-on':'')} onClick={()=>setView('plus')} title="Get Paula Plus">
+            <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2 18h20l-1.5-9-5 4-3.5-7-3.5 7-5-4z"/></svg></i><span>Get Plus</span>
+          </button>}
           <button className={'rl-item'+(view==='settings'?' rl-on':'')} onClick={()=>setView('settings')} title="Settings">
             <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></i><span>Settings</span>
           </button>
@@ -1495,7 +1544,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
 
         :view==='stats'?<DashView perf={perf}/>
 
-        :view==='plus'?<PlusPage isPlus={isPlus} onBuy={()=>setShowPlus(true)} setView={setView}/>
+        :view==='plus'?<PlusPage isPlus={isPlus} token={token} setView={setView} onUnlocked={()=>setUser&&setUser(u=>({...u,plus:true}))}/>
 
         :view==='settings'?<SetView settings={settings} update={updateSetting} user={user} token={token} logout={logout} autopilot={autopilot} setAutopilot={setAutopilot} persist={persist} setActiveChatId={setActiveChatId} setMessages={setMessages} setShowChangelog={setShowChangelog} setUser={setUser} theme={theme} setTheme={setTheme} setView={setView}/>
         :(<>
