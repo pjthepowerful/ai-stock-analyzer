@@ -1191,3 +1191,11 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .plus-unlock-inline { position: relative; min-height: 420px; display: grid; place-items: center; overflow: hidden; border-radius: 18px; background: radial-gradient(circle at 50% 35%, rgba(16,185,129,.10), transparent 70%); animation: plusFade .4s ease; }
 .plus-unlock-inline .plus-unlock-inner { position: relative; z-index: 2; }
 .plus-unlock-inline .plus-confetti { position: absolute; opacity: .9; animation: plusFall linear forwards; }
+
+/* Beginner jargon — highlighted terms + click-for-definition popover */
+.jargon { color: var(--grn); border-bottom: 1px dashed var(--grn); cursor: help; font-weight: 500; transition: background .12s; border-radius: 2px; }
+.jargon:hover { background: rgba(16,185,129,.12); }
+.jargon-pop { position: fixed; transform: translateX(-50%); z-index: 500; max-width: 260px; background: var(--c1); border: 1px solid var(--grn); border-radius: 12px; padding: 12px 14px; box-shadow: 0 12px 40px rgba(0,0,0,.4); animation: jargonIn .15s ease; }
+@keyframes jargonIn { from { opacity: 0; transform: translateX(-50%) translateY(-4px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+.jargon-term { font-weight: 800; color: var(--grn); font-size: .82rem; margin-bottom: 5px; }
+.jargon-def { font-size: .78rem; color: var(--lt); line-height: 1.5; }

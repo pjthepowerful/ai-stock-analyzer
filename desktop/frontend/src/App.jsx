@@ -20,7 +20,7 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.21.6'
+const VERSION = '3.22.0'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
@@ -840,6 +840,26 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
   const recognitionRef = useRef(null)
   const [showPlus, setShowPlus] = useState(false)
   const [guestGate, setGuestGate] = useState(false)
+  // Jargon definitions — click a highlighted term to see what it means.
+  const [jargon, setJargon] = useState(null) // { term, def, x, y }
+  useEffect(() => {
+    const onClick = (e) => {
+      const el = e.target.closest && e.target.closest('.jargon')
+      if (el) {
+        const term = el.getAttribute('data-term')
+        const def = GLOSSARY[term]
+        if (def) {
+          const r = el.getBoundingClientRect()
+          setJargon({ term, def, x: r.left + r.width / 2, y: r.bottom })
+          e.stopPropagation()
+          return
+        }
+      }
+      setJargon(null)
+    }
+    document.addEventListener('click', onClick)
+    return () => document.removeEventListener('click', onClick)
+  }, [])
   // Gift notification — when an admin gifts Plus with a message, show it once.
   const [giftNote, setGiftNote] = useState(null)
   useEffect(() => {
@@ -1671,6 +1691,10 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
       </main>
       {showPlus && <PlusModal token={token} onClose={() => setShowPlus(false)} onUnlocked={() => setUser && setUser(u => ({ ...u, plus: true }))}/>}
       {guestGate && <GuestAuthModal onClose={() => setGuestGate(false)} onDone={() => { setGuestGate(false); logout() }} />}
+      {jargon && <div className="jargon-pop" style={{ left: Math.min(Math.max(jargon.x, 130), window.innerWidth - 130), top: jargon.y + 8 }} onClick={e => e.stopPropagation()}>
+        <div className="jargon-term">{jargon.term}</div>
+        <div className="jargon-def">{jargon.def}</div>
+      </div>}
       {giftNote && <div className="cl-overlay" onClick={dismissGift}>
         <div className="plus-modal gift-modal" onClick={e => e.stopPropagation()}>
           <div className="gift-icon">🎁</div>
@@ -2643,6 +2667,38 @@ function chatEmoji(title) {
   return '💬'
 }
 
+// Beginner-friendly glossary. Terms found in Paula's replies get highlighted
+// and show a definition on click/tap.
+const GLOSSARY = {
+  'RSI': "Relative Strength Index — a 0–100 momentum gauge. Above 70 is often 'overbought' (may be due for a pullback), below 30 'oversold' (may bounce).",
+  'MACD': "Moving Average Convergence Divergence — a trend/momentum indicator. When its lines cross up it's bullish, down it's bearish.",
+  'ATR': "Average True Range — how much a stock typically moves in a day. Used to size stops to a stock's normal volatility.",
+  'VWAP': "Volume-Weighted Average Price — the average price weighted by volume over the day. Traders watch it as a fair-value line.",
+  'SMA': "Simple Moving Average — the average closing price over N days. Smooths out noise to show the trend.",
+  'EMA': "Exponential Moving Average — like an SMA but weights recent prices more, so it reacts faster.",
+  'oversold': "When a stock has fallen far/fast enough that it may be due for a bounce (often RSI below 30).",
+  'overbought': "When a stock has risen far/fast enough that it may be due for a pullback (often RSI above 70).",
+  'death cross': "When the 50-day average crosses below the 200-day average — a classic bearish trend signal.",
+  'golden cross': "When the 50-day average crosses above the 200-day average — a classic bullish trend signal.",
+  'support': "A price level where buying has repeatedly stepped in, tending to hold the price up.",
+  'resistance': "A price level where selling has repeatedly stepped in, tending to cap the price.",
+  'breakout': "When price pushes above a resistance level, often signaling the start of a new move up.",
+  'pullback': "A temporary dip within an overall uptrend — sometimes a chance to buy at a better price.",
+  'stop loss': "A preset price where you exit a losing trade to cap the loss.",
+  'risk/reward': "How much you stand to gain vs lose on a trade. 2:1 means risking $1 to make $2.",
+  'market cap': "A company's total value = share price × shares outstanding. Small-cap is roughly under $2B.",
+  'P/E ratio': "Price-to-Earnings — share price divided by earnings per share. A rough gauge of how 'expensive' a stock is.",
+  'Bollinger Bands': "Bands set above/below a moving average by volatility. Price near the upper band is stretched high, lower band stretched low.",
+  'liquidity': "How easily you can buy/sell without moving the price. High-volume stocks are more liquid.",
+  'volatility': "How much a price swings. Higher volatility = bigger moves in both directions.",
+  'momentum': "The tendency of a price in motion to keep moving the same direction.",
+  'relative strength': "How a stock is performing compared to the broader market (e.g. the S&P 500).",
+}
+const _GLOSSARY_RE = new RegExp('\\b(' + Object.keys(GLOSSARY)
+  .sort((a,b)=>b.length-a.length)
+  .map(k=>k.replace(/[.*+?^${}()|[\]\\/]/g,'\\$&'))
+  .join('|') + ')\\b', 'gi')
+
 function fmt(t){
   if(!t)return '';
   // PERMANENT GUARD: the LLM sometimes hallucinates trade levels and repeats the
@@ -2682,6 +2738,18 @@ function fmt(t){
   s = s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
        .replace(/`(.+?)`/g,'<code>$1</code>')
        .replace(/\n/g,'<br/>');
+  // Highlight glossary terms (skip anything already inside an HTML tag/anchor).
+  // Split on tags so we only touch plain-text segments.
+  s = s.split(/(<[^>]+>)/g).map(seg => {
+    if (seg.startsWith('<')) return seg  // leave tags alone
+    const seen = {}
+    return seg.replace(_GLOSSARY_RE, (m) => {
+      const key = Object.keys(GLOSSARY).find(k => k.toLowerCase() === m.toLowerCase())
+      if (!key || seen[key.toLowerCase()]) return m  // define each term once per message
+      seen[key.toLowerCase()] = true
+      return `<span class="jargon" data-term="${key}">${m}</span>`
+    })
+  }).join('')
   return s;
 }
 export default App

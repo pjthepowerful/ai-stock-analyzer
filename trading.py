@@ -5702,12 +5702,31 @@ def execute(intent: dict) -> dict:
         user_msg_lower = intent.get("_original_msg", "").lower()
         wants_single = any(w in user_msg_lower for w in ["1 stock", "one stock", "a stock", "single stock", "just one", "best one", "top pick"])
 
-        # Extract price filter (e.g., "under $50", "below 100", "less than $30")
+        # Extract price OR market-cap filter. "under $50" = share price;
+        # "under $1 billion (market cap)" = market cap. Disambiguate by the
+        # billion/million/cap keywords so we don't read "$1 billion" as "$1".
         max_price = None
+        max_mcap = None   # in dollars
+        min_mcap = None
         import re as _pre
-        _price_match = _pre.search(r'(?:under|below|less than|cheaper than|max|up to)\s*\$?(\d+)', user_msg_lower)
-        if _price_match:
-            max_price = float(_price_match.group(1))
+        # Market cap: "under $1 billion", "below 500 million", "less than 2b market cap"
+        _mcap_match = _pre.search(r'(?:under|below|less than|max|up to|smaller than)\s*\$?(\d+(?:\.\d+)?)\s*(billion|bn|b|million|mm|m)\b', user_msg_lower)
+        if _mcap_match:
+            _val = float(_mcap_match.group(1))
+            _unit = _mcap_match.group(2)
+            mult = 1e9 if _unit in ("billion", "bn", "b") else 1e6
+            max_mcap = _val * mult
+        # Also catch "small cap"/"micro cap" as implicit cap ceilings.
+        if max_mcap is None:
+            if "micro cap" in user_msg_lower or "micro-cap" in user_msg_lower or "microcap" in user_msg_lower:
+                max_mcap = 300e6
+            elif "mid cap" in user_msg_lower or "mid-cap" in user_msg_lower:
+                max_mcap = 10e9; min_mcap = 2e9
+        # Share price: only if NOT a market-cap phrase (avoid "$1 billion" -> $1)
+        if max_mcap is None:
+            _price_match = _pre.search(r'(?:under|below|less than|cheaper than|max|up to)\s*\$?(\d+(?:\.\d+)?)\b(?!\s*(?:billion|bn|b|million|mm|m|k)\b)', user_msg_lower)
+            if _price_match:
+                max_price = float(_price_match.group(1))
 
         if cat == "large":
             universe = list(dict.fromkeys(SP500_TOP + NASDAQ_100 + VALUE_DIVIDEND + SECTOR_PICKS))
@@ -5747,9 +5766,18 @@ def execute(intent: dict) -> dict:
             except Exception:
                 universe = list(dict.fromkeys(SP500_TOP + NASDAQ_100 + MIDCAP_GROWTH + SMALLCAP + TRENDING + VALUE_DIVIDEND + SECTOR_PICKS))
 
-        # If user wants cheap stocks, expand universe to include more small/mid caps
-        if max_price and max_price <= 100:
+        # If user wants cheap stocks OR a small market cap, widen the universe
+        # to include more small/mid caps so there's something to find.
+        if (max_price and max_price <= 100) or (max_mcap and max_mcap <= 10e9):
             universe = list(set(universe + MIDCAP_GROWTH + SMALLCAP + TRENDING))
+        # For an explicit small/micro-cap request, go even broader (full market)
+        # since most small caps aren't in the curated lists.
+        if max_mcap and max_mcap <= 2e9:
+            try:
+                from universe import all_exchange_tickers
+                universe = list(set(universe + all_exchange_tickers(include_nasdaq=True)))
+            except Exception:
+                pass
 
         picks = []
 
@@ -5767,6 +5795,7 @@ def execute(intent: dict) -> dict:
                         "setup": sig.get("setup", ""),
                         "price": data.get("price", 0),
                         "change_pct": data.get("change_pct", 0),
+                        "market_cap": data.get("market_cap"),
                         "signals": reasons[:3],
                         "trade": sig.get("trade", {}),
                     }
@@ -5798,6 +5827,11 @@ def execute(intent: dict) -> dict:
         # Apply price filter if user specified one
         if max_price:
             picks = [p for p in picks if p.get("price", 0) <= max_price]
+        # Apply market-cap filter(s)
+        if max_mcap:
+            picks = [p for p in picks if p.get("market_cap") and p["market_cap"] <= max_mcap]
+        if min_mcap:
+            picks = [p for p in picks if p.get("market_cap") and p["market_cap"] >= min_mcap]
         top = picks[:5]
 
         # ── Price consistency: the intraday scanner's price (last 5-min bar)
@@ -5821,8 +5855,11 @@ def execute(intent: dict) -> dict:
                 pass
 
         if not top:
+            if max_mcap:
+                _cap_str = f"${max_mcap/1e9:.1f}B" if max_mcap >= 1e9 else f"${max_mcap/1e6:.0f}M"
+                return {"ok": True, "type": "analysis", "msg": f"I scanned {len(universe)} stocks but couldn't find any under {_cap_str} market cap with a strong enough setup right now. Smaller companies are often more volatile and thinly covered — try a wider cap range, or ask me to analyze a specific small-cap ticker."}
             if max_price:
-                return {"ok": True, "type": "analysis", "msg": f"I scanned {len(universe)} stocks but couldn't find any under ${max_price:.0f} that score high enough right now. Try a higher price range or ask me to analyze a specific cheap ticker."}
+                return {"ok": True, "type": "analysis", "msg": f"I scanned {len(universe)} stocks but couldn't find any under ${max_price:.0f} a share that score high enough right now. Try a higher price range or ask me to analyze a specific cheap ticker."}
             return {"ok": True, "type": "analysis", "msg": "I scanned " + str(len(universe)) + " stocks but nothing scored high enough right now. The market might be choppy — try again later or ask me to analyze a specific ticker."}
 
         # Single stock request — written response with the best pick
