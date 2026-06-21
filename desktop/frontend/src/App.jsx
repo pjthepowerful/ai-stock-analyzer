@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.21.1'
+const VERSION = '3.21.2'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.21.2', d: 'June 18, 2026', changes: [
+    'Removed the @ mention highlighting in chat \u2014 your messages just read as plain text now.',
+  ]},
   { v: '3.21.1', d: 'June 18, 2026', changes: [
     'Buying Plus now ends with the full unlock celebration, right on the page.',
     'Cleaned up the Plus crown placement \u2014 it now sits neatly by your name.',
@@ -1635,7 +1638,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                       {m.time&&!m.streaming&&<div className="msg-time">{m.time}</div>}
                     </div>
                   </div>
-                ):(<><div className="user-bubble">{m.content.split(/(@[A-Z]{1,5})/g).map((part,i) => part.match(/^@[A-Z]{1,5}$/) ? <span key={i} className="mention">{part}</span> : part)}</div>{m.time&&<div className="msg-time">{m.time}</div>}</>)}
+                ):(<><div className="user-bubble">{m.content}</div>{m.time&&<div className="msg-time">{m.time}</div>}</>)}
               </div>))}
             {sending&&sendingChatRef.current===chatIdRef.current&&!messages.some(m=>m.streaming)&&<div className="msg msg-assistant"><div className="ai"><div className="ai-av">P</div><div className="ai-body"><div className="ai-name">Paula</div><div className="loading-state"><div className="dots"><span/><span/><span/></div><span className="loading-txt">{loadingText}</span></div></div></div></div>}
             <div ref={messagesEnd}/>
