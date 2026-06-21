@@ -1159,7 +1159,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .ppf-ic { width: 34px; height: 34px; border-radius: 9px; background: rgba(16,185,129,.12); color: var(--grn); display: grid; place-items: center; flex-shrink: 0; }
 
 /* Plus crown badges (yellow, stands out) */
-.plus-mark-badge { display: inline-grid; place-items: center; width: 15px; height: 15px; margin-left: 7px; border-radius: 5px; background: linear-gradient(135deg, var(--grn2), var(--grn)); color: #04130d; font-family: var(--mono); font-weight: 800; font-size: 12px; line-height: 1; vertical-align: -2px; }
+.plus-mark-badge { margin-left: 6px; color: var(--grn); font-family: var(--mono); font-weight: 800; font-size: 14px; line-height: 1; vertical-align: -1px; text-shadow: 0 0 6px var(--grn), 0 0 12px rgba(16,185,129,.6); }
 .hdr-plus { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: .56rem; font-weight: 800; letter-spacing: .06em; color: #fbbf24; background: rgba(251,191,36,.12); border: 1px solid rgba(251,191,36,.3); border-radius: 6px; padding: 3px 8px; cursor: pointer; transition: background .15s; }
 .hdr-plus:hover { background: rgba(251,191,36,.2); }
 .hdr-plus svg { filter: drop-shadow(0 0 3px rgba(251,191,36,.5)); }
