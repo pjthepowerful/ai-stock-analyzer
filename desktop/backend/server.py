@@ -650,7 +650,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.24.5",  # bump marker — confirms running code
+        "build": "v3.24.6",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1250,11 +1250,19 @@ def _company_info(ticker: str) -> dict:
         officers = info.get("companyOfficers") or []
         for o in officers:
             title = (o.get("title") or "").lower()
-            if "chief executive" in title or title.strip() == "ceo":
-                info_out["ceo"] = o.get("name")
-                break
-        if not info_out["ceo"] and officers:
-            info_out["ceo"] = officers[0].get("name")
+            # Only accept a clear CEO title. We deliberately DON'T fall back to
+            # "first officer in the list" — that surfaced wrong names (e.g. a CFO
+            # or a stale/mismatched record) labeled as CEO. Better to show no CEO
+            # than a wrong one.
+            if ("chief executive" in title or title.strip() in ("ceo", "co-ceo")
+                    or title.startswith("ceo")):
+                name = o.get("name")
+                # Yahoo sometimes returns a placeholder/empty or a name that
+                # clearly isn't a person (all caps junk, single token). Basic sanity.
+                if name and len(name.split()) >= 2:
+                    info_out["ceo"] = name
+                    break
+        # No reliable-CEO fallback on purpose — leave it None if unclear.
     except Exception:
         pass
     _COMPANY_CACHE[t] = info_out

@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.24.5'
+const VERSION = '3.24.6'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.24.6', d: 'June 21, 2026', changes: [
+    'Stopped showing a wrong CEO name on company cards \u2014 if the CEO can\u2019t be confidently identified, the line is now hidden instead of guessing.',
+  ]},
   { v: '3.24.5', d: 'June 21, 2026', changes: [
     'Cleaned up the Analyze, Performance, and Settings tabs by removing the small subtitle text under each header.',
   ]},
