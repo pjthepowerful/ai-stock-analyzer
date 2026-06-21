@@ -1152,3 +1152,18 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 
 /* Plus page feature icons */
 .ppf-ic { width: 34px; height: 34px; border-radius: 9px; background: rgba(16,185,129,.12); color: var(--grn); display: grid; place-items: center; flex-shrink: 0; }
+
+/* Plus crown badges (yellow, stands out) */
+.plus-crown-badge { color: #fbbf24; margin-left: 6px; vertical-align: -1px; filter: drop-shadow(0 0 4px rgba(251,191,36,.5)); }
+.hdr-plus { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: .56rem; font-weight: 800; letter-spacing: .06em; color: #fbbf24; background: rgba(251,191,36,.12); border: 1px solid rgba(251,191,36,.3); border-radius: 6px; padding: 3px 8px; cursor: pointer; transition: background .15s; }
+.hdr-plus:hover { background: rgba(251,191,36,.2); }
+.hdr-plus svg { filter: drop-shadow(0 0 3px rgba(251,191,36,.5)); }
+
+/* Plus-only accent color picker */
+.accent-picks { display: flex; gap: 8px; flex-wrap: wrap; }
+.ac-swatch { width: 30px; height: 30px; border-radius: 8px; border: 2px solid transparent; cursor: pointer; display: grid; place-items: center; transition: transform .12s, border-color .15s; }
+.ac-swatch:hover { transform: scale(1.1); }
+.ac-on { border-color: var(--wh); }
+.ac-locked { opacity: .55; }
+.ac-locked:hover { opacity: .8; }
+.inline-lock { color: var(--dim); margin-left: 5px; vertical-align: -1px; }

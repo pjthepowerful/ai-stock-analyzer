@@ -20,11 +20,16 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.19.0'
+const VERSION = '3.20.0'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.20.0', d: 'June 18, 2026', changes: [
+    'A gold crown now marks Paula Plus members in the sidebar and header.',
+    'Plus members can pick an accent color \u2014 emerald, ocean, violet, amber, rose, or cyan.',
+    'Brought back the animated welcome prompt.',
+  ]},
   { v: '3.19.0', d: 'June 18, 2026', changes: [
     'Paula Plus now unlocks all settings (Connections & Sounds) \u2014 theme, font size, and your account stay free for everyone.',
     'Gifted Plus arrives in real time, with an optional personal note from the team.',
@@ -132,6 +137,22 @@ const CHANGELOG_DATA = [
   ]},
 ]
 const ADMIN_EMAIL = 'parjan.d@icloud.com'
+// Plus-only accent colors. Each overrides the green accent family.
+const ACCENTS = [
+  { id: 'green',  name: 'Emerald (default)', color: '#10b981', dark: '#059669', light: '#34d399' },
+  { id: 'blue',   name: 'Ocean',             color: '#3b82f6', dark: '#2563eb', light: '#60a5fa' },
+  { id: 'purple', name: 'Violet',            color: '#8b5cf6', dark: '#7c3aed', light: '#a78bfa' },
+  { id: 'amber',  name: 'Amber',             color: '#f59e0b', dark: '#d97706', light: '#fbbf24' },
+  { id: 'rose',   name: 'Rose',              color: '#f43f5e', dark: '#e11d48', light: '#fb7185' },
+  { id: 'cyan',   name: 'Cyan',              color: '#06b6d4', dark: '#0891b2', light: '#22d3ee' },
+]
+function applyAccent(id) {
+  const a = ACCENTS.find(x => x.id === id) || ACCENTS[0]
+  const r = document.documentElement.style
+  r.setProperty('--grn', a.color)
+  r.setProperty('--grn2', a.dark)
+  r.setProperty('--grn3', a.light)
+}
 // Email-dependent auth (2FA, signup verification, password reset) is OFF until a
 // sending domain is verified in Resend. Keep in sync with the backend's
 // EMAIL_AUTH_ENABLED. Flip to true when email works.
@@ -931,7 +952,11 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
   useEffect(() => {
     settingsRef.current = settings
     if (settings.fontSize) document.documentElement.style.setProperty('--chat-fs', settings.fontSize)
-  }, [settings])
+    // Accent color is a Plus perk — apply the saved one for Plus members,
+    // otherwise force the default green (so a lapsed member doesn't keep it).
+    if (isPlus && settings.accent) applyAccent(settings.accent)
+    else applyAccent('green')
+  }, [settings, isPlus])
   const updateSetting = (k, v) => { const n = { ...settings, [k]: v }; setSettings(n); localStorage.setItem('paula-settings-' + user.id, JSON.stringify(n)) }
   const snd = (fn) => { if (settingsRef.current.sounds !== false) fn() }
 
@@ -1443,7 +1468,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
             <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></i><span>Settings</span>
           </button>
           <button className="rl-item rl-profile" onClick={()=>setView('settings')} title={settings.userName||user?.username||'Account'}>
-            <i className="rl-ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></i><span>{settings.userName||user?.username||'PJ'}</span>
+            <i className="rl-ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></i><span>{settings.userName||user?.username||'PJ'}{isPlus&&<svg className="plus-crown-badge" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M2 18h20l-1.5-9-5 4-3.5-7-3.5 7-5-4z"/></svg>}</span>
           </button>
           <button className="rl-item rl-signout" onClick={logout} title="Sign out">
             <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></i><span>Sign out</span>
@@ -1457,6 +1482,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
         <div className="hdr hdr-slim">
           <button className="ham" onClick={()=>setSideOpen(true)} aria-label="Open menu">☰</button>
           <button className="hdr-changelog" onClick={()=>setShowChangelog(true)} title="What's new">v{VERSION}</button>
+          {isPlus&&<button className="hdr-plus" onClick={()=>setView('plus')} title="Paula Plus member"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M2 18h20l-1.5-9-5 4-3.5-7-3.5 7-5-4z"/></svg>PLUS</button>}
           <div className="hdr-ticker">
             {account&&<>
               <span className="hdr-eq">${account.equity.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
@@ -1494,7 +1520,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
               <div className="welcome">
                 <span className="logo-p w-mark">P</span>
                 <h1 className="w-greet"><span className="w-hi">{(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' })()}, {name}.</span></h1>
-                <p className="w-q">What are we trading today?</p>
+                <p className="w-q"><Typewriter/></p>
 
                 {account&&<div className="w-snap">
                   <div className="ws-cell"><span className="ws-l">Equity</span><span className="ws-v">${account.equity.toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>
@@ -2361,6 +2387,17 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
               onClick={()=>{update('fontSize',s.val);document.documentElement.style.setProperty('--chat-fs',s.val)}}>
               <span className="fp-aa" style={{fontSize:s.display+'px'}}>Aa</span>
               <span className="fp-label">{s.name}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="s-row"><span>Accent color {!isPlus&&<svg className="inline-lock" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>}</span>
+        <div className="accent-picks">
+          {ACCENTS.map(a=>(
+            <button key={a.id} className={'ac-swatch'+((settings.accent||'green')===a.id?' ac-on':'')+(!isPlus?' ac-locked':'')}
+              style={{background:a.color}} title={isPlus?a.name:a.name+' (Plus)'}
+              onClick={()=>{ if(!isPlus){setView&&setView('plus');return} update('accent',a.id); applyAccent(a.id) }}>
+              {(settings.accent||'green')===a.id&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>}
             </button>
           ))}
         </div>
