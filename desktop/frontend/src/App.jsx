@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.24.4'
+const VERSION = '3.24.5'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.24.5', d: 'June 21, 2026', changes: [
+    'Cleaned up the Analyze, Performance, and Settings tabs by removing the small subtitle text under each header.',
+  ]},
   { v: '3.24.4', d: 'June 21, 2026', changes: [
     'Fixed the crown getting clipped at the edge of the profile box.',
   ]},
@@ -1916,7 +1919,6 @@ function AnalyzeView({ sendMessage, setView }) {
   return (
     <div className="view-scroll">
       <h2 className="view-h">Analyze</h2>
-      <p className="view-sub">Look up any stock — price, score, signal, and chart.</p>
 
       <div className="az-search">
         <div className="az-input-wrap">
@@ -2429,7 +2431,6 @@ function DashView({perf}){
   const totalPct = startEq > 0 ? ((endEq/startEq - 1)*100) : 0
 
   return(<div className="view-scroll"><h2 className="view-h">Performance</h2>
-    <p className="view-sub">Trailing {period} · Updated {new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/New_York'})} ET</p>
     {/* Period selector */}
     <div className="period-bar">
       {[['1D','1D'],['1W','1W'],['1M','1M'],['3M','3M'],['6M','6M'],['1A','YTD'],['all','ALL']].map(([k,label])=>(
@@ -2547,7 +2548,6 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
   const fontSizes = [{name:'Small',val:'13px',display:11},{name:'Default',val:'15px',display:15},{name:'Large',val:'18px',display:19}]
 
   return(<div className="view-scroll"><h2 className="view-h">Settings</h2>
-    <p className="view-sub">Account, integrations, and behavior</p>
 
     {/* Connections (Plus) */}
     {user&&(isPlus?<div className="card wide"><label>Connections</label><span className="card-sub">Broker and data feeds</span>
