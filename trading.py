@@ -2971,33 +2971,49 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True) -> dict:
     tickers = _need
     if not tickers:
         return out
-    # Smaller chunks = more of them = more we can run truly in parallel. 100
-    # symbols per yf.download is still one round-trip, but with ~8 workers a
-    # 1000-name scan fires all chunks at once instead of in waves of 4.
-    CHUNK = 100
+    # Balance: bigger chunks mean FEWER total HTTP requests (each yf.download
+    # call is one request for the whole chunk), which is what actually keeps us
+    # under Yahoo's rate limit. Combined with modest concurrency, this is fast
+    # WITHOUT triggering "Too Many Requests". Going too parallel (8+ workers,
+    # tiny chunks) floods Yahoo and gets the whole scan throttled — which then
+    # returns no data and makes the AI fall back to guessing.
+    CHUNK = 175
     chunks = [tickers[i:i + CHUNK] for i in range(0, len(tickers), CHUNK)]
 
+    import time as _time
+
     def _fetch_chunk(chunk):
-        try:
-            import warnings
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                df = yf.download(
-                    chunk, period="1y", interval="1d",
-                    group_by="ticker", auto_adjust=True,
-                    threads=True, progress=False,
-                )
-            return chunk, df
-        except Exception as e:
-            _log.warning(f"batch_fetch_scan chunk failed ({len(chunk)} tickers): {e}")
-            return chunk, None
+        # Retry with exponential backoff if Yahoo rate-limits us, so a temporary
+        # throttle doesn't silently drop a whole chunk of stocks from the scan.
+        for attempt in range(3):
+            try:
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    df = yf.download(
+                        chunk, period="1y", interval="1d",
+                        group_by="ticker", auto_adjust=True,
+                        threads=True, progress=False,
+                    )
+                # Empty frame can also signal a soft rate-limit — retry once.
+                if (df is None or df.empty) and attempt < 2:
+                    _time.sleep(1.5 * (attempt + 1))
+                    continue
+                return chunk, df
+            except Exception as e:
+                msg = str(e).lower()
+                if ("rate" in msg or "too many" in msg) and attempt < 2:
+                    _time.sleep(2.0 * (attempt + 1))  # 2s, then 4s
+                    continue
+                _log.warning(f"batch_fetch_scan chunk failed ({len(chunk)} tickers): {e}")
+                return chunk, None
+        return chunk, None
 
     from concurrent.futures import ThreadPoolExecutor
-    # Fire all chunks concurrently (network-bound), capped at 8 workers so we
-    # don't hammer the data source. For a ~1000-name scan that's ~10 chunks all
-    # downloading at once instead of in sequential waves.
+    # Modest concurrency — 3 chunks at a time. Enough to overlap network waits,
+    # few enough that Yahoo doesn't throttle us. (Was 8, which got rate-limited.)
     results = []
-    with ThreadPoolExecutor(max_workers=min(8, len(chunks))) as _ex:
+    with ThreadPoolExecutor(max_workers=min(3, len(chunks))) as _ex:
         results = list(_ex.map(_fetch_chunk, chunks))
 
     for chunk, df in results:
@@ -6335,6 +6351,8 @@ CRITICAL — PRICE ACCURACY:
 - For trade plans (entry, stop, targets), use the EXACT entry/stop/target numbers already provided in the attached signal data. Do NOT recompute them.
 - If the trade levels are 0, missing, or the side is HOLD/NEUTRAL/EXIT/AVOID, DO NOT state any entry, stop, or target at all — there is no trade plan. Never write a line like "Entry: $X · Stop: $X · Target: $X". Just describe the setup and what to watch for. Inventing levels (e.g. repeating the current price as entry, stop, AND target) is a serious error.
 - If you don't have price data for a stock, say so — don't make up a number.
+- NEVER state a specific market cap (e.g. "$943M market cap") unless that exact figure is in the attached data. Market cap is NOT something you can estimate or recall — you will get it wrong (e.g. calling a $50B company "$943M"). If asked for small-caps and the data doesn't include verified caps, describe the names you found without inventing cap numbers, or say you can pull the exact figure if they analyze a specific ticker.
+- Do NOT recall or estimate company facts you're unsure of (who acquired whom, whether a company is still public, its size). Stale training data causes confident errors. Stick to the attached data; if it's not there, say you'd need to look it up.
 - When listing multiple stocks, use the exact Price and Chg% from the data for each one.
 
 CRITICAL — NO ARITHMETIC (you are bad at math, so don't do any):

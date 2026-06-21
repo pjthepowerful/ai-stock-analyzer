@@ -20,11 +20,16 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.25.1'
+const VERSION = '3.26.0'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.26.0', d: 'June 21, 2026', changes: [
+    'Tap "Analyze" right under any stock Paula suggests to pull up its full breakdown.',
+    'Fixed scans coming back empty \u2014 they were getting rate-limited by being too aggressive; now they retry and stay under the limit.',
+    'Paula no longer makes up market-cap figures or stale company facts.',
+  ]},
   { v: '3.25.1', d: 'June 21, 2026', changes: [
     'Scans are faster again \u2014 the whole market now downloads fully in parallel instead of in waves.',
   ]},
@@ -1753,6 +1758,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                         <div className="ai-chart"><Suspense fallback={<ChartFallback/>}><Chart ticker={m.ticker||m.tickers[0]} signal={m.signal} height={260}/></Suspense></div>
                       ):null}
                       {m.signalData && <SignalCard data={m.signalData} onExecute={(ticker, side) => sendMessage((side === 'EXIT' ? 'Sell ' : 'Buy ') + ticker)}/>}
+                      {!m.streaming && <AnalyzeChips content={m.content} known={m.tickers} onAnalyze={(tk)=>sendMessage('Analyze '+tk)}/>}
                       {m.time&&!m.streaming&&<div className="msg-time">{m.time}</div>}
                     </div>
                   </div>
@@ -2167,6 +2173,32 @@ function ChartTabs({ tickers, signal }) {
         ))}
       </div>
       <Suspense fallback={<ChartFallback/>}><Chart key={safeTicker} ticker={safeTicker} signal={active === 0 ? signal : null} height={240} /></Suspense>
+    </div>
+  )
+}
+
+function AnalyzeChips({ content, known, onAnalyze }) {
+  // Pull tickers Paula mentioned so we can offer a one-tap Analyze for each.
+  // Prefer a server-provided list; otherwise extract (TICKER) patterns from the
+  // prose — Paula writes picks like "Axon Enterprise (AXON)".
+  const tickers = []
+  const seen = {}
+  const add = (t) => { const u = (t||'').toUpperCase(); if (u && /^[A-Z]{1,5}$/.test(u) && !seen[u]) { seen[u] = 1; tickers.push(u) } }
+  if (Array.isArray(known)) known.forEach(add)
+  if (typeof content === 'string') {
+    const STOP = new Set(['CEO','RSI','MACD','ATR','VWAP','SMA','EMA','ETF','USA','USD','AI','IPO','P','AND','OR','THE','FDA','SPY','VIX','PE','EPS'])
+    const m = content.match(/\(([A-Z]{1,5})\)/g) || []
+    m.forEach(x => { const t = x.replace(/[()]/g,''); if (!STOP.has(t)) add(t) })
+  }
+  if (!tickers.length) return null
+  return (
+    <div className="analyze-chips">
+      {tickers.slice(0, 6).map(t => (
+        <button key={t} className="analyze-chip" onClick={() => onAnalyze(t)}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-6"/></svg>
+          Analyze {t}
+        </button>
+      ))}
     </div>
   )
 }

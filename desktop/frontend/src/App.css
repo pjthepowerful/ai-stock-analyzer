@@ -1220,3 +1220,15 @@ body.has-bg-theme .rail { background: rgba(0,0,0,.18); }
 .jargon-pop { padding-right: 28px; }
 .jargon-x { position: absolute; top: 6px; right: 7px; width: 18px; height: 18px; border: none; background: none; color: var(--dim); font-size: 16px; line-height: 1; cursor: pointer; border-radius: 4px; display: grid; place-items: center; }
 .jargon-x:hover { color: var(--wh); background: var(--c2); }
+
+/* One-tap Analyze chips under a stock-suggestion reply */
+.analyze-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+.analyze-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--c2); border: 1px solid var(--brd); border-radius: 9px; color: var(--lt); font-size: .76rem; font-weight: 600; font-family: inherit; cursor: pointer; transition: all .14s; }
+.analyze-chip:hover { border-color: var(--grn); color: var(--grn); background: rgba(16,185,129,.08); transform: translateY(-1px); }
+.analyze-chip svg { color: var(--grn); }
+
+/* Analyze chips under AI stock suggestions */
+.analyze-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+.analyze-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 9px; border: 1px solid var(--brd); background: rgba(16,185,129,.08); color: var(--grn); font: inherit; font-size: .8rem; font-weight: 600; cursor: pointer; transition: background .14s, border-color .14s, transform .1s; }
+.analyze-chip:hover { background: rgba(16,185,129,.16); border-color: var(--grn); transform: translateY(-1px); }
+.analyze-chip svg { flex-shrink: 0; }
