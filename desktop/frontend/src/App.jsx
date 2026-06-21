@@ -20,11 +20,18 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.18.0'
+const VERSION = '3.19.0'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.19.0', d: 'June 18, 2026', changes: [
+    'Paula Plus now unlocks all settings (Connections & Sounds) \u2014 theme, font size, and your account stay free for everyone.',
+    'Gifted Plus arrives in real time, with an optional personal note from the team.',
+    'A richer Plus page showing exactly what you get.',
+    'Guests get a quick sign-up prompt to save and sync their chats.',
+    'A cleaner, calmer interface and a refreshed settings icon.',
+  ]},
   { v: '3.18.0', d: 'June 18, 2026', changes: [
     'Use Paula without signing in \u2014 tap "Continue as guest" to try it with 5 messages a day.',
     'Guest chats are saved on your device, and move into your account when you sign up.',
@@ -194,12 +201,29 @@ function App() {
         .then(r => r.json())
         .then(async data => {
           if (data.ok) {
-            setUser({ ...data.user, plus: !!data.plus, is_admin: !!data.is_admin })
+            setUser({ ...data.user, plus: !!data.plus, is_admin: !!data.is_admin, gift_msg: data.gift_msg || '' })
           } else { setToken(null); localStorage.removeItem('paula-token') }
         })
         .catch(() => {})
         .finally(() => setAuthLoading(false))
     } else { setAuthLoading(false) }
+  }, [token])
+
+  // Real-time Plus sync — re-check status every 20s (and on tab focus) so an
+  // admin grant/revoke takes effect live without the user re-logging in.
+  useEffect(() => {
+    if (!token) return
+    const sync = () => {
+      if (document.hidden) return
+      f(API + '/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } })
+        .then(r => r.json())
+        .then(data => {
+          if (data.ok) setUser(u => u ? { ...u, plus: !!data.plus, is_admin: !!data.is_admin, gift_msg: data.gift_msg || '' } : u)
+        }).catch(() => {})
+    }
+    const id = setInterval(sync, 20000)
+    document.addEventListener('visibilitychange', sync)
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', sync) }
   }, [token])
 
   const doAuth = async (username, password, isSignup, email) => {
@@ -587,12 +611,17 @@ function PlusPage({ isPlus, onBuy, setView }) {
 
         <div className="plus-page-feats">
           {[
-            ['Unlimited messages', 'No daily cap — ask Paula as much as you want.'],
-            ['Unlimited chats', 'Organize your trades and ideas across as many chats as you like.'],
-            ['Full Analyze', 'Deep dives, company breakdowns, and the full signal picture on any stock.'],
-            ['Everything, unlocked', 'Every feature Paula has, with no limits.'],
-          ].map(([t, d], i) => (
-            <div className="ppf" key={i}><span className="cl-dot cl-dot-grn"/><div><b>{t}</b><p>{d}</p></div></div>
+            ['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z', 'Unlimited messages', 'No daily cap — ask Paula as much as you want, whenever you want.'],
+            ['M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01', 'Unlimited chats', 'Keep a separate thread for every strategy, watchlist, and idea.'],
+            ['M3 3v18h18M7 14l4-4 4 4 5-6', 'Full Analyze & deep dives', 'Company breakdowns, the full signal picture, and reasoning on any stock.'],
+            ['M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M5 19l3-3M16 8l3-3', 'Autopilot trading', 'Let Paula scan, enter, and manage positions — with trailing stops.'],
+            ['M15 7a4 4 0 0 1 0 8M9 17a4 4 0 0 1 0-8M5 12h14', 'Connect your own broker', 'Trade your own Alpaca account with encrypted, private keys.'],
+            ['M20 6L9 17l-5-5', 'Every setting unlocked', 'Sounds, connections, and all the controls — fully yours.'],
+          ].map(([icon, t, d], i) => (
+            <div className="ppf" key={i}>
+              <span className="ppf-ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={icon}/></svg></span>
+              <div><b>{t}</b><p>{d}</p></div>
+            </div>
           ))}
         </div>
 
@@ -701,6 +730,15 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
   const recognitionRef = useRef(null)
   const [showPlus, setShowPlus] = useState(false)
   const [guestGate, setGuestGate] = useState(false)
+  // Gift notification — when an admin gifts Plus with a message, show it once.
+  const [giftNote, setGiftNote] = useState(null)
+  useEffect(() => {
+    const msg = user.gift_msg
+    if (user.plus && msg && localStorage.getItem('paula-gift-seen') !== msg) {
+      setGiftNote(msg)
+    }
+  }, [user.plus, user.gift_msg])
+  const dismissGift = () => { if (user.gift_msg) localStorage.setItem('paula-gift-seen', user.gift_msg); setGiftNote(null) }
   // Plus access: Plus subscribers, the admin, and authorized accounts are unlocked.
   const isPlus = !!(user.plus || user.is_admin)
 
@@ -842,6 +880,8 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
   }
 
   const newChat = () => {
+    // Guests can't sync chats — nudge them to sign in/up with a mini prompt.
+    if (isGuest) { setGuestGate(true); return }
     // Free tier: only one chat. Creating new chats is a Plus feature.
     if (!isPlus && chatsRef.current.length >= 1) { setShowPlus(true); return }
     saveCurrentChat()
@@ -1084,7 +1124,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
     abortRef.current = new AbortController()
     setInput('')
     setView('chat')
-    // Thinking sequence — contextual, cycles while waiting so it feels alive.
+    // Status line — shows what Paula's actually doing while it works.
     const ml = msg.toLowerCase()
     const tkm = msg.match(/[A-Z]{1,5}/)
     let _seq
@@ -1102,7 +1142,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
     } else if (/recap|today|performance/i.test(ml)) {
       _seq = ['Loading your recap...', 'Tallying the day...']
     } else {
-      _seq = ['Thinking...', 'Working it out...', 'Almost there...']
+      _seq = ['Working...', 'One sec...']
     }
     setLoadingText(_seq[0])
     let _si = 0
@@ -1400,7 +1440,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
 
         <div className="rl-foot">
           <button className={'rl-item'+(view==='settings'?' rl-on':'')} onClick={()=>setView('settings')} title="Settings">
-            <i className="rl-ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"><path d="M10.33 2.32a1 1 0 0 1 .97-.82h1.4a1 1 0 0 1 .97.82l.2 1.1a1 1 0 0 0 .66.76 7.6 7.6 0 0 1 .9.37 1 1 0 0 0 1-.08l.92-.65a1 1 0 0 1 1.28.11l.99.99a1 1 0 0 1 .11 1.28l-.65.92a1 1 0 0 0-.08 1c.14.29.27.59.37.9a1 1 0 0 0 .76.66l1.1.2a1 1 0 0 1 .82.97v1.4a1 1 0 0 1-.82.97l-1.1.2a1 1 0 0 0-.76.66c-.1.31-.23.61-.37.9a1 1 0 0 0 .08 1l.65.92a1 1 0 0 1-.11 1.28l-.99.99a1 1 0 0 1-1.28.11l-.92-.65a1 1 0 0 0-1-.08c-.29.14-.59.27-.9.37a1 1 0 0 0-.66.76l-.2 1.1a1 1 0 0 1-.97.82h-1.4a1 1 0 0 1-.97-.82l-.2-1.1a1 1 0 0 0-.66-.76 7.6 7.6 0 0 1-.9-.37 1 1 0 0 0-1 .08l-.92.65a1 1 0 0 1-1.28-.11l-.99-.99a1 1 0 0 1-.11-1.28l.65-.92a1 1 0 0 0 .08-1 7.6 7.6 0 0 1-.37-.9 1 1 0 0 0-.76-.66l-1.1-.2a1 1 0 0 1-.82-.97v-1.4a1 1 0 0 1 .82-.97l1.1-.2a1 1 0 0 0 .76-.66c.1-.31.23-.61.37-.9a1 1 0 0 0-.08-1l-.65-.92a1 1 0 0 1 .11-1.28l.99-.99a1 1 0 0 1 1.28-.11l.92.65a1 1 0 0 0 1 .08c.29-.14.59-.27.9-.37a1 1 0 0 0 .66-.76z"/><circle cx="12" cy="12" r="3" fill="var(--c0,#0b0b10)" stroke="currentColor" strokeWidth="1.5"/></svg></i><span>Settings</span>
+            <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></i><span>Settings</span>
           </button>
           <button className="rl-item rl-profile" onClick={()=>setView('settings')} title={settings.userName||user?.username||'Account'}>
             <i className="rl-ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></i><span>{settings.userName||user?.username||'PJ'}</span>
@@ -1454,7 +1494,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
               <div className="welcome">
                 <span className="logo-p w-mark">P</span>
                 <h1 className="w-greet"><span className="w-hi">{(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' })()}, {name}.</span></h1>
-                <p className="w-q"><Typewriter/></p>
+                <p className="w-q">What are we trading today?</p>
 
                 {account&&<div className="w-snap">
                   <div className="ws-cell"><span className="ws-l">Equity</span><span className="ws-v">${account.equity.toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>
@@ -1513,13 +1553,15 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
         </>)}
       </main>
       {showPlus && <PlusModal token={token} onClose={() => setShowPlus(false)} onUnlocked={() => setUser && setUser(u => ({ ...u, plus: true }))}/>}
-      {guestGate && <div className="cl-overlay" onClick={() => setGuestGate(false)}>
-        <div className="plus-modal" onClick={e => e.stopPropagation()}>
-          <div className="plus-badge">PAULA <span>PLUS</span></div>
-          <h2 style={{fontSize:'1.3rem',margin:'14px 0 8px',color:'var(--wh)'}}>You've used your 5 free messages</h2>
-          <p style={{fontSize:'.9rem',color:'var(--lt)',marginBottom:'20px',lineHeight:1.5}}>Create a free account to keep chatting — your conversations here will come with you.</p>
-          <button className="plus-buy" onClick={() => { setGuestGate(false); logout() }}>Sign up free →</button>
-          <button className="plus-cancel" onClick={() => setGuestGate(false)}>Not now</button>
+      {guestGate && <GuestAuthModal onClose={() => setGuestGate(false)} onDone={() => { setGuestGate(false); logout() }} />}
+      {giftNote && <div className="cl-overlay" onClick={dismissGift}>
+        <div className="plus-modal gift-modal" onClick={e => e.stopPropagation()}>
+          <div className="gift-icon">🎁</div>
+          <div className="plus-badge" style={{marginTop:8}}>PAULA <span>PLUS</span></div>
+          <h2 style={{fontSize:'1.35rem',margin:'12px 0 6px',color:'var(--wh)'}}>You've been gifted Plus!</h2>
+          {giftNote.trim() && <p className="gift-msg-text">"{giftNote}"</p>}
+          <p style={{fontSize:'.85rem',color:'var(--lt)',margin:'8px 0 20px',lineHeight:1.5}}>Everything's unlocked — unlimited messages, full Analyze, and all settings.</p>
+          <button className="plus-buy" onClick={dismissGift}>Let's go →</button>
         </div>
       </div>}
     </div>)
@@ -2048,10 +2090,16 @@ function AdminPanel({ token, onClose }) {
 
   const togglePlus = async (u) => {
     const on = !u.plus
+    let message = ''
+    if (on) {
+      // Optional personal note shown to the user when they're gifted Plus.
+      message = window.prompt(`Gift Paula Plus to ${u.username || u.email}?\n\nOptional message to show them (leave blank for none):`, '') ?? ''
+      if (message === null) return  // cancelled
+    }
     setUsers(prev => prev.map(x => x.id === u.id ? { ...x, plus: on } : x))
     await f(API + '/api/admin/set-plus', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ user_id: u.id, on })
+      body: JSON.stringify({ user_id: u.id, on, message })
     }).catch(() => {})
   }
 
@@ -2284,13 +2332,13 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
   return(<div className="view-scroll"><h2 className="view-h">Settings</h2>
     <p className="view-sub">Account, integrations, and behavior</p>
 
-    {/* Connections */}
-    {user&&<div className="card wide"><label>Connections</label><span className="card-sub">Broker and data feeds</span>
+    {/* Connections (Plus) */}
+    {user&&(isPlus?<div className="card wide"><label>Connections</label><span className="card-sub">Broker and data feeds</span>
       <p className="s-hint">Add your own Alpaca paper keys to trade <b>your own account</b>. Leave blank to use the shared demo account. Keys are encrypted and never shown again.</p>
       <div className="s-row"><div className="s-col"><span>Alpaca Key</span><span className="s-desc">Broker · trade execution</span></div><input className="s-inp s-wide" type="password" name="alpaca-key-field" autoComplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" value={keys.alpaca_key} onChange={e=>setKeys({...keys,alpaca_key:e.target.value})} placeholder={keyExists.alpaca_key?'•••••••• saved — leave blank to keep':'PKSPW...'}/></div>
       <div className="s-row"><div className="s-col"><span>Alpaca Secret</span><span className="s-desc">From your Alpaca dashboard</span></div><input className="s-inp s-wide" type="password" name="alpaca-secret-field" autoComplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" value={keys.alpaca_secret} onChange={e=>setKeys({...keys,alpaca_secret:e.target.value})} placeholder={keyExists.alpaca_secret?'•••••••• saved — leave blank to keep':'AzMr...'}/></div>
       <button className={'login-btn s-save'+(keySaved?' s-saved':'')} onClick={saveKeys}>{keySaved?'✓ Saved':'Save connections'}</button>
-    </div>}
+    </div>:<LockedCard title="Connections" sub="Broker and data feeds" onUpgrade={()=>setView&&setView('plus')}/>)}
 
     {/* Appearance */}
     <div className="card wide"><label>Appearance</label>
@@ -2319,11 +2367,11 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
       </div>
     </div>
 
-    {/* Sounds */}
-    <div className="card wide"><label>Sounds</label>
+    {/* Sounds (Plus) */}
+    {isPlus?<div className="card wide"><label>Sounds</label>
       <Tog l="Trade sounds" on={settings.sounds!==false} fn={()=>update('sounds',!(settings.sounds!==false))}/>
       <Tog l="Scan notification" on={settings.scanSound!==false} fn={()=>update('scanSound',!(settings.scanSound!==false))}/>
-    </div>
+    </div>:<LockedCard title="Sounds" sub="Trade & scan alerts" onUpgrade={()=>setView&&setView('plus')}/>}
 
     
 
@@ -2342,7 +2390,75 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
   </div>)
 }
 
+function GuestAuthModal({ onClose, onDone }) {
+  const [mode, setMode] = useState('signup') // signup | login
+  const [email, setEmail] = useState('')
+  const [name, setName] = useState('')
+  const [pw, setPw] = useState('')
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const migrate = async (tok) => {
+    try {
+      const raw = localStorage.getItem('paula-guest-chats')
+      if (raw) {
+        const chats = JSON.parse(raw); const msgs = []
+        for (const c of chats || []) for (const m of c.messages || []) if (m.role === 'user' && m.content) msgs.push(m.content)
+        if (msgs.length) await f(API + '/api/chat/import', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify({ messages: msgs.slice(0, 100) }) }).catch(() => {})
+      }
+      localStorage.removeItem('paula-guest-chats'); localStorage.removeItem('paula-guest-usage')
+    } catch {}
+  }
+
+  const submit = async () => {
+    setErr(''); setBusy(true)
+    try {
+      const body = mode === 'signup' ? { email, username: name || email.split('@')[0], password: pw } : { email, password: pw }
+      const res = await f(API + '/api/auth/' + mode, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json())
+      if (!res.ok) { setErr(res.error || 'Something went wrong'); setBusy(false); return }
+      if (res.needs_2fa || res.needs_verification) {
+        // Fall back to the full login page for the code step.
+        setBusy(false); onDone(); return
+      }
+      if (res.token) {
+        await migrate(res.token)
+        localStorage.setItem('paula-token', res.token)
+        window.location.reload()  // cleanest way to re-init as the signed-in user
+      }
+    } catch { setErr("Can't reach the server"); setBusy(false) }
+  }
+
+  return (
+    <div className="cl-overlay" onClick={onClose}>
+      <div className="plus-modal guest-auth" onClick={e => e.stopPropagation()}>
+        <div className="ga-logo">P</div>
+        <h2 className="ga-title">{mode === 'signup' ? 'Save your chats' : 'Welcome back'}</h2>
+        <p className="ga-sub">{mode === 'signup' ? "Create a free account and your guest chats come with you." : 'Sign in to sync your chats across devices.'}</p>
+        <input className="ga-inp" type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} autoFocus />
+        {mode === 'signup' && <input className="ga-inp" type="text" placeholder="Display name (optional)" value={name} onChange={e => setName(e.target.value)} />}
+        <input className="ga-inp" type="password" placeholder="Password" value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} />
+        {err && <div className="ga-err">{err}</div>}
+        <button className="plus-buy" onClick={submit} disabled={busy}>{busy ? '…' : mode === 'signup' ? 'Create account →' : 'Sign in →'}</button>
+        <button className="plus-cancel" onClick={() => { setErr(''); setMode(mode === 'signup' ? 'login' : 'signup') }}>{mode === 'signup' ? 'Already have an account? Sign in' : 'New here? Create an account'}</button>
+        <button className="ga-later" onClick={onClose}>Keep browsing as guest</button>
+      </div>
+    </div>
+  )
+}
+
 function Tog({l,on,fn}){return <div className="s-row"><span>{l}</span><button className={'toggle-sw'+(on?' sw-on':'')} onClick={fn} role="switch" aria-checked={on}><span className="sw-thumb"/></button></div>}
+
+function LockedCard({title,sub,onUpgrade}){
+  return (
+    <button className="card wide locked-card" onClick={onUpgrade}>
+      <div className="lc-head">
+        <div><label>{title}</label>{sub&&<span className="card-sub">{sub}</span>}</div>
+        <svg className="lc-lock" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      </div>
+      <div className="lc-cta"><span className="lc-plus">PLUS</span> Unlock with Paula Plus →</div>
+    </button>
+  )
+}
 
 function EqChart({data}){
   const [hover, setHover] = useState(null)

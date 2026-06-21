@@ -572,6 +572,7 @@ async def me(authorization: str = Header(None)):
     plus = auth.is_plus(user["id"])
     return {"ok": True, "user": user, "settings": settings,
             "plus": plus,
+            "gift_msg": auth.get_gift_msg(user["id"]) if plus else "",
             "messages_today": auth.messages_today(user["id"]),
             "is_admin": (user.get("email", "").lower() == ADMIN_EMAIL)}
 
@@ -649,7 +650,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.18.0",  # bump marker — confirms running code
+        "build": "v3.19.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -2287,9 +2288,10 @@ async def admin_set_plus(req: dict, authorization: str = Header(None)):
         return {"ok": False, "error": "Unauthorized"}
     target_id = req.get("user_id")
     on = bool(req.get("on", True))
+    gift_msg = req.get("message", "") if on else ""
     if not target_id:
         return {"ok": False, "error": "Missing user_id"}
-    auth.set_plus(int(target_id), on)
+    auth.set_plus(int(target_id), on, gift_msg=gift_msg)
     return {"ok": True, "user_id": target_id, "plus": on}
 
 

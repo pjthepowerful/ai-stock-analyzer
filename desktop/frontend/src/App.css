@@ -1123,3 +1123,32 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .lg-guest { width: 100%; height: 48px; border-radius: 12px; background: transparent; border: 1px solid #2a2a35; color: #ececf2; font: inherit; font-weight: 500; font-size: 15px; cursor: pointer; transition: border-color .15s, background .15s }
 .lg-guest:hover { border-color: #10b981; background: rgba(16,185,129,.06) }
 .lg-guest-note { font-size: 11px; color: #62627a; text-align: center; margin-top: 10px; line-height: 1.5 }
+
+/* Locked (Plus-gated) settings card */
+.locked-card { text-align: left; cursor: pointer; width: 100%; display: block; transition: border-color .15s, background .15s; }
+.locked-card:hover { border-color: var(--grn); background: rgba(16,185,129,.04); }
+.lc-head { display: flex; align-items: flex-start; justify-content: space-between; }
+.lc-lock { color: var(--dim); flex-shrink: 0; margin-top: 2px; }
+.locked-card:hover .lc-lock { color: var(--grn); }
+.lc-cta { margin-top: 14px; font-size: .82rem; color: var(--lt); display: flex; align-items: center; gap: 8px; }
+.lc-plus { font-family: var(--mono); font-size: .58rem; font-weight: 800; letter-spacing: .08em; background: linear-gradient(120deg,var(--grn2),var(--grn)); color: #04130d; padding: 2px 7px; border-radius: 5px; }
+
+/* Gift Plus modal */
+.gift-modal { text-align: center; }
+.gift-icon { font-size: 3rem; animation: giftPop .5s cubic-bezier(.2,1.5,.4,1); }
+@keyframes giftPop { from { transform: scale(0) rotate(-15deg); } to { transform: scale(1) rotate(0); } }
+.gift-msg-text { font-size: .95rem; color: var(--wh); font-style: italic; line-height: 1.5; margin: 8px 0; padding: 12px 16px; background: var(--c2); border-left: 3px solid var(--grn); border-radius: 0 8px 8px 0; text-align: left; }
+
+/* Guest mini login/signup modal */
+.guest-auth { text-align: center; }
+.ga-logo { width: 52px; height: 52px; border-radius: 15px; background: linear-gradient(150deg,var(--grn2),var(--grn)); color: #04130d; display: grid; place-items: center; font-family: var(--mono); font-weight: 800; font-size: 26px; margin: 0 auto 16px; box-shadow: 0 0 36px rgba(16,185,129,.35); }
+.ga-title { font-size: 1.35rem; font-weight: 800; letter-spacing: -.02em; color: var(--wh); margin-bottom: 6px; }
+.ga-sub { font-size: .85rem; color: var(--lt); margin-bottom: 20px; line-height: 1.5; }
+.ga-inp { width: 100%; height: 46px; border: 1px solid var(--brd); border-radius: 11px; background: var(--c2); color: var(--wh); padding: 0 14px; font: inherit; font-size: 14px; margin-bottom: 11px; outline: none; transition: border-color .15s, box-shadow .15s; }
+.ga-inp:focus { border-color: var(--grn); box-shadow: 0 0 0 3px rgba(16,185,129,.14); }
+.ga-err { background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3); color: #f87171; font-size: 12px; padding: 8px 11px; border-radius: 9px; margin-bottom: 11px; }
+.ga-later { width: 100%; margin-top: 6px; padding: 8px; background: none; border: none; color: var(--dim); font-size: .76rem; cursor: pointer; }
+.ga-later:hover { color: var(--lt); }
+
+/* Plus page feature icons */
+.ppf-ic { width: 34px; height: 34px; border-radius: 9px; background: rgba(16,185,129,.12); color: var(--grn); display: grid; place-items: center; flex-shrink: 0; }

@@ -68,12 +68,25 @@ def is_plus(user_id: int) -> bool:
         db.close()
 
 
-def set_plus(user_id: int, on: bool = True) -> bool:
+def set_plus(user_id: int, on: bool = True, gift_msg: str = None) -> bool:
     db = _get_db()
     try:
-        db.execute("UPDATE users SET plus = ? WHERE id = ?", (1 if on else 0, user_id))
+        if on:
+            db.execute("UPDATE users SET plus = 1, plus_gift_msg = ? WHERE id = ?",
+                       ((gift_msg or "")[:300], user_id))
+        else:
+            db.execute("UPDATE users SET plus = 0, plus_gift_msg = '' WHERE id = ?", (user_id,))
         db.commit()
         return True
+    finally:
+        db.close()
+
+
+def get_gift_msg(user_id: int) -> str:
+    db = _get_db()
+    try:
+        row = db.execute("SELECT plus_gift_msg FROM users WHERE id = ?", (user_id,)).fetchone()
+        return (row["plus_gift_msg"] if row and "plus_gift_msg" in row.keys() else "") or ""
     finally:
         db.close()
 
@@ -175,6 +188,8 @@ def init_db():
             db.execute("ALTER TABLE users ADD COLUMN twofa_enabled INTEGER DEFAULT 1")
         if "plus" not in cols:
             db.execute("ALTER TABLE users ADD COLUMN plus INTEGER DEFAULT 0")
+        if "plus_gift_msg" not in cols:
+            db.execute("ALTER TABLE users ADD COLUMN plus_gift_msg TEXT DEFAULT ''")
         db.commit()
     except Exception:
         pass
