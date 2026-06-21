@@ -75,6 +75,21 @@ def large_universe() -> list:
     return list(seen.keys())
 
 
+def liquid_universe() -> list:
+    """The most-liquid core (~500 S&P 500 names) for the DEFAULT scan. These are
+    all heavily traded, real, tradeable stocks — where the actual swing setups
+    are. Scanning this instead of the full ~1000 keeps us well under data-source
+    rate limits and finishes much faster. The broader large_universe() (with
+    small/mid-caps) is still used when a request explicitly asks for them
+    (e.g. 'small caps under $1B')."""
+    seen = {}
+    for t in SP500_FULL:
+        t = t.strip()
+        if t and t not in seen:
+            seen[t] = True
+    return list(seen.keys())
+
+
 _LISTING_CACHE = {"ts": 0, "tickers": None}
 
 def all_exchange_tickers(include_nasdaq: bool = True) -> list:

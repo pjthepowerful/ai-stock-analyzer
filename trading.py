@@ -2944,7 +2944,9 @@ _DELISTED_CACHE = set()
 # minute to minute, so reusing it across back-to-back scans (e.g. a broad scan
 # then a themed one) avoids re-downloading the same 1y history. 90s TTL.
 _SCAN_DATA_CACHE = {}   # ticker -> (timestamp, data)
-_SCAN_CACHE_TTL = 90
+_SCAN_CACHE_TTL = 300   # 5 min — daily bars barely move intraday, so repeat
+                        # scans (or overlapping universes) reuse data and are
+                        # near-instant instead of re-downloading.
 
 def batch_fetch_scan(tickers: list, skip_news: bool = True) -> dict:
     """Bulk-fetch 1-year history for MANY tickers in a few HTTP requests using
@@ -5809,14 +5811,16 @@ def execute(intent: dict) -> dict:
                 from universe import large_universe
                 universe = large_universe()
         else:
-            # Default broad scan — the full liquid US universe (~600 names:
-            # entire S&P 500 + liquid growth/fintech/semis/miners). Big coverage,
-            # kept clean of delisted tickers.
+            # Default broad scan — the most-liquid core (~500 S&P 500 names).
+            # Scanning this instead of the full ~1000 keeps us under data-source
+            # rate limits and is much faster, while still covering where the real
+            # swing setups are. Small/mid-caps get added below only when the
+            # request actually asks for them.
             try:
-                from universe import large_universe
-                universe = large_universe()
+                from universe import liquid_universe
+                universe = liquid_universe()
             except Exception:
-                universe = list(dict.fromkeys(SP500_TOP + NASDAQ_100 + MIDCAP_GROWTH + SMALLCAP + TRENDING + VALUE_DIVIDEND + SECTOR_PICKS))
+                universe = list(dict.fromkeys(SP500_TOP + NASDAQ_100))
 
         # If user wants cheap stocks OR a small market cap, widen the universe
         # to include more small/mid caps so there's something to find.

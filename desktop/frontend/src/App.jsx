@@ -20,11 +20,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.26.0'
+const VERSION = '3.26.1'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.26.1', d: 'June 21, 2026', changes: [
+    'Scans are faster and stop getting rate-limited \u2014 the default scan now focuses on the ~500 most liquid stocks and remembers recent results.',
+    'Closed a way to open Analyze without Plus from the welcome screen.',
+  ]},
   { v: '3.26.0', d: 'June 21, 2026', changes: [
     'Tap "Analyze" right under any stock Paula suggests to pull up its full breakdown.',
     'Fixed scans coming back empty \u2014 they were getting rate-limited by being too aggressive; now they retry and stay under the limit.',
@@ -1741,7 +1745,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                   ].map((p,i)=>(
                     <button key={i} className="w-pill" disabled={sending && sendingChatRef.current === chatIdRef.current} onClick={()=>sendMessage(p.cmd)}>{p.q}</button>
                   ))}
-                  <button className="w-pill" onClick={()=>setView('analyze')}>Analyze a stock</button>
+                  <button className="w-pill" onClick={()=>{ if(!isPlus){setShowPlus(true);return} setView('analyze') }}>Analyze a stock{!isPlus&&<svg className="w-pill-lock" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>}</button>
                 </div>
               </div>)}
             {messages.map((m,i)=>(
