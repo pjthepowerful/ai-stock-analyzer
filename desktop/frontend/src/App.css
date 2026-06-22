@@ -1211,10 +1211,11 @@ body.has-bg-theme .rail,
 body.has-bg-theme .chat { background: transparent; }
 body.has-bg-theme .rail { background: rgba(0,0,0,.18); }
 
-/* Plus star icon next to the username in the rail (matches the collapsed/expand behavior of rl-name) */
-.rl-plus-ic { display: inline-flex; align-items: center; flex-shrink: 0; color: #fbbf24; margin-left: 7px; opacity: 0; transition: opacity .2s ease .06s; filter: drop-shadow(0 0 4px rgba(251,191,36,.55)); }
+/* Plus crown — now inside .rl-name so it inherits the name's slide/fade animation as one unit */
+.rl-plus-ic { display: inline-block; vertical-align: -2px; margin-left: 6px; color: #fbbf24; filter: drop-shadow(0 0 4px rgba(251,191,36,.55)); }
 .rl-profile { padding-right: 14px; }
 .rail:hover .rl-plus-ic, .rail.rail-pinned .rl-plus-ic, .rail-mobile-open .rl-plus-ic { opacity: 1; }
+
 
 /* Jargon popover close button */
 .jargon-pop { padding-right: 28px; }
@@ -1238,3 +1239,9 @@ body.has-bg-theme .rail { background: rgba(0,0,0,.18); }
 .chart-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(10,10,14,.6); backdrop-filter: blur(2px); border-radius: 12px; color: var(--lt); font-size: .85rem; text-align: center; padding: 16px; }
 .chart-retry { padding: 6px 16px; border-radius: 8px; border: 1px solid var(--grn); background: rgba(16,185,129,.1); color: var(--grn); font: inherit; font-size: .8rem; font-weight: 600; cursor: pointer; }
 .chart-retry:hover { background: rgba(16,185,129,.2); }
+
+/* Quote-to-reply floating button */
+.quote-btn { position: fixed; transform: translateX(-50%); z-index: 400; display: inline-flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: 9px; border: 1px solid var(--grn); background: var(--c1); color: var(--grn); font: inherit; font-size: .8rem; font-weight: 600; cursor: pointer; box-shadow: 0 6px 24px rgba(0,0,0,.4); animation: quoteIn .14s ease; }
+.quote-btn:hover { background: rgba(16,185,129,.12); }
+.quote-btn svg { flex-shrink: 0; }
+@keyframes quoteIn { from { opacity: 0; transform: translateX(-50%) translateY(4px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }

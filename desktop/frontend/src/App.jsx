@@ -20,11 +20,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.26.5'
+const VERSION = '3.27.0'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.27.0', d: 'June 21, 2026', changes: [
+    'Highlight any part of Paula\u2019s reply to quote it and ask a follow-up about that specific bit.',
+    'The Plus crown is now part of your name and slides in with it.',
+  ]},
   { v: '3.26.5', d: 'June 21, 2026', changes: [
     'Removed the redundant "Analyze" button that appeared under a stock you were already analyzing.',
   ]},
@@ -905,6 +909,41 @@ function PlusModal({ token, onClose, onUnlocked }) {
 function MainApp({ user, token, logout, setUser, theme, setTheme }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
+  // Quote-to-reply: when the user selects text inside a Paula message, show a
+  // small "Quote" button; clicking it drops the selected text into the input as
+  // a quoted reference so they can ask a follow-up about that specific bit.
+  const [quoteBtn, setQuoteBtn] = useState(null) // { text, x, y }
+  useEffect(() => {
+    const onSelect = () => {
+      const sel = window.getSelection()
+      const text = sel ? sel.toString().trim() : ''
+      if (!text || text.length < 3) { setQuoteBtn(null); return }
+      // Only offer quoting for selections inside an assistant message body.
+      let node = sel.anchorNode
+      let inAI = false
+      while (node) {
+        if (node.nodeType === 1 && node.classList && node.classList.contains('ai-txt')) { inAI = true; break }
+        node = node.parentNode
+      }
+      if (!inAI) { setQuoteBtn(null); return }
+      const rect = sel.getRangeAt(0).getBoundingClientRect()
+      setQuoteBtn({ text: text.slice(0, 280), x: rect.left + rect.width / 2, y: rect.top })
+    }
+    document.addEventListener('selectionchange', onSelect)
+    document.addEventListener('mouseup', onSelect)
+    return () => {
+      document.removeEventListener('selectionchange', onSelect)
+      document.removeEventListener('mouseup', onSelect)
+    }
+  }, [])
+  const quoteSelection = () => {
+    if (!quoteBtn) return
+    const quoted = '> ' + quoteBtn.text.replace(/\n+/g, ' ') + '\n\n'
+    setInput(prev => quoted + prev)
+    setQuoteBtn(null)
+    window.getSelection()?.removeAllRanges()
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }
   const [quickTicker, setQuickTicker] = useState('')
   const [quickResult, setQuickResult] = useState(null)
   const [quickLoading, setQuickLoading] = useState(false)
@@ -1689,8 +1728,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
           </button>
           <button className="rl-item rl-profile" onClick={()=>setView('settings')} title={(settings.userName||user?.username||'Account')+(isPlus?' · Paula Plus':'')}>
             <i className="rl-ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></i>
-            <span className="rl-name">{settings.userName||user?.username||'PJ'}</span>
-            {isPlus&&<i className="rl-plus-ic" title="Paula Plus"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M2 18h20l-1.5-9-5 4-3.5-7-3.5 7-5-4z"/></svg></i>}
+            <span className="rl-name">{settings.userName||user?.username||'PJ'}{isPlus&&<svg className="rl-plus-ic" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" title="Paula Plus"><path d="M2 18h20l-1.5-9-5 4-3.5-7-3.5 7-5-4z"/></svg>}</span>
           </button>
           <button className="rl-item rl-signout" onClick={logout} title="Sign out">
             <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></i><span>Sign out</span>
@@ -1802,6 +1840,10 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
       </main>
       {showPlus && <PlusModal token={token} onClose={() => setShowPlus(false)} onUnlocked={() => setUser && setUser(u => ({ ...u, plus: true }))}/>}
       {guestGate && <GuestAuthModal onClose={() => setGuestGate(false)} onDone={() => { setGuestGate(false); logout() }} />}
+      {quoteBtn && <button className="quote-btn" style={{ left: Math.min(Math.max(quoteBtn.x, 60), window.innerWidth - 60), top: quoteBtn.y - 42 }} onMouseDown={e => { e.preventDefault(); quoteSelection() }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M7 6H4a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h3v2a2 2 0 0 1-2 2H4v2h1a4 4 0 0 0 4-4V7a1 1 0 0 0-1-1H7zm10 0h-3a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h3v2a2 2 0 0 1-2 2h-1v2h1a4 4 0 0 0 4-4V7a1 1 0 0 0-1-1z"/></svg>
+        Quote &amp; reply
+      </button>}
       {jargon && <div className="jargon-pop" style={{ left: Math.min(Math.max(jargon.x, 130), window.innerWidth - 130), top: jargon.y + 8 }} onClick={e => e.stopPropagation()}>
         <button className="jargon-x" onClick={() => setJargon(null)} aria-label="Close">×</button>
         <div className="jargon-term">{jargon.term}</div>
