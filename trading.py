@@ -3296,6 +3296,14 @@ def _llm_classify_intent(msg: str) -> dict | None:
 
 
 def route(msg: str) -> dict:
+    # Quoted lines (the user highlighted part of a prior reply and is asking
+    # ABOUT it) are context, not commands. Strip them before routing so words
+    # inside a quote — e.g. a "BUY" signal — never trigger a real trade.
+    if msg and "\n" in msg or (msg and msg.lstrip().startswith(">")):
+        _lines = [ln for ln in msg.split("\n") if not ln.lstrip().startswith(">")]
+        _stripped = "\n".join(_lines).strip()
+        if _stripped:  # keep the user's actual question, drop the quote
+            msg = _stripped
     m = msg.lower().strip()
     if m in ("hi", "hello", "hey", "thanks", "thank you", "help", "bye"):
         return {"type": "chat"}
@@ -3512,9 +3520,28 @@ def route(msg: str) -> dict:
     if any(w in m for w in ["close all", "sell everything", "liquidate", "panic sell", "close everything"]):
         return {"type": "close_all"}
 
+    # A trade command is an IMPERATIVE ("buy AAPL"), not a question or an
+    # explanation request. If the message reads as a question/explainer, never
+    # route it to a real buy/sell/short/cover — even if those words appear (e.g.
+    # quoting a "BUY" signal and asking "explain this"). This prevents accidental
+    # order execution from analytical questions.
+    _is_question = (
+        m.endswith("?")
+        or any(w in m for w in [
+            "explain", "what does", "what do", "what is", "what's", "why ", "why's",
+            "how ", "should i", "does this", "do you think", "mean", "tell me",
+            "is it a good", "is this a good", "worth", "thoughts", "opinion",
+            "would you", "can you explain", "help me understand", "break down",
+        ])
+    )
+    # But an explicit imperative like "yes buy it" / "go ahead and buy 5 AAPL"
+    # should still work — only treat as a question when there's no clear command lead.
+    _explicit_cmd = bool(re.match(r'^\s*(buy|sell|short|cover|close|go ahead|yes,? (buy|sell)|do it|execute|confirm)\b', m))
+    _block_trade = _is_question and not _explicit_cmd
+
     # "buy NVDA", "buy 10 AAPL", "buy $500 of TSLA"
     buy_match = re.search(r'\bbuy\b', m)
-    if buy_match and ticker:
+    if buy_match and ticker and not _block_trade:
         qty = None
         notional = None
         qty_match = re.search(r'buy\s+(\d+)\s+', m)
@@ -3527,7 +3554,7 @@ def route(msg: str) -> dict:
 
     # "sell NVDA", "sell 5 AAPL", "close TSLA", "sell all NVDA"
     sell_match = re.search(r'\b(sell|close)\b', m)
-    if sell_match and ticker:
+    if sell_match and ticker and not _block_trade:
         sell_all = "all" in m or "close" in m
         qty = None
         qty_match = re.search(r'sell\s+(\d+)\s+', m)
@@ -3537,7 +3564,7 @@ def route(msg: str) -> dict:
 
     # "short NVDA", "short 10 AAPL", "cover TSLA", "cover all NVDA"
     short_match = re.search(r'\bshort\b', m)
-    if short_match and ticker:
+    if short_match and ticker and not _block_trade:
         qty = None
         qty_match = re.search(r'short\s+(\d+)\s+', m)
         if qty_match:
@@ -3545,7 +3572,7 @@ def route(msg: str) -> dict:
         return {"type": "short", "ticker": ticker, "market": market, "qty": qty}
 
     cover_match = re.search(r'\bcover\b', m)
-    if cover_match and ticker:
+    if cover_match and ticker and not _block_trade:
         cover_all = "all" in m
         qty = None
         qty_match = re.search(r'cover\s+(\d+)\s+', m)

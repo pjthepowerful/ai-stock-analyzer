@@ -20,11 +20,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.27.0'
+const VERSION = '3.27.1'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.27.1', d: 'June 21, 2026', changes: [
+    'Fixed a serious bug where quoting a reply that mentioned "buy" could place a real trade \u2014 questions and quotes never execute trades now.',
+    'Quoted text now shows as a clean "replying to" card above the message box instead of raw text.',
+  ]},
   { v: '3.27.0', d: 'June 21, 2026', changes: [
     'Highlight any part of Paula\u2019s reply to quote it and ask a follow-up about that specific bit.',
     'The Plus crown is now part of your name and slides in with it.',
@@ -936,10 +940,10 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
       document.removeEventListener('mouseup', onSelect)
     }
   }, [])
+  const [quotedText, setQuotedText] = useState(null) // the "replying to" card
   const quoteSelection = () => {
     if (!quoteBtn) return
-    const quoted = '> ' + quoteBtn.text.replace(/\n+/g, ' ') + '\n\n'
-    setInput(prev => quoted + prev)
+    setQuotedText(quoteBtn.text.replace(/\n+/g, ' ').trim())
     setQuoteBtn(null)
     window.getSelection()?.removeAllRanges()
     setTimeout(() => inputRef.current?.focus(), 0)
@@ -1599,7 +1603,12 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
       recognitionRef.current = null
       setListening(false)
     }
-    sendMessage(msg)
+    // If replying to a quoted passage, prepend it as context (as a blockquote)
+    // so Paula knows what "this" refers to. Backend strips quote lines from
+    // command routing, so it can't trigger a trade.
+    const full = quotedText ? ('> ' + quotedText + '\n\n' + msg) : msg
+    setQuotedText(null)
+    sendMessage(full)
   }
 
   const quickLookup = async (ticker) => {
@@ -1822,7 +1831,13 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
             <div ref={messagesEnd}/>
             </div>
           </div>
-          <div className={'input-area'+(messages.length?' ia-active':'')}><div className="input-wrap"><div className="input-box">
+          <div className={'input-area'+(messages.length?' ia-active':'')}><div className="input-wrap">
+            {quotedText && <div className="quote-reply-card">
+              <div className="qrc-bar"/>
+              <div className="qrc-text">{quotedText}</div>
+              <button className="qrc-x" onClick={()=>setQuotedText(null)} aria-label="Remove quote">×</button>
+            </div>}
+            <div className="input-box">
             <textarea ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();if(!(sending && sendingChatRef.current === chatIdRef.current))send()}}} placeholder="Message Paula — ask for a setup, scan, or recap..." rows={1} className="chat-textarea"/>
             <button className={'mic'+(listening?' mic-on':'')} onClick={toggleVoice} title="Voice input">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0014 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
