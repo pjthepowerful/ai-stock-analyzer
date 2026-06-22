@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.26.3'
+const VERSION = '3.26.4'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.26.4', d: 'June 21, 2026', changes: [
+    'Deep stock analysis is now properly Plus-only everywhere \u2014 including in chat \u2014 not just the Analyze tab.',
+  ]},
   { v: '3.26.3', d: 'June 21, 2026', changes: [
     'Charts no longer fail when the data source is busy \u2014 they now cache, retry automatically, and show a clear message instead of a blank chart.',
   ]},
@@ -1768,7 +1771,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                         <div className="ai-chart"><Suspense fallback={<ChartFallback/>}><Chart ticker={m.ticker||m.tickers[0]} signal={m.signal} height={260}/></Suspense></div>
                       ):null}
                       {m.signalData && <SignalCard data={m.signalData} onExecute={(ticker, side) => sendMessage((side === 'EXIT' ? 'Sell ' : 'Buy ') + ticker)}/>}
-                      {!m.streaming && <AnalyzeChips content={m.content} known={m.tickers} onAnalyze={(tk)=>sendMessage('Analyze '+tk)}/>}
+                      {!m.streaming && <AnalyzeChips content={m.content} known={m.tickers} onAnalyze={(tk)=>{ if(!isPlus){setShowPlus(true);return} sendMessage('Analyze '+tk) }}/>}
                       {m.time&&!m.streaming&&<div className="msg-time">{m.time}</div>}
                     </div>
                   </div>

@@ -671,7 +671,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.26.3",  # bump marker — confirms running code
+        "build": "v3.26.4",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1522,6 +1522,16 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
     # If execute returned a ready message (trades, regime, etc) — return instantly
     if result and result.get("ok") and result.get("msg"):
         rtype = result.get("type", "")
+        # Deep single-stock analysis is Plus-only (see the non-stream path for
+        # the full rationale) — close the chat bypass here as well.
+        _is_deep = rtype == "analysis" and bool(result.get("ticker")) and isinstance(result.get("data"), dict)
+        if _is_deep:
+            _plus = bool(user) and (auth.is_plus(user["id"]) or _can_autopilot(user) or (user.get("email", "").lower() == ADMIN_EMAIL))
+            if not _plus:
+                return {
+                    "ok": True, "stream": False, "type": "limit", "limit_reached": True,
+                    "message": "Deep stock analysis is a Paula Plus feature. Upgrade to analyze any stock with the full signal breakdown, score, and chart.",
+                }
         if rtype in ("analysis", "list"):
             # Has data — stream AI analysis
             stock_data = result.get("data") if rtype == "analysis" else {"stocks": result.get("data", [])}
@@ -1538,6 +1548,14 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
                 "autopilot": autopilot_task is not None and not autopilot_task.done(),
             }
     elif result and result.get("ok") and result.get("type") == "analysis":
+        _is_deep2 = bool(result.get("ticker")) and isinstance(result.get("data"), dict)
+        if _is_deep2:
+            _plus2 = bool(user) and (auth.is_plus(user["id"]) or _can_autopilot(user) or (user.get("email", "").lower() == ADMIN_EMAIL))
+            if not _plus2:
+                return {
+                    "ok": True, "stream": False, "type": "limit", "limit_reached": True,
+                    "message": "Deep stock analysis is a Paula Plus feature. Upgrade to analyze any stock with the full signal breakdown, score, and chart.",
+                }
         stock_data = result.get("data")
     elif result and result.get("error"):
         resp = f"⚠️ {result['error']}"
@@ -1694,6 +1712,27 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
         rtype = result.get("type", "")
 
         if rtype == "analysis":
+            # Deep single-stock analysis is a Plus feature. A result carrying a
+            # specific ticker + full data dict is a deep-dive (not a scan/list or
+            # a market overview), so gate it. This closes the bypass where free
+            # users reach the Plus 'Analyze' experience via chat ("analyze AAPL")
+            # or the in-chat Analyze chips, not just the gated Analyze tab.
+            _is_deep = bool(result.get("ticker")) and isinstance(result.get("data"), dict)
+            if _is_deep and user:
+                _plus = auth.is_plus(user["id"]) or _can_autopilot(user) or (user.get("email", "").lower() == ADMIN_EMAIL)
+                if not _plus:
+                    return {
+                        "ok": True, "stream": False, "type": "limit",
+                        "limit_reached": True,
+                        "message": "Deep stock analysis is a Paula Plus feature. Upgrade to analyze any stock with the full signal breakdown, score, and chart.",
+                    }
+            elif _is_deep and not user:
+                # Guests/anonymous also can't deep-analyze.
+                return {
+                    "ok": True, "stream": False, "type": "limit",
+                    "limit_reached": True,
+                    "message": "Deep stock analysis is a Paula Plus feature. Sign up and upgrade to analyze any stock in full.",
+                }
             if not resp:
                 # If the question is news-oriented, fetch recent headlines for
                 # the analyzed ticker and feed them to the AI (same as chat path).
