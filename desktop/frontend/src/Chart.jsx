@@ -9,6 +9,8 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
   const chartRef = useRef(null)
   const [priceInfo, setPriceInfo] = useState(null)
   const [period, setPeriod] = useState('1y')
+  const [loadErr, setLoadErr] = useState(null)
+  const [retryTick, setRetryTick] = useState(0)
 
   useEffect(() => {
     if (!ticker || !containerRef.current) return
@@ -42,7 +44,17 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
       if (!r.ok) throw new Error('Failed')
       return r.json()
     }).then(data => {
-      if (!data.ok) { console.error('Chart API error:', data.error); return }
+      if (!data.ok) {
+        console.error('Chart API error:', data.error)
+        const rateLimited = /rate|too many/i.test(data.error || '')
+        setLoadErr(rateLimited ? 'busy' : 'nodata')
+        // Auto-retry once after a short wait if we were rate-limited.
+        if (rateLimited && retryTick < 2) {
+          setTimeout(() => setRetryTick(t => t + 1), 2500)
+        }
+        return
+      }
+      setLoadErr(null)
       const { dates, open, high, low, close, volume } = data.data
       if (!dates || dates.length === 0) { console.error('Chart: no dates returned'); return }
       console.log(`Chart ${ticker}: ${dates.length} bars, first=${dates[0]}, last=${dates[dates.length-1]}`)
@@ -152,7 +164,7 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
         chartRef.current = null
       }
     }
-  }, [ticker, signal, height, period])
+  }, [ticker, signal, height, period, retryTick])
 
   const fmtVol = (v) => { if (!v) return '0'; if (v >= 1e9) return (v/1e9).toFixed(1)+'B'; if (v >= 1e6) return (v/1e6).toFixed(1)+'M'; if (v >= 1e3) return (v/1e3).toFixed(0)+'K'; return v.toString() }
 
@@ -193,6 +205,16 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
         </div>
       )}
       <div ref={containerRef} className="chart-canvas" />
+      {loadErr && (
+        <div className="chart-overlay">
+          {loadErr === 'busy'
+            ? <span>Chart data is busy right now{retryTick < 2 ? ' — retrying…' : '. Try again in a moment.'}</span>
+            : <span>No chart data available for {ticker}.</span>}
+          {loadErr === 'busy' && retryTick >= 2 && (
+            <button className="chart-retry" onClick={() => { setLoadErr(null); setRetryTick(t => t + 1) }}>Retry</button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

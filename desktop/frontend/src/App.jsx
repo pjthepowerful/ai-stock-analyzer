@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.26.2'
+const VERSION = '3.26.3'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.26.3', d: 'June 21, 2026', changes: [
+    'Charts no longer fail when the data source is busy \u2014 they now cache, retry automatically, and show a clear message instead of a blank chart.',
+  ]},
   { v: '3.26.2', d: 'June 21, 2026', changes: [
     'Fixed chat and data failing to load on the live site (a cross-origin/CORS issue between the app and its server).',
   ]},

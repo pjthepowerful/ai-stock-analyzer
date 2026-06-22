@@ -671,7 +671,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.26.2",  # bump marker — confirms running code
+        "build": "v3.26.3",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1393,45 +1393,72 @@ def spy_trend():
         return {"ok": False, "error": str(e)[:100]}
 
 
+_CHART_CACHE = {}        # (ticker, period) -> (timestamp, payload)
+_CHART_CACHE_TTL = 180   # daily bars: 3 min; intraday refreshes a touch faster below
+
 @app.get("/api/chart/{ticker}")
 def chart_data(ticker: str, period: str = "1y"):
-    """Get chart OHLCV data — sync endpoint, auto-threaded by FastAPI."""
+    """Get chart OHLCV data — sync endpoint, auto-threaded by FastAPI.
+    Cached + retries on rate-limit so chart views don't fail when Yahoo is busy
+    (e.g. right after a scan)."""
     import yfinance as yf
-    import warnings
-    # Intraday periods need a finer interval and keep the time portion;
-    # daily periods use date-only keys.
+    import warnings, time as _t
+    ticker = ticker.upper()
     INTRADAY = {"1d": "5m", "5d": "30m"}
     interval = INTRADAY.get(period)
     intraday = interval is not None
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            tk = yf.Ticker(ticker.upper())
-            hist = tk.history(period=period, interval=interval) if intraday else tk.history(period=period)
-        if hist is None or hist.empty:
-            return {"ok": False, "error": "No data"}
-        # Key: full timestamp for intraday, date-only otherwise
-        raw_keys = [str(d)[:16] if intraday else str(d)[:10] for d in hist.index]
-        seen = set()
-        indices = []
-        clean_dates = []
-        for i, d in enumerate(raw_keys):
-            if d not in seen:
-                seen.add(d)
-                indices.append(i)
-                clean_dates.append(d)
-        return {
-            "ok": True, "data": {
-                "dates": clean_dates,
-                "open": [round(float(hist["Open"].iloc[i]), 2) for i in indices],
-                "high": [round(float(hist["High"].iloc[i]), 2) for i in indices],
-                "low": [round(float(hist["Low"].iloc[i]), 2) for i in indices],
-                "close": [round(float(hist["Close"].iloc[i]), 2) for i in indices],
-                "volume": [int(hist["Volume"].iloc[i]) for i in indices],
+
+    # Serve from cache when fresh (intraday gets a shorter TTL so it stays live).
+    ttl = 60 if intraday else _CHART_CACHE_TTL
+    ck = (ticker, period)
+    cached = _CHART_CACHE.get(ck)
+    if cached and (_t.time() - cached[0]) < ttl:
+        return cached[1]
+
+    last_err = "No data"
+    for attempt in range(3):
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                tk = yf.Ticker(ticker)
+                hist = tk.history(period=period, interval=interval) if intraday else tk.history(period=period)
+            if hist is None or hist.empty:
+                last_err = "No data"
+                # Could be a soft rate-limit returning empty — brief retry.
+                if attempt < 2:
+                    _t.sleep(1.2 * (attempt + 1)); continue
+                # If we have a stale cached copy, better to show it than nothing.
+                if cached:
+                    return cached[1]
+                return {"ok": False, "error": "No data"}
+            raw_keys = [str(d)[:16] if intraday else str(d)[:10] for d in hist.index]
+            seen = set(); indices = []; clean_dates = []
+            for i, d in enumerate(raw_keys):
+                if d not in seen:
+                    seen.add(d); indices.append(i); clean_dates.append(d)
+            payload = {
+                "ok": True, "data": {
+                    "dates": clean_dates,
+                    "open": [round(float(hist["Open"].iloc[i]), 2) for i in indices],
+                    "high": [round(float(hist["High"].iloc[i]), 2) for i in indices],
+                    "low": [round(float(hist["Low"].iloc[i]), 2) for i in indices],
+                    "close": [round(float(hist["Close"].iloc[i]), 2) for i in indices],
+                    "volume": [int(hist["Volume"].iloc[i]) for i in indices],
+                }
             }
-        }
-    except Exception as e:
-        return {"ok": False, "error": str(e)[:100]}
+            _CHART_CACHE[ck] = (_t.time(), payload)
+            return payload
+        except Exception as e:
+            last_err = str(e)[:100]
+            msg = last_err.lower()
+            if ("rate" in msg or "too many" in msg) and attempt < 2:
+                _t.sleep(2.0 * (attempt + 1))  # 2s, then 4s
+                continue
+            break
+    # All attempts failed — serve stale cache if we have any, else the error.
+    if cached:
+        return cached[1]
+    return {"ok": False, "error": last_err}
 
 
 # ── Chat (AI response via Groq) ──
