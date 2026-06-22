@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>Paula</title>
   <link rel="icon" href="/favicon.ico" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -13,6 +16,26 @@
 </head>
 <body>
   <div id="root"></div>
+  <script>
+    // Auto-recover from a stale-deploy asset mismatch: if a hashed JS/CSS asset
+    // 404s (old index.html cached against a newer deploy), force a one-time
+    // cache-busting reload so the user gets a working page instead of an
+    // unstyled/broken one. Guarded by sessionStorage so it can't loop.
+    window.addEventListener('error', function (e) {
+      var t = e.target;
+      if (!t || !t.tagName) return;
+      var url = t.src || t.href || '';
+      var isAsset = /\/assets\/.*\.(js|css)(\?|$)/.test(url);
+      if (isAsset && !sessionStorage.getItem('paula-asset-reloaded')) {
+        sessionStorage.setItem('paula-asset-reloaded', '1');
+        location.reload(true);
+      }
+    }, true);
+    // Clear the guard once the app has clearly loaded fine.
+    window.addEventListener('load', function () {
+      setTimeout(function () { sessionStorage.removeItem('paula-asset-reloaded'); }, 4000);
+    });
+  </script>
   <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>

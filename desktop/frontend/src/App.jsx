@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.29.3'
+const VERSION = '3.29.4'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.29.4', d: 'June 22, 2026', changes: [
+    'Fixed the app sometimes loading unstyled after an update \u2014 it now auto-recovers from stale files.',
+  ]},
   { v: '3.29.3', d: 'June 22, 2026', changes: [
     'Quoted text now shows as a distinct quote block inside your sent message, instead of a plain \u201c>\u201d line.',
   ]},
