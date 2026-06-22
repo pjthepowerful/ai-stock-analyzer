@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.29.1'
+const VERSION = '3.29.2'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.29.2', d: 'June 21, 2026', changes: [
+    'More breathing room between section headings and their content on the Analyze and Portfolio pages.',
+  ]},
   { v: '3.29.1', d: 'June 21, 2026', changes: [
     'Tidied the sidebar \u2014 Automation now sits above Chats, and removed a duplicate Automation heading.',
   ]},
