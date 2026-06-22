@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.29.0'
+const VERSION = '3.29.1'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.29.1', d: 'June 21, 2026', changes: [
+    'Tidied the sidebar \u2014 Automation now sits above Chats, and removed a duplicate Automation heading.',
+  ]},
   { v: '3.29.0', d: 'June 21, 2026', changes: [
     'Execute now opens a buy panel \u2014 see your buying power, pick how many shares, and it warns (and caps) if you\u2019d go over.',
   ]},
@@ -1749,6 +1752,12 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
         )})}
 
         <div className="rl-scroll">
+          {['parjan.d@icloud.com','pinakin.d@moftmail.com'].includes((user?.email||'').toLowerCase()) && <>
+          <div className="rl-sec">Automation</div>
+          <button className={'rl-item rl-ap'+(autopilot?' rl-ap-on':'')} onClick={()=>toggleAutopilot()} title="Autopilot">
+            <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg></i><span>Autopilot<small className={autopilot?'c-on':''}>{autopilot?'on':'off'}</small></span>
+          </button>
+          </>}
           <div className="rl-sec">Chats</div>
           {(()=>{
             const q = chatSearch.toLowerCase()
@@ -1758,28 +1767,14 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
               const tb = new Date(b.updated || b.created || 0).getTime()
               return tb - ta
             }).slice(0, 30)
-            // Split out automation (autopilot) sessions into their own section.
-            const isAuto = c => /autopilot/i.test(c.title || '')
-            const autoChats = sorted.filter(isAuto)
-            const normalChats = sorted.filter(c => !isAuto(c))
-            const ChatRow = c => (
+            return sorted.map(c => (
               <div key={c.id} className={'rl-chat' + (chatId === c.id ? ' rl-chat-on' : '')} onClick={() => {switchChat(c.id);setView('chat')}}>
                 <span className="rl-chat-title">{c.title}</span>
                 <button className="rl-chat-x" onClick={(e) => { e.stopPropagation(); deleteChat(c.id) }} aria-label="Delete chat">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
               </div>
-            )
-            return (<>
-              {autoChats.length > 0 && <>
-                <div className="rl-sec rl-sec-auto"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg> Automation</div>
-                {autoChats.map(ChatRow)}
-              </>}
-              {normalChats.length > 0 && <>
-                {autoChats.length > 0 && <div className="rl-sec">Chats</div>}
-                {normalChats.map(ChatRow)}
-              </>}
-            </>)
+            ))
           })()}
           {positions.length>0&&<>
             <div className="rl-sec">Positions <span className={'rl-sec-tot '+(totalUnrealized>=0?'up':'dn')}>{totalUnrealized>=0?'+':''}${Math.abs(totalUnrealized).toFixed(0)}</span></div>
@@ -1789,13 +1784,6 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                 <span className={'rl-pos-pnl '+(p.unrealized_pnl>=0?'up':'dn')}>{p.unrealized_pnl>=0?'+':'−'}${Math.abs(p.unrealized_pnl).toFixed(0)}</span>
               </div>
             ))}
-          </>}
-
-          {['parjan.d@icloud.com','pinakin.d@moftmail.com'].includes((user?.email||'').toLowerCase()) && <>
-          <div className="rl-sec">Automation</div>
-          <button className={'rl-item rl-ap'+(autopilot?' rl-ap-on':'')} onClick={()=>toggleAutopilot()} title="Autopilot">
-            <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg></i><span>Autopilot<small className={autopilot?'c-on':''}>{autopilot?'on':'off'}</small></span>
-          </button>
           </>}
         </div>
 
