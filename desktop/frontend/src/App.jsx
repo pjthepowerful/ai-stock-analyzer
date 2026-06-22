@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.28.3'
+const VERSION = '3.28.4'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.28.4', d: 'June 21, 2026', changes: [
+    'Fixed the big gap in the background theme picker \u2014 the swatches now sit neatly under the label.',
+  ]},
   { v: '3.28.3', d: 'June 21, 2026', changes: [
     'Gradient backgrounds now only apply in dark mode (they looked off on light) \u2014 light mode stays clean.',
     'Cleaned up the broker key fields \u2014 removed the example text in the inputs.',
