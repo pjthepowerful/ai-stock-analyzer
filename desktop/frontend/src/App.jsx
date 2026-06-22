@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.26.1'
+const VERSION = '3.26.2'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.26.2', d: 'June 21, 2026', changes: [
+    'Fixed chat and data failing to load on the live site (a cross-origin/CORS issue between the app and its server).',
+  ]},
   { v: '3.26.1', d: 'June 21, 2026', changes: [
     'Scans are faster and stop getting rate-limited \u2014 the default scan now focuses on the ~500 most liquid stocks and remembers recent results.',
     'Closed a way to open Analyze without Plus from the welcome screen.',

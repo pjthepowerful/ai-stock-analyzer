@@ -182,7 +182,12 @@ app = FastAPI(title="Paula", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    # Can't use allow_origins=["*"] together with allow_credentials=True — the
+    # browser requires a SPECIFIC origin to be echoed back when credentials are
+    # allowed, so "*" results in no Access-Control-Allow-Origin header at all
+    # (which is the CORS error). Use a regex that matches our real frontends:
+    # any *.vercel.app deployment + localhost for dev.
+    allow_origin_regex=r"https://([a-z0-9-]+\.)*vercel\.app|http://localhost(:\d+)?|https://localhost(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -196,9 +201,25 @@ from fastapi import Request
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     print(f"⚠️ Unhandled error on {request.url.path}: {exc}")
+    # Echo the request origin so a 500 surfaces as the real error, not a
+    # misleading CORS failure (the CORS middleware doesn't always wrap responses
+    # produced by a custom exception handler).
+    origin = request.headers.get("origin", "")
+    import re as _cors_re
+    allowed = bool(_cors_re.fullmatch(
+        r"https://([a-z0-9-]+\.)*vercel\.app|http://localhost(:\d+)?|https://localhost(:\d+)?",
+        origin or "",
+    ))
+    headers = {}
+    if allowed:
+        headers = {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+        }
     return JSONResponse(
         status_code=200,
         content={"ok": False, "error": str(exc)[:200]},
+        headers=headers,
     )
 
 
@@ -650,7 +671,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.26.1",  # bump marker — confirms running code
+        "build": "v3.26.2",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
