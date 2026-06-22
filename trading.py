@@ -1090,11 +1090,13 @@ def build_portfolio_chart(history: dict) -> go.Figure | None:
         return None
 
 
-def alpaca_smart_buy(ticker: str, trade_signal: dict, risk_pct: float = 0.02) -> dict:
+def alpaca_smart_buy(ticker: str, trade_signal: dict, risk_pct: float = 0.02, dry_run: bool = False) -> dict:
     """
     Smart buy using Paula's trade signal. Automatically calculates:
     - Position size based on risk % of portfolio
     - Sets bracket order with stop-loss and take-profit from signal
+    dry_run=True returns the computed qty/cost WITHOUT placing an order (used to
+    populate the confirmation card).
     """
     account = alpaca_account()
     if not account:
@@ -1122,6 +1124,8 @@ def alpaca_smart_buy(ticker: str, trade_signal: dict, risk_pct: float = 0.02) ->
         return {"ok": False, "error": f"Position too small — need at least ${ entry:.2f} buying power"}
 
     cost = qty * entry
+    if dry_run:
+        return {"ok": True, "qty_calculated": qty, "cost_estimate": round(cost, 2)}
     result = alpaca_buy(
         ticker=ticker,
         qty=qty,
@@ -5748,19 +5752,16 @@ def execute(intent: dict) -> dict:
             return {"ok": True, "type": "analysis", "ticker": ticker, "market": market,
                     "data": {**data, **signal}, "trade_signal": signal,
                     "msg": f"⚠️ Signal is **{signal['action']}** (score: {signal['score']}). Not executing — doesn't meet buy criteria."}
-        # Execute the smart buy
-        result = alpaca_smart_buy(ticker=ticker, trade_signal=signal)
-        if result["ok"]:
-            msg = (
-                f"🟢 **Smart buy executed: {result.get('qty_calculated', '?')} shares of {ticker.upper()}**\n\n"
-                f"Cost: ~`${result.get('cost_estimate', 0):,.2f}` · "
-                f"Stop: `${result.get('stop_loss', 0):.2f}` · "
-                f"Target: `${result.get('take_profit', 0):.2f}`\n\n"
-                f"Risk: `${result.get('total_risk', 0):,.2f}` ({signal['trade']['risk_pct']:.1f}% per share) · "
-                f"R:R `{signal['trade']['risk_reward']:.1f}:1`"
-            )
-            return {"ok": True, "type": "trade", "ticker": ticker, "msg": msg, "trade_signal": signal}
-        return {"ok": False, "error": f"Smart buy failed: {result.get('error', 'Unknown')}"}
+        # SAFETY: confirm before executing (same as a manual buy). Compute the
+        # risk-sized qty so the confirm card can show it, but place no order.
+        try:
+            qty_calc = alpaca_smart_buy(ticker=ticker, trade_signal=signal, dry_run=True).get("qty_calculated")
+        except Exception:
+            qty_calc = None
+        return {"ok": True, "type": "confirm_trade",
+                "trade": {"action": "buy", "ticker": ticker.upper(),
+                          "qty": qty_calc, "smart": True},
+                "msg": ""}
 
     # ── Standard commands ──
     if t == "stock_ideas":

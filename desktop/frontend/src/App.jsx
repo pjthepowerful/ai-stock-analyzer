@@ -20,11 +20,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.28.0'
+const VERSION = '3.28.1'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.28.1', d: 'June 21, 2026', changes: [
+    'Smart/auto buys now ask for confirmation too \u2014 closing the last path that could trade without a tap.',
+    'Autopilot chats are now grouped under an "Automation" heading in the sidebar.',
+  ]},
   { v: '3.28.0', d: 'June 21, 2026', changes: [
     'Trades now ask for confirmation first \u2014 buying, selling, or shorting shows a Confirm/Cancel card, and nothing is placed until you tap Confirm.',
   ]},
@@ -1738,15 +1742,29 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
               const ta = new Date(a.updated || a.created || 0).getTime()
               const tb = new Date(b.updated || b.created || 0).getTime()
               return tb - ta
-            })
-            return sorted.slice(0, 25).map(c => (
+            }).slice(0, 30)
+            // Split out automation (autopilot) sessions into their own section.
+            const isAuto = c => /autopilot/i.test(c.title || '')
+            const autoChats = sorted.filter(isAuto)
+            const normalChats = sorted.filter(c => !isAuto(c))
+            const ChatRow = c => (
               <div key={c.id} className={'rl-chat' + (chatId === c.id ? ' rl-chat-on' : '')} onClick={() => {switchChat(c.id);setView('chat')}}>
                 <span className="rl-chat-title">{c.title}</span>
                 <button className="rl-chat-x" onClick={(e) => { e.stopPropagation(); deleteChat(c.id) }} aria-label="Delete chat">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
               </div>
-            ))
+            )
+            return (<>
+              {autoChats.length > 0 && <>
+                <div className="rl-sec rl-sec-auto"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg> Automation</div>
+                {autoChats.map(ChatRow)}
+              </>}
+              {normalChats.length > 0 && <>
+                {autoChats.length > 0 && <div className="rl-sec">Chats</div>}
+                {normalChats.map(ChatRow)}
+              </>}
+            </>)
           })()}
           {positions.length>0&&<>
             <div className="rl-sec">Positions <span className={'rl-sec-tot '+(totalUnrealized>=0?'up':'dn')}>{totalUnrealized>=0?'+':''}${Math.abs(totalUnrealized).toFixed(0)}</span></div>

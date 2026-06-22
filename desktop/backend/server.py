@@ -626,10 +626,21 @@ async def execute_confirmed_trade(req: dict, authorization: str = Header(None)):
         return {"ok": False, "error": "Invalid trade request"}
     try:
         if action == "buy":
-            result = engine.alpaca_buy(ticker=ticker, qty=qty, notional=req.get("notional"))
-            if result.get("ok"):
-                qty_str = f"{result.get('qty', qty)} shares" if (result.get("qty") or qty) else f"${req.get('notional')}"
-                return {"ok": True, "message": f"🟢 Bought {qty_str} of {ticker} · {result.get('status','submitted')}"}
+            if req.get("smart"):
+                # Re-derive the signal and place the risk-sized bracket order.
+                data = engine.fetch_full(ticker)
+                if data:
+                    sig = engine.generate_trade_signal(data)
+                    result = engine.alpaca_smart_buy(ticker=ticker, trade_signal=sig)
+                else:
+                    result = engine.alpaca_buy(ticker=ticker, qty=qty)
+                if result.get("ok"):
+                    return {"ok": True, "message": f"🟢 Bought {result.get('qty_calculated', qty)} shares of {ticker} (risk-sized) · {result.get('status','submitted')}"}
+            else:
+                result = engine.alpaca_buy(ticker=ticker, qty=qty, notional=req.get("notional"))
+                if result.get("ok"):
+                    qty_str = f"{result.get('qty', qty)} shares" if (result.get("qty") or qty) else f"${req.get('notional')}"
+                    return {"ok": True, "message": f"🟢 Bought {qty_str} of {ticker} · {result.get('status','submitted')}"}
         elif action == "sell":
             result = engine.alpaca_sell(ticker=ticker, qty=qty, sell_all=req.get("sell_all", False))
             if result.get("ok"):
@@ -711,7 +722,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.28.0",  # bump marker — confirms running code
+        "build": "v3.28.1",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),

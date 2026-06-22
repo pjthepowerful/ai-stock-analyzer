@@ -1268,3 +1268,7 @@ body.has-bg-theme .rail { background: rgba(0,0,0,.18); }
 .tc-cancel:hover { border-color: var(--lt); color: var(--wh); }
 .tc-note { margin-top: 10px; font-size: .72rem; color: var(--dim); }
 .tc-done { margin-top: 12px; font-size: .9rem; color: var(--lt); font-weight: 500; }
+
+/* Automation section header in the chat list */
+.rl-sec-auto { display: flex; align-items: center; gap: 6px; color: var(--grn); }
+.rl-sec-auto svg { flex-shrink: 0; }

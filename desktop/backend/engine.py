@@ -92,6 +92,7 @@ from trading import (
     trade_track_record,
     alpaca_orders,
     alpaca_buy,
+    alpaca_smart_buy,
     alpaca_sell,
     alpaca_short,
     alpaca_cover,
