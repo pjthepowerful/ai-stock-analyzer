@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.28.4'
+const VERSION = '3.29.0'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.29.0', d: 'June 21, 2026', changes: [
+    'Execute now opens a buy panel \u2014 see your buying power, pick how many shares, and it warns (and caps) if you\u2019d go over.',
+  ]},
   { v: '3.28.4', d: 'June 21, 2026', changes: [
     'Fixed the big gap in the background theme picker \u2014 the swatches now sit neatly under the label.',
   ]},
@@ -1916,7 +1919,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                       ):m.showChart && (m.ticker||m.tickers?.[0])?(
                         <div className="ai-chart"><Suspense fallback={<ChartFallback/>}><Chart ticker={m.ticker||m.tickers[0]} signal={m.signal} height={260}/></Suspense></div>
                       ):null}
-                      {m.signalData && <SignalCard data={m.signalData} onExecute={(ticker, side) => sendMessage((side === 'EXIT' ? 'Sell ' : 'Buy ') + ticker)}/>}
+                      {m.signalData && <SignalCard data={m.signalData} account={account} onBuy={(ticker, qty)=>{ if(!isPlus){setShowPlus(true);return} sendMessage(`Buy ${qty} ${ticker}`) }} onExecute={(ticker, side) => sendMessage((side === 'EXIT' ? 'Sell ' : 'Buy ') + ticker)}/>}
                       {!m.streaming && <AnalyzeChips content={m.content} known={m.tickers} exclude={[m.ticker, m.signalData?.ticker, ...(m.tickers||[])].filter(Boolean)} hasCard={!!m.signalData} onAnalyze={(tk)=>{ if(!isPlus){setShowPlus(true);return} sendMessage('Analyze '+tk) }}/>}
                       {m.time&&!m.streaming&&<div className="msg-time">{m.time}</div>}
                     </div>
@@ -2377,7 +2380,7 @@ function AnalyzeChips({ content, known, exclude, hasCard, onAnalyze }) {
   )
 }
 
-function SignalCard({ data, onExecute }) {
+function SignalCard({ data, account, onBuy, onExecute }) {
   if (!data) return null
   const scores = data.scores || {}
   const trade = data.trade || {}
@@ -2386,6 +2389,13 @@ function SignalCard({ data, onExecute }) {
   const isExit = side === 'EXIT'
   const isAvoid = side === 'AVOID'
   const isNeutral = side === 'NEUTRAL'
+  const [buyOpen, setBuyOpen] = useState(false)
+  const [qty, setQty] = useState(1)
+  const entryPx = trade.entry || data.price || 0
+  const buyingPower = account?.buying_power ?? null
+  const cost = qty * entryPx
+  const overBuyingPower = buyingPower != null && cost > buyingPower
+  const maxShares = (buyingPower != null && entryPx > 0) ? Math.floor(buyingPower / entryPx) : null
 
   const ScoreBar = ({ name, sub, value }) => {
     const color = value >= 70 ? 'var(--grn)' : value >= 50 ? 'var(--amb)' : 'var(--red)'
@@ -2480,9 +2490,39 @@ function SignalCard({ data, onExecute }) {
             <div className="sc-level"><span className="sc-level-l">TARGET</span><span className="sc-level-v sc-target">${trade.target?.toFixed(2)}</span></div>
           </div>
           {data.earnings_warning && <div className="sc-warn">⚠ {data.earnings_warning}</div>}
-          <div className="sc-actions">
-            <button className="sc-btn sc-exec" onClick={() => onExecute(data.ticker, 'LONG')}>Execute</button>
-          </div>
+          {!buyOpen ? (
+            <div className="sc-actions">
+              <button className="sc-btn sc-exec" onClick={() => setBuyOpen(true)}>Execute</button>
+            </div>
+          ) : (
+            <div className="buy-panel">
+              <div className="bp-bp">
+                <span>Buying power</span>
+                <b>{buyingPower != null ? '$'+buyingPower.toLocaleString(undefined,{maximumFractionDigits:2}) : '—'}</b>
+              </div>
+              <div className="bp-qty-row">
+                <span className="bp-label">Shares</span>
+                <div className="bp-stepper">
+                  <button onClick={()=>setQty(q=>Math.max(1,q-1))} aria-label="Fewer">−</button>
+                  <input type="number" min="1" value={qty} onChange={e=>setQty(Math.max(1, parseInt(e.target.value)||1))}/>
+                  <button onClick={()=>setQty(q=>q+1)} aria-label="More">+</button>
+                </div>
+                {maxShares != null && <button className="bp-max" onClick={()=>setQty(Math.max(1, maxShares))}>Max {maxShares}</button>}
+              </div>
+              <div className="bp-cost">
+                <span>Est. cost</span>
+                <b className={overBuyingPower?'bp-over':''}>${cost.toLocaleString(undefined,{maximumFractionDigits:2})}</b>
+                <span className="bp-at">@ ${entryPx.toFixed(2)}/sh</span>
+              </div>
+              {overBuyingPower && <div className="bp-warn">⚠ That's ${(cost-buyingPower).toLocaleString(undefined,{maximumFractionDigits:0})} over your buying power.{maxShares>=1?` You can afford up to ${maxShares} share${maxShares>1?'s':''}.`:" You don't have enough to buy 1 share."}</div>}
+              <div className="bp-actions">
+                <button className="bp-cancel" onClick={()=>setBuyOpen(false)}>Cancel</button>
+                <button className="bp-confirm" disabled={overBuyingPower} onClick={()=>{ setBuyOpen(false); onBuy ? onBuy(data.ticker, qty) : onExecute(data.ticker, 'LONG') }}>
+                  Buy {qty} share{qty>1?'s':''}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
