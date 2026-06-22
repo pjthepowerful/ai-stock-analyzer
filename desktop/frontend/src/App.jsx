@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.26.4'
+const VERSION = '3.26.5'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.26.5', d: 'June 21, 2026', changes: [
+    'Removed the redundant "Analyze" button that appeared under a stock you were already analyzing.',
+  ]},
   { v: '3.26.4', d: 'June 21, 2026', changes: [
     'Deep stock analysis is now properly Plus-only everywhere \u2014 including in chat \u2014 not just the Analyze tab.',
   ]},
@@ -1771,7 +1774,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                         <div className="ai-chart"><Suspense fallback={<ChartFallback/>}><Chart ticker={m.ticker||m.tickers[0]} signal={m.signal} height={260}/></Suspense></div>
                       ):null}
                       {m.signalData && <SignalCard data={m.signalData} onExecute={(ticker, side) => sendMessage((side === 'EXIT' ? 'Sell ' : 'Buy ') + ticker)}/>}
-                      {!m.streaming && <AnalyzeChips content={m.content} known={m.tickers} onAnalyze={(tk)=>{ if(!isPlus){setShowPlus(true);return} sendMessage('Analyze '+tk) }}/>}
+                      {!m.streaming && <AnalyzeChips content={m.content} known={m.tickers} exclude={[m.ticker, m.signalData?.ticker, ...(m.tickers||[])].filter(Boolean)} hasCard={!!m.signalData} onAnalyze={(tk)=>{ if(!isPlus){setShowPlus(true);return} sendMessage('Analyze '+tk) }}/>}
                       {m.time&&!m.streaming&&<div className="msg-time">{m.time}</div>}
                     </div>
                   </div>
@@ -2190,19 +2193,24 @@ function ChartTabs({ tickers, signal }) {
   )
 }
 
-function AnalyzeChips({ content, known, onAnalyze }) {
+function AnalyzeChips({ content, known, exclude, hasCard, onAnalyze }) {
   // Pull tickers Paula mentioned so we can offer a one-tap Analyze for each.
   // Prefer a server-provided list; otherwise extract (TICKER) patterns from the
   // prose — Paula writes picks like "Axon Enterprise (AXON)".
+  const ex = new Set((exclude || []).map(t => (t || '').toUpperCase()))
   const tickers = []
   const seen = {}
-  const add = (t) => { const u = (t||'').toUpperCase(); if (u && /^[A-Z]{1,5}$/.test(u) && !seen[u]) { seen[u] = 1; tickers.push(u) } }
+  const add = (t) => { const u = (t||'').toUpperCase(); if (u && /^[A-Z]{1,5}$/.test(u) && !seen[u] && !ex.has(u)) { seen[u] = 1; tickers.push(u) } }
   if (Array.isArray(known)) known.forEach(add)
   if (typeof content === 'string') {
     const STOP = new Set(['CEO','RSI','MACD','ATR','VWAP','SMA','EMA','ETF','USA','USD','AI','IPO','P','AND','OR','THE','FDA','SPY','VIX','PE','EPS'])
     const m = content.match(/\(([A-Z]{1,5})\)/g) || []
     m.forEach(x => { const t = x.replace(/[()]/g,''); if (!STOP.has(t)) add(t) })
   }
+  // On a full single-stock analysis (signal card present), the only ticker in
+  // play is the one already shown — so chips add nothing. Don't surface "Analyze
+  // X" for names incidentally mentioned in that card's prose.
+  if (hasCard) return null
   if (!tickers.length) return null
   return (
     <div className="analyze-chips">
