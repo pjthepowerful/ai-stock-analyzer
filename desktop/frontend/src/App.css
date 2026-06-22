@@ -1306,9 +1306,3 @@ body.has-bg-theme .rail { background: rgba(0,0,0,.18); }
 .bp-confirm { flex: 1; padding: 10px; border-radius: 9px; border: none; background: var(--grn); color: #04130d; font: inherit; font-weight: 700; cursor: pointer; transition: filter .14s; }
 .bp-confirm:hover:not(:disabled) { filter: brightness(1.08); }
 .bp-confirm:disabled { opacity: .45; cursor: not-allowed; }
-
-/* Quoted passage shown inside a user message bubble */
-.ub-quote { display: flex; gap: 8px; margin-bottom: 8px; padding: 7px 10px; background: rgba(0,0,0,.16); border-radius: 8px; align-items: stretch; }
-.ub-quote-bar { width: 3px; border-radius: 2px; background: rgba(0,0,0,.4); flex-shrink: 0; }
-.ub-quote-txt { font-size: .82rem; line-height: 1.4; opacity: .8; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.ub-body { white-space: pre-wrap; }

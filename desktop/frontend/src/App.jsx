@@ -20,16 +20,13 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.29.4'
+const VERSION = '3.29.5'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
-  { v: '3.29.4', d: 'June 22, 2026', changes: [
-    'Fixed the app sometimes loading unstyled after an update \u2014 it now auto-recovers from stale files.',
-  ]},
-  { v: '3.29.3', d: 'June 22, 2026', changes: [
-    'Quoted text now shows as a distinct quote block inside your sent message, instead of a plain \u201c>\u201d line.',
+  { v: '3.29.5', d: 'June 22, 2026', changes: [
+    'Reverted two recent changes.',
   ]},
   { v: '3.29.2', d: 'June 21, 2026', changes: [
     'More breathing room between section headings and their content on the Analyze and Portfolio pages.',
@@ -1921,25 +1918,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                       {m.time&&!m.streaming&&<div className="msg-time">{m.time}</div>}
                     </div>
                   </div>
-                ):(<><div className="user-bubble">{(()=>{
-                    const c = m.content || ''
-                    // Split leading quote lines (markdown '>') from the actual message
-                    // so the quoted passage shows as a distinct block, not plain text.
-                    const lines = c.split('\n')
-                    const qLines = [], rest = []
-                    let inQuote = true
-                    for (const ln of lines) {
-                      if (inQuote && ln.trimStart().startsWith('>')) qLines.push(ln.replace(/^\s*>\s?/, ''))
-                      else { inQuote = false; rest.push(ln) }
-                    }
-                    const quote = qLines.join(' ').trim()
-                    const body = rest.join('\n').trim()
-                    if (!quote) return c
-                    return (<>
-                      <div className="ub-quote"><span className="ub-quote-bar"/><span className="ub-quote-txt">{quote}</span></div>
-                      {body && <div className="ub-body">{body}</div>}
-                    </>)
-                  })()}</div>{m.time&&<div className="msg-time">{m.time}</div>}</>)}
+                ):(<><div className="user-bubble">{m.content}</div>{m.time&&<div className="msg-time">{m.time}</div>}</>)}
               </div>))}
             {sending&&sendingChatRef.current===chatIdRef.current&&!messages.some(m=>m.streaming)&&<div className="msg msg-assistant"><div className="ai"><div className="ai-av">P</div><div className="ai-body"><div className="ai-name">Paula</div><div className="loading-state"><div className="dots"><span/><span/><span/></div><span className="loading-txt">{loadingText}</span></div></div></div></div>}
             <div ref={messagesEnd}/>
