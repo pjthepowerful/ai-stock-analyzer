@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.27.1'
+const VERSION = '3.28.0'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.28.0', d: 'June 21, 2026', changes: [
+    'Trades now ask for confirmation first \u2014 buying, selling, or shorting shows a Confirm/Cancel card, and nothing is placed until you tap Confirm.',
+  ]},
   { v: '3.27.1', d: 'June 21, 2026', changes: [
     'Fixed a serious bug where quoting a reply that mentioned "buy" could place a real trade \u2014 questions and quotes never execute trades now.',
     'Quoted text now shows as a clean "replying to" card above the message box instead of raw text.',
@@ -1472,6 +1475,18 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
       }
 
       if (data.ok) {
+        // Trade confirmation — render a Confirm/Cancel card; no order placed yet.
+        if (data.type === 'confirm_trade' && data.trade) {
+          setSending(false)
+          if (chatIdRef.current === targetId) {
+            setMessages(prev => [...prev, {
+              role: 'assistant', content: '', type: 'confirm_trade',
+              trade: data.trade, tradePending: true,
+              time: new Date().toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'})
+            }])
+          }
+          return
+        }
         const text = data.message || ''
         const assistantMsg = {
           role: 'assistant', content: text, streaming: false,
@@ -1592,6 +1607,29 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
     try { abortRef.current?.abort() } catch {}
     setSending(false)
     setLoadingText('')
+  }
+
+  // Confirm or cancel a pending trade card. Only confirming actually places the
+  // order (via /api/trade/execute) — so no trade happens without an explicit tap.
+  const confirmTrade = async (msgIdx, trade) => {
+    setMessages(prev => prev.map((m, i) => i === msgIdx ? { ...m, tradePending: false, tradeBusy: true } : m))
+    try {
+      const r = await f(API + '/api/trade/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+        body: JSON.stringify(trade)
+      }).then(r => r.json())
+      const resultMsg = r.ok ? r.message : ('⚠️ ' + (r.error || 'Order failed'))
+      if (r.ok && /bought/i.test(r.message || '')) { snd(playBuy); addToast(r.message.slice(0, 60), 'buy') }
+      else if (r.ok) { snd(playSell); addToast(r.message.slice(0, 60), 'sell') }
+      setMessages(prev => prev.map((m, i) => i === msgIdx ? { ...m, tradeBusy: false, tradeDone: resultMsg } : m))
+      refreshData()
+    } catch {
+      setMessages(prev => prev.map((m, i) => i === msgIdx ? { ...m, tradeBusy: false, tradeDone: "⚠️ Couldn't reach the server" } : m))
+    }
+  }
+  const cancelTrade = (msgIdx) => {
+    setMessages(prev => prev.map((m, i) => i === msgIdx ? { ...m, tradePending: false, tradeDone: 'Trade cancelled.' } : m))
   }
 
   const send = () => {
@@ -1815,6 +1853,26 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                     <div className="ai-body">
                       <div className="ai-name">Paula</div>
                       <div className="ai-txt"><span dangerouslySetInnerHTML={{__html:fmt(m.content)}}/>{m.streaming&&<span className="stream-cursor">▌</span>}</div>
+                      {m.type === 'confirm_trade' && m.trade && (
+                        <div className="trade-confirm">
+                          <div className="tc-head">
+                            <span className={'tc-action tc-'+m.trade.action}>{m.trade.action.toUpperCase()}</span>
+                            <span className="tc-ticker">{m.trade.ticker}</span>
+                            <span className="tc-qty">{m.trade.sell_all||m.trade.cover_all ? 'entire position' : (m.trade.qty ? m.trade.qty+' share'+(m.trade.qty>1?'s':'') : (m.trade.notional ? '$'+m.trade.notional : '1 share'))}</span>
+                          </div>
+                          {m.tradeDone ? (
+                            <div className="tc-done">{m.tradeDone}</div>
+                          ) : m.tradeBusy ? (
+                            <div className="tc-done">Placing order…</div>
+                          ) : m.tradePending ? (
+                            <div className="tc-actions">
+                              <button className="tc-cancel" onClick={()=>cancelTrade(i)}>Cancel</button>
+                              <button className="tc-confirm" onClick={()=>confirmTrade(i, m.trade)}>Confirm {m.trade.action}</button>
+                            </div>
+                          ) : null}
+                          {m.tradePending && <div className="tc-note">Review before confirming — nothing is bought until you tap Confirm.</div>}
+                        </div>
+                      )}
                       {m.showChart && m.tickers?.length>1?(
                         <ChartTabs tickers={m.tickers} signal={m.signal}/>
                       ):m.showChart && (m.ticker||m.tickers?.[0])?(

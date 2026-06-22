@@ -5704,53 +5704,38 @@ def execute(intent: dict) -> dict:
         ticker = intent["ticker"]
         qty = intent.get("qty")
         notional = intent.get("notional")
-        result = alpaca_buy(ticker=ticker, qty=qty, notional=notional)
-        if result["ok"]:
-            qty_str = f"{result['qty']} shares" if result.get("qty") else f"${notional}"
-            return {"ok": True, "type": "trade",
-                    "msg": f"🟢 **Bought {qty_str} of {ticker.upper()}** · Status: {result['status']}"}
-        return {"ok": False, "error": f"Buy failed: {result.get('error', 'Unknown')}"}
+        # SAFETY: don't execute from a chat intent. Return a confirmation request
+        # so the user explicitly approves before any real order is placed. This
+        # prevents accidental trades from misread intent (e.g. a quoted "BUY").
+        return {"ok": True, "type": "confirm_trade",
+                "trade": {"action": "buy", "ticker": ticker.upper(),
+                          "qty": qty, "notional": notional},
+                "msg": ""}
 
     if t == "sell":
         ticker = intent["ticker"]
         sell_all = intent.get("sell_all", False)
         qty = intent.get("qty")
-        result = alpaca_sell(ticker=ticker, qty=qty, sell_all=sell_all)
-        if result["ok"]:
-            action = "Closed position in" if sell_all else f"Sold {qty or result.get('qty', '')} shares of"
-            return {"ok": True, "type": "trade",
-                    "msg": f"🔴 **{action} {ticker.upper()}** · Status: {result.get('status', 'submitted')}"}
-        return {"ok": False, "error": f"Sell failed: {result.get('error', 'Unknown')}"}
+        return {"ok": True, "type": "confirm_trade",
+                "trade": {"action": "sell", "ticker": ticker.upper(),
+                          "qty": qty, "sell_all": sell_all},
+                "msg": ""}
 
     if t == "short":
         ticker = intent["ticker"]
         qty = intent.get("qty", 1)
-        # Analyze first
-        data = fetch_full(ticker)
-        if data:
-            signal = generate_trade_signal(data)
-            stop = signal["trade"]["stop_loss"] if signal["action"] in ("SELL", "STRONG_SELL") else None
-            target = signal["trade"]["target_1"] if signal["action"] in ("SELL", "STRONG_SELL") else None
-            result = alpaca_short(ticker=ticker, qty=qty, stop_loss=stop, take_profit=target)
-        else:
-            result = alpaca_short(ticker=ticker, qty=qty)
-        if result.get("ok"):
-            msg = f"🔴 **Shorted {qty} shares of {ticker.upper()}** · Status: {result.get('status', 'submitted')}"
-            if data:
-                msg += f"\n\nSignal: {signal['action']} (score: {signal['score']})"
-            return {"ok": True, "type": "trade", "ticker": ticker, "msg": msg}
-        return {"ok": False, "error": f"Short failed: {result.get('error', 'Unknown')}"}
+        return {"ok": True, "type": "confirm_trade",
+                "trade": {"action": "short", "ticker": ticker.upper(), "qty": qty},
+                "msg": ""}
 
     if t == "cover":
         ticker = intent["ticker"]
         cover_all = intent.get("cover_all", False)
         qty = intent.get("qty")
-        result = alpaca_cover(ticker=ticker, qty=qty, cover_all=cover_all)
-        if result.get("ok"):
-            action = "Covered all of" if cover_all else f"Covered {qty or result.get('qty', '')} shares of"
-            return {"ok": True, "type": "trade",
-                    "msg": f"🟢 **{action} {ticker.upper()}** (short closed) · Status: {result.get('status', 'submitted')}"}
-        return {"ok": False, "error": f"Cover failed: {result.get('error', 'Unknown')}"}
+        return {"ok": True, "type": "confirm_trade",
+                "trade": {"action": "cover", "ticker": ticker.upper(),
+                          "qty": qty, "cover_all": cover_all},
+                "msg": ""}
 
     if t == "smart_buy":
         ticker = intent["ticker"]

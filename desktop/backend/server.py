@@ -608,6 +608,46 @@ async def plus_purchase(req: dict = None, authorization: str = Header(None)):
     auth.set_plus(user["id"], True)
     return {"ok": True, "plus": True, "plan": plan}
 
+
+@app.post("/api/trade/execute")
+async def execute_confirmed_trade(req: dict, authorization: str = Header(None)):
+    """Actually place a trade — ONLY called after the user explicitly confirms
+    in the UI. Chat 'buy/sell/short/cover' intents return a confirm_trade card
+    instead of executing, so an order can never be placed from a single
+    (possibly misread) message. This endpoint is the only path to a live order
+    from chat."""
+    user = _get_user(authorization)
+    if not user:
+        return {"ok": False, "error": "Not authenticated"}
+    action = (req or {}).get("action")
+    ticker = (req or {}).get("ticker", "").upper()
+    qty = req.get("qty")
+    if not ticker or action not in ("buy", "sell", "short", "cover"):
+        return {"ok": False, "error": "Invalid trade request"}
+    try:
+        if action == "buy":
+            result = engine.alpaca_buy(ticker=ticker, qty=qty, notional=req.get("notional"))
+            if result.get("ok"):
+                qty_str = f"{result.get('qty', qty)} shares" if (result.get("qty") or qty) else f"${req.get('notional')}"
+                return {"ok": True, "message": f"🟢 Bought {qty_str} of {ticker} · {result.get('status','submitted')}"}
+        elif action == "sell":
+            result = engine.alpaca_sell(ticker=ticker, qty=qty, sell_all=req.get("sell_all", False))
+            if result.get("ok"):
+                act = "Closed position in" if req.get("sell_all") else f"Sold {qty or result.get('qty','')} shares of"
+                return {"ok": True, "message": f"🔴 {act} {ticker} · {result.get('status','submitted')}"}
+        elif action == "short":
+            result = engine.alpaca_short(ticker=ticker, qty=qty or 1)
+            if result.get("ok"):
+                return {"ok": True, "message": f"🔴 Shorted {qty or 1} shares of {ticker} · {result.get('status','submitted')}"}
+        elif action == "cover":
+            result = engine.alpaca_cover(ticker=ticker, qty=qty, cover_all=req.get("cover_all", False))
+            if result.get("ok"):
+                act = "Covered all of" if req.get("cover_all") else f"Covered {qty or result.get('qty','')} shares of"
+                return {"ok": True, "message": f"🟢 {act} {ticker} (short closed) · {result.get('status','submitted')}"}
+        return {"ok": False, "error": result.get("error", "Order failed")}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:160]}
+
 @app.post("/api/auth/settings")
 async def save_user_settings(req: SettingsRequest, authorization: str = Header(None)):
     user = _get_user(authorization)
@@ -671,7 +711,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.27.1",  # bump marker — confirms running code
+        "build": "v3.28.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1519,6 +1559,16 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
     # Determine response strategy
     stock_data = None
 
+    # Trade confirmation — a buy/sell/short/cover intent returns a confirm card
+    # (no order placed). The frontend shows Confirm/Cancel; only Confirm hits
+    # /api/trade/execute. This guarantees no order from a single chat message.
+    if result and result.get("ok") and result.get("type") == "confirm_trade":
+        return {
+            "ok": True, "stream": False, "type": "confirm_trade",
+            "trade": result.get("trade"),
+            "autopilot": autopilot_task is not None and not autopilot_task.done(),
+        }
+
     # If execute returned a ready message (trades, regime, etc) — return instantly
     if result and result.get("ok") and result.get("msg"):
         rtype = result.get("type", "")
@@ -1710,6 +1760,13 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
     if result and result.get("ok"):
         resp = result.get("msg", "")
         rtype = result.get("type", "")
+
+        # Trade confirmation — return the confirm card, place no order.
+        if rtype == "confirm_trade":
+            return {
+                "ok": True, "type": "confirm_trade", "trade": result.get("trade"),
+                "autopilot": autopilot_task is not None and not autopilot_task.done(),
+            }
 
         if rtype == "analysis":
             # Deep single-stock analysis is a Plus feature. A result carrying a

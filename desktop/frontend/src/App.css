@@ -1252,3 +1252,19 @@ body.has-bg-theme .rail { background: rgba(0,0,0,.18); }
 .qrc-text { flex: 1; padding: 9px 12px; font-size: .82rem; color: var(--lt); line-height: 1.45; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .qrc-x { flex-shrink: 0; width: 30px; border: none; background: none; color: var(--dim); font-size: 18px; cursor: pointer; }
 .qrc-x:hover { color: var(--wh); }
+
+/* Trade confirmation card (confirm before any real order) */
+.trade-confirm { margin-top: 12px; border: 1px solid var(--brd); border-radius: 14px; padding: 16px; background: var(--c1); max-width: 420px; }
+.tc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tc-action { font-family: var(--mono); font-size: .68rem; font-weight: 800; letter-spacing: .05em; padding: 3px 9px; border-radius: 6px; }
+.tc-buy, .tc-cover { background: rgba(16,185,129,.15); color: var(--grn); }
+.tc-sell, .tc-short { background: rgba(239,68,68,.15); color: #f87171; }
+.tc-ticker { font-size: 1.25rem; font-weight: 800; color: var(--wh); letter-spacing: -.02em; }
+.tc-qty { font-size: .85rem; color: var(--lt); }
+.tc-actions { display: flex; gap: 10px; margin-top: 14px; }
+.tc-confirm { flex: 1; padding: 11px; border-radius: 10px; border: none; background: var(--grn); color: #04130d; font: inherit; font-weight: 700; font-size: .9rem; cursor: pointer; transition: filter .14s; }
+.tc-confirm:hover { filter: brightness(1.08); }
+.tc-cancel { padding: 11px 18px; border-radius: 10px; border: 1px solid var(--brd); background: none; color: var(--lt); font: inherit; font-weight: 600; font-size: .9rem; cursor: pointer; }
+.tc-cancel:hover { border-color: var(--lt); color: var(--wh); }
+.tc-note { margin-top: 10px; font-size: .72rem; color: var(--dim); }
+.tc-done { margin-top: 12px; font-size: .9rem; color: var(--lt); font-weight: 500; }
