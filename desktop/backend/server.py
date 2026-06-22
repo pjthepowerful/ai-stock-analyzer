@@ -622,6 +622,15 @@ async def execute_confirmed_trade(req: dict, authorization: str = Header(None)):
     action = (req or {}).get("action")
     ticker = (req or {}).get("ticker", "").upper()
     qty = req.get("qty")
+    if action == "cancel_orders":
+        try:
+            result = engine.alpaca_cancel_all_orders()
+            if result.get("ok"):
+                n = result.get("count")
+                return {"ok": True, "message": f"✅ Cancelled {n if n is not None else 'all'} open order{'' if n==1 else 's'}. Your positions are untouched."}
+            return {"ok": False, "error": result.get("error", "Cancel failed")}
+        except Exception as e:
+            return {"ok": False, "error": str(e)[:160]}
     if not ticker or action not in ("buy", "sell", "short", "cover"):
         return {"ok": False, "error": "Invalid trade request"}
     try:
@@ -722,7 +731,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.28.1",  # bump marker — confirms running code
+        "build": "v3.28.2",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),

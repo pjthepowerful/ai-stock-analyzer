@@ -855,6 +855,25 @@ def alpaca_sell(ticker: str, qty: int = None, sell_all: bool = False) -> dict:
         return {"ok": False, "error": str(e)[:100]}
 
 
+def alpaca_cancel_all_orders() -> dict:
+    """Cancel ALL open/pending orders (stops, limits, brackets) WITHOUT touching
+    open positions. Different from close_all, which also liquidates positions."""
+    try:
+        # Count first so we can report how many were cancelled.
+        try:
+            r0 = requests.get(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(),
+                              params={"status": "open"}, timeout=10)
+            n = len(r0.json()) if r0.status_code == 200 and isinstance(r0.json(), list) else None
+        except Exception:
+            n = None
+        r = requests.delete(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(), timeout=10)
+        if r.status_code in (200, 207, 204):
+            return {"ok": True, "count": n}
+        return {"ok": False, "error": f"Failed to cancel orders: {r.status_code}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:100]}
+
+
 def alpaca_close_all() -> dict:
     """Close ALL positions — cancel orders first, then close."""
     try:
@@ -3514,6 +3533,10 @@ def route(msg: str) -> dict:
                             "how many shares", "shares do i", "shares of", "do i own", "do i have",
                             "am i holding", "my shares", "what am i long", "what am i short"]):
         return {"type": "positions"}
+    # Cancel open orders — must come before the "show orders" check so
+    # "cancel all orders" / "cancel my orders" isn't read as "show orders".
+    if "cancel" in m and any(w in m for w in ["order", "orders", "all trade", "active trade", "pending", "everything"]):
+        return {"type": "cancel_orders"}
     if any(w in m for w in ["my orders", "open orders", "order history", "recent orders", "pending orders"]):
         return {"type": "orders"}
     if any(w in m for w in ["how did", "today's trades", "recap", "review", "session", "performance",
@@ -5703,6 +5726,12 @@ def execute(intent: dict) -> dict:
         if result["ok"]:
             return {"ok": True, "type": "trade", "msg": "🔴 **All positions closed.** Portfolio is flat."}
         return {"ok": False, "error": result.get("error", "Failed to close all")}
+
+    if t == "cancel_orders":
+        # Confirm first — cancelling pending orders also removes protective stops.
+        return {"ok": True, "type": "confirm_trade",
+                "trade": {"action": "cancel_orders"},
+                "msg": ""}
 
     if t == "buy":
         ticker = intent["ticker"]

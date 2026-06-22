@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.28.1'
+const VERSION = '3.28.2'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.28.2', d: 'June 21, 2026', changes: [
+    'You can now cancel all open orders \u2014 just ask, and confirm. Your positions stay open.',
+  ]},
   { v: '3.28.1', d: 'June 21, 2026', changes: [
     'Smart/auto buys now ask for confirmation too \u2014 closing the last path that could trade without a tap.',
     'Autopilot chats are now grouped under an "Automation" heading in the sidebar.',
@@ -1873,22 +1876,30 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                       <div className="ai-txt"><span dangerouslySetInnerHTML={{__html:fmt(m.content)}}/>{m.streaming&&<span className="stream-cursor">▌</span>}</div>
                       {m.type === 'confirm_trade' && m.trade && (
                         <div className="trade-confirm">
-                          <div className="tc-head">
-                            <span className={'tc-action tc-'+m.trade.action}>{m.trade.action.toUpperCase()}</span>
-                            <span className="tc-ticker">{m.trade.ticker}</span>
-                            <span className="tc-qty">{m.trade.sell_all||m.trade.cover_all ? 'entire position' : (m.trade.qty ? m.trade.qty+' share'+(m.trade.qty>1?'s':'') : (m.trade.notional ? '$'+m.trade.notional : '1 share'))}</span>
-                          </div>
+                          {m.trade.action === 'cancel_orders' ? (
+                            <div className="tc-head">
+                              <span className="tc-action tc-sell">CANCEL</span>
+                              <span className="tc-ticker">All orders</span>
+                              <span className="tc-qty">positions stay open</span>
+                            </div>
+                          ) : (
+                            <div className="tc-head">
+                              <span className={'tc-action tc-'+m.trade.action}>{m.trade.action.toUpperCase()}</span>
+                              <span className="tc-ticker">{m.trade.ticker}</span>
+                              <span className="tc-qty">{m.trade.sell_all||m.trade.cover_all ? 'entire position' : (m.trade.qty ? m.trade.qty+' share'+(m.trade.qty>1?'s':'') : (m.trade.notional ? '$'+m.trade.notional : '1 share'))}</span>
+                            </div>
+                          )}
                           {m.tradeDone ? (
                             <div className="tc-done">{m.tradeDone}</div>
                           ) : m.tradeBusy ? (
-                            <div className="tc-done">Placing order…</div>
+                            <div className="tc-done">{m.trade.action === 'cancel_orders' ? 'Cancelling…' : 'Placing order…'}</div>
                           ) : m.tradePending ? (
                             <div className="tc-actions">
-                              <button className="tc-cancel" onClick={()=>cancelTrade(i)}>Cancel</button>
-                              <button className="tc-confirm" onClick={()=>confirmTrade(i, m.trade)}>Confirm {m.trade.action}</button>
+                              <button className="tc-cancel" onClick={()=>cancelTrade(i)}>Never mind</button>
+                              <button className="tc-confirm" onClick={()=>confirmTrade(i, m.trade)}>{m.trade.action === 'cancel_orders' ? 'Cancel all orders' : 'Confirm '+m.trade.action}</button>
                             </div>
                           ) : null}
-                          {m.tradePending && <div className="tc-note">Review before confirming — nothing is bought until you tap Confirm.</div>}
+                          {m.tradePending && <div className="tc-note">{m.trade.action === 'cancel_orders' ? 'This removes pending orders (including protective stops). Positions stay open.' : 'Review before confirming — nothing is bought until you tap Confirm.'}</div>}
                         </div>
                       )}
                       {m.showChart && m.tickers?.length>1?(
