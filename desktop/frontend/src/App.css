@@ -1272,3 +1272,7 @@ body.has-bg-theme .rail { background: rgba(0,0,0,.18); }
 /* Automation section header in the chat list */
 .rl-sec-auto { display: flex; align-items: center; gap: 6px; color: var(--grn); }
 .rl-sec-auto svg { flex-shrink: 0; }
+
+/* Gradient swatches disabled in light mode */
+.bg-dimmed { opacity: .35; cursor: not-allowed; }
+.bg-dimmed:hover { transform: none; }

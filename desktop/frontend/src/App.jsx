@@ -20,11 +20,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.28.2'
+const VERSION = '3.28.3'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.28.3', d: 'June 21, 2026', changes: [
+    'Gradient backgrounds now only apply in dark mode (they looked off on light) \u2014 light mode stays clean.',
+    'Cleaned up the broker key fields \u2014 removed the example text in the inputs.',
+  ]},
   { v: '3.28.2', d: 'June 21, 2026', changes: [
     'You can now cancel all open orders \u2014 just ask, and confirm. Your positions stay open.',
   ]},
@@ -1196,9 +1200,11 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
     if (settings.fontSize) document.documentElement.style.setProperty('--chat-fs', settings.fontSize)
     // Background theme is a Plus perk — apply the saved one for Plus members,
     // otherwise force the classic background (so a lapsed member loses it).
-    if (isPlus && settings.bgTheme) applyTheme(settings.bgTheme)
+    // Gradients are dark-toned and look wrong on a light background, so we only
+    // apply them in dark mode; light mode always uses the clean light bg.
+    if (isPlus && settings.bgTheme && theme !== 'light') applyTheme(settings.bgTheme)
     else applyTheme('default')
-  }, [settings, isPlus])
+  }, [settings, isPlus, theme])
   const updateSetting = (k, v) => { const n = { ...settings, [k]: v }; setSettings(n); localStorage.setItem('paula-settings-' + user.id, JSON.stringify(n)) }
   const snd = (fn) => { if (settingsRef.current.sounds !== false) fn() }
 
@@ -2760,8 +2766,8 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
     {/* Connections (Plus) */}
     {user&&(isPlus?<div className="card wide"><label>Connections</label><span className="card-sub">Broker and data feeds</span>
       <p className="s-hint">Add your own Alpaca paper keys to trade <b>your own account</b>. Leave blank to use the shared demo account. Keys are encrypted and never shown again.</p>
-      <div className="s-row"><div className="s-col"><span>Alpaca Key</span><span className="s-desc">Broker · trade execution</span></div><input className="s-inp s-wide" type="password" name="alpaca-key-field" autoComplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" value={keys.alpaca_key} onChange={e=>setKeys({...keys,alpaca_key:e.target.value})} placeholder={keyExists.alpaca_key?'•••••••• saved — leave blank to keep':'PKSPW...'}/></div>
-      <div className="s-row"><div className="s-col"><span>Alpaca Secret</span><span className="s-desc">From your Alpaca dashboard</span></div><input className="s-inp s-wide" type="password" name="alpaca-secret-field" autoComplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" value={keys.alpaca_secret} onChange={e=>setKeys({...keys,alpaca_secret:e.target.value})} placeholder={keyExists.alpaca_secret?'•••••••• saved — leave blank to keep':'AzMr...'}/></div>
+      <div className="s-row"><div className="s-col"><span>Alpaca Key</span><span className="s-desc">Broker · trade execution</span></div><input className="s-inp s-wide" type="password" name="alpaca-key-field" autoComplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" value={keys.alpaca_key} onChange={e=>setKeys({...keys,alpaca_key:e.target.value})} placeholder={keyExists.alpaca_key?'•••••••• saved — leave blank to keep':'Your Alpaca API key'}/></div>
+      <div className="s-row"><div className="s-col"><span>Alpaca Secret</span><span className="s-desc">From your Alpaca dashboard</span></div><input className="s-inp s-wide" type="password" name="alpaca-secret-field" autoComplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" value={keys.alpaca_secret} onChange={e=>setKeys({...keys,alpaca_secret:e.target.value})} placeholder={keyExists.alpaca_secret?'•••••••• saved — leave blank to keep':'Your Alpaca secret key'}/></div>
       <button className={'login-btn s-save'+(keySaved?' s-saved':'')} onClick={saveKeys}>{keySaved?'✓ Saved':'Save connections'}</button>
     </div>:<LockedCard title="Connections" sub="Broker and data feeds" onUpgrade={()=>setView&&setView('plus')}/>)}
 
@@ -2792,16 +2798,19 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
       </div>
       <div className="s-row s-row-top"><span>Background {!isPlus&&<svg className="inline-lock" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>}</span>
         <div className="theme-bg-picks">
-          {THEMES.map(t=>(
-            <button key={t.id} className={'bg-swatch'+((settings.bgTheme||'default')===t.id?' bg-on':'')+(!isPlus?' bg-locked':'')}
-              style={{background:t.swatch||'var(--bg)'}} title={isPlus?t.name:t.name+' (Plus)'}
-              onClick={()=>{ if(!isPlus){setView&&setView('plus');return} update('bgTheme',t.id); applyTheme(t.id) }}>
+          {THEMES.map(t=>{
+            const dimmed = theme==='light' && t.id!=='default'
+            return (
+            <button key={t.id} className={'bg-swatch'+((settings.bgTheme||'default')===t.id?' bg-on':'')+(!isPlus?' bg-locked':'')+(dimmed?' bg-dimmed':'')}
+              style={{background:t.swatch||'var(--bg)'}} title={dimmed?t.name+' (dark mode only)':(isPlus?t.name:t.name+' (Plus)')}
+              onClick={()=>{ if(!isPlus){setView&&setView('plus');return} if(dimmed){return} update('bgTheme',t.id); applyTheme(t.id) }}>
               {(settings.bgTheme||'default')===t.id&&<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>}
               {t.id==='default'&&(settings.bgTheme||'default')!=='default'&&<span className="bg-x">∅</span>}
               <span className="bg-label">{t.name}</span>
             </button>
-          ))}
+          )})}
         </div>
+        {theme==='light'&&<span className="s-desc" style={{marginTop:6}}>Gradient backgrounds are dark-toned — available in dark mode.</span>}
       </div>
     </div>
 
