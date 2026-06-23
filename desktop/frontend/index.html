@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>Paula</title>
   <link rel="icon" href="/favicon.ico" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -13,6 +16,21 @@
 </head>
 <body>
   <div id="root"></div>
+  <script>
+    // Catch a 404 on a hashed CSS/JS asset (old cached index.html pointing at
+    // files a newer deploy already replaced) and self-heal with one cache-busting
+    // reload. Complements Vite's vite:preloadError (which covers JS chunks) by
+    // also catching <link rel=stylesheet> failures. Guarded against loops.
+    window.addEventListener('error', function (e) {
+      var t = e.target;
+      if (!t || !t.tagName) return;
+      var url = t.href || t.src || '';
+      if (/\/assets\/.*\.(css|js)(\?|$)/.test(url) && !sessionStorage.getItem('paula-reloaded-stale')) {
+        sessionStorage.setItem('paula-reloaded-stale', '1');
+        location.reload();
+      }
+    }, true);
+  </script>
   <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>
