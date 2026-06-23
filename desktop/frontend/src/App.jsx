@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.29.6'
+const VERSION = '3.29.7'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.29.7', d: 'June 22, 2026', changes: [
+    'Free tier is now 3 messages a day.',
+  ]},
   { v: '3.29.6', d: 'June 22, 2026', changes: [
     'The app now reliably self-heals after an update instead of ever loading unstyled or half-broken.',
   ]},
@@ -163,7 +166,7 @@ const CHANGELOG_DATA = [
     'A cleaner, calmer interface and a refreshed settings icon.',
   ]},
   { v: '3.18.0', d: 'June 18, 2026', changes: [
-    'Use Paula without signing in \u2014 tap "Continue as guest" to try it with 5 messages a day.',
+    'Use Paula without signing in \u2014 tap "Continue as guest" to try it with 3 messages a day.',
     'Guest chats are saved on your device, and move into your account when you sign up.',
   ]},
   { v: '3.17.1', d: 'June 18, 2026', changes: [
@@ -212,11 +215,11 @@ const CHANGELOG_DATA = [
   ]},
   { v: '3.9.6', d: 'June 16, 2026', changes: [
     'New "Hey Paula — for everything trading" branding on the trailer and login.',
-    'Free tier is a clean 5 messages per day.',
+    'Free tier is a clean 3 messages per day.',
   ]},
   { v: '3.9.0', d: 'June 15, 2026', changes: [
     'Introducing Paula Plus ($9.99/mo): unlimited messages, unlimited chats, and full access.',
-    'Free tier: 5 messages a day, one chat, with Analyze & Portfolio reserved for Plus.',
+    'Free tier: 3 messages a day, one chat, with Analyze & Portfolio reserved for Plus.',
     'Smooth upgrade flow with an unlock celebration.',
     'Admins can grant or revoke Plus from the admin panel.',
   ]},
@@ -659,7 +662,7 @@ function LoginPage({ onAuth, onFinishAuth, onGuest }) {
                 {onGuest && <>
                   <div className="lg-or"><span>or</span></div>
                   <button className="lg-guest" onClick={onGuest}>Continue as guest</button>
-                  <p className="lg-guest-note">Try Paula with 5 messages a day. Your chats stay on this device until you sign up.</p>
+                  <p className="lg-guest-note">Try Paula with 3 messages a day. Your chats stay on this device until you sign up.</p>
                 </>}
               </div>
             </>}
@@ -1434,8 +1437,8 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
 
   const sendMessage = async (msg) => {
     if (!msg || (sending && sendingChatRef.current === chatIdRef.current)) return
-    // Guests get 5 messages/day on this device; then prompt to sign up.
-    if (isGuest && guestUsage() >= 5) { setGuestGate(true); return }
+    // Guests get 3 messages/day on this device; then prompt to sign up.
+    if (isGuest && guestUsage() >= 3) { setGuestGate(true); return }
     if (isGuest) bumpGuestUsage()
     scrollLockRef.current = true  // sending a message re-pins to the bottom
     setSending(true)

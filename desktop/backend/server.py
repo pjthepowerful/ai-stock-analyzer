@@ -731,7 +731,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.29.6",  # bump marker — confirms running code
+        "build": "v3.29.7",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1727,14 +1727,14 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
     user = _get_user(authorization)
     user_id = user["id"] if user else 0
     # Free-tier daily message limit (Paula Plus, admin, and authorized accounts
-    # are exempt). 5 free messages per day; the 6th is blocked with the Plus prompt.
+    # are exempt). 3 free messages per day; the 4th is blocked with the Plus prompt.
     if user:
         _exempt = auth.is_plus(user["id"]) or _can_autopilot(user) or (user.get("email", "").lower() == ADMIN_EMAIL)
-        if not _exempt and auth.messages_today(user["id"]) >= 5:
+        if not _exempt and auth.messages_today(user["id"]) >= 3:
             return {
                 "ok": True, "stream": False, "type": "limit",
                 "limit_reached": True,
-                "message": "You've used your 5 free messages for today. Upgrade to Paula Plus for unlimited messages, new chats, and full access.",
+                "message": "You've used your 3 free messages for today. Upgrade to Paula Plus for unlimited messages, new chats, and full access.",
             }
     if user:
         auth.save_chat(user["id"], "user", user_msg)
