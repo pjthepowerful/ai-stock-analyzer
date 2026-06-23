@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.29.7'
+const VERSION = '3.29.8'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.29.8', d: 'June 22, 2026', changes: [
+    'Removed the timestamps under messages for a cleaner chat.',
+  ]},
   { v: '3.29.7', d: 'June 22, 2026', changes: [
     'Free tier is now 3 messages a day.',
   ]},
@@ -1921,10 +1924,9 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                       ):null}
                       {m.signalData && <SignalCard data={m.signalData} account={account} onBuy={(ticker, qty)=>{ if(!isPlus){setShowPlus(true);return} sendMessage(`Buy ${qty} ${ticker}`) }} onExecute={(ticker, side) => sendMessage((side === 'EXIT' ? 'Sell ' : 'Buy ') + ticker)}/>}
                       {!m.streaming && <AnalyzeChips content={m.content} known={m.tickers} exclude={[m.ticker, m.signalData?.ticker, ...(m.tickers||[])].filter(Boolean)} hasCard={!!m.signalData} onAnalyze={(tk)=>{ if(!isPlus){setShowPlus(true);return} sendMessage('Analyze '+tk) }}/>}
-                      {m.time&&!m.streaming&&<div className="msg-time">{m.time}</div>}
                     </div>
                   </div>
-                ):(<><div className="user-bubble">{m.content}</div>{m.time&&<div className="msg-time">{m.time}</div>}</>)}
+                ):(<><div className="user-bubble">{m.content}</div></>)}
               </div>))}
             {sending&&sendingChatRef.current===chatIdRef.current&&!messages.some(m=>m.streaming)&&<div className="msg msg-assistant"><div className="ai"><div className="ai-av">P</div><div className="ai-body"><div className="ai-name">Paula</div><div className="loading-state"><div className="dots"><span/><span/><span/></div><span className="loading-txt">{loadingText}</span></div></div></div></div>}
             <div ref={messagesEnd}/>
