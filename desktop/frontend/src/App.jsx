@@ -1530,6 +1530,18 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
           }
           return
         }
+        // Free "taste" of a deep analysis — show the quick read + a Plus upsell.
+        if (data.type === 'taste') {
+          setSending(false)
+          if (chatIdRef.current === targetId) {
+            setMessages(prev => [...prev, {
+              role: 'assistant', content: data.message || '', type: 'taste',
+              ticker: data.ticker || null, tasteUpsell: true,
+              time: new Date().toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'})
+            }])
+          }
+          return
+        }
         const text = data.message || ''
         const assistantMsg = {
           role: 'assistant', content: text, streaming: false,
@@ -1929,6 +1941,10 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                         <div className="ai-chart"><Suspense fallback={<ChartFallback/>}><Chart ticker={m.ticker||m.tickers[0]} signal={m.signal} height={260}/></Suspense></div>
                       ):null}
                       {m.signalData && <SignalCard data={m.signalData} account={account} onBuy={(ticker, qty)=>{ if(!isPlus){setShowPlus(true);return} sendMessage(`Buy ${qty} ${ticker}`) }} onExecute={(ticker, side) => sendMessage((side === 'EXIT' ? 'Sell ' : 'Buy ') + ticker)}/>}
+                      {m.tasteUpsell && <button className="taste-upsell" onClick={()=>setShowPlus(true)}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M2 18h20l-1.5-9-5 4-3.5-7-3.5 7-5-4z"/></svg>
+                        See the full analysis with Plus
+                      </button>}
                       {!m.streaming && <AnalyzeChips content={m.content} known={m.tickers} exclude={[m.ticker, m.signalData?.ticker, ...(m.tickers||[])].filter(Boolean)} hasCard={!!m.signalData} onAnalyze={(tk)=>{ if(!isPlus){setShowPlus(true);return} sendMessage('Analyze '+tk) }}/>}
                     </div>
                   </div>

@@ -1306,3 +1306,8 @@ body.has-bg-theme .rail { background: rgba(0,0,0,.18); }
 .bp-confirm { flex: 1; padding: 10px; border-radius: 9px; border: none; background: var(--grn); color: #04130d; font: inherit; font-weight: 700; cursor: pointer; transition: filter .14s; }
 .bp-confirm:hover:not(:disabled) { filter: brightness(1.08); }
 .bp-confirm:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Free "taste" analysis Plus upsell button */
+.taste-upsell { display: inline-flex; align-items: center; gap: 7px; margin-top: 12px; padding: 9px 15px; border-radius: 10px; border: 1px solid #fbbf24; background: linear-gradient(135deg, rgba(251,191,36,.14), rgba(251,191,36,.06)); color: #fbbf24; font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer; transition: filter .14s; }
+.taste-upsell:hover { filter: brightness(1.12); }
+.taste-upsell svg { flex-shrink: 0; }

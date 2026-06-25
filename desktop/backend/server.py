@@ -60,6 +60,43 @@ EMAIL_AUTH_ENABLED = os.environ.get("EMAIL_AUTH_ENABLED", "0") == "1"
 
 def _can_autopilot(user) -> bool:
     return bool(user) and user.get("email", "").lower() in AUTOPILOT_EMAILS
+
+
+def _taste_analysis(result: dict) -> dict:
+    """Free users get a *taste* of a deep stock analysis: the ticker, current
+    price, the signal (BUY/SELL/etc) and the score — but NOT the full data dict,
+    chart, entry/stop/target levels, or detailed breakdown (those stay Plus).
+    Returns a trimmed chat response with a flag so the frontend shows a
+    'see the full analysis with Plus' prompt under it."""
+    data = result.get("data") or {}
+    ticker = (result.get("ticker") or data.get("ticker") or "").upper()
+    price = data.get("price")
+    signal = data.get("action") or data.get("signal") or (data.get("trade") or {}).get("side")
+    score = data.get("score")
+    bits = []
+    if price is not None:
+        try:
+            bits.append(f"**{ticker}** is at ${float(price):,.2f}")
+        except Exception:
+            bits.append(f"**{ticker}**")
+    else:
+        bits.append(f"**{ticker}**")
+    if signal:
+        bits.append(f"current signal: **{signal}**")
+    if score is not None:
+        bits.append(f"score **{score}/100**")
+    teaser = " · ".join(bits)
+    msg = (
+        f"{teaser}\n\nThat's the quick read. The full breakdown — setup scores, "
+        f"entry/stop/target levels, the chart, and Paula's reasoning — is part of "
+        f"Paula Plus."
+    )
+    return {
+        "ok": True, "stream": False, "type": "taste",
+        "taste": True, "plus_upsell": True,
+        "ticker": ticker, "message": msg,
+    }
+
 # Shared set of recognizable tickers (used for chat data + news lookups)
 KNOWN_TICKERS = set(["AAPL","MSFT","NVDA","GOOGL","AMZN","META","TSLA","AMD","NFLX","SPY","QQQ","JPM","V","BA","HD","CRM","AVGO","LLY","COST","WMT","DIS","XOM","CVX","GS","BAC","INTC","PYPL","COIN","PLTR","UBER","SHOP","SOFI","MARA","CELH","NIO","RIVN","F","GM","KO","PEP","NKE","ADBE","CSCO","IBM","QCOM","TXN","MU","MA","SQ","HOOD","MS","C","WFC","UNH","JNJ","MRK","PFE","ABBV","TGT","SBUX","MCD","CMG","DASH","BKNG","ABNB","LULU","SLB","COP","CAT","GE","HON","DE","UPS","FDX","LMT","SNAP","RBLX","DKNG","MSTR","RIOT","NET","DDOG","SNOW","PANW","CRWD","TTD","SMCI","ARM","IONQ","TMDX","DUOL","FCEL","ONON","HIMS","CAVA","TOST","ELF","LCID","DELL","ROKU","NOW","INTU","PINS","CVNA","MRNA","BRK-B","RKLB","AXON"])
 autopilot_task: Optional[asyncio.Task] = None
@@ -1616,10 +1653,7 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
         if _is_deep:
             _plus = bool(user) and (auth.is_plus(user["id"]) or _can_autopilot(user) or (user.get("email", "").lower() == ADMIN_EMAIL))
             if not _plus:
-                return {
-                    "ok": True, "stream": False, "type": "limit", "limit_reached": True,
-                    "message": "Deep stock analysis is a Paula Plus feature. Upgrade to analyze any stock with the full signal breakdown, score, and chart.",
-                }
+                return _taste_analysis(result)
         if rtype in ("analysis", "list"):
             # Has data — stream AI analysis
             stock_data = result.get("data") if rtype == "analysis" else {"stocks": result.get("data", [])}
@@ -1640,10 +1674,7 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
         if _is_deep2:
             _plus2 = bool(user) and (auth.is_plus(user["id"]) or _can_autopilot(user) or (user.get("email", "").lower() == ADMIN_EMAIL))
             if not _plus2:
-                return {
-                    "ok": True, "stream": False, "type": "limit", "limit_reached": True,
-                    "message": "Deep stock analysis is a Paula Plus feature. Upgrade to analyze any stock with the full signal breakdown, score, and chart.",
-                }
+                return _taste_analysis(result)
         stock_data = result.get("data")
     elif result and result.get("error"):
         resp = f"⚠️ {result['error']}"
@@ -1816,18 +1847,10 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
             if _is_deep and user:
                 _plus = auth.is_plus(user["id"]) or _can_autopilot(user) or (user.get("email", "").lower() == ADMIN_EMAIL)
                 if not _plus:
-                    return {
-                        "ok": True, "stream": False, "type": "limit",
-                        "limit_reached": True,
-                        "message": "Deep stock analysis is a Paula Plus feature. Upgrade to analyze any stock with the full signal breakdown, score, and chart.",
-                    }
+                    return _taste_analysis(result)
             elif _is_deep and not user:
-                # Guests/anonymous also can't deep-analyze.
-                return {
-                    "ok": True, "stream": False, "type": "limit",
-                    "limit_reached": True,
-                    "message": "Deep stock analysis is a Paula Plus feature. Sign up and upgrade to analyze any stock in full.",
-                }
+                # Guests/anonymous also get just the taste.
+                return _taste_analysis(result)
             if not resp:
                 # If the question is news-oriented, fetch recent headlines for
                 # the analyzed ticker and feed them to the AI (same as chat path).
