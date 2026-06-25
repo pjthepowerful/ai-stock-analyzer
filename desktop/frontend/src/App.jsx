@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.29.8'
+const VERSION = '3.29.9'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.29.9', d: 'June 22, 2026', changes: [
+    'Removed the \u201cAutopilot active\u201d banner under the chat input.',
+  ]},
   { v: '3.29.8', d: 'June 22, 2026', changes: [
     'Removed the timestamps under messages for a cleaner chat.',
   ]},
@@ -1948,9 +1951,6 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
               : <button className="send" onClick={send}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9Z"/></svg></button>
             }
           </div>
-          {autopilot&&<div className="input-hints">
-            <span className="ih-left"><span className="ih-dot"/>AUTOPILOT ACTIVE</span>
-          </div>}
           </div></div>
         </>)}
       </main>
