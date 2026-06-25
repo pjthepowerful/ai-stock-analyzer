@@ -3035,72 +3035,69 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True) -> dict:
         return chunk, None
 
     from concurrent.futures import ThreadPoolExecutor
-    # Modest concurrency — 3 chunks at a time. Enough to overlap network waits,
-    # few enough that Yahoo doesn't throttle us. (Was 8, which got rate-limited.)
-    results = []
+    # Modest concurrency — 3 chunks at a time. Process each chunk's frame as it
+    # finishes and drop it immediately, so we never hold all ~500 tickers' worth
+    # of 1y data in memory at once (that peak was a contributor to OOM kills).
+    from concurrent.futures import as_completed
     with ThreadPoolExecutor(max_workers=min(3, len(chunks))) as _ex:
-        results = list(_ex.map(_fetch_chunk, chunks))
-
-    for chunk, df in results:
-        if df is None or df.empty:
-            continue
-        for t in chunk:
-            try:
-                # Multi-ticker frame is column-keyed by ticker; single-ticker isn't.
-                sub = df[t] if len(chunk) > 1 else df
-                sub = sub.dropna(how="all")
-                if sub is None or sub.empty or len(sub) < 50:
-                    if sub is None or sub.empty:
-                        _DELISTED_CACHE.add(t)
-                    continue
-                price = float(sub["Close"].iloc[-1])
-                prev = float(sub["Close"].iloc[-2]) if len(sub) >= 2 else price
-                if not price or price < 1:
-                    continue
-                # STALE-DATA / DELISTED guard: a stock that was acquired, delisted,
-                # or halted stops printing new bars, but still has months of valid
-                # history (so the IPO/min-history guard misses it). If the most
-                # recent bar is several days stale, it's no longer trading — skip
-                # it so we never recommend a dead ticker (e.g. MASI after the
-                # Danaher buyout). Allow ~5 days to cover weekends + holidays.
-                try:
-                    import pandas as _pd
-                    last_dt = sub.index[-1]
-                    last_ts = _pd.Timestamp(last_dt)
-                    now_ts = _pd.Timestamp.now(tz=last_ts.tz) if last_ts.tz else _pd.Timestamp.now()
-                    if (now_ts - last_ts).days > 5:
-                        _DELISTED_CACHE.add(t)
-                        continue
-                except Exception:
-                    pass
-                # Liquidity filter — drop illiquid junk so a full-market scan only
-                # surfaces names you could actually trade. Require ~$5M+ average
-                # daily dollar volume over the last 20 sessions.
-                try:
-                    recent = sub.tail(20)
-                    avg_dollar_vol = float((recent["Close"] * recent["Volume"]).mean())
-                    if avg_dollar_vol < 5_000_000:
-                        continue
-                except Exception:
-                    pass
-                tech = compute_technicals(sub)
-                if not tech:
-                    continue
-                rs = _calc_relative_strength(sub)
-                data = {
-                    "price": round(price, 2),
-                    "prev_close": round(prev, 2),
-                    "change_pct": round((price - prev) / prev * 100, 2) if prev else 0,
-                    "name": t, "ticker": t, "full_ticker": t,
-                    "technicals": tech,
-                    "relative_strength": rs,
-                    "sector_etf": TICKER_SECTOR.get(t),
-                    "news_sentiment": {} if skip_news else _news_sentiment(t),
-                }
-                out[t] = data
-                _SCAN_DATA_CACHE[t] = (_now, data)
-            except Exception:
+        futures = [_ex.submit(_fetch_chunk, ch) for ch in chunks]
+        for fut in as_completed(futures):
+            chunk, df = fut.result()
+            if df is None or df.empty:
                 continue
+            for t in chunk:
+                try:
+                    # Multi-ticker frame is column-keyed by ticker; single-ticker isn't.
+                    sub = df[t] if len(chunk) > 1 else df
+                    sub = sub.dropna(how="all")
+                    if sub is None or sub.empty or len(sub) < 50:
+                        if sub is None or sub.empty:
+                            _DELISTED_CACHE.add(t)
+                        continue
+                    price = float(sub["Close"].iloc[-1])
+                    prev = float(sub["Close"].iloc[-2]) if len(sub) >= 2 else price
+                    if not price or price < 1:
+                        continue
+                    try:
+                        import pandas as _pd
+                        last_dt = sub.index[-1]
+                        last_ts = _pd.Timestamp(last_dt)
+                        now_ts = _pd.Timestamp.now(tz=last_ts.tz) if last_ts.tz else _pd.Timestamp.now()
+                        if (now_ts - last_ts).days > 5:
+                            _DELISTED_CACHE.add(t)
+                            continue
+                    except Exception:
+                        pass
+                    try:
+                        recent = sub.tail(20)
+                        avg_dollar_vol = float((recent["Close"] * recent["Volume"]).mean())
+                        if avg_dollar_vol < 5_000_000:
+                            continue
+                    except Exception:
+                        pass
+                    tech = compute_technicals(sub)
+                    if not tech:
+                        continue
+                    rs = _calc_relative_strength(sub)
+                    data = {
+                        "price": round(price, 2),
+                        "prev_close": round(prev, 2),
+                        "change_pct": round((price - prev) / prev * 100, 2) if prev else 0,
+                        "name": t, "ticker": t, "full_ticker": t,
+                        "technicals": tech,
+                        "relative_strength": rs,
+                        "sector_etf": TICKER_SECTOR.get(t),
+                        "news_sentiment": {} if skip_news else _news_sentiment(t),
+                    }
+                    out[t] = data
+                    _SCAN_DATA_CACHE[t] = (_now, data)
+                    if len(_SCAN_DATA_CACHE) > 1500:
+                        for _k in sorted(_SCAN_DATA_CACHE, key=lambda k: _SCAN_DATA_CACHE[k][0])[:500]:
+                            _SCAN_DATA_CACHE.pop(_k, None)
+                except Exception:
+                    continue
+            # Release this chunk's frame before moving to the next completed one.
+            del df
     return out
 
 
@@ -3166,6 +3163,9 @@ def fetch_full(ticker: str) -> dict | None:
     _result = _fetch_full_uncached(ticker)
     if _result:
         _FULL_CACHE[_key] = (_now, _result)
+        if len(_FULL_CACHE) > 600:
+            for _k in sorted(_FULL_CACHE, key=lambda k: _FULL_CACHE[k][0])[:200]:
+                _FULL_CACHE.pop(_k, None)
     return _result
 
 

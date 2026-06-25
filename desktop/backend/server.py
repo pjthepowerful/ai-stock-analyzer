@@ -336,12 +336,23 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             data = await websocket.receive_text()
             # Client can send pings or commands via WS
-            msg = json.loads(data)
+            try:
+                msg = json.loads(data)
+            except Exception:
+                continue
             if msg.get("type") == "ping":
                 await websocket.send_text(json.dumps({"event": "pong"}))
-    except WebSocketDisconnect:
+    except Exception:
+        # Any disconnect/error path — fall through to cleanup.
+        pass
+    finally:
+        # ALWAYS remove the socket so connected_clients can't grow unbounded
+        # (a leak here is a slow OOM as clients reconnect over and over).
         if websocket in connected_clients:
-            connected_clients.remove(websocket)
+            try:
+                connected_clients.remove(websocket)
+            except ValueError:
+                pass
 
 
 # ── REST Endpoints ──
@@ -731,7 +742,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.29.9",  # bump marker — confirms running code
+        "build": "v3.29.10",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1347,6 +1358,10 @@ def _company_info(ticker: str) -> dict:
     except Exception:
         pass
     _COMPANY_CACHE[t] = info_out
+    if len(_COMPANY_CACHE) > 800:
+        # Company info is plain dicts; just trim arbitrary entries when oversized.
+        for _k in list(_COMPANY_CACHE)[:300]:
+            _COMPANY_CACHE.pop(_k, None)
     return info_out
 
 
@@ -1507,6 +1522,9 @@ def chart_data(ticker: str, period: str = "1y"):
                 }
             }
             _CHART_CACHE[ck] = (_t.time(), payload)
+            if len(_CHART_CACHE) > 400:
+                for _k in sorted(_CHART_CACHE, key=lambda k: _CHART_CACHE[k][0])[:150]:
+                    _CHART_CACHE.pop(_k, None)
             return payload
         except Exception as e:
             last_err = str(e)[:100]
