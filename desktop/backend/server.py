@@ -62,6 +62,29 @@ def _can_autopilot(user) -> bool:
     return bool(user) and user.get("email", "").lower() in AUTOPILOT_EMAILS
 
 
+def _friendly_error(err: str) -> str:
+    """Turn a raw/technical error into something a person can act on."""
+    e = (err or "").lower()
+    if "no data" in e or "delisted" in e or "symbol may be" in e:
+        return ("I couldn't pull data for that ticker. It might be misspelled, "
+                "newly listed, delisted, or not a US-listed stock. Double-check "
+                "the symbol and try again.")
+    if "rate" in e or "too many" in e:
+        return ("The market data source is busy right now (rate-limited). Give it "
+                "a few seconds and try again — it usually clears quickly.")
+    if "alpaca" in e or "connect" in e or "credential" in e or "unauthorized" in e:
+        return ("I couldn't reach your brokerage account. Check that your Alpaca "
+                "API keys are set correctly in Settings → Connections.")
+    if "buying power" in e or "insufficient" in e:
+        return ("That order needs more buying power than the account has. Try a "
+                "smaller share count.")
+    if "timeout" in e or "timed out" in e:
+        return ("That took too long and timed out. The data source may be slow "
+                "right now — please try again.")
+    # Fallback: show the original but cleaned up.
+    return f"Something went wrong: {err}"
+
+
 def _taste_analysis(result: dict) -> dict:
     """Free users get a *taste* of a deep stock analysis: the ticker, current
     price, the signal (BUY/SELL/etc) and the score — but NOT the full data dict,
@@ -779,7 +802,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.29.10",  # bump marker — confirms running code
+        "build": "v3.30.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1034,7 +1057,7 @@ async def get_account(authorization: str = Header(None)):
     _get_user(authorization)  # sets this user's Alpaca creds for the request
     acc = engine.alpaca_account()
     if not acc:
-        return {"ok": False, "error": "Can't connect to Alpaca"}
+        return {"ok": False, "error": "Couldn't reach your brokerage account. Check your Alpaca keys in Settings → Connections."}
     return {"ok": True, "data": acc}
 
 
@@ -1677,7 +1700,7 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
                 return _taste_analysis(result)
         stock_data = result.get("data")
     elif result and result.get("error"):
-        resp = f"⚠️ {result['error']}"
+        resp = f"⚠️ {_friendly_error(result.get('error', ''))}"
         chat_history.append({"role": "assistant", "content": resp})
         return {"ok": True, "message": resp, "stream": False, "type": "chat"}
 
@@ -1954,7 +1977,7 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                     pass
             resp = await loop.run_in_executor(None, engine.ai_response, _umsg, _chat_data if _chat_data else None, chat_history, "US")
     elif result and result.get("error"):
-        resp = f"⚠️ {result['error']}"
+        resp = f"⚠️ {_friendly_error(result.get('error', ''))}"
     else:
         # Final fallthrough — plain conversational answer.
         _fall_data = None

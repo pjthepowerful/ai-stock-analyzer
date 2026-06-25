@@ -20,11 +20,16 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.29.10'
+const VERSION = '3.30.0'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.30.0', d: 'June 24, 2026', changes: [
+    'New "Today\u2019s market" summary on the welcome screen \u2014 regime, SPY, VIX, and RSI at a glance.',
+    'Clearer error messages when a ticker, the data source, or your brokerage has a problem.',
+    'Mobile polish \u2014 bigger tap targets and better-fitting cards on phones.',
+  ]},
   { v: '3.29.10', d: 'June 24, 2026', changes: [
     'Backend stability — fixed memory leaks that were causing the server to restart under load.',
   ]},
@@ -1084,6 +1089,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
   const apToggleAtRef = useRef(0) // timestamp of last manual toggle — guards against poll races
   const [connected, setConnected] = useState(false)
   const [spyTrend, setSpyTrend] = useState(null)
+  const [marketToday, setMarketToday] = useState(null)
   const [selectedPos, setSelectedPos] = useState(null)
   const [toasts, setToasts] = useState([])
   const [view, setView] = useState('chat')
@@ -1357,9 +1363,8 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
       if (chat?.messages) setMessages(chat.messages)
     }
     refreshData()
-    // Poll account/positions every 5s — but skip refreshes while the tab is
-    // hidden (background), and fire one immediately when the user returns. Saves
-    // battery, bandwidth, and backend load when Paula isn't on screen.
+    // Today's market mood — fetched once on mount (hits Yahoo, so not polled).
+    f(API+'/api/market-regime').then(r=>r.json()).then(d=>{ if(d.ok||d.regime) setMarketToday(d.data||d) }).catch(()=>{})
     const i = setInterval(() => { if (!document.hidden) refreshData() }, 5000)
     const onVis = () => { if (!document.hidden) refreshData() }
     document.addEventListener('visibilitychange', onVis)
@@ -1887,6 +1892,20 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                   <div className="ws-cell"><span className="ws-l">Open P/L</span><span className={'ws-v '+(pnl>=0?'up':'dn')}>{pnl>=0?'+':'−'}${Math.abs(pnl).toFixed(0)}</span></div>
                   {spyTrend&&<div className="ws-cell"><span className="ws-l">Market</span><span className={'ws-v '+(spyTrend.change_pct>=0?'up':'dn')}>SPY {spyTrend.change_pct>=0?'+':''}{spyTrend.change_pct}%</span></div>}
                   <div className="ws-cell"><span className="ws-l">Positions</span><span className="ws-v">{positions.length}</span></div>
+                </div>}
+
+                {marketToday&&(marketToday.regime||marketToday.reason)&&<div className={'w-market '+(marketToday.safe_to_buy?'wm-ok':'wm-caution')}>
+                  <div className="wm-top">
+                    <span className="wm-dot"/>
+                    <span className="wm-label">Today's market</span>
+                    {marketToday.regime&&<span className="wm-regime">{String(marketToday.regime).replace(/_/g,' ')}</span>}
+                  </div>
+                  {marketToday.reason&&<div className="wm-reason">{marketToday.reason}</div>}
+                  <div className="wm-stats">
+                    {marketToday.spy_price&&<span>SPY ${marketToday.spy_price}</span>}
+                    {marketToday.vix&&marketToday.vix.level?<span>VIX {marketToday.vix.level}{marketToday.vix.status?` · ${String(marketToday.vix.status).replace(/_/g,' ')}`:''}</span>:null}
+                    {typeof marketToday.rsi==='number'&&<span>RSI {marketToday.rsi}</span>}
+                  </div>
                 </div>}
 
                 <div className="w-pills">

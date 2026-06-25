@@ -965,6 +965,32 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 
   /* Theme picker + font buttons wrap */
   .theme-picks { flex-wrap: wrap; }
+
+  /* ── Polish for narrower phones ── */
+  /* Welcome screen breathes a bit less */
+  .welcome { padding: 0 4px; }
+  .w-greet { font-size: 1.5rem; }
+  .w-snap { gap: 10px; }
+  .w-market { padding: 12px 13px; }
+  .w-pills { flex-wrap: wrap; justify-content: center; }
+
+  /* Signal card + buy panel + trade confirm fit the screen and have big taps */
+  .signal-card, .trade-confirm, .buy-panel { max-width: 100%; }
+  .bp-qty-row { gap: 9px; }
+  .bp-stepper button { width: 40px; height: 42px; }   /* bigger touch targets */
+  .bp-stepper input { height: 42px; }
+  .tc-actions, .bp-actions { flex-direction: column-reverse; }   /* stack, confirm on top */
+  .tc-confirm, .tc-cancel, .bp-confirm, .bp-cancel { width: 100%; padding: 13px; }
+
+  /* Analyze chips + taste upsell wrap cleanly */
+  .analyze-chips { gap: 6px; }
+  .analyze-chip, .taste-upsell { padding: 9px 13px; }   /* easier to tap */
+
+  /* Quote button never runs off-screen */
+  .quote-btn { max-width: 90vw; }
+
+  /* Setting rows stack their controls */
+  .s-row-top .theme-bg-picks { gap: 7px; }
 }
 
 @media (min-width: 761px) {
@@ -1311,3 +1337,16 @@ body.has-bg-theme .rail { background: rgba(0,0,0,.18); }
 .taste-upsell { display: inline-flex; align-items: center; gap: 7px; margin-top: 12px; padding: 9px 15px; border-radius: 10px; border: 1px solid #fbbf24; background: linear-gradient(135deg, rgba(251,191,36,.14), rgba(251,191,36,.06)); color: #fbbf24; font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer; transition: filter .14s; }
 .taste-upsell:hover { filter: brightness(1.12); }
 .taste-upsell svg { flex-shrink: 0; }
+
+/* "Today's market" summary card on the welcome screen */
+.w-market { margin: 6px auto 0; max-width: 440px; width: 100%; padding: 13px 16px; border-radius: 13px; border: 1px solid var(--brd); background: var(--c1); text-align: left; }
+.wm-ok { border-color: rgba(16,185,129,.3); }
+.wm-caution { border-color: rgba(239,68,68,.3); }
+.wm-top { display: flex; align-items: center; gap: 8px; }
+.wm-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.wm-ok .wm-dot { background: var(--grn); box-shadow: 0 0 8px rgba(16,185,129,.6); }
+.wm-caution .wm-dot { background: #f87171; box-shadow: 0 0 8px rgba(239,68,68,.6); }
+.wm-label { font-size: .7rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--dim); }
+.wm-regime { margin-left: auto; font-size: .74rem; font-weight: 700; text-transform: capitalize; color: var(--lt); }
+.wm-reason { margin-top: 7px; font-size: .85rem; color: var(--lt); line-height: 1.45; }
+.wm-stats { margin-top: 9px; display: flex; flex-wrap: wrap; gap: 14px; font-family: var(--mono); font-size: .74rem; color: var(--dim); }
