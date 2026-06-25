@@ -105,7 +105,6 @@ from trading import (
     # Autopilot
     run_autopilot,
     load_autopilot_config,
-    save_autopilot_user_settings,
     web_search,
     fetch_news,
     premarket_scan,

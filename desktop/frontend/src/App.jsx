@@ -26,7 +26,7 @@ const VERSION_DATE = 'June 18, 2026'
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
   { v: '3.31.0', d: 'June 24, 2026', changes: [
-    'New Autopilot settings panel \u2014 tune max positions, signal score, reward:risk, daily loss limit and more with simple sliders (no more editing code).',
+    'Autopilot now keeps running on its own \u2014 it survives the server restarting and resumes automatically, so it trades unattended even with your laptop closed.',
   ]},
   { v: '3.30.0', d: 'June 24, 2026', changes: [
     'New "Today\u2019s market" summary on the welcome screen \u2014 regime, SPY, VIX, and RSI at a glance.',
@@ -2807,22 +2807,6 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
   const [showAdmin, setShowAdmin] = useState(false)
   const [showPlus, setShowPlus] = useState(false)
   const isPlus = !!(user && (user.plus || user.is_admin))
-  const canAutopilot = ['parjan.d@icloud.com','pinakin.d@moftmail.com'].includes((user?.email||'').toLowerCase())
-  const [apSettings, setApSettings] = useState(null)
-  const [apRiskAuto, setApRiskAuto] = useState(true)
-  const [apSaved, setApSaved] = useState(false)
-  useEffect(()=>{
-    if(token && canAutopilot){
-      f(API+'/api/autopilot/settings',{headers:{Authorization:'Bearer '+token}}).then(r=>r.json()).then(d=>{
-        if(d.ok){ setApSettings(d.settings); setApRiskAuto(d.risk_auto) }
-      }).catch(()=>{})
-    }
-  },[token,canAutopilot])
-  const saveApSetting = (key, value) => {
-    setApSettings(prev => ({...prev, [key]: {...prev[key], value}}))
-    f(API+'/api/autopilot/settings',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({[key]:value})})
-      .then(r=>r.json()).then(()=>{ setApSaved(true); setTimeout(()=>setApSaved(false),1500) }).catch(()=>{})
-  }
 
   useEffect(()=>{
     if(token&&!keyLoaded){
@@ -2872,31 +2856,6 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
       <div className="s-row"><div className="s-col"><span>Alpaca Secret</span><span className="s-desc">From your Alpaca dashboard</span></div><input className="s-inp s-wide" type="password" name="alpaca-secret-field" autoComplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" value={keys.alpaca_secret} onChange={e=>setKeys({...keys,alpaca_secret:e.target.value})} placeholder={keyExists.alpaca_secret?'•••••••• saved — leave blank to keep':'Your Alpaca secret key'}/></div>
       <button className={'login-btn s-save'+(keySaved?' s-saved':'')} onClick={saveKeys}>{keySaved?'✓ Saved':'Save connections'}</button>
     </div>:<LockedCard title="Connections" sub="Broker and data feeds" onUpgrade={()=>setView&&setView('plus')}/>)}
-
-    {/* Autopilot settings (admin / autopilot-authorized only) */}
-    {canAutopilot && apSettings && <div className="card wide ap-settings-card">
-      <label>Autopilot{apSaved&&<span className="ap-saved-tag">✓ Saved</span>}</label>
-      <span className="card-sub">How autonomous trading behaves</span>
-      <p className="s-hint">These tune what Paula trades on autopilot. Changes apply on the next cycle. Risk per trade is set automatically from market conditions.</p>
-      {Object.entries(apSettings).map(([key,cfg])=>(
-        <div className="ap-row" key={key}>
-          <div className="ap-row-top">
-            <span className="ap-label">{cfg.label}</span>
-            <span className="ap-val">{cfg.pct?Math.round(cfg.value*100)+'%':cfg.value}</span>
-          </div>
-          <input type="range" className="ap-slider" min={cfg.min} max={cfg.max} step={cfg.step}
-            value={cfg.value}
-            onChange={e=>setApSettings(prev=>({...prev,[key]:{...prev[key],value:parseFloat(e.target.value)}}))}
-            onMouseUp={e=>saveApSetting(key, parseFloat(e.target.value))}
-            onTouchEnd={e=>saveApSetting(key, parseFloat(e.target.value))}/>
-          <span className="ap-help">{cfg.help}</span>
-        </div>
-      ))}
-      <div className="ap-row ap-row-auto">
-        <div className="ap-row-top"><span className="ap-label">Risk per trade</span><span className="ap-val ap-auto">Auto</span></div>
-        <span className="ap-help">Paula sizes risk automatically — smaller in choppy/risk-off markets, normal in healthy trends.</span>
-      </div>
-    </div>}
 
     {/* Appearance */}
     <div className="card wide"><label>Appearance</label>

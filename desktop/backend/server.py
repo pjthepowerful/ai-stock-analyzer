@@ -129,6 +129,28 @@ _user_sessions: dict[int, list[dict]] = {}  # {user_id: [chat messages]}
 _session_lock = asyncio.Lock()
 autopilot_owner_id: Optional[int] = None  # Only one user can own autopilot
 
+# ── Autopilot persistence ──
+# Autopilot runs as a server-side background task, so it keeps trading even when
+# the user closes their laptop/browser. But an in-memory task is lost if the
+# backend restarts (deploy, crash, host bounce). We persist the on/off state +
+# owner to a small file and auto-resume on startup, so autopilot survives
+# restarts and genuinely runs unattended.
+_AP_STATE_FILE = os.path.join(os.environ.get("DB_DIR", os.path.dirname(os.path.abspath(__file__))), "autopilot_state.json")
+
+def _save_autopilot_state(on: bool, owner_id: Optional[int]):
+    try:
+        with open(_AP_STATE_FILE, "w") as f:
+            json.dump({"on": bool(on), "owner_id": owner_id}, f)
+    except Exception as e:
+        print(f"  ⚠️ Could not save autopilot state: {e}")
+
+def _load_autopilot_state() -> dict:
+    try:
+        with open(_AP_STATE_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {"on": False, "owner_id": None}
+
 # ── Maintenance mode ── (admin-only toggle; blocks the app for everyone but admin)
 _MAINT_FILE = os.path.join(os.environ.get("DB_DIR", os.path.dirname(os.path.abspath(__file__))), "maintenance.json")
 def _maint_state() -> dict:
@@ -231,6 +253,20 @@ async def lifespan(app: FastAPI):
 
     # Start the EOD guardian — runs independently of autopilot
     eod_task = asyncio.create_task(_eod_guardian())
+
+    # Auto-resume autopilot if it was running before a restart (deploy/crash/host
+    # bounce). This is what makes autopilot genuinely unattended — it survives the
+    # backend going down and comes back trading on its own.
+    global autopilot_task, autopilot_owner_id
+    try:
+        _ap = _load_autopilot_state()
+        if _ap.get("on"):
+            autopilot_owner_id = _ap.get("owner_id")
+            autopilot_task = _spawn_autopilot()
+            print(f"  ✓ Auto-resumed autopilot (owner {autopilot_owner_id}) after restart")
+    except Exception as e:
+        print(f"  ⚠️ Could not auto-resume autopilot: {e}")
+
     yield
     print("🔴 Paula backend stopping...")
     eod_task.cancel()
@@ -1631,6 +1667,7 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
         if not autopilot_task or autopilot_task.done():
             autopilot_owner_id = user_id
             autopilot_task = _spawn_autopilot()
+            _save_autopilot_state(True, user_id)
         resp = "Autopilot activated. Scanning every 5 minutes."
         chat_history.append({"role": "assistant", "content": resp})
         return {"ok": True, "message": resp, "stream": False, "type": "trade", "autopilot": True}
@@ -1642,6 +1679,7 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
             autopilot_task.cancel()
             autopilot_task = None
             autopilot_owner_id = None
+        _save_autopilot_state(False, None)
         resp = "Autopilot stopped."
         chat_history.append({"role": "assistant", "content": resp})
         return {"ok": True, "message": resp, "stream": False, "type": "trade", "autopilot": False}
@@ -1834,6 +1872,7 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
         if not autopilot_task or autopilot_task.done():
             autopilot_owner_id = user_id
             autopilot_task = _spawn_autopilot()
+            _save_autopilot_state(True, user_id)
         return {"ok": True, "message": "Autopilot activated.", "type": "trade", "autopilot": True}
 
     if intent.get("type") == "stop_autopilot":
@@ -1843,6 +1882,7 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
             autopilot_task.cancel()
             autopilot_task = None
             autopilot_owner_id = None
+        _save_autopilot_state(False, None)
         return {"ok": True, "message": "Autopilot stopped.", "type": "trade", "autopilot": False}
 
     # Run in thread pool since engine functions are blocking
@@ -2455,6 +2495,7 @@ async def start_autopilot(authorization: str = Header(None)):
 
     autopilot_owner_id = user["id"]
     autopilot_task = _spawn_autopilot()
+    _save_autopilot_state(True, user["id"])
     print(f"[autopilot] started by {user.get('email')}", flush=True)
     await broadcast("autopilot", {"status": "started"})
     try:
@@ -2475,6 +2516,7 @@ async def stop_autopilot(authorization: str = Header(None)):
         autopilot_task.cancel()
         autopilot_task = None
         autopilot_owner_id = None
+    _save_autopilot_state(False, None)
     await broadcast("autopilot", {"status": "stopped"})
     try:
         acc = engine.alpaca_account() or {}
@@ -2495,46 +2537,6 @@ async def autopilot_status():
     """Check if autopilot is running."""
     running = autopilot_task is not None and not autopilot_task.done()
     return {"ok": True, "running": running}
-
-
-@app.get("/api/autopilot/settings")
-async def get_autopilot_settings(authorization: str = Header(None)):
-    """Return the current autopilot config + which fields are user-editable.
-    Admin/autopilot-authorized only (autopilot is not a general user feature)."""
-    user = _get_user(authorization)
-    if not user or not (_can_autopilot(user) or user.get("email", "").lower() == ADMIN_EMAIL):
-        return {"ok": False, "error": "Not authorized"}
-    cfg = engine.load_autopilot_config()
-    # Only surface the safe, user-editable subset + their bounds + read-only auto risk.
-    editable = {
-        "MAX_POSITIONS": {"value": cfg.get("MAX_POSITIONS"), "min": 1, "max": 6, "step": 1,
-                          "label": "Max open positions", "help": "How many trades autopilot can hold at once."},
-        "MIN_SCORE": {"value": cfg.get("MIN_SCORE"), "min": 60, "max": 95, "step": 1,
-                      "label": "Minimum signal score", "help": "Only enter setups scoring at least this (higher = pickier)."},
-        "MIN_RR": {"value": cfg.get("MIN_RR"), "min": 1.0, "max": 5.0, "step": 0.1,
-                   "label": "Minimum reward : risk", "help": "Skip trades whose target/stop ratio is below this."},
-        "DAILY_LOSS_LIMIT": {"value": cfg.get("DAILY_LOSS_LIMIT"), "min": 0.01, "max": 0.10, "step": 0.005,
-                             "label": "Daily loss limit", "help": "Stop trading for the day after losing this % of equity.", "pct": True},
-        "MAX_DAILY_ENTRIES": {"value": cfg.get("MAX_DAILY_ENTRIES"), "min": 1, "max": 10, "step": 1,
-                              "label": "Max new trades per day", "help": "Cap on how many new positions autopilot opens daily."},
-        "MAX_POS_PCT": {"value": cfg.get("MAX_POS_PCT"), "min": 0.05, "max": 0.5, "step": 0.05,
-                        "label": "Max size per position", "help": "Largest share of equity any single position can take.", "pct": True},
-    }
-    return {
-        "ok": True, "settings": editable,
-        "risk_auto": cfg.get("RISK_AUTO", True),
-        "risk_current": cfg.get("RISK_PER_TRADE"),
-    }
-
-
-@app.post("/api/autopilot/settings")
-async def update_autopilot_settings(req: dict, authorization: str = Header(None)):
-    """Save user-edited autopilot settings (bounded server-side). Admin/autopilot only."""
-    user = _get_user(authorization)
-    if not user or not (_can_autopilot(user) or user.get("email", "").lower() == ADMIN_EMAIL):
-        return {"ok": False, "error": "Not authorized"}
-    result = engine.save_autopilot_user_settings(req or {})
-    return result
 
 
 # ── Run ──
