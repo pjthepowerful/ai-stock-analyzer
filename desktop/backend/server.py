@@ -802,7 +802,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.30.0",  # bump marker — confirms running code
+        "build": "v3.31.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -2495,6 +2495,46 @@ async def autopilot_status():
     """Check if autopilot is running."""
     running = autopilot_task is not None and not autopilot_task.done()
     return {"ok": True, "running": running}
+
+
+@app.get("/api/autopilot/settings")
+async def get_autopilot_settings(authorization: str = Header(None)):
+    """Return the current autopilot config + which fields are user-editable.
+    Admin/autopilot-authorized only (autopilot is not a general user feature)."""
+    user = _get_user(authorization)
+    if not user or not (_can_autopilot(user) or user.get("email", "").lower() == ADMIN_EMAIL):
+        return {"ok": False, "error": "Not authorized"}
+    cfg = engine.load_autopilot_config()
+    # Only surface the safe, user-editable subset + their bounds + read-only auto risk.
+    editable = {
+        "MAX_POSITIONS": {"value": cfg.get("MAX_POSITIONS"), "min": 1, "max": 6, "step": 1,
+                          "label": "Max open positions", "help": "How many trades autopilot can hold at once."},
+        "MIN_SCORE": {"value": cfg.get("MIN_SCORE"), "min": 60, "max": 95, "step": 1,
+                      "label": "Minimum signal score", "help": "Only enter setups scoring at least this (higher = pickier)."},
+        "MIN_RR": {"value": cfg.get("MIN_RR"), "min": 1.0, "max": 5.0, "step": 0.1,
+                   "label": "Minimum reward : risk", "help": "Skip trades whose target/stop ratio is below this."},
+        "DAILY_LOSS_LIMIT": {"value": cfg.get("DAILY_LOSS_LIMIT"), "min": 0.01, "max": 0.10, "step": 0.005,
+                             "label": "Daily loss limit", "help": "Stop trading for the day after losing this % of equity.", "pct": True},
+        "MAX_DAILY_ENTRIES": {"value": cfg.get("MAX_DAILY_ENTRIES"), "min": 1, "max": 10, "step": 1,
+                              "label": "Max new trades per day", "help": "Cap on how many new positions autopilot opens daily."},
+        "MAX_POS_PCT": {"value": cfg.get("MAX_POS_PCT"), "min": 0.05, "max": 0.5, "step": 0.05,
+                        "label": "Max size per position", "help": "Largest share of equity any single position can take.", "pct": True},
+    }
+    return {
+        "ok": True, "settings": editable,
+        "risk_auto": cfg.get("RISK_AUTO", True),
+        "risk_current": cfg.get("RISK_PER_TRADE"),
+    }
+
+
+@app.post("/api/autopilot/settings")
+async def update_autopilot_settings(req: dict, authorization: str = Header(None)):
+    """Save user-edited autopilot settings (bounded server-side). Admin/autopilot only."""
+    user = _get_user(authorization)
+    if not user or not (_can_autopilot(user) or user.get("email", "").lower() == ADMIN_EMAIL):
+        return {"ok": False, "error": "Not authorized"}
+    result = engine.save_autopilot_user_settings(req or {})
+    return result
 
 
 # ── Run ──

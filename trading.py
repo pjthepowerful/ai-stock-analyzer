@@ -4613,6 +4613,47 @@ def load_autopilot_config() -> dict:
     return params
 
 
+def save_autopilot_user_settings(updates: dict) -> dict:
+    """Persist a SAFE subset of autopilot knobs from the settings UI, each
+    clamped to a sane range so a user can't set something dangerous (e.g. 50
+    positions or a 0 score threshold). Returns the merged, saved config.
+    SWING/auto-managed fields (risk, hold days, hours) are NOT user-editable."""
+    import pathlib as _pl
+    cfg_path = _pl.Path(__file__).parent / "autopilot_config.json"
+    try:
+        cur = json.loads(cfg_path.read_text()) if cfg_path.exists() else {}
+    except Exception:
+        cur = {}
+
+    def _clamp(v, lo, hi, cast=float):
+        try:
+            return max(lo, min(hi, cast(v)))
+        except Exception:
+            return None
+
+    # (key, lo, hi, cast) — only these are user-editable, each bounded.
+    bounds = {
+        "MAX_POSITIONS": (1, 6, int),
+        "MIN_SCORE": (60, 95, int),          # never below 60 (too loose)
+        "MIN_RR": (1.0, 5.0, float),
+        "DAILY_LOSS_LIMIT": (0.01, 0.10, float),   # 1%–10%
+        "MAX_DAILY_ENTRIES": (1, 10, int),
+        "MAX_POS_PCT": (0.05, 0.5, float),   # 5%–50% of equity per position
+    }
+    applied = {}
+    for k, (lo, hi, cast) in bounds.items():
+        if k in updates:
+            cv = _clamp(updates[k], lo, hi, cast)
+            if cv is not None:
+                cur[k] = cv
+                applied[k] = cv
+    try:
+        cfg_path.write_text(json.dumps(cur, indent=2))
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:120]}
+    return {"ok": True, "applied": applied}
+
+
 def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dict:
     """
     Full autopilot cycle:
