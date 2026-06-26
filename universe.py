@@ -90,12 +90,14 @@ def liquid_universe() -> list:
     return list(seen.keys())
 
 
-_LISTING_CACHE = {"ts": 0, "tickers": None}
+_LISTING_CACHE = {}  # keyed by "all" / "nasdaq" -> {"ts", "tickers"}
 
-def all_exchange_tickers(include_nasdaq: bool = True) -> list:
+def all_exchange_tickers(include_nasdaq: bool = True, nasdaq_only: bool = False) -> list:
     """Fetch the FULL current NYSE (+ optionally NASDAQ) common-stock listing
     from a maintained public source. Cached 24h. Falls back to large_universe()
     if the network is unavailable.
+
+    nasdaq_only=True returns ONLY the NASDAQ listing (for "scan the whole NASDAQ").
 
     The raw listing has thousands of symbols incl. illiquid names; the scanner's
     batch fetch + price/liquidity filters drop the junk so only real tradeable
@@ -103,13 +105,18 @@ def all_exchange_tickers(include_nasdaq: bool = True) -> list:
     """
     import time as _t
     now = _t.time()
-    if _LISTING_CACHE["tickers"] is not None and (now - _LISTING_CACHE["ts"]) < 86400:
-        return _LISTING_CACHE["tickers"]
+    _ck = "nasdaq" if nasdaq_only else "all"
+    _cached = _LISTING_CACHE.get(_ck)
+    if _cached and _cached.get("tickers") is not None and (now - _cached["ts"]) < 86400:
+        return _cached["tickers"]
     import urllib.request
     base = "https://raw.githubusercontent.com/rreichel3/US-Stock-Symbols/main"
-    urls = [f"{base}/nyse/nyse_tickers.txt"]
-    if include_nasdaq:
-        urls.append(f"{base}/nasdaq/nasdaq_tickers.txt")
+    if nasdaq_only:
+        urls = [f"{base}/nasdaq/nasdaq_tickers.txt"]
+    else:
+        urls = [f"{base}/nyse/nyse_tickers.txt"]
+        if include_nasdaq:
+            urls.append(f"{base}/nasdaq/nasdaq_tickers.txt")
     collected = {}
     for url in urls:
         try:
@@ -127,7 +134,6 @@ def all_exchange_tickers(include_nasdaq: bool = True) -> list:
             continue
     if collected:
         tickers = list(collected.keys())
-        _LISTING_CACHE["tickers"] = tickers
-        _LISTING_CACHE["ts"] = now
+        _LISTING_CACHE[_ck] = {"tickers": tickers, "ts": now}
         return tickers
     return large_universe()

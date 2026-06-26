@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.35.2'
+const VERSION = '3.36.0'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.36.0', d: 'June 26, 2026', changes: [
+    'You can now scan the entire NASDAQ \u2014 just ask. It\u2019s a big scan and takes several minutes (and may return partial data when the free data source throttles).',
+  ]},
   { v: '3.35.2', d: 'June 26, 2026', changes: [
     'Scans finish more reliably \u2014 tuned the size and added a clear message if the data source is too slow, instead of an unexplained timeout.',
   ]},
@@ -1665,8 +1668,9 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
         if (data.type === 'scan_started') {
           // Leave `sending` true so the spinner + progress bar stay visible.
           scanReturnChatRef.current = targetId
-          // Safety net: if the websocket result never lands (e.g. dropped
-          // connection), don't spin forever — clear after 5 minutes.
+          // Safety net if the websocket result never lands. Big full-market /
+          // NASDAQ scans get a much longer window (they're meant to be slow).
+          const _wait = data.big ? 1800000 : 300000  // 30 min vs 5 min
           setTimeout(() => {
             if (scanReturnChatRef.current === targetId) {
               scanReturnChatRef.current = null
@@ -1675,7 +1679,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                 setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ The scan took too long to come back. Please try again.' }])
               }
             }
-          }, 300000)
+          }, _wait)
           return
         }
         const text = data.message || ''

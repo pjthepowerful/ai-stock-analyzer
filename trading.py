@@ -3560,7 +3560,9 @@ def route(msg: str) -> dict:
             cat = "crypto"
         elif any(w in m for w in ["dividend", "income", "value", "safe"]):
             cat = "value"
-        elif any(w in m for w in ["all stocks", "every stock", "entire market", "whole market", "nyse", "nasdaq", "all nyse", "everything", "full market", "all of nyse", "scan everything"]):
+        elif "nasdaq" in m:
+            cat = "nasdaq"
+        elif any(w in m for w in ["all stocks", "every stock", "entire market", "whole market", "nyse", "all nyse", "everything", "full market", "all of nyse", "scan everything"]):
             cat = "full"
         return {"type": "stock_ideas", "category": cat, "_original_msg": msg}
 
@@ -5984,6 +5986,17 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
             universe = list(dict.fromkeys(["COIN","MSTR","MARA","RIOT","CLSK","HUT","BTBT","WULF","CIFR","CORZ","IREN","HOOD"]))
         elif cat == "value":
             universe = list(dict.fromkeys(VALUE_DIVIDEND + ["JPM","BAC","WFC","KO","PEP","PG","JNJ","WMT","HD","MCD","VZ","T"]))
+        elif cat == "nasdaq":
+            # WHOLE NASDAQ — every NASDAQ common-stock listing (~3-4k symbols).
+            # This is a big scan; with free Yahoo throttling the server, expect it
+            # to take a while and return PARTIAL data (some chunks come back empty
+            # when Yahoo blocks us). The liquidity filter drops the junk.
+            try:
+                from universe import all_exchange_tickers
+                universe = all_exchange_tickers(nasdaq_only=True)
+            except Exception:
+                from universe import large_universe
+                universe = large_universe()
         elif cat == "full":
             # ENTIRE market — live NYSE + NASDAQ common-stock listing (~5-7k
             # symbols). The batch fetch + liquidity filter below drop the

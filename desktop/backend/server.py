@@ -877,7 +877,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.35.2",  # bump marker — confirms running code
+        "build": "v3.36.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -2038,14 +2038,17 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
     # over the websocket (the same channel the progress bar already uses).
     if intent.get("type") == "stock_ideas":
         _uid = user["id"] if user else None
+        # Big full-market / whole-NASDAQ scans get a much longer ceiling — the user
+        # explicitly wants a wide scan and accepts it'll be slow. Normal broad
+        # scans keep the tighter cap.
+        _big = intent.get("category") in ("full", "nasdaq")
+        _scan_timeout = 1500 if _big else 240  # 25 min vs 4 min
         async def _run_scan_bg():
             try:
-                # Hard cap the scan at 4 min so it can't hang forever; whatever
-                # happens, we broadcast a result so the client never just spins.
                 res = await asyncio.wait_for(
                     loop.run_in_executor(
                         None, functools.partial(engine.execute, intent, progress_cb=_prog, is_plus=_is_plus)),
-                    timeout=240,
+                    timeout=_scan_timeout,
                 )
                 msg_out = res.get("msg", "") if res and res.get("ok") else _friendly_error((res or {}).get("error", "Scan failed"))
                 tickers_out = (res or {}).get("tickers", []) if res and res.get("ok") else []
@@ -2066,8 +2069,10 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                 await broadcast("scan_result", {"ok": False, "message": _friendly_error(str(_se))})
         asyncio.create_task(_run_scan_bg())
         return {
-            "ok": True, "type": "scan_started",
-            "message": "On it — scanning the market for the best setups. This takes a moment…",
+            "ok": True, "type": "scan_started", "big": _big,
+            "message": ("On it — scanning the entire " + ("NASDAQ" if intent.get("category") == "nasdaq" else "market") +
+                        ". This is a big one and can take several minutes…") if _big
+                       else "On it — scanning the market for the best setups. This takes a moment…",
         }
 
     result = await loop.run_in_executor(None, functools.partial(engine.execute, intent, progress_cb=_prog, is_plus=_is_plus))
