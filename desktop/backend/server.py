@@ -852,7 +852,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.31.1",  # bump marker — confirms running code
+        "build": "v3.31.2",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1252,8 +1252,21 @@ async def close_all():
 
 @app.get("/api/market-regime")
 async def market_regime():
-    """Check market regime."""
+    """Check market regime + the day's single top gainer and loser (best-effort)."""
     regime = engine.check_market_regime()
+    # Top mover each way — nice-to-have; never let it break the card.
+    try:
+        g = engine.polygon_gainers(limit=1)
+        if g:
+            regime["top_gainer"] = {"ticker": g[0]["Ticker"], "chg": g[0]["Chg%"], "price": g[0]["Price"]}
+    except Exception:
+        pass
+    try:
+        l = engine.polygon_losers(limit=1)
+        if l:
+            regime["top_loser"] = {"ticker": l[0]["Ticker"], "chg": l[0]["Chg%"], "price": l[0]["Price"]}
+    except Exception:
+        pass
     return {"ok": True, "data": regime}
 
 

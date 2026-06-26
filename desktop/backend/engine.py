@@ -111,6 +111,8 @@ from trading import (
 
     # Market
     check_market_regime,
+    polygon_gainers,
+    polygon_losers,
     _market_is_open,
     _get_spy_intraday_trend,
     _get_sector_strength,

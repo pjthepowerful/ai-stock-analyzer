@@ -1350,3 +1350,16 @@ body.has-bg-theme .rail { background: rgba(0,0,0,.18); }
 .wm-regime { margin-left: auto; font-size: .74rem; font-weight: 700; text-transform: capitalize; color: var(--lt); }
 .wm-reason { margin-top: 7px; font-size: .85rem; color: var(--lt); line-height: 1.45; }
 .wm-stats { margin-top: 9px; display: flex; flex-wrap: wrap; gap: 14px; font-family: var(--mono); font-size: .74rem; color: var(--dim); }
+
+/* Today's market card — redone with up/down headline + movers */
+.wm-move { margin-left: auto; font-family: var(--mono); font-size: .82rem; font-weight: 700; }
+.wm-move.up { color: var(--grn); }
+.wm-move.dn { color: var(--red, #f87171); }
+.wm-movers { margin-top: 10px; display: flex; gap: 10px; }
+.wm-mover { flex: 1; display: flex; flex-direction: column; gap: 3px; padding: 9px 11px; border-radius: 9px; background: var(--c2); }
+.wm-mv-l { font-size: .64rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--dim); }
+.wm-mv-v { font-size: .92rem; color: var(--lt); }
+.wm-mv-v b { color: var(--wh); font-weight: 700; }
+.wm-mv-v .up { color: var(--grn); font-family: var(--mono); font-size: .82rem; }
+.wm-mv-v .dn { color: var(--red, #f87171); font-family: var(--mono); font-size: .82rem; }
+.wm-regime-tag { text-transform: capitalize; color: var(--lt); font-weight: 600; }

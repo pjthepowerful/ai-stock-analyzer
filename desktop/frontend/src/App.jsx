@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.31.1'
+const VERSION = '3.31.2'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.31.2', d: 'June 25, 2026', changes: [
+    'Redid the "Today\u2019s market" card \u2014 now shows if the market is up or down plus the day\u2019s top gainer and top loser, instead of repeating the SPY price.',
+  ]},
   { v: '3.31.1', d: 'June 25, 2026', changes: [
     'Cleaner welcome screen \u2014 solid greeting color and more even spacing.',
     'Closed a couple of paywall gaps so Plus features stay Plus-only.',
@@ -1905,13 +1908,26 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                   <div className="wm-top">
                     <span className="wm-dot"/>
                     <span className="wm-label">Today's market</span>
-                    {marketToday.regime&&<span className="wm-regime">{String(marketToday.regime).replace(/_/g,' ')}</span>}
+                    {typeof marketToday.spy_change_pct==='number'&&<span className={'wm-move '+(marketToday.spy_change_pct>=0?'up':'dn')}>
+                      {marketToday.spy_change_pct>=0?'▲':'▼'} SPY {marketToday.spy_change_pct>=0?'+':''}{marketToday.spy_change_pct}%
+                    </span>}
                   </div>
-                  {marketToday.reason&&<div className="wm-reason">{marketToday.reason}</div>}
+
+                  {(marketToday.top_gainer||marketToday.top_loser)?<div className="wm-movers">
+                    {marketToday.top_gainer&&<div className="wm-mover">
+                      <span className="wm-mv-l">Top gainer</span>
+                      <span className="wm-mv-v"><b>{marketToday.top_gainer.ticker}</b> <span className="up">+{marketToday.top_gainer.chg}%</span></span>
+                    </div>}
+                    {marketToday.top_loser&&<div className="wm-mover">
+                      <span className="wm-mv-l">Top loser</span>
+                      <span className="wm-mv-v"><b>{marketToday.top_loser.ticker}</b> <span className="dn">{marketToday.top_loser.chg}%</span></span>
+                    </div>}
+                  </div>:(marketToday.reason&&<div className="wm-reason">{marketToday.reason}</div>)}
+
                   <div className="wm-stats">
-                    {marketToday.spy_price&&<span>SPY ${marketToday.spy_price}</span>}
+                    <span className="wm-regime-tag">{String(marketToday.regime||'').replace(/_/g,' ')}</span>
                     {marketToday.vix&&marketToday.vix.level?<span>VIX {marketToday.vix.level}{marketToday.vix.status?` · ${String(marketToday.vix.status).replace(/_/g,' ')}`:''}</span>:null}
-                    {typeof marketToday.rsi==='number'&&<span>RSI {marketToday.rsi}</span>}
+                    {typeof marketToday.rsi==='number'&&<span>SPY RSI {marketToday.rsi}</span>}
                   </div>
                 </div>}
 

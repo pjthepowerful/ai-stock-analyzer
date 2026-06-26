@@ -3742,6 +3742,8 @@ def check_market_regime() -> dict:
 
         close = hist["Close"]
         price = float(close.iloc[-1])
+        prev_close = float(close.iloc[-2]) if len(close) >= 2 else price
+        spy_change_pct = round((price - prev_close) / prev_close * 100, 2) if prev_close else 0.0
 
         # Key moving averages
         sma_50 = float(close.rolling(50).mean().iloc[-1])
@@ -3800,6 +3802,7 @@ def check_market_regime() -> dict:
             "safe_to_buy": safe,
             "reason": reason,
             "spy_price": round(price, 2),
+            "spy_change_pct": spy_change_pct,
             "sma_50": round(sma_50, 2),
             "sma_200": round(sma_200, 2),
             "rsi": round(rsi, 1),
