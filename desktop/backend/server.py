@@ -873,7 +873,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.32.2",  # bump marker — confirms running code
+        "build": "v3.32.3",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1632,6 +1632,57 @@ def spy_trend():
 _CHART_CACHE = {}        # (ticker, period) -> (timestamp, payload)
 _CHART_CACHE_TTL = 180   # daily bars: 3 min; intraday refreshes a touch faster below
 
+def _polygon_chart_bars(ticker: str, period: str, intraday: bool, interval: str = None):
+    """Fallback chart source: Polygon aggregates. Yahoo aggressively rate-limits
+    single-ticker history calls from datacenter IPs (like Railway's), which makes
+    the chart fail constantly; Polygon is far more reliable from a server. Returns
+    the same payload shape as the Yahoo path, or None on failure."""
+    import requests as _rq, time as _t
+    from datetime import datetime as _dt, timedelta as _td
+    key = os.environ.get("POLYGON_API_KEY", "") or "wzJ5v31KgEA_rwFQxViseXokW5TLoSrG"
+    if not key:
+        return None
+    # Map our periods to a Polygon (multiplier, timespan, lookback-days).
+    span = {
+        "1d":  (5, "minute", 1),
+        "5d":  (30, "minute", 5),
+        "1mo": (1, "day", 31),
+        "3mo": (1, "day", 93),
+        "6mo": (1, "day", 186),
+        "1y":  (1, "day", 372),
+        "5y":  (1, "week", 1830),
+    }.get(period, (1, "day", 372))
+    mult, timespan, lookback = span
+    end = _dt.utcnow().date()
+    start = end - _td(days=lookback)
+    try:
+        url = (f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/"
+               f"{mult}/{timespan}/{start.isoformat()}/{end.isoformat()}")
+        r = _rq.get(url, params={"apiKey": key, "adjusted": "true", "sort": "asc", "limit": 50000}, timeout=12)
+        if r.status_code != 200:
+            return None
+        results = (r.json() or {}).get("results") or []
+        if not results:
+            return None
+        dates, o, h, l, c, v = [], [], [], [], [], []
+        for bar in results:
+            ts = bar.get("t")
+            if ts is None:
+                continue
+            d = _dt.utcfromtimestamp(ts / 1000)
+            dates.append(d.strftime("%Y-%m-%d %H:%M" if intraday else "%Y-%m-%d"))
+            o.append(round(float(bar.get("o", 0)), 2))
+            h.append(round(float(bar.get("h", 0)), 2))
+            l.append(round(float(bar.get("l", 0)), 2))
+            c.append(round(float(bar.get("c", 0)), 2))
+            v.append(int(bar.get("v", 0)))
+        if not dates:
+            return None
+        return {"ok": True, "data": {"dates": dates, "open": o, "high": h, "low": l, "close": c, "volume": v}}
+    except Exception:
+        return None
+
+
 @app.get("/api/chart/{ticker}")
 def chart_data(ticker: str, period: str = "1y"):
     """Get chart OHLCV data — sync endpoint, auto-threaded by FastAPI.
@@ -1663,6 +1714,11 @@ def chart_data(ticker: str, period: str = "1y"):
                 # Could be a soft rate-limit returning empty — brief retry.
                 if attempt < 2:
                     _t.sleep(1.2 * (attempt + 1)); continue
+                # Yahoo gave us nothing — try Polygon before giving up.
+                _poly = _polygon_chart_bars(ticker, period, intraday, interval)
+                if _poly:
+                    _CHART_CACHE[ck] = (_t.time(), _poly)
+                    return _poly
                 # If we have a stale cached copy, better to show it than nothing.
                 if cached:
                     return cached[1]
@@ -1694,7 +1750,11 @@ def chart_data(ticker: str, period: str = "1y"):
                 _t.sleep(2.0 * (attempt + 1))  # 2s, then 4s
                 continue
             break
-    # All attempts failed — serve stale cache if we have any, else the error.
+    # All Yahoo attempts failed — try Polygon, then stale cache, then the error.
+    _poly = _polygon_chart_bars(ticker, period, intraday, interval)
+    if _poly:
+        _CHART_CACHE[ck] = (_t.time(), _poly)
+        return _poly
     if cached:
         return cached[1]
     return {"ok": False, "error": last_err}
