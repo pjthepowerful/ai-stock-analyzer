@@ -5,13 +5,13 @@ Kept in its own module so trading.py stays readable.
 
 # Full S&P 500 (as of 2025-2026) + high-liquidity additions.
 SP500_FULL = [
-    "A","AAPL","ABBV","ABNB","ABT","ACGL","ACN","ADBE","ADI","ADM","ADP","ADSK","AEE","AEP","AES","AFL","AIG","AIZ","AJG","AKAM","ALB","ALGN","ALL","ALLE","AMAT","AMCR","AMD","AME","AMGN","AMP","AMT","AMZN","ANET","ANSS","AON","AOS","APA","APD","APH","APTV","ARE","ATO","AVB","AVGO","AVY","AWK","AXON","AXP","AZO","BA","BAC","BALL","BAX","BBY","BDX","BEN","BF-B","BG","BIIB","BK","BKNG","BKR","BLDR","BLK","BMY","BR","BRO","BSX","BWA","BX","BXP",
+    "A","AAPL","ABBV","ABNB","ABT","ACGL","ACN","ADBE","ADI","ADM","ADP","ADSK","AEE","AEP","AES","AFL","AIG","AIZ","AJG","AKAM","ALB","ALGN","ALL","ALLE","AMAT","AMCR","AMD","AME","AMGN","AMP","AMT","AMZN","ANET","AON","AOS","APA","APD","APH","APTV","ARE","ATO","AVB","AVGO","AVY","AWK","AXON","AXP","AZO","BA","BAC","BALL","BAX","BBY","BDX","BEN","BF-B","BG","BIIB","BK","BKNG","BKR","BLDR","BLK","BMY","BR","BRO","BSX","BWA","BX","BXP",
     "C","CAG","CAH","CARR","CAT","CB","CBOE","CBRE","CCI","CCL","CDNS","CDW","CE","CEG","CF","CFG","CHD","CHRW","CHTR","CI","CINF","CL","CLX","CMA","CMCSA","CME","CMG","CMI","CMS","CNC","CNP","COF","COIN","COO","COP","COR","COST","CPAY","CPB","CPRT","CPT","CRL","CRM","CRWD","CSCO","CSGP","CSX","CTAS","CTLT","CTRA","CTSH","CTVA","CVS","CVX","CZR",
     "D","DAL","DAY","DD","DE","DECK","DELL","DFS","DG","DGX","DHI","DHR","DIS","DLR","DLTR","DOC","DOV","DOW","DPZ","DRI","DTE","DUK","DVA","DVN","DXCM",
     "EA","EBAY","ECL","ED","EFX","EG","EIX","EL","ELV","EMN","EMR","ENPH","EOG","EPAM","EQIX","EQR","EQT","ERIE","ES","ESS","ETN","ETR","EVRG","EW","EXC","EXPD","EXPE","EXR",
     "F","FANG","FAST","FCX","FDS","FDX","FE","FFIV","FI","FICO","FIS","FITB","FMC","FOX","FOXA","FRT","FSLR","FTNT","FTV",
     "GD","GDDY","GE","GEHC","GEN","GEV","GILD","GIS","GL","GLW","GM","GNRC","GOOG","GOOGL","GPC","GPN","GRMN","GS","GWW",
-    "HAL","HAS","HBAN","HCA","HD","HES","HIG","HII","HLT","HOLX","HON","HPE","HPQ","HRL","HSIC","HST","HSY","HUBB","HUM","HWM",
+    "HAL","HAS","HBAN","HCA","HD","HIG","HII","HLT","HOLX","HON","HPE","HPQ","HRL","HSIC","HST","HSY","HUBB","HUM","HWM",
     "IBM","ICE","IDXX","IEX","IFF","INCY","INTC","INTU","INVH","IP","IPG","IQV","IR","IRM","ISRG","IT","ITW","IVZ",
     "J","JBHT","JBL","JCI","JKHY","JNJ","JNPR","JPM",
     "K","KDP","KEY","KEYS","KHC","KIM","KKR","KLAC","KMB","KMI","KMX","KO","KR","KVUE",
@@ -19,7 +19,7 @@ SP500_FULL = [
     "MA","MAA","MAR","MAS","MCD","MCHP","MCK","MCO","MDLZ","MDT","MET","META","MGM","MHK","MKC","MKTX","MLM","MMC","MMM","MNST","MO","MOH","MOS","MPC","MPWR","MRK","MRNA","MS","MSCI","MSFT","MSI","MTB","MTCH","MTD","MU",
     "NCLH","NDAQ","NDSN","NEE","NEM","NFLX","NI","NKE","NOC","NOW","NRG","NSC","NTAP","NTRS","NUE","NVDA","NVR","NWS","NWSA","NXPI",
     "O","ODFL","OKE","OMC","ON","ORCL","ORLY","OTIS","OXY",
-    "PANW","PARA","PAYC","PAYX","PCAR","PCG","PEG","PEP","PFE","PFG","PG","PGR","PH","PHM","PKG","PLD","PLTR","PM","PNC","PNR","PNW","PODD","POOL","PPG","PPL","PRU","PSA","PSX","PTC","PWR","PYPL",
+    "PANW","PAYC","PAYX","PCAR","PCG","PEG","PEP","PFE","PFG","PG","PGR","PH","PHM","PKG","PLD","PLTR","PM","PNC","PNR","PNW","PODD","POOL","PPG","PPL","PRU","PSA","PSX","PTC","PWR","PYPL",
     "QCOM","QRVO",
     "RCL","REG","REGN","RF","RJF","RL","RMD","ROK","ROL","ROP","ROST","RSG","RTX","RVTY",
     "SBAC","SBUX","SCHW","SHW","SJM","SLB","SMCI","SNA","SNPS","SO","SOLV","SPG","SPGI","SRE","STE","STLD","STT","STX","STZ","SWK","SWKS","SYF","SYK","SYY",
@@ -43,7 +43,7 @@ EXTRAS = [
     "AA","AAL","ACAD","ACHC","ACI","ADT","AFG","AGCO","AGNC","AKAM","ALGM","ALKS","ALLY","ALSN","AMBA","AMC","AMKR","AN","ANF","APG","APLS","APO","AR","ARES","ARW","ARWR","ASAN","ASH","ASO","AVAV","AVTR","AXSM","AYI","AZEK","AZTA",
     "BAH","BC","BCO","BDC","BECN","BFAM","BHF","BIO","BJ","BKU","BLD","BLKB","BMRN","BOKF","BPMC","BRBR","BRKR","BRX","BSY","BURL","BWXT","BYD","BZH",
     "CABO","CACC","CACI","CADE","CAR","CASY","CBSH","CCK","CFR","CGNX","CHE","CHRD","CHX","CIEN","CLF","CLH","CMC","CNM","CNX","COKE","COLB","COLM","COOP","CPRI","CR","CRC","CRI","CROX","CRUS","CSL","CVLT","CW","CXT","CYTK",
-    "DAR","DBX","DECK","DFH","DINO","DJT","DKS","DLB","DNB","DOCS","DOCU","DTM","DXC",
+    "DAR","DBX","DECK","DFH","DINO","DJT","DKS","DLB","DOCS","DOCU","DTM","DXC",
     "EAT","EBC","EEFT","EHC","ELAN","ELF","EME","ENS","ENSG","ENTG","EPAM","EQH","ESI","ETSY","EWBC","EXAS","EXEL","EXLS","EXP",
     "FAF","FBIN","FCFS","FCN","FELE","FFIN","FHB","FHN","FIVE","FIVN","FIX","FLEX","FLR","FLS","FN","FND","FNF","FOUR","FRPT","FSS","FTDR","FTRE","FYBR",
     "G","GAP","GATX","GBCI","GFS","GGG","GH","GKOS","GLOB","GME","GMED","GNTX","GPK","GTLS","GXO",

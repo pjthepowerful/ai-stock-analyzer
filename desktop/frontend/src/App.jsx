@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.32.3'
+const VERSION = '3.32.4'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.32.4', d: 'June 26, 2026', changes: [
+    'Cleaned delisted/acquired tickers (Ansys, Paramount, Dun & Bradstreet, Hess) out of the scan universe so scans stop wasting time on dead symbols.',
+  ]},
   { v: '3.32.3', d: 'June 26, 2026', changes: [
     'Charts are far more reliable \u2014 added a Polygon fallback so they stop showing \u201cchart data is busy\u201d when Yahoo rate-limits the server.',
   ]},
