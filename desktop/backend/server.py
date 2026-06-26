@@ -873,7 +873,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.33.0",  # bump marker — confirms running code
+        "build": "v3.33.1",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -2717,7 +2717,14 @@ async def admin_set_maintenance(req: dict, authorization: str = Header(None)):
     if not user or user.get("email", "").lower() != ADMIN_EMAIL:
         return {"ok": False, "error": "Unauthorized"}
     _set_maint(bool(req.get("on")), req.get("message", ""))
-    return {"ok": True, **_maint_state()}
+    state = _maint_state()
+    # Push to all connected clients so the maintenance screen flips on/off
+    # instantly — no refresh and no waiting for the next poll.
+    try:
+        await broadcast("maintenance", state)
+    except Exception:
+        pass
+    return {"ok": True, **state}
 
 
 @app.get("/api/admin/users")

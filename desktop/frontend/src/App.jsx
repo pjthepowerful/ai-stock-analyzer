@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.33.0'
+const VERSION = '3.33.1'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.33.1', d: 'June 26, 2026', changes: [
+    'Maintenance mode now appears for users automatically \u2014 no refresh needed (flips instantly over the live connection, and falls back to a fast poll).',
+  ]},
   { v: '3.33.0', d: 'June 26, 2026', changes: [
     'Autopilot now syncs with your real account each cycle \u2014 it counts today\u2019s actual trades and respects open positions, even after a restart, so daily limits are accurate.',
   ]},
@@ -385,12 +388,17 @@ function App() {
   }, [theme])
 
   // Poll maintenance status (everyone sees it; admin is exempt from the block).
+  // Polls every 10s and re-checks the moment the user returns to the tab, so the
+  // maintenance screen appears on its own — no refresh needed.
   useEffect(() => {
     let alive = true
     const check = () => f(API + '/api/maintenance').then(r => r.json()).then(d => { if (alive && d.ok) setMaint({ on: d.on, message: d.message || '' }) }).catch(() => {})
     check()
-    const id = setInterval(() => { if (!document.hidden) check() }, 30000)
-    return () => { alive = false; clearInterval(id) }
+    const id = setInterval(() => { if (!document.hidden) check() }, 10000)
+    const onVis = () => { if (!document.hidden) check() }
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('focus', onVis)
+    return () => { alive = false; clearInterval(id); document.removeEventListener('visibilitychange', onVis); window.removeEventListener('focus', onVis) }
   }, [])
 
   // Check auth on mount
@@ -1296,6 +1304,10 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
         try {
           const { event, data } = JSON.parse(e.data)
           if (event === 'connected') { if (Date.now() - apToggleAtRef.current > 10000) setAutopilot(data.autopilot) }
+          if (event === 'maintenance') {
+            // Admin toggled maintenance — flip the screen instantly, no refresh.
+            setMaint({ on: !!data.on, message: data.message || '' })
+          }
           if (event === 'scan_progress') {
             // Live progress for the big market scan — show a bar while it runs.
             setScanProgress({ pct: data.pct, done: data.done, total: data.total, phase: data.phase })
