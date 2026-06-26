@@ -5995,14 +5995,14 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
                 from universe import large_universe
                 universe = large_universe()
         else:
-            # Default broad scan — the full large universe (~1000 names). Scans
-            # now run ASYNC (background task, results over websocket), so a big
-            # scan can no longer time out the request — we can scan wide again.
-            # Free tier is still capped to ~100 below; small/mid-caps added only
-            # on explicit ask.
+            # Default broad scan — ~700 names. Scans run async so they can't time
+            # out the HTTP request, but the result still has to come back over the
+            # websocket within a sane window; the full ~1000 could run past 3-4 min
+            # when Yahoo throttles. ~700 is the sweet spot: well above the old ~500
+            # core, but finishes reliably. Free tier still capped ~100 below.
             try:
                 from universe import large_universe
-                universe = large_universe()
+                universe = large_universe()[:700]
             except Exception:
                 try:
                     from universe import liquid_universe

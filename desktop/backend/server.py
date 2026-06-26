@@ -877,7 +877,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.35.1",  # bump marker — confirms running code
+        "build": "v3.35.2",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -2040,8 +2040,13 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
         _uid = user["id"] if user else None
         async def _run_scan_bg():
             try:
-                res = await loop.run_in_executor(
-                    None, functools.partial(engine.execute, intent, progress_cb=_prog, is_plus=_is_plus))
+                # Hard cap the scan at 4 min so it can't hang forever; whatever
+                # happens, we broadcast a result so the client never just spins.
+                res = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        None, functools.partial(engine.execute, intent, progress_cb=_prog, is_plus=_is_plus)),
+                    timeout=240,
+                )
                 msg_out = res.get("msg", "") if res and res.get("ok") else _friendly_error((res or {}).get("error", "Scan failed"))
                 tickers_out = (res or {}).get("tickers", []) if res and res.get("ok") else []
                 if _uid:
@@ -2051,6 +2056,11 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                     "ok": bool(res and res.get("ok")),
                     "message": msg_out,
                     "tickers": tickers_out,
+                })
+            except asyncio.TimeoutError:
+                await broadcast("scan_result", {
+                    "ok": False,
+                    "message": "⚠️ The market's data source is slow right now and the scan couldn't finish. Please try again in a moment — or ask me to analyze a specific ticker.",
                 })
             except Exception as _se:
                 await broadcast("scan_result", {"ok": False, "message": _friendly_error(str(_se))})
