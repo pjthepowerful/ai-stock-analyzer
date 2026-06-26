@@ -3128,7 +3128,7 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None) ->
     if progress_cb:
         try: progress_cb(0, _total, "fetching")
         except Exception: pass
-    with ThreadPoolExecutor(max_workers=min(3, len(chunks))) as _ex:
+    with ThreadPoolExecutor(max_workers=min(4, len(chunks))) as _ex:
         futures = [_ex.submit(_fetch_chunk, ch) for ch in chunks]
         for fut in as_completed(futures):
             chunk, df = fut.result()
@@ -5995,14 +5995,14 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
                 from universe import large_universe
                 universe = large_universe()
         else:
-            # Default broad scan — now the larger ~1000-name universe (was the
-            # ~500 liquid core). Wider coverage finds more setups; the batch
-            # fetch + caching + backoff keep it manageable, and the live progress
-            # bar gives feedback while it works. Small/mid-caps still get added
-            # below only when the request explicitly asks for them.
+            # Default broad scan — ~600 names (the most-liquid slice of the large
+            # universe). Bigger than the old ~500 liquid core for wider coverage,
+            # but capped well under the full ~1000 so the scan finishes before the
+            # request times out. (The 1000-name version was timing out behind the
+            # gateway.) Small/mid-caps still get added below only on explicit ask.
             try:
                 from universe import large_universe
-                universe = large_universe()
+                universe = large_universe()[:600]
             except Exception:
                 try:
                     from universe import liquid_universe
