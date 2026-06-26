@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.35.0'
+const VERSION = '3.35.1'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.35.1', d: 'June 26, 2026', changes: [
+    'Scans cover more of the market again (~1,000 stocks for Plus) now that they run in the background and can\u2019t time out.',
+  ]},
   { v: '3.35.0', d: 'June 26, 2026', changes: [
     'Scans no longer time out \u2014 they run in the background and the results stream in when ready, even for big scans.',
   ]},
