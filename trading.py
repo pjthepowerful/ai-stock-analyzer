@@ -2971,13 +2971,16 @@ _SCAN_CACHE_TTL = 300   # 5 min — daily bars barely move intraday, so repeat
                         # scans (or overlapping universes) reuse data and are
                         # near-instant instead of re-downloading.
 
-def batch_fetch_scan(tickers: list, skip_news: bool = True) -> dict:
+def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None) -> dict:
     """Bulk-fetch 1-year history for MANY tickers in a few HTTP requests using
     yf.download (multi-ticker). Returns {ticker: scan_data_dict}. Far faster than
     per-ticker fetch_scan for big universes — one network round-trip per chunk
     instead of one per stock. News is skipped here (fetched only for top picks).
     Chunks are downloaded IN PARALLEL so a 1000-name scan isn't 7 sequential
     round-trips but a handful of concurrent ones.
+
+    progress_cb(done, total, phase): optional callback fired as chunks complete,
+    so the UI can show a live progress bar. 'done'/'total' are ticker counts.
     """
     out = {}
     tickers = [t for t in tickers if t not in _DELISTED_CACHE]
@@ -3039,10 +3042,19 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True) -> dict:
     # finishes and drop it immediately, so we never hold all ~500 tickers' worth
     # of 1y data in memory at once (that peak was a contributor to OOM kills).
     from concurrent.futures import as_completed
+    _total = len(tickers)
+    _done = 0
+    if progress_cb:
+        try: progress_cb(0, _total, "fetching")
+        except Exception: pass
     with ThreadPoolExecutor(max_workers=min(3, len(chunks))) as _ex:
         futures = [_ex.submit(_fetch_chunk, ch) for ch in chunks]
         for fut in as_completed(futures):
             chunk, df = fut.result()
+            _done += len(chunk)
+            if progress_cb:
+                try: progress_cb(min(_done, _total), _total, "scoring")
+                except Exception: pass
             if df is None or df.empty:
                 continue
             for t in chunk:
@@ -5551,7 +5563,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     }
 
 
-def execute(intent: dict) -> dict:
+def execute(intent: dict, progress_cb=None) -> dict:
     t = intent["type"]
     market = intent.get("market", "US")
 
@@ -5909,7 +5921,7 @@ def execute(intent: dict) -> dict:
             # (yf.download), then score locally. This is what makes 600-1000+
             # stocks fast: one round-trip per ~150 tickers instead of one per
             # stock. News is skipped here; it's fetched only for the top picks.
-            batch = batch_fetch_scan(universe, skip_news=True)
+            batch = batch_fetch_scan(universe, skip_news=True, progress_cb=progress_cb)
             for _tk, _data in batch.items():
                 _r = _score_data(_tk, _data)
                 if _r:

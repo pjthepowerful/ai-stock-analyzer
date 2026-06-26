@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.31.2'
+const VERSION = '3.32.0'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.32.0', d: 'June 25, 2026', changes: [
+    'Live progress bar on the big market scan \u2014 watch Paula work through the stocks in real time instead of staring at a spinner.',
+  ]},
   { v: '3.31.2', d: 'June 25, 2026', changes: [
     'Redid the "Today\u2019s market" card \u2014 now shows if the market is up or down plus the day\u2019s top gainer and top loser, instead of repeating the SPY price.',
   ]},
@@ -1100,6 +1103,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
   const [connected, setConnected] = useState(false)
   const [spyTrend, setSpyTrend] = useState(null)
   const [marketToday, setMarketToday] = useState(null)
+  const [scanProgress, setScanProgress] = useState(null)
   const [selectedPos, setSelectedPos] = useState(null)
   const [toasts, setToasts] = useState([])
   const [view, setView] = useState('chat')
@@ -1277,6 +1281,11 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
         try {
           const { event, data } = JSON.parse(e.data)
           if (event === 'connected') { if (Date.now() - apToggleAtRef.current > 10000) setAutopilot(data.autopilot) }
+          if (event === 'scan_progress') {
+            // Live progress for the big market scan — show a bar while it runs.
+            setScanProgress({ pct: data.pct, done: data.done, total: data.total, phase: data.phase })
+            if (data.pct >= 100) setTimeout(() => setScanProgress(null), 1200)
+          }
           if (event === 'autopilot') {
             if (data.status === 'started') { setAutopilot(true) }
             if (data.status === 'stopped') { setAutopilot(false); apChatRef.current = null }
@@ -1466,6 +1475,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
     if (isGuest) bumpGuestUsage()
     scrollLockRef.current = true  // sending a message re-pins to the bottom
     setSending(true)
+    setScanProgress(null)  // clear any stale scan bar from a prior message
     cancelledRef.current = false
     abortRef.current = new AbortController()
     setInput('')
@@ -1664,6 +1674,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
     try { clearInterval(abortRef.current?._thinkTimer) } catch {}
     setSending(false)
     setLoadingText('')
+    setScanProgress(null)
     sendingChatRef.current = null
     cancelledRef.current = false
     abortRef.current = null
@@ -1677,6 +1688,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
     try { abortRef.current?.abort() } catch {}
     setSending(false)
     setLoadingText('')
+    setScanProgress(null)
   }
 
   // Confirm or cancel a pending trade card. Only confirming actually places the
@@ -1992,7 +2004,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                   </div>
                 ):(<><div className="user-bubble">{m.content}</div></>)}
               </div>))}
-            {sending&&sendingChatRef.current===chatIdRef.current&&!messages.some(m=>m.streaming)&&<div className="msg msg-assistant"><div className="ai"><div className="ai-av">P</div><div className="ai-body"><div className="ai-name">Paula</div><div className="loading-state"><div className="dots"><span/><span/><span/></div><span className="loading-txt">{loadingText}</span></div></div></div></div>}
+            {sending&&sendingChatRef.current===chatIdRef.current&&!messages.some(m=>m.streaming)&&<div className="msg msg-assistant"><div className="ai"><div className="ai-av">P</div><div className="ai-body"><div className="ai-name">Paula</div><div className="loading-state"><div className="dots"><span/><span/><span/></div><span className="loading-txt">{scanProgress ? (scanProgress.done + " of " + scanProgress.total + " scanned") : loadingText}</span>{scanProgress ? <ScanBar pct={scanProgress.pct} /> : null}</div></div></div></div>}
             <div ref={messagesEnd}/>
             </div>
           </div>
@@ -2408,6 +2420,15 @@ function ChartTabs({ tickers, signal }) {
         ))}
       </div>
       <Suspense fallback={<ChartFallback/>}><Chart key={safeTicker} ticker={safeTicker} signal={active === 0 ? signal : null} height={240} /></Suspense>
+    </div>
+  )
+}
+
+function ScanBar({ pct }) {
+  const w = Math.max(0, Math.min(100, pct || 0)) + '%'
+  return (
+    <div className="scan-bar">
+      <div className="scan-bar-fill" style={{ width: w }} />
     </div>
   )
 }

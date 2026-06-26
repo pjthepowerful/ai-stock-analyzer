@@ -4,6 +4,7 @@ Wraps the trading engine as a local API server.
 """
 
 import asyncio
+import functools
 import json
 import time
 import os
@@ -397,6 +398,26 @@ async def broadcast(event: str, data: dict):
         except Exception:
             pass
 
+
+def _make_scan_progress_cb(loop):
+    """Build a progress callback safe to call from the scan's worker thread.
+    It schedules a websocket broadcast onto the main event loop. Throttled so a
+    fast scan doesn't spam the socket. Returns None if there's no loop."""
+    if loop is None:
+        return None
+    _last = {"pct": -1}
+    def _cb(done, total, phase="scanning"):
+        try:
+            pct = int(done / total * 100) if total else 0
+            # Only push when the percent actually advances (avoid socket spam).
+            if pct <= _last["pct"]:
+                return
+            _last["pct"] = pct
+            payload = {"done": int(done), "total": int(total), "pct": pct, "phase": phase}
+            asyncio.run_coroutine_threadsafe(broadcast("scan_progress", payload), loop)
+        except Exception:
+            pass
+    return _cb
 
 def _sanitize_trade_error(result: dict) -> dict:
     """Strip broker day-trade restriction text from user-facing errors."""
@@ -852,7 +873,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.31.2",  # bump marker — confirms running code
+        "build": "v3.32.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1725,7 +1746,8 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
     result = None
     try:
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, engine.execute, intent)
+        _prog = _make_scan_progress_cb(loop)
+        result = await loop.run_in_executor(None, functools.partial(engine.execute, intent, progress_cb=_prog))
     except Exception as e:
         print(f"⚠️ Execute error: {e}")
 
@@ -1924,7 +1946,8 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
 
     # Run in thread pool since engine functions are blocking
     loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, engine.execute, intent)
+    _prog = _make_scan_progress_cb(loop)
+    result = await loop.run_in_executor(None, functools.partial(engine.execute, intent, progress_cb=_prog))
 
     if result and result.get("ok"):
         resp = result.get("msg", "")
