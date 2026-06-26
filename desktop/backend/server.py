@@ -780,7 +780,21 @@ async def save_user_settings(req: SettingsRequest, authorization: str = Header(N
     user = _get_user(authorization)
     if not user:
         return {"ok": False, "error": "Not authenticated"}
-    result = auth.save_settings(user["id"], req.dict())
+
+    # Connections (broker/data API keys) are a Plus feature. The UI hides them
+    # behind a LockedCard, but the endpoint must enforce it too — otherwise a
+    # free user could POST keys directly and bypass the paywall. Strip the
+    # key fields for non-Plus users; their other settings (theme, font, etc.)
+    # still save normally.
+    _is_plus = auth.is_plus(user["id"]) or _can_autopilot(user) or (user.get("email", "").lower() == ADMIN_EMAIL)
+    payload = req.dict()
+    if not _is_plus:
+        for _k in ("alpaca_key", "alpaca_secret", "groq_key", "polygon_key"):
+            payload.pop(_k, None)
+        result = auth.save_settings(user["id"], payload)
+        return result
+
+    result = auth.save_settings(user["id"], payload)
 
     # Hot-reload API keys into environment (no restart needed)
     if req.alpaca_key:
@@ -838,7 +852,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.31.0",  # bump marker — confirms running code
+        "build": "v3.31.1",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1649,6 +1663,16 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
 
     user = _get_user(authorization)
     user_id = user["id"] if user else 0
+    # Free-tier daily message limit — MUST match /api/chat. Without this, the
+    # stream endpoint was an open bypass: a free user hitting /api/chat/stream
+    # directly skipped the cap entirely. Plus/admin/autopilot are exempt.
+    if user:
+        _exempt = auth.is_plus(user["id"]) or _can_autopilot(user) or (user.get("email", "").lower() == ADMIN_EMAIL)
+        if not _exempt and auth.messages_today(user["id"]) >= 3:
+            return {
+                "ok": True, "stream": False, "type": "limit", "limit_reached": True,
+                "message": "You've used your 3 free messages for today. Upgrade to Paula Plus for unlimited messages, new chats, and full access.",
+            }
     if user:
         auth.save_chat(user["id"], "user", user_msg)
 

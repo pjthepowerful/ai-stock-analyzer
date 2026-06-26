@@ -20,11 +20,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.31.0'
+const VERSION = '3.31.1'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.31.1', d: 'June 25, 2026', changes: [
+    'Cleaner welcome screen \u2014 solid greeting color and more even spacing.',
+    'Closed a couple of paywall gaps so Plus features stay Plus-only.',
+  ]},
   { v: '3.31.0', d: 'June 24, 2026', changes: [
     'Autopilot now keeps running on its own \u2014 it survives the server restarting and resumes automatically, so it trades unattended even with your laptop closed.',
   ]},
