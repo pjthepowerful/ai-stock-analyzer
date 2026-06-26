@@ -20,11 +20,16 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.33.1'
+const VERSION = '3.34.0'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.34.0', d: 'June 26, 2026', changes: [
+    'High-conviction alerts \u2014 when autopilot\u2019s scan flags a setup scoring 90+, an in-app banner pops up so you don\u2019t miss the best ones.',
+    'Bigger default scan (~1000 stocks, up from ~500) for wider coverage.',
+    'Scan progress now shows a percentage as it works.',
+  ]},
   { v: '3.33.1', d: 'June 26, 2026', changes: [
     'Maintenance mode now appears for users automatically \u2014 no refresh needed (flips instantly over the live connection, and falls back to a fast poll).',
   ]},
@@ -1127,6 +1132,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
   const [spyTrend, setSpyTrend] = useState(null)
   const [marketToday, setMarketToday] = useState(null)
   const [scanProgress, setScanProgress] = useState(null)
+  const [alerts, setAlerts] = useState([])
   const [selectedPos, setSelectedPos] = useState(null)
   const [toasts, setToasts] = useState([])
   const [view, setView] = useState('chat')
@@ -1307,6 +1313,13 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
           if (event === 'maintenance') {
             // Admin toggled maintenance — flip the screen instantly, no refresh.
             setMaint({ on: !!data.on, message: data.message || '' })
+          }
+          if (event === 'alert') {
+            // High-conviction setup flagged (90+ score) — show an in-app banner.
+            setAlerts(prev => {
+              if (prev.some(a => a.ticker === data.ticker)) return prev
+              return [{ ticker: data.ticker, score: data.score, rr: data.rr, id: Date.now() + data.ticker }, ...prev].slice(0, 4)
+            })
           }
           if (event === 'scan_progress') {
             // Live progress for the big market scan — show a bar while it runs.
@@ -1920,6 +1933,18 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
 
       {/* Main */}
       <main className="main">
+        {alerts.length > 0 && <div className="alert-stack">
+          {alerts.map(a => (
+            <div className="alert-banner" key={a.id}>
+              <span className="alert-icon">⚡</span>
+              <span className="alert-text">
+                <b>{a.ticker}</b> flagged — high-conviction setup (score {a.score}{a.rr ? `, ${a.rr}:1 R:R` : ''})
+              </span>
+              <button className="alert-analyze" onClick={()=>{ if(!isPlus){setShowPlus(true);return} setAlerts(prev=>prev.filter(x=>x.id!==a.id)); sendMessage('Analyze '+a.ticker) }}>Analyze</button>
+              <button className="alert-x" onClick={()=>setAlerts(prev=>prev.filter(x=>x.id!==a.id))} aria-label="Dismiss">×</button>
+            </div>
+          ))}
+        </div>}
         {/* Slim top bar — hamburger (mobile) + equity ticker; nav lives in the rail */}
         <div className="hdr hdr-slim">
           <button className="ham" onClick={()=>setSideOpen(true)} aria-label="Open menu">☰</button>
@@ -2058,7 +2083,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                   </div>
                 ):(<><div className="user-bubble">{m.content}</div></>)}
               </div>))}
-            {sending&&sendingChatRef.current===chatIdRef.current&&!messages.some(m=>m.streaming)&&<div className="msg msg-assistant"><div className="ai"><div className="ai-av">P</div><div className="ai-body"><div className="ai-name">Paula</div><div className="loading-state"><div className="dots"><span/><span/><span/></div><span className="loading-txt">{scanProgress ? (scanProgress.done + " of " + scanProgress.total + " scanned") : loadingText}</span>{scanProgress ? <ScanBar pct={scanProgress.pct} /> : null}</div></div></div></div>}
+            {sending&&sendingChatRef.current===chatIdRef.current&&!messages.some(m=>m.streaming)&&<div className="msg msg-assistant"><div className="ai"><div className="ai-av">P</div><div className="ai-body"><div className="ai-name">Paula</div><div className="loading-state"><div className="dots"><span/><span/><span/></div><span className="loading-txt">{scanProgress ? ("Scanning the market… " + scanProgress.pct + "%") : loadingText}</span>{scanProgress ? <ScanBar pct={scanProgress.pct} /> : null}</div></div></div></div>}
             <div ref={messagesEnd}/>
             </div>
           </div>

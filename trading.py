@@ -5624,6 +5624,19 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     for b in executions:
         log.append(b)
 
+    # High-conviction alerts: any long setup scoring 90+ (whether or not
+    # autopilot bought it). These get surfaced to the user as an in-app alert.
+    # all_scores rows are (ticker, score, action, bullish_confluence, rr).
+    high_conviction = []
+    for row in all_scores:
+        try:
+            tkr, sc, act, conf, rr = row
+            if sc >= 90 and act == "STRONG_BUY":
+                high_conviction.append({"ticker": tkr, "score": int(sc), "rr": round(float(rr), 1)})
+        except Exception:
+            continue
+    high_conviction.sort(key=lambda x: x["score"], reverse=True)
+
     return {
         "ok": True,
         "log": log,
@@ -5632,6 +5645,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         "sells": len(sells),
         "scanned": analyzed,
         "opportunities": len(opportunities),
+        "alerts": high_conviction[:5],
     }
 
 
@@ -5940,16 +5954,20 @@ def execute(intent: dict, progress_cb=None) -> dict:
                 from universe import large_universe
                 universe = large_universe()
         else:
-            # Default broad scan — the most-liquid core (~500 S&P 500 names).
-            # Scanning this instead of the full ~1000 keeps us under data-source
-            # rate limits and is much faster, while still covering where the real
-            # swing setups are. Small/mid-caps get added below only when the
-            # request actually asks for them.
+            # Default broad scan — now the larger ~1000-name universe (was the
+            # ~500 liquid core). Wider coverage finds more setups; the batch
+            # fetch + caching + backoff keep it manageable, and the live progress
+            # bar gives feedback while it works. Small/mid-caps still get added
+            # below only when the request explicitly asks for them.
             try:
-                from universe import liquid_universe
-                universe = liquid_universe()
+                from universe import large_universe
+                universe = large_universe()
             except Exception:
-                universe = list(dict.fromkeys(SP500_TOP + NASDAQ_100))
+                try:
+                    from universe import liquid_universe
+                    universe = liquid_universe()
+                except Exception:
+                    universe = list(dict.fromkeys(SP500_TOP + NASDAQ_100))
 
         # If user wants cheap stocks OR a small market cap, widen the universe
         # to include more small/mid caps so there's something to find.

@@ -1370,3 +1370,15 @@ body.has-bg-theme .rail { background: rgba(0,0,0,.18); }
 
 /* Market card mood fallback (when movers unavailable) */
 .wm-mood { margin-top: 9px; font-size: .85rem; color: var(--lt); line-height: 1.45; }
+
+/* High-conviction alert banners */
+.alert-stack { position: sticky; top: 0; z-index: 40; display: flex; flex-direction: column; gap: 7px; padding: 9px 14px 0; }
+.alert-banner { display: flex; align-items: center; gap: 10px; padding: 10px 13px; border-radius: 11px; border: 1px solid rgba(16,185,129,.35); background: linear-gradient(135deg, rgba(16,185,129,.16), rgba(16,185,129,.05)); animation: alertIn .35s ease; }
+@keyframes alertIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+.alert-icon { font-size: 1rem; flex-shrink: 0; }
+.alert-text { flex: 1; font-size: .85rem; color: var(--lt); line-height: 1.35; }
+.alert-text b { color: var(--grn); font-weight: 700; }
+.alert-analyze { flex-shrink: 0; padding: 6px 13px; border-radius: 8px; border: 1px solid var(--grn); background: transparent; color: var(--grn); font: inherit; font-size: .78rem; font-weight: 700; cursor: pointer; transition: background .14s; }
+.alert-analyze:hover { background: rgba(16,185,129,.14); }
+.alert-x { flex-shrink: 0; width: 26px; height: 26px; border-radius: 7px; border: none; background: transparent; color: var(--dim); font-size: 1.1rem; line-height: 1; cursor: pointer; }
+.alert-x:hover { color: var(--lt); background: var(--c2); }

@@ -130,6 +130,10 @@ _user_sessions: dict[int, list[dict]] = {}  # {user_id: [chat messages]}
 _session_lock = asyncio.Lock()
 autopilot_owner_id: Optional[int] = None  # Only one user can own autopilot
 
+# High-conviction alert dedup: ticker -> date last alerted. Prevents re-alerting
+# the same 90+ stock every 5-min cycle; it can re-alert on a new day.
+_alerted_today: dict = {}
+
 # ── Autopilot persistence ──
 # Autopilot runs as a server-side background task, so it keeps trading even when
 # the user closes their laptop/browser. But an in-memory task is lost if the
@@ -873,7 +877,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.33.1",  # bump marker — confirms running code
+        "build": "v3.34.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -2533,6 +2537,27 @@ async def _autopilot_loop():
                 "sells": sells,
                 "scanned": result.get("scanned", 0),
             })
+
+            # High-conviction alerts (90+) — fire an in-app alert per ticker, but
+            # only once per day each (dedup) so it doesn't repeat every cycle.
+            try:
+                from datetime import date as _date
+                _today_str = _date.today().isoformat()
+                # Drop stale entries from previous days.
+                for _k in [k for k, v in _alerted_today.items() if v != _today_str]:
+                    _alerted_today.pop(_k, None)
+                for a in (result.get("alerts") or []):
+                    tkr = a.get("ticker")
+                    if not tkr or _alerted_today.get(tkr) == _today_str:
+                        continue
+                    _alerted_today[tkr] = _today_str
+                    await broadcast("alert", {
+                        "ticker": tkr,
+                        "score": a.get("score"),
+                        "rr": a.get("rr"),
+                    })
+            except Exception as _ae:
+                print(f"  ⚠️ alert broadcast error: {_ae}")
 
             # Send detailed phone notification if trades were made
             if buys > 0 or sells > 0 or shorts > 0:
