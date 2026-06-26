@@ -5649,7 +5649,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     }
 
 
-def execute(intent: dict, progress_cb=None) -> dict:
+def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
     t = intent["type"]
     market = intent.get("market", "US")
 
@@ -5982,6 +5982,21 @@ def execute(intent: dict, progress_cb=None) -> dict:
             except Exception:
                 pass
 
+        # Free tier scans a lighter ~100-stock slice; Plus gets the full universe.
+        # Prefer the most-liquid core names so a free scan still surfaces quality,
+        # just fewer of them. (is_plus is threaded in from the backend; default
+        # True so non-web callers / internal use aren't capped.)
+        if not is_plus:
+            try:
+                from universe import liquid_universe
+                _core = liquid_universe()
+            except Exception:
+                _core = list(dict.fromkeys(SP500_TOP + NASDAQ_100))
+            # Keep universe order but prioritize liquid-core members, cap at 100.
+            _core_set = set(_core)
+            _ranked = [t for t in _core if t in set(universe)] + [t for t in universe if t not in _core_set]
+            universe = _ranked[:100]
+
         picks = []
 
         def _score_data(ticker, data):
@@ -6116,6 +6131,8 @@ def execute(intent: dict, progress_cb=None) -> dict:
             lines.append("")
 
         lines.append("*These are based on my 21-factor signal engine — not financial advice.*")
+        if not is_plus:
+            lines.append("\n*Free scans cover the ~100 most-liquid stocks. Paula Plus scans the full ~1,000-name universe for more setups.*")
         return {"ok": True, "type": "analysis", "ticker": top[0]["ticker"],
                 "tickers": [p["ticker"] for p in top],
                 "msg": "\n".join(lines)}

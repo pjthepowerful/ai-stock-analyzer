@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.34.0'
+const VERSION = '3.34.1'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.34.1', d: 'June 26, 2026', changes: [
+    'Free scans now cover the ~100 most-liquid stocks; Paula Plus scans the full ~1,000-name universe.',
+  ]},
   { v: '3.34.0', d: 'June 26, 2026', changes: [
     'High-conviction alerts \u2014 when autopilot\u2019s scan flags a setup scoring 90+, an in-app banner pops up so you don\u2019t miss the best ones.',
     'Bigger default scan (~1000 stocks, up from ~500) for wider coverage.',

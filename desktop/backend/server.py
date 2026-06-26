@@ -877,7 +877,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.34.0",  # bump marker — confirms running code
+        "build": "v3.34.1",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1828,7 +1828,8 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
     try:
         loop = asyncio.get_event_loop()
         _prog = _make_scan_progress_cb(loop)
-        result = await loop.run_in_executor(None, functools.partial(engine.execute, intent, progress_cb=_prog))
+        _is_plus = bool(user) and (auth.is_plus(user["id"]) or _can_autopilot(user) or (user.get("email", "").lower() == ADMIN_EMAIL))
+        result = await loop.run_in_executor(None, functools.partial(engine.execute, intent, progress_cb=_prog, is_plus=_is_plus))
     except Exception as e:
         print(f"⚠️ Execute error: {e}")
 
@@ -2028,7 +2029,8 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
     # Run in thread pool since engine functions are blocking
     loop = asyncio.get_event_loop()
     _prog = _make_scan_progress_cb(loop)
-    result = await loop.run_in_executor(None, functools.partial(engine.execute, intent, progress_cb=_prog))
+    _is_plus = bool(user) and (auth.is_plus(user["id"]) or _can_autopilot(user) or (user.get("email", "").lower() == ADMIN_EMAIL))
+    result = await loop.run_in_executor(None, functools.partial(engine.execute, intent, progress_cb=_prog, is_plus=_is_plus))
 
     if result and result.get("ok"):
         resp = result.get("msg", "")
