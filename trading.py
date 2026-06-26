@@ -4674,6 +4674,34 @@ def load_autopilot_config() -> dict:
     return params
 
 
+def autopilot_entries_today() -> set:
+    """Count today's actual entries (filled BUY orders) straight from Alpaca,
+    so autopilot's daily-entry count stays correct across backend restarts and
+    doesn't rely on in-memory state (which resets and was Streamlit-only). This
+    is what lets a resumed autopilot 'sync' with what already happened today.
+    Returns a set of tickers bought today."""
+    try:
+        et = ZoneInfo("US/Eastern")
+        start_of_day = datetime.now(et).replace(hour=0, minute=0, second=0, microsecond=0)
+        r = requests.get(f"{ALPACA_BASE}/v2/orders",
+                         headers=_alpaca_headers(),
+                         params={"status": "closed", "limit": 200,
+                                 "after": start_of_day.isoformat()},
+                         timeout=10)
+        if r.status_code != 200:
+            return set()
+        bought = set()
+        for o in r.json():
+            if (o.get("side") == "buy" and o.get("filled_qty")
+                    and float(o.get("filled_qty", 0)) > 0):
+                sym = o.get("symbol")
+                if sym:
+                    bought.add(sym)
+        return bought
+    except Exception:
+        return set()
+
+
 def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dict:
     """
     Full autopilot cycle:
@@ -4694,15 +4722,12 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     if not is_open and skip_market_check:
         log.append(f"⚠️ {status_msg} — scanning anyway (forced)")
 
-    # Track what we've already bought this session to prevent duplicates
-    if "autopilot_bought" not in st.session_state:
-        st.session_state["autopilot_bought"] = set()
-    # Reset bought tracker each new day
+    # Sync today's entries from Alpaca (filled buy orders) — the real source of
+    # truth. Works across restarts and doesn't depend on in-memory state. This
+    # is how a resumed autopilot knows what it already did today.
     et = ZoneInfo("US/Eastern")
     today = datetime.now(et).strftime("%Y-%m-%d")
-    if st.session_state.get("autopilot_date") != today:
-        st.session_state["autopilot_bought"] = set()
-        st.session_state["autopilot_date"] = today
+    bought_today = autopilot_entries_today()
 
     # ── 1. Account check ──
     account = alpaca_account()
@@ -4711,7 +4736,8 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     log.append(f"💰 Portfolio: ${account['equity']:,.2f} · Cash: ${account['cash']:,.2f} · Buying power: ${account['buying_power']:,.2f}")
 
     positions = alpaca_positions()
-    held_tickers = {p["ticker"] for p in positions} | st.session_state.get("autopilot_bought", set())
+    # Don't re-buy anything we already hold OR already bought today.
+    held_tickers = {p["ticker"] for p in positions} | bought_today
 
     # ── AUTO-TUNER: Load params from config, adjust daily based on performance ──
     import json, os, pathlib
@@ -4830,7 +4856,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     SELL_BELOW = params["SELL_BELOW"]
     MAX_DAILY_ENTRIES = params.get("MAX_DAILY_ENTRIES", 6)
 
-    daily_entries = len(st.session_state.get("autopilot_bought", set()))
+    daily_entries = len(bought_today)
 
     log.append(f"Open positions: {len(positions)} · Max: {MAX_POSITIONS} · Entries today: {daily_entries}/{MAX_DAILY_ENTRIES}")
     log.append(f"📊 Mode: **{'Swing' if SWING_MODE else 'Selective Intraday'}** · Score≥{MIN_SCORE} · R:R≥{MIN_RR} · Max {MAX_POSITIONS} pos")
@@ -5165,7 +5191,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                     if result.get("ok"):
                         sells.append(f"🔴 {action_word} {pos['ticker']} {'(short)' if is_short else ''} — score {sig['score']}, signal: {sig['action']}")
                         # Prevent re-buying this ticker today
-                        st.session_state.setdefault("autopilot_bought", set()).add(pos["ticker"])
+                        held_tickers.add(pos["ticker"])
                     else:
                         sells.append(f"⚠️ Tried to close {pos['ticker']} but failed: {result.get('error','')}")
         except Exception:
@@ -5590,7 +5616,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
 
             if result.get("ok"):
                 executions.append(f"{side_emoji} {side_word} {qty} {ticker} @ ~${entry:.2f} · Stop ${stop:.2f} · Target ${target:.2f} · Score {opp['score']} · R:R {opp['rr']:.1f}:1")
-                st.session_state.setdefault("autopilot_bought", set()).add(ticker)
+                held_tickers.add(ticker)
                 account["buying_power"] -= cost
             else:
                 executions.append(f"⚠️ Failed to {'short' if is_short else 'buy'} {ticker}: {result.get('error','')}")
