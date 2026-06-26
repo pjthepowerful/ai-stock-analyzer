@@ -3017,6 +3017,36 @@ _SCAN_CACHE_TTL = 300   # 5 min — daily bars barely move intraday, so repeat
                         # scans (or overlapping universes) reuse data and are
                         # near-instant instead of re-downloading.
 
+def _clear_yf_session():
+    """Force yfinance to drop its cached session + crumb token. Yahoo's
+    'Invalid Crumb' 401 happens when that token goes stale; clearing it makes
+    the next request fetch a fresh one. Defensive across yfinance versions."""
+    try:
+        import yfinance as _yf
+        # Newer yfinance keeps a shared data singleton with the crumb/cookies.
+        try:
+            from yfinance import shared as _yshared
+            if hasattr(_yshared, "_ERRORS"):
+                _yshared._ERRORS = {}
+        except Exception:
+            pass
+        try:
+            from yfinance.data import YfData as _YfData
+            inst = getattr(_YfData, "_instances", None)
+            if inst:
+                _YfData._instances = {}
+            # Reset crumb/cookie on any live instance.
+            for attr in ("_crumb", "_cookie", "_cookie_strategy"):
+                try:
+                    setattr(_YfData, attr, None)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
 def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None) -> dict:
     """Bulk-fetch 1-year history for MANY tickers in a few HTTP requests using
     yf.download (multi-ticker). Returns {ticker: scan_data_dict}. Far faster than
@@ -3069,14 +3099,19 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None) ->
                         group_by="ticker", auto_adjust=True,
                         threads=True, progress=False,
                     )
-                # Empty frame can also signal a soft rate-limit — retry once.
+                # Empty frame can signal a soft rate-limit OR a stale-crumb block
+                # ("Invalid Crumb" 401) — clear yfinance's cached session/crumb and
+                # retry, which usually fixes the crumb case.
                 if (df is None or df.empty) and attempt < 2:
+                    _clear_yf_session()
                     _time.sleep(1.5 * (attempt + 1))
                     continue
                 return chunk, df
             except Exception as e:
                 msg = str(e).lower()
-                if ("rate" in msg or "too many" in msg) and attempt < 2:
+                if (("rate" in msg or "too many" in msg or "crumb" in msg
+                     or "401" in msg or "unauthorized" in msg) and attempt < 2):
+                    _clear_yf_session()
                     _time.sleep(2.0 * (attempt + 1))  # 2s, then 4s
                     continue
                 _log.warning(f"batch_fetch_scan chunk failed ({len(chunk)} tickers): {e}")
@@ -3109,8 +3144,13 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None) ->
                     sub = df[t] if len(chunk) > 1 else df
                     sub = sub.dropna(how="all")
                     if sub is None or sub.empty or len(sub) < 50:
-                        if sub is None or sub.empty:
-                            _DELISTED_CACHE.add(t)
+                        # IMPORTANT: do NOT mark delisted here. An empty frame in a
+                        # bulk download usually means Yahoo throttled/blocked the
+                        # whole request ("Invalid Crumb" 401), not that the stock is
+                        # dead. Marking it delisted would wrongly drop alive names
+                        # (FI, MMC, HOLX, etc.) from all future scans. We just skip
+                        # this one for now; genuine delistings are caught by the
+                        # single-ticker path's explicit Yahoo "delisted" message.
                         continue
                     price = float(sub["Close"].iloc[-1])
                     prev = float(sub["Close"].iloc[-2]) if len(sub) >= 2 else price
@@ -3167,10 +3207,11 @@ def fetch_scan(ticker: str) -> dict | None:
         stk = yf.Ticker(ticker)
         hist = stk.history(period="1y")
         if hist is None or hist.empty or len(hist) < 50:
-            # No / too-little data — likely delisted or too new. Remember it so we
-            # don't re-fetch and spam the logs on every scan.
-            if hist is None or hist.empty:
-                _DELISTED_CACHE.add(ticker)
+            # Empty/thin can mean genuinely delisted OR Yahoo blocked us
+            # ("Invalid Crumb" 401). Don't poison the delisted cache on an empty
+            # response — that wrongly drops alive names when Yahoo throttles. We
+            # only treat the STALE-BAR case below (data returned, but last bar is
+            # days old) as a real delisting. Just skip this one for now.
             return None
         price = float(hist["Close"].iloc[-1])
         prev = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else price
