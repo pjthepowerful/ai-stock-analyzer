@@ -457,6 +457,52 @@ def polygon_losers(limit: int = 20) -> list[dict] | None:
         return None
 
 
+def yahoo_top_movers() -> dict:
+    """Fallback top gainer/loser from a curated liquid large-cap set via ONE
+    yfinance batch download. Used when Polygon's gainers/losers snapshot isn't
+    available (the free Polygon tier blocks that endpoint). Returns
+    {'gainer': {...}, 'loser': {...}} with whatever it could compute.
+
+    Note: this is a large-cap-only readout (not the whole market), so it won't
+    surface a tiny stock up 300% — but it's reliable and free, and a big liquid
+    name making a move is more meaningful for context anyway.
+    """
+    universe = [
+        "AAPL","MSFT","NVDA","AMZN","GOOGL","META","TSLA","AVGO","JPM","V",
+        "WMT","MA","JNJ","ORCL","HD","PG","COST","NFLX","BAC","AMD",
+        "ADBE","CRM","KO","PEP","XOM","CVX","DIS","INTC","QCOM","CSCO",
+        "MCD","NKE","BA","GE","CAT","PFE","T","VZ","UBER","PYPL",
+    ]
+    try:
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            df = yf.download(universe, period="2d", interval="1d",
+                             group_by="ticker", auto_adjust=True,
+                             threads=True, progress=False)
+        rows = []
+        for t in universe:
+            try:
+                sub = df[t] if len(universe) > 1 else df
+                sub = sub.dropna(how="all")
+                if sub is None or sub.empty or len(sub) < 2:
+                    continue
+                last = float(sub["Close"].iloc[-1])
+                prev = float(sub["Close"].iloc[-2])
+                if not prev:
+                    continue
+                chg = round((last - prev) / prev * 100, 2)
+                rows.append({"Ticker": t, "Price": round(last, 2), "Chg%": chg})
+            except Exception:
+                continue
+        if not rows:
+            return {}
+        rows.sort(key=lambda r: r["Chg%"], reverse=True)
+        return {"gainer": rows[0], "loser": rows[-1]}
+    except Exception:
+        return {}
+
+
 @st.cache_data(ttl=180)
 def polygon_all_snapshots() -> list[dict] | None:
     """

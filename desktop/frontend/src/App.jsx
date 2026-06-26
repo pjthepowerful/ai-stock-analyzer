@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.32.0'
+const VERSION = '3.32.1'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.32.1', d: 'June 25, 2026', changes: [
+    'Today\u2019s market card now reliably shows a top gainer and loser (added a fallback when the data source is limited), and no longer repeats the SPY line.',
+  ]},
   { v: '3.32.0', d: 'June 25, 2026', changes: [
     'Live progress bar on the big market scan \u2014 watch Paula work through the stocks in real time instead of staring at a spinner.',
   ]},
@@ -1934,7 +1937,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                       <span className="wm-mv-l">Top loser</span>
                       <span className="wm-mv-v"><b>{marketToday.top_loser.ticker}</b> <span className="dn">{marketToday.top_loser.chg}%</span></span>
                     </div>}
-                  </div>:(marketToday.reason&&<div className="wm-reason">{marketToday.reason}</div>)}
+                  </div>:<div className="wm-mood">{marketToday.safe_to_buy?'Conditions look constructive for buying.':'Conditions call for caution right now.'}</div>}
 
                   <div className="wm-stats">
                     <span className="wm-regime-tag">{String(marketToday.regime||'').replace(/_/g,' ')}</span>

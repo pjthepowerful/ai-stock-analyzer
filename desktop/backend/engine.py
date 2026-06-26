@@ -113,6 +113,7 @@ from trading import (
     check_market_regime,
     polygon_gainers,
     polygon_losers,
+    yahoo_top_movers,
     _market_is_open,
     _get_spy_intraday_trend,
     _get_sector_strength,

@@ -1367,3 +1367,6 @@ body.has-bg-theme .rail { background: rgba(0,0,0,.18); }
 /* Live scan progress bar */
 .scan-bar { margin-top: 10px; height: 5px; border-radius: 3px; background: var(--c2); overflow: hidden; max-width: 280px; }
 .scan-bar-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--grn3, var(--grn)), var(--grn)); transition: width .4s ease; }
+
+/* Market card mood fallback (when movers unavailable) */
+.wm-mood { margin-top: 9px; font-size: .85rem; color: var(--lt); line-height: 1.45; }
