@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.32.1'
+const VERSION = '3.32.2'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.32.2', d: 'June 25, 2026', changes: [
+    'Clearer errors \u2014 says \u201cAPI limit reached\u201d when rate-limited (and \u201cserver busy\u201d on restarts) instead of a blanket \u201cConnection lost.\u201d',
+  ]},
   { v: '3.32.1', d: 'June 25, 2026', changes: [
     'Today\u2019s market card now reliably shows a top gainer and loser (added a fallback when the data source is limited), and no longer repeats the SPY line.',
   ]},
@@ -1534,6 +1537,24 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
           history: _histSnapshot
         })
       })
+      // Check the HTTP status before parsing — a 429/5xx won't throw, so
+      // without this it'd fall through and look like a generic failure.
+      if (!res.ok) {
+        try { clearInterval(abortRef.current?._thinkTimer) } catch {}
+        let note = '⚠️ Something went wrong. Please try again.'
+        if (res.status === 429) {
+          note = "⚠️ API limit reached — Paula's getting a lot of requests right now. Give it a few seconds and try again."
+        } else if (res.status >= 500) {
+          note = '⚠️ The server is busy or restarting. Give it a moment and try again.'
+        } else if (res.status === 401 || res.status === 403) {
+          note = '⚠️ Your session may have expired. Try refreshing or signing in again.'
+        }
+        if (sendingChatRef.current === chatIdRef.current) {
+          setMessages(prev => [...prev, { role: 'assistant', content: note }])
+        }
+        setSending(false); setLoadingText(''); setScanProgress(null)
+        return
+      }
       const data = await res.json()
       try { clearInterval(abortRef.current?._thinkTimer) } catch {}
 
@@ -1668,9 +1689,18 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
 
       refreshData()
     } catch (err) {
-      // If the user cancelled, don't show a "connection lost" error.
+      // If the user cancelled, don't show an error at all.
       if (!(cancelledRef.current || (err && err.name === 'AbortError'))) {
-        setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Connection lost.' }])
+        const em = ((err && (err.message || err.toString())) || '').toLowerCase()
+        let note = '⚠️ Connection lost. Please try again.'
+        if (em.includes('429') || em.includes('rate limit') || em.includes('rate_limit') || em.includes('too many')) {
+          note = "⚠️ API limit reached — Paula's getting a lot of requests right now. Give it a few seconds and try again."
+        } else if (em.includes('timeout') || em.includes('timed out')) {
+          note = '⚠️ That took too long and timed out. The server may be busy — please try again in a moment.'
+        } else if (em.includes('500') || em.includes('502') || em.includes('503') || em.includes('504')) {
+          note = '⚠️ The server is busy or restarting. Give it a moment and try again.'
+        }
+        setMessages(prev => [...prev, { role: 'assistant', content: note }])
       }
     }
 
