@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.34.3'
+const VERSION = '3.35.0'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.35.0', d: 'June 26, 2026', changes: [
+    'Scans no longer time out \u2014 they run in the background and the results stream in when ready, even for big scans.',
+  ]},
   { v: '3.34.3', d: 'June 26, 2026', changes: [
     'Faster scans \u2014 tuned the market scan so it finishes reliably instead of timing out with \u201cConnection lost.\u201d',
   ]},
@@ -1129,6 +1132,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
   const [sending, setSending] = useState(false)
   const [loadingText, setLoadingText] = useState('')
   const sendingChatRef = useRef(null) // which chat the current send is for
+  const scanReturnChatRef = useRef(null) // which chat an async scan should return to
   const cancelledRef = useRef(false)  // set true to abort an in-flight response
   const abortRef = useRef(null)       // AbortController for the fetch
   const [account, setAccount] = useState(null)
@@ -1322,6 +1326,22 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
           if (event === 'maintenance') {
             // Admin toggled maintenance — flip the screen instantly, no refresh.
             setMaint({ on: !!data.on, message: data.message || '' })
+          }
+          if (event === 'scan_result') {
+            // Async market scan finished — append the results and stop the spinner.
+            const targetId = scanReturnChatRef.current || chatIdRef.current
+            scanReturnChatRef.current = null
+            setScanProgress(null)
+            setSending(false)
+            setLoadingText('')
+            if (chatIdRef.current === targetId) {
+              setMessages(prev => [...prev, {
+                role: 'assistant',
+                content: data.message || 'Scan complete.',
+                tickers: data.tickers || [],
+                time: new Date().toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'})
+              }])
+            }
           }
           if (event === 'alert') {
             // High-conviction setup flagged (90+ score) — show an in-app banner.
@@ -1632,6 +1652,24 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
               time: new Date().toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'})
             }])
           }
+          return
+        }
+        // Async scan kicked off — keep the loading/progress indicator up; the
+        // actual results arrive over the websocket as a 'scan_result' event.
+        if (data.type === 'scan_started') {
+          // Leave `sending` true so the spinner + progress bar stay visible.
+          scanReturnChatRef.current = targetId
+          // Safety net: if the websocket result never lands (e.g. dropped
+          // connection), don't spin forever — clear after 3 minutes.
+          setTimeout(() => {
+            if (scanReturnChatRef.current === targetId) {
+              scanReturnChatRef.current = null
+              setSending(false); setLoadingText(''); setScanProgress(null)
+              if (chatIdRef.current === targetId) {
+                setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ The scan took too long to come back. Please try again.' }])
+              }
+            }
+          }, 180000)
           return
         }
         const text = data.message || ''

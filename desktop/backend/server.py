@@ -877,7 +877,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.34.3",  # bump marker — confirms running code
+        "build": "v3.35.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -2030,6 +2030,36 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
     loop = asyncio.get_event_loop()
     _prog = _make_scan_progress_cb(loop)
     _is_plus = bool(user) and (auth.is_plus(user["id"]) or _can_autopilot(user) or (user.get("email", "").lower() == ADMIN_EMAIL))
+
+    # ── Async scan ──
+    # A market scan (stock_ideas) can take long enough that the gateway drops the
+    # HTTP request ("Connection lost"). So we DON'T run it inline: kick it off in
+    # the background, return an immediate ack, and deliver the finished result
+    # over the websocket (the same channel the progress bar already uses).
+    if intent.get("type") == "stock_ideas":
+        _uid = user["id"] if user else None
+        async def _run_scan_bg():
+            try:
+                res = await loop.run_in_executor(
+                    None, functools.partial(engine.execute, intent, progress_cb=_prog, is_plus=_is_plus))
+                msg_out = res.get("msg", "") if res and res.get("ok") else _friendly_error((res or {}).get("error", "Scan failed"))
+                tickers_out = (res or {}).get("tickers", []) if res and res.get("ok") else []
+                if _uid:
+                    try: auth.save_chat(_uid, "assistant", msg_out)
+                    except Exception: pass
+                await broadcast("scan_result", {
+                    "ok": bool(res and res.get("ok")),
+                    "message": msg_out,
+                    "tickers": tickers_out,
+                })
+            except Exception as _se:
+                await broadcast("scan_result", {"ok": False, "message": _friendly_error(str(_se))})
+        asyncio.create_task(_run_scan_bg())
+        return {
+            "ok": True, "type": "scan_started",
+            "message": "On it — scanning the market for the best setups. This takes a moment…",
+        }
+
     result = await loop.run_in_executor(None, functools.partial(engine.execute, intent, progress_cb=_prog, is_plus=_is_plus))
 
     if result and result.get("ok"):
