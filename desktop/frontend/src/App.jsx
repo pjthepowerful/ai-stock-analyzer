@@ -20,11 +20,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.36.0'
+const VERSION = '3.36.1'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.36.1', d: 'June 26, 2026', changes: [
+    'Chat names now update instantly from your question, before Paula replies.',
+    'Fixed autopilot quirks \u2014 stopping it no longer posts a stray message to the wrong chat, and toggling it no longer renames your chat.',
+  ]},
   { v: '3.36.0', d: 'June 26, 2026', changes: [
     'You can now scan the entire NASDAQ \u2014 just ask. It\u2019s a big scan and takes several minutes (and may return partial data when the free data source throttles).',
   ]},
@@ -1225,15 +1229,24 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
     setAutopilot(!wasOn)
     if (wasOn) {
       const apId = apChatRef.current
-      if (apId && chatIdRef.current !== apId) switchChat(apId)
-      setMessages(prev => [...prev, { role: 'assistant', content: '🔴 **Autopilot stopped.**', type: 'autopilot' }])
-      if (apId) persist(chatsRef.current.map(c => c.id === apId ? { ...c, title: 'Autopilot Off' } : c))
+      // Only surface the "stopped" message in the autopilot chat if it still
+      // exists and we can show it. Otherwise show a toast — don't append the
+      // message to whatever unrelated chat happens to be open (or to nowhere).
+      const apChatExists = apId && chatsRef.current.some(c => c.id === apId)
+      if (apChatExists) {
+        if (chatIdRef.current !== apId) switchChat(apId)
+        setMessages(prev => [...prev, { role: 'assistant', content: '🔴 **Autopilot stopped.**', type: 'autopilot' }])
+      } else {
+        addToast('Autopilot stopped', 'sell')
+      }
       apChatRef.current = null
     } else {
       newChat()
       const apId = chatIdRef.current
       apChatRef.current = apId
-      persist(chatsRef.current.map(c => c.id === apId ? { ...c, title: 'Autopilot Session' } : c))
+      // Name the autopilot chat once, at creation (it has no user message to
+      // title it from). This is a one-time label, NOT a rename-on-every-toggle.
+      persist(chatsRef.current.map(c => c.id === apId && c.title === 'New chat' ? { ...c, title: 'Autopilot' } : c))
       setMessages([{ role: 'assistant', content: '🟢 **Autopilot started.** Scanning every 5 minutes.\n\nLogs will appear here.', type: 'autopilot' }])
     }
     setView('chat')
@@ -1598,6 +1611,18 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
     // Show user message immediately
     setMessages(prev => [...prev, { role: 'user', content: msg, time: new Date().toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'}) }])
 
+    // Title the chat from the user's question RIGHT AWAY — before Paula replies —
+    // so the sidebar name updates first instead of lagging behind the response.
+    if (isFirstMsg) {
+      // Instant fallback so the name changes immediately; the AI title (if it
+      // comes back) refines it a moment later.
+      persist(chatsRef.current.map(c => c.id === targetId && c.title === 'New chat' ? { ...c, title: msg.slice(0, 35) } : c))
+      f(API + '/api/chat/title', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg }) })
+        .then(r => r.json()).then(t => {
+          if (t.ok && t.title) persist(chatsRef.current.map(c => c.id === targetId ? { ...c, title: t.title } : c))
+        }).catch(() => {})
+    }
+
     try {
       const res = await f(API + '/api/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
@@ -1766,16 +1791,6 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
           // Save error to original chat
           persist(chatsRef.current.map(c => c.id === targetId ? { ...c, messages: [...(c.messages||[]), { role: 'assistant', content: '⚠️ ' + (data.error || 'Something went wrong') }] } : c))
         }
-      }
-
-      // AI title on first message
-      if (isFirstMsg) {
-        f(API + '/api/chat/title', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg }) })
-          .then(r => r.json()).then(t => {
-            if (t.ok && t.title) persist(chatsRef.current.map(c => c.id === targetId ? { ...c, title: t.title } : c))
-          }).catch(() => {
-            persist(chatsRef.current.map(c => c.id === targetId && c.title === 'New chat' ? { ...c, title: msg.slice(0, 35) } : c))
-          })
       }
 
       refreshData()
