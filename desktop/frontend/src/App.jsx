@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.36.1'
+const VERSION = '3.36.2'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.36.2', d: 'June 26, 2026', changes: [
+    'Fixed scans timing out \u2014 the live connection now stays alive during long scans, so results actually come back instead of hanging.',
+  ]},
   { v: '3.36.1', d: 'June 26, 2026', changes: [
     'Chat names now update instantly from your question, before Paula replies.',
     'Fixed autopilot quirks \u2014 stopping it no longer posts a stray message to the wrong chat, and toggling it no longer renames your chat.',
@@ -1336,11 +1339,22 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
   }, [])
 
   useEffect(() => {
+    let pingTimer = null
     const connect = () => {
       const ws = new WebSocket(WS_URL)
       wsRef.current = ws
-      ws.onopen = () => setConnected(true)
-      ws.onclose = () => { setConnected(false); setTimeout(connect, 3000) }
+      ws.onopen = () => {
+        setConnected(true)
+        // Keepalive: ping every 25s so the connection never goes idle. Railway's
+        // proxy drops idle WebSockets after ~60s, which was silently killing the
+        // socket during long scans — so the scan_result broadcast never arrived
+        // and the client hit its safety timeout. The backend replies 'pong'.
+        if (pingTimer) clearInterval(pingTimer)
+        pingTimer = setInterval(() => {
+          try { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'ping' })) } catch {}
+        }, 25000)
+      }
+      ws.onclose = () => { setConnected(false); if (pingTimer) clearInterval(pingTimer); setTimeout(connect, 3000) }
       ws.onmessage = (e) => {
         try {
           const { event, data } = JSON.parse(e.data)
@@ -1448,7 +1462,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
       }
     }
     connect()
-    return () => wsRef.current?.close()
+    return () => { if (pingTimer) clearInterval(pingTimer); try { wsRef.current?.close() } catch {} }
   }, [])
 
   const refreshData = useCallback(async () => {
