@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.36.3'
+const VERSION = '3.36.4'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.36.4', d: 'June 27, 2026', changes: [
+    'Simplified the Today\u2019s market card \u2014 removed the VIX and RSI line for a cleaner look.',
+  ]},
   { v: '3.36.3', d: 'June 26, 2026', changes: [
     'Fixed scans crashing the server \u2014 they were spawning too many threads for the host. Scans are now resource-safe and reliable.',
   ]},
@@ -2106,8 +2109,6 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
 
                   <div className="wm-stats">
                     <span className="wm-regime-tag">{String(marketToday.regime||'').replace(/_/g,' ')}</span>
-                    {marketToday.vix&&marketToday.vix.level?<span>VIX {marketToday.vix.level}{marketToday.vix.status?` · ${String(marketToday.vix.status).replace(/_/g,' ')}`:''}</span>:null}
-                    {typeof marketToday.rsi==='number'&&<span>SPY RSI {marketToday.rsi}</span>}
                   </div>
                 </div>}
 
