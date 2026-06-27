@@ -3128,10 +3128,25 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None) ->
     if progress_cb:
         try: progress_cb(0, _total, "fetching")
         except Exception: pass
-    with ThreadPoolExecutor(max_workers=min(4, len(chunks))) as _ex:
-        futures = [_ex.submit(_fetch_chunk, ch) for ch in chunks]
+    # IMPORTANT: only 2 chunks in flight at once. Each yf.download(threads=True)
+    # spawns its OWN internal thread pool, so N outer workers multiply into N×
+    # internal threads. On a small Railway container that exhausts the thread
+    # limit ("can't start new thread" → container crash mid-scan). 2 outer workers
+    # keeps total threads bounded while still overlapping network waits.
+    with ThreadPoolExecutor(max_workers=min(2, len(chunks))) as _ex:
+        try:
+            futures = [_ex.submit(_fetch_chunk, ch) for ch in chunks]
+        except RuntimeError as _re:
+            # "can't start new thread" — the host is out of thread budget. Bail
+            # gracefully with whatever we have rather than crashing the process.
+            _log.warning(f"scan thread-pool submit failed: {_re}")
+            futures = []
         for fut in as_completed(futures):
-            chunk, df = fut.result()
+            try:
+                chunk, df = fut.result()
+            except Exception as _fe:
+                _log.warning(f"scan chunk result error: {_fe}")
+                continue
             _done += len(chunk)
             if progress_cb:
                 try: progress_cb(min(_done, _total), _total, "scoring")
@@ -6008,14 +6023,13 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
                 from universe import large_universe
                 universe = large_universe()
         else:
-            # Default broad scan — ~700 names. Scans run async so they can't time
-            # out the HTTP request, but the result still has to come back over the
-            # websocket within a sane window; the full ~1000 could run past 3-4 min
-            # when Yahoo throttles. ~700 is the sweet spot: well above the old ~500
-            # core, but finishes reliably. Free tier still capped ~100 below.
+            # Default broad scan — ~500 names. The Railway container is small
+            # (limited threads/memory); bigger scans were spawning too many
+            # threads ("can't start new thread" → crash). 500 is the reliable
+            # ceiling for this host. Free tier still capped ~100 below.
             try:
                 from universe import large_universe
-                universe = large_universe()[:700]
+                universe = large_universe()[:500]
             except Exception:
                 try:
                     from universe import liquid_universe
@@ -6090,7 +6104,7 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
             def _scan_one(ticker):
                 return _score_data(ticker, fetch_scan(ticker))
             from concurrent.futures import ThreadPoolExecutor
-            with ThreadPoolExecutor(max_workers=12) as _ex:
+            with ThreadPoolExecutor(max_workers=6) as _ex:
                 for _r in _ex.map(_scan_one, universe):
                     if _r:
                         picks.append(_r)

@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.36.2'
+const VERSION = '3.36.3'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.36.3', d: 'June 26, 2026', changes: [
+    'Fixed scans crashing the server \u2014 they were spawning too many threads for the host. Scans are now resource-safe and reliable.',
+  ]},
   { v: '3.36.2', d: 'June 26, 2026', changes: [
     'Fixed scans timing out \u2014 the live connection now stays alive during long scans, so results actually come back instead of hanging.',
   ]},
