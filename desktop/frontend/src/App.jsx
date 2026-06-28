@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.38.1'
+const VERSION = '3.38.2'
 const VERSION_DATE = 'June 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.38.2', d: 'June 28, 2026', changes: [
+    'New app icon \u2014 a fresh Paula \u201cP\u201d mark with rising bars.',
+  ]},
   { v: '3.38.1', d: 'June 28, 2026', changes: [
     '\u201cWhat should I buy?\u201d now shows ONLY the definite buys \u2014 the setups that clear autopilot\u2019s full bar \u2014 instead of mixing in watch-list names. If nothing qualifies, it says so plainly.',
   ]},
