@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.37.2'
+const VERSION = '3.37.3'
 const VERSION_DATE = 'June 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.37.3', d: 'June 28, 2026', changes: [
+    'Removed the P logo from the welcome screen for a cleaner greeting.',
+  ]},
   { v: '3.37.2', d: 'June 28, 2026', changes: [
     'Removed the regime label from the Today\u2019s market card for a cleaner look.',
   ]},
@@ -2127,7 +2130,6 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
             <div className="chat-inner">
             {messages.length===0&&!(sending && sendingChatRef.current === chatIdRef.current)&&(
               <div className="welcome">
-                <span className="logo-p w-mark">P</span>
                 <h1 className="w-greet"><span className="w-hi">{(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening' })()}, {name}.</span></h1>
                 <p className="w-q"><Typewriter/></p>
 
