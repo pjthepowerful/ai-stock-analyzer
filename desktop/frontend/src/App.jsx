@@ -20,11 +20,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.37.0'
-const VERSION_DATE = 'June 18, 2026'
+const VERSION = '3.37.1'
+const VERSION_DATE = 'June 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.37.1', d: 'June 28, 2026', changes: [
+    'Cleaner portfolio number font, and the font-size setting now applies across the whole app \u2014 not just chat.',
+    'Daily balance up top now shows a + for gains and a \u2212 for losses.',
+  ]},
   { v: '3.37.0', d: 'June 27, 2026', changes: [
     'Leaving a chat or closing the tab now cancels an in-progress request (like a scan), so the server isn\u2019t left working on something you\u2019ve walked away from.',
   ]},
@@ -1350,10 +1354,21 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
   const [settings, setSettings] = useState(() => {
     try { return JSON.parse(localStorage.getItem('paula-settings-' + user.id)) || {} } catch { return {} }
   })
+  // Apply the font-size preference EVERYWHERE, not just chat. We keep --chat-fs
+  // (exact px for chat bubbles/inputs) AND scale the root font-size so all
+  // rem-based text across the app grows/shrinks proportionally. Default 15px =
+  // 100%; Small/Large scale relative to it. Pixel-fixed layout stays put.
+  const applyFontSize = (val) => {
+    document.documentElement.style.setProperty('--chat-fs', val)
+    const px = parseInt(val, 10) || 15
+    const scalePct = Math.round((px / 15) * 100)  // 13->87%, 15->100%, 18->120%
+    document.documentElement.style.fontSize = scalePct + '%'
+  }
+
   const settingsRef = useRef(settings)
   useEffect(() => {
     settingsRef.current = settings
-    if (settings.fontSize) document.documentElement.style.setProperty('--chat-fs', settings.fontSize)
+    if (settings.fontSize) applyFontSize(settings.fontSize)
     // Background theme is a Plus perk — apply the saved one for Plus members,
     // otherwise force the classic background (so a lapsed member loses it).
     // Gradients are dark-toned and look wrong on a light background, so we only
@@ -2077,7 +2092,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
           <div className="hdr-ticker">
             {account&&<>
               <span className="hdr-eq">${account.equity.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
-              <span className={'hdr-eq '+(pnl>=0?'up':'dn')}>{pnl>=0?'+':''}${Math.abs(pnl).toFixed(0)}</span>
+              <span className={'hdr-eq '+(pnl>=0?'up':'dn')}>{pnl>=0?'+':'−'}${Math.abs(pnl).toFixed(0)}</span>
             </>}
           </div>
         </div>
@@ -3118,7 +3133,7 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
         <div className="font-picks">
           {fontSizes.map(s=>(
             <button key={s.val} className={'fp-btn'+(settings.fontSize===s.val||(!settings.fontSize&&s.val==='15px')?' fp-on':'')}
-              onClick={()=>{update('fontSize',s.val);document.documentElement.style.setProperty('--chat-fs',s.val)}}>
+              onClick={()=>{update('fontSize',s.val);applyFontSize(s.val)}}>
               <span className="fp-aa" style={{fontSize:s.display+'px'}}>Aa</span>
               <span className="fp-label">{s.name}</span>
             </button>
