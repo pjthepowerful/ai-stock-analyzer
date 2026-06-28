@@ -6084,6 +6084,8 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
                         "market_cap": data.get("market_cap"),
                         "signals": reasons[:3],
                         "trade": sig.get("trade", {}),
+                        "confluence": sig.get("confluence", {}).get("bullish", 0),
+                        "rr": sig.get("trade", {}).get("risk_reward", 0),
                     }
             except Exception:
                 return None
@@ -6182,23 +6184,67 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
                     "msg": msg, "data": {"price": p["price"]},
                     "signal_data": None}
 
-        # Multiple picks — structured list
-        lines = [f"**Top {len(top)} Picks** — scanned {len(universe)} stocks:\n"]
+        # Autopilot's live decision bar — use the SAME thresholds it trades on,
+        # so the scan's verdict matches what autopilot would actually do.
+        AP_SCORE, AP_CONF, AP_RR = 82, 5, 2.0
+
+        # Market-regime context line (autopilot checks this before it acts).
+        regime_line = ""
+        try:
+            reg = check_market_regime()
+            _safe = reg.get("safe_to_buy", True)
+            _rname = str(reg.get("regime", "")).replace("_", " ")
+            if _rname:
+                regime_line = (f"Market backdrop: **{_rname}** — "
+                               + ("conditions favor new long setups.\n\n" if _safe
+                                  else "be selective; the backdrop is shaky for new longs.\n\n"))
+        except Exception:
+            pass
+
+        def _verdict(p):
+            """Autopilot-style verdict for a pick using its real trade thresholds."""
+            sc = p.get("score", 0); cf = p.get("confluence", 0); rr = p.get("rr", 0) or 0
+            act = p.get("action", "")
+            if act == "STRONG_BUY" and sc >= AP_SCORE and cf >= AP_CONF and rr >= AP_RR:
+                return "✅ **Autopilot would buy this** — clears every bar (score, confluence, and reward-to-risk)."
+            # Explain what's missing so it's a real recommendation, not a label.
+            misses = []
+            if sc < AP_SCORE: misses.append(f"score {sc} (wants ≥{AP_SCORE})")
+            if cf < AP_CONF: misses.append(f"only {cf} confirming signals (wants ≥{AP_CONF})")
+            if rr < AP_RR: misses.append(f"reward-to-risk {rr:.1f}:1 (wants ≥{AP_RR})")
+            if act != "STRONG_BUY": misses.append(f"signal is {act}, not STRONG_BUY")
+            if sc >= 70 and act in ("STRONG_BUY", "BUY"):
+                return "👀 **Worth watching** — close, but " + ("; ".join(misses)) + "."
+            return "⏸️ **Pass for now** — " + ("; ".join(misses)) + "."
+
+        lines = [f"**What's worth a look right now** — I scanned {len(universe)} stocks and ranked them the way autopilot does.\n"]
+        if regime_line:
+            lines.append(regime_line)
         for i, p in enumerate(top, 1):
             entry = p["trade"].get("entry", p["price"])
             stop = p["trade"].get("stop_loss", 0)
             t1 = p["trade"].get("target_1", 0)
             arrow = "▲" if p["change_pct"] >= 0 else "▼"
-            lines.append(f"**{i}. {p['ticker']}** — Score: `{p['score']}` · {p['action']} · ${p['price']:.2f} {arrow}{p['change_pct']:+.1f}%")
+            lines.append(f"**{i}. {p['ticker']}** · ${p['price']:.2f} {arrow}{p['change_pct']:+.1f}% · score `{p['score']}`")
+            lines.append(f"   {_verdict(p)}")
             if p.get("setup"):
-                lines.append(f"   *{p['setup']}*")
-            if stop and t1:
-                lines.append(f"   Entry: `${entry:.2f}` · Stop: `${stop:.2f}` · Target: `${t1:.2f}`")
+                lines.append(f"   *The setup:* {p['setup']}")
             if p["signals"]:
-                lines.append(f"   {' · '.join(p['signals'][:2])}")
+                lines.append(f"   *Why:* {' · '.join(p['signals'][:3])}")
+            if stop and t1:
+                _risk = abs(entry - stop) / entry * 100 if entry else 0
+                lines.append(f"   *The plan:* enter near `${entry:.2f}`, stop `${stop:.2f}` (risking ~{_risk:.1f}%), first target `${t1:.2f}`"
+                             + (f" · {p['rr']:.1f}:1 reward-to-risk" if p.get('rr') else ""))
             lines.append("")
 
-        lines.append("*These are based on my 21-factor signal engine — not financial advice.*")
+        # Bottom-line summary — which ones actually clear autopilot's bar.
+        _buys = [p["ticker"] for p in top if p.get("action") == "STRONG_BUY"
+                 and p.get("score", 0) >= AP_SCORE and p.get("confluence", 0) >= AP_CONF and (p.get("rr") or 0) >= AP_RR]
+        if _buys:
+            lines.append(f"**Bottom line:** {', '.join(_buys)} clear autopilot's full bar right now — the rest are watch-list quality, not buy-now.")
+        else:
+            lines.append("**Bottom line:** nothing clears autopilot's full buy bar this moment — these are the best of what's out there, but I'd watch, not chase. A clean setup is worth waiting for.")
+        lines.append("\n*Based on my 21-factor signal engine — not financial advice. You make the call.*")
         if not is_plus:
             lines.append("\n*Free scans cover the ~100 most-liquid stocks. Paula Plus scans the full ~1,000-name universe for more setups.*")
         return {"ok": True, "type": "analysis", "ticker": top[0]["ticker"],

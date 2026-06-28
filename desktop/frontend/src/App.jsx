@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.37.4'
+const VERSION = '3.38.0'
 const VERSION_DATE = 'June 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.38.0', d: 'June 28, 2026', changes: [
+    'Smarter \u201cwhat should I buy?\u201d \u2014 the scan now gives a real recommendation, judging each pick the way autopilot does: would-buy vs watch vs pass, the reasoning, the risk, and a bottom-line takeaway.',
+  ]},
   { v: '3.37.4', d: 'June 28, 2026', changes: [
     'More even spacing on the welcome screen \u2014 greeting, stats, market card, and actions have more room to breathe.',
   ]},
@@ -2166,7 +2169,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
 
                 <div className="w-pills">
                   {[
-                    {q:'Find swing setups', cmd:'Find me the 5 best swing trade setups right now'},
+                    {q:'What should I buy?', cmd:'What should I invest in right now? Give me your real take, the way autopilot would judge it.'},
                     {q:'Check the market', cmd:'How is the market looking today for swing trading?'},
                   ].map((p,i)=>(
                     <button key={i} className="w-pill" disabled={sending && sendingChatRef.current === chatIdRef.current} onClick={()=>sendMessage(p.cmd)}>{p.q}</button>
