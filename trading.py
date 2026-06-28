@@ -6120,27 +6120,17 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
             picks = [p for p in picks if p.get("market_cap") and p["market_cap"] <= max_mcap]
         if min_mcap:
             picks = [p for p in picks if p.get("market_cap") and p["market_cap"] >= min_mcap]
-        top = picks[:5]
+        # Consider a deeper slice (top 15 by score) so we don't miss a clean buy
+        # that ranks below 5th. The recommendation output filters to the ones that
+        # clear autopilot's bar, so showing more candidates here costs nothing.
+        top = picks[:15]
 
         # ── Price consistency: the intraday scanner's price (last 5-min bar)
         # can differ by cents/dollars from the Analyze tab + chart, which use
-        # the real-time quote. Re-stamp the displayed price for the top picks
-        # from the SAME source the Analyze tab uses, so they always match.
-        for p in top:
-            try:
-                fresh = fetch_price(p["ticker"])
-                if fresh and fresh.get("price"):
-                    old_price = p["price"]
-                    p["price"] = fresh["price"]
-                    if fresh.get("change") is not None and fresh.get("prev_close"):
-                        prev = fresh["prev_close"]
-                        p["change_pct"] = round((fresh["price"] - prev) / prev * 100, 2) if prev else p["change_pct"]
-                    # If the trade plan's entry was just the old price, re-anchor it.
-                    tr = p.get("trade", {})
-                    if tr and abs(tr.get("entry", 0) - old_price) < 0.01:
-                        tr["entry"] = fresh["price"]
-            except Exception:
-                pass
+        # the real-time quote. We re-stamp the displayed price from that SAME
+        # source — but only for the picks we'll actually SHOW (done after the buy
+        # filter below), so we don't fire 15 extra quote calls and worsen
+        # rate-limiting. (Re-stamp loop moved below.)
 
         if not top:
             if max_mcap:
@@ -6153,6 +6143,17 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
         # Single stock request — written response with the best pick
         if wants_single and top:
             p = top[0]
+            try:
+                fresh = fetch_price(p["ticker"])
+                if fresh and fresh.get("price"):
+                    _op = p["price"]; p["price"] = fresh["price"]
+                    if fresh.get("prev_close"):
+                        p["change_pct"] = round((fresh["price"] - fresh["prev_close"]) / fresh["prev_close"] * 100, 2)
+                    _tr = p.get("trade", {})
+                    if _tr and abs(_tr.get("entry", 0) - _op) < 0.01:
+                        _tr["entry"] = fresh["price"]
+            except Exception:
+                pass
             entry = p["trade"].get("entry", p["price"])
             stop = p["trade"].get("stop_loss", 0)
             t1 = p["trade"].get("target_1", 0)
@@ -6217,16 +6218,56 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
                 return "👀 **Worth watching** — close, but " + ("; ".join(misses)) + "."
             return "⏸️ **Pass for now** — " + ("; ".join(misses)) + "."
 
-        lines = [f"**What's worth a look right now** — I scanned {len(universe)} stocks and ranked them the way autopilot does.\n"]
+        def _is_buy(p):
+            return (p.get("action") == "STRONG_BUY" and p.get("score", 0) >= AP_SCORE
+                    and p.get("confluence", 0) >= AP_CONF and (p.get("rr") or 0) >= AP_RR)
+
+        # Only the definite buys — the ones autopilot would actually act on.
+        buys = [p for p in top if _is_buy(p)][:8]
+
+        # Re-stamp displayed prices from the real-time quote source (matches the
+        # Analyze tab/chart) — only for the buys we're about to show.
+        for p in buys:
+            try:
+                fresh = fetch_price(p["ticker"])
+                if fresh and fresh.get("price"):
+                    old_price = p["price"]
+                    p["price"] = fresh["price"]
+                    if fresh.get("change") is not None and fresh.get("prev_close"):
+                        prev = fresh["prev_close"]
+                        p["change_pct"] = round((fresh["price"] - prev) / prev * 100, 2) if prev else p["change_pct"]
+                    tr = p.get("trade", {})
+                    if tr and abs(tr.get("entry", 0) - old_price) < 0.01:
+                        tr["entry"] = fresh["price"]
+            except Exception:
+                pass
+
+        if not buys:
+            # Nothing clears the bar — say so cleanly instead of listing watch-list
+            # names the user didn't ask for.
+            msg = [f"I scanned {len(universe)} stocks and judged them the way autopilot does — "
+                   "**nothing clears the full buy bar right now** (score ≥82, 5+ confirming signals, and 2:1+ reward-to-risk)."]
+            if regime_line:
+                msg.append("\n" + regime_line.strip())
+            msg.append("\nNo clean setup is worth forcing — better to wait for one that lines up. "
+                       "Ask me to scan again later, or I can analyze a specific ticker if you have one in mind.")
+            msg.append("\n*Based on my 21-factor signal engine — not financial advice.*")
+            if not is_plus:
+                msg.append("\n*Free scans cover the ~100 most-liquid stocks. Paula Plus scans the full ~1,000-name universe.*")
+            return {"ok": True, "type": "analysis", "ticker": top[0]["ticker"],
+                    "tickers": [], "msg": "\n".join(msg)}
+
+        _n = len(buys)
+        lines = [f"**{_n} buy{'s' if _n != 1 else ''} worth acting on** — scanned {len(universe)} stocks; "
+                 f"these are the only ones that clear autopilot's full bar (score ≥{AP_SCORE}, {AP_CONF}+ signals, {AP_RR:.0f}:1+ reward-to-risk).\n"]
         if regime_line:
             lines.append(regime_line)
-        for i, p in enumerate(top, 1):
+        for i, p in enumerate(buys, 1):
             entry = p["trade"].get("entry", p["price"])
             stop = p["trade"].get("stop_loss", 0)
             t1 = p["trade"].get("target_1", 0)
             arrow = "▲" if p["change_pct"] >= 0 else "▼"
-            lines.append(f"**{i}. {p['ticker']}** · ${p['price']:.2f} {arrow}{p['change_pct']:+.1f}% · score `{p['score']}`")
-            lines.append(f"   {_verdict(p)}")
+            lines.append(f"**{i}. {p['ticker']}** · ${p['price']:.2f} {arrow}{p['change_pct']:+.1f}% · score `{p['score']}` ✅")
             if p.get("setup"):
                 lines.append(f"   *The setup:* {p['setup']}")
             if p["signals"]:
@@ -6237,18 +6278,11 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
                              + (f" · {p['rr']:.1f}:1 reward-to-risk" if p.get('rr') else ""))
             lines.append("")
 
-        # Bottom-line summary — which ones actually clear autopilot's bar.
-        _buys = [p["ticker"] for p in top if p.get("action") == "STRONG_BUY"
-                 and p.get("score", 0) >= AP_SCORE and p.get("confluence", 0) >= AP_CONF and (p.get("rr") or 0) >= AP_RR]
-        if _buys:
-            lines.append(f"**Bottom line:** {', '.join(_buys)} clear autopilot's full bar right now — the rest are watch-list quality, not buy-now.")
-        else:
-            lines.append("**Bottom line:** nothing clears autopilot's full buy bar this moment — these are the best of what's out there, but I'd watch, not chase. A clean setup is worth waiting for.")
-        lines.append("\n*Based on my 21-factor signal engine — not financial advice. You make the call.*")
+        lines.append("*Based on my 21-factor signal engine — not financial advice. You make the call.*")
         if not is_plus:
             lines.append("\n*Free scans cover the ~100 most-liquid stocks. Paula Plus scans the full ~1,000-name universe for more setups.*")
-        return {"ok": True, "type": "analysis", "ticker": top[0]["ticker"],
-                "tickers": [p["ticker"] for p in top],
+        return {"ok": True, "type": "analysis", "ticker": buys[0]["ticker"],
+                "tickers": [p["ticker"] for p in buys],
                 "msg": "\n".join(lines)}
 
     if t == "chart":
