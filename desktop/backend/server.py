@@ -130,6 +130,10 @@ _user_sessions: dict[int, list[dict]] = {}  # {user_id: [chat messages]}
 _session_lock = asyncio.Lock()
 autopilot_owner_id: Optional[int] = None  # Only one user can own autopilot
 
+# Per-user in-flight scan tasks, so a scan can be cancelled when the user
+# navigates away / closes the tab (don't burn server resources for nobody).
+_active_scans: dict = {}
+
 # High-conviction alert dedup: ticker -> date last alerted. Prevents re-alerting
 # the same 90+ stock every 5-min cycle; it can re-alert on a new day.
 _alerted_today: dict = {}
@@ -877,7 +881,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.36.4",  # bump marker — confirms running code
+        "build": "v3.37.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1966,6 +1970,28 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+@app.post("/api/scan/cancel")
+async def cancel_scan(authorization: str = Header(None), token: str = None):
+    """Cancel the caller's in-flight market scan (e.g. they switched chats or
+    closed the tab). Best-effort: cancelling the asyncio task stops the result
+    from being processed/broadcast and frees the slot. (A scan already blocked
+    inside a worker thread will let that thread finish its current chunk — Python
+    can't force-kill a thread — but no further work is queued and nothing is
+    sent back.)"""
+    # Auth may come via header (switchChat fetch) or ?token= (sendBeacon on tab
+    # close, which can't set headers).
+    user = _get_user(authorization)
+    if not user and token:
+        user = _get_user("Bearer " + token)
+    if not user:
+        return {"ok": True, "cancelled": False}
+    task = _active_scans.pop(user["id"], None)
+    if task and not task.done():
+        task.cancel()
+        return {"ok": True, "cancelled": True}
+    return {"ok": True, "cancelled": False}
+
+
 @app.post("/api/chat")
 async def chat(msg: ChatMessage, authorization: str = Header(None)):
     """Process a chat message through Paula's brain."""
@@ -2038,11 +2064,13 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
     # over the websocket (the same channel the progress bar already uses).
     if intent.get("type") == "stock_ideas":
         _uid = user["id"] if user else None
-        # Big full-market / whole-NASDAQ scans get a much longer ceiling — the user
-        # explicitly wants a wide scan and accepts it'll be slow. Normal broad
-        # scans keep the tighter cap.
         _big = intent.get("category") in ("full", "nasdaq")
         _scan_timeout = 1500 if _big else 240  # 25 min vs 4 min
+        # Cancel any previous scan still running for this user before starting a
+        # new one (a user only needs their latest scan).
+        _prev = _active_scans.pop(_uid, None) if _uid is not None else None
+        if _prev and not _prev.done():
+            _prev.cancel()
         async def _run_scan_bg():
             try:
                 res = await asyncio.wait_for(
@@ -2060,6 +2088,10 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                     "message": msg_out,
                     "tickers": tickers_out,
                 })
+            except asyncio.CancelledError:
+                # User navigated away / closed the tab — drop it silently, no
+                # broadcast (nobody's waiting).
+                raise
             except asyncio.TimeoutError:
                 await broadcast("scan_result", {
                     "ok": False,
@@ -2067,7 +2099,12 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                 })
             except Exception as _se:
                 await broadcast("scan_result", {"ok": False, "message": _friendly_error(str(_se))})
-        asyncio.create_task(_run_scan_bg())
+            finally:
+                if _uid is not None and _active_scans.get(_uid) is _scan_task:
+                    _active_scans.pop(_uid, None)
+        _scan_task = asyncio.create_task(_run_scan_bg())
+        if _uid is not None:
+            _active_scans[_uid] = _scan_task
         return {
             "ok": True, "type": "scan_started", "big": _big,
             "message": ("On it — scanning the entire " + ("NASDAQ" if intent.get("category") == "nasdaq" else "market") +

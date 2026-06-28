@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.36.4'
+const VERSION = '3.37.0'
 const VERSION_DATE = 'June 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.37.0', d: 'June 27, 2026', changes: [
+    'Leaving a chat or closing the tab now cancels an in-progress request (like a scan), so the server isn\u2019t left working on something you\u2019ve walked away from.',
+  ]},
   { v: '3.36.4', d: 'June 27, 2026', changes: [
     'Simplified the Today\u2019s market card \u2014 removed the VIX and RSI line for a cleaner look.',
   ]},
@@ -1285,12 +1288,42 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
 
   const switchChat = (id) => {
     if (id === chatIdRef.current) return
+    // If a request is in flight for the chat we're leaving, cancel it — no point
+    // burning server resources on a result the user has navigated away from.
+    if (sending && sendingChatRef.current === chatIdRef.current) {
+      cancelSend()
+    }
+    // Also cancel an async scan tied to the chat we're leaving.
+    if (scanReturnChatRef.current && scanReturnChatRef.current === chatIdRef.current) {
+      scanReturnChatRef.current = null
+      setScanProgress(null)
+      try { f(API + '/api/scan/cancel', { method: 'POST', headers: token ? { Authorization: 'Bearer ' + token } : {} }) } catch {}
+    }
     saveCurrentChat()
     setActiveChatId(id)
     const chat = chatsRef.current.find(c => c.id === id)
     setMessages(chat?.messages || [])
     f(API + '/api/chat/clear', { method: 'POST' }).catch(() => {})
   }
+
+  // Cancel any in-flight request when the user closes the tab or navigates away,
+  // so the server isn't left doing work (especially a heavy scan) for a user
+  // who's gone. Uses sendBeacon so the cancel reliably fires during unload.
+  useEffect(() => {
+    const onLeave = () => {
+      const inFlight = (sending && sendingChatRef.current) || scanReturnChatRef.current
+      if (!inFlight) return
+      try { abortRef.current?.abort() } catch {}
+      try {
+        const url = API + '/api/scan/cancel' + (token ? ('?token=' + encodeURIComponent(token)) : '')
+        if (navigator.sendBeacon) navigator.sendBeacon(url)
+        else f(API + '/api/scan/cancel', { method: 'POST', keepalive: true, headers: token ? { Authorization: 'Bearer ' + token } : {} }).catch(() => {})
+      } catch {}
+    }
+    window.addEventListener('pagehide', onLeave)
+    window.addEventListener('beforeunload', onLeave)
+    return () => { window.removeEventListener('pagehide', onLeave); window.removeEventListener('beforeunload', onLeave) }
+  }, [sending])
 
   const deleteChat = (id) => {
     const updated = chatsRef.current.filter(c => c.id !== id)
