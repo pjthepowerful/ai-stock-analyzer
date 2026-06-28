@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.37.1'
+const VERSION = '3.37.2'
 const VERSION_DATE = 'June 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.37.2', d: 'June 28, 2026', changes: [
+    'Removed the regime label from the Today\u2019s market card for a cleaner look.',
+  ]},
   { v: '3.37.1', d: 'June 28, 2026', changes: [
     'Cleaner portfolio number font, and the font-size setting now applies across the whole app \u2014 not just chat.',
     'Daily balance up top now shows a + for gains and a \u2212 for losses.',
@@ -2154,10 +2157,6 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                       <span className="wm-mv-v"><b>{marketToday.top_loser.ticker}</b> <span className="dn">{marketToday.top_loser.chg}%</span></span>
                     </div>}
                   </div>:<div className="wm-mood">{marketToday.safe_to_buy?'Conditions look constructive for buying.':'Conditions call for caution right now.'}</div>}
-
-                  <div className="wm-stats">
-                    <span className="wm-regime-tag">{String(marketToday.regime||'').replace(/_/g,' ')}</span>
-                  </div>
                 </div>}
 
                 <div className="w-pills">
