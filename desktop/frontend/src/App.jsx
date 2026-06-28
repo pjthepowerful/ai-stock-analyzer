@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.37.3'
+const VERSION = '3.37.4'
 const VERSION_DATE = 'June 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.37.4', d: 'June 28, 2026', changes: [
+    'More even spacing on the welcome screen \u2014 greeting, stats, market card, and actions have more room to breathe.',
+  ]},
   { v: '3.37.3', d: 'June 28, 2026', changes: [
     'Removed the P logo from the welcome screen for a cleaner greeting.',
   ]},

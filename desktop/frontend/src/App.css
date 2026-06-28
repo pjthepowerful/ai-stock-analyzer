@@ -308,13 +308,13 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 /* Welcome */
 .welcome { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 0 40px 40px; max-width: 680px; margin: 0 auto }
 .w-mark { width: 52px; height: 52px; border-radius: 15px; background: var(--grn); color: var(--bg); display: grid; place-items: center; font-weight: 800; font-family: var(--mono); font-size: 24px; margin-bottom: 18px; }
-.w-greet { font-size: 1.7rem; font-weight: 700; color: var(--wh); letter-spacing: -.02em; margin-bottom: 6px; line-height: 1.2 }
+.w-greet { font-size: 1.7rem; font-weight: 700; color: var(--wh); letter-spacing: -.02em; margin-bottom: 12px; line-height: 1.2 }
 .w-hi { color: var(--grn); -webkit-text-fill-color: var(--grn); }
-.w-q { font-size: 1.05rem; color: var(--dim); margin-bottom: 24px; min-height: 1.5em; }
+.w-q { font-size: 1.05rem; color: var(--dim); margin-bottom: 40px; min-height: 1.5em; }
 .w-q .tw { color: var(--lt); }
 .w-q .cursor { color: var(--grn); font-weight: 300; margin-left: 1px; animation: blinkcur .8s step-end infinite; }
 @keyframes blinkcur { 0%,100% { opacity: 1 } 50% { opacity: 0 } }
-.w-snap { display: flex; border: 1px solid var(--brd); border-radius: 13px; background: var(--c1); overflow: hidden; margin-bottom: 14px; max-width: 540px; width: 100%; }
+.w-snap { display: flex; border: 1px solid var(--brd); border-radius: 13px; background: var(--c1); overflow: hidden; margin-bottom: 22px; max-width: 540px; width: 100%; }
 .ws-cell { padding: 12px 20px; display: flex; flex-direction: column; gap: 3px; }
 .ws-cell + .ws-cell { border-left: 1px solid var(--brd); }
 .ws-l { font-size: .68rem; color: var(--dim); }
@@ -1339,7 +1339,7 @@ body.has-bg-theme .rail { background: rgba(0,0,0,.18); }
 .taste-upsell svg { flex-shrink: 0; }
 
 /* "Today's market" summary card on the welcome screen */
-.w-market { margin: 0 auto 18px; max-width: 540px; width: 100%; padding: 13px 16px; border-radius: 13px; border: 1px solid var(--brd); background: var(--c1); text-align: left; }
+.w-market { margin: 0 auto 28px; max-width: 540px; width: 100%; padding: 13px 16px; border-radius: 13px; border: 1px solid var(--brd); background: var(--c1); text-align: left; }
 .wm-ok { border-color: rgba(16,185,129,.3); }
 .wm-caution { border-color: rgba(239,68,68,.3); }
 .wm-top { display: flex; align-items: center; gap: 8px; }
