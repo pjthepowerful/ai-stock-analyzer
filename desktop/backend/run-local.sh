@@ -40,6 +40,9 @@ fi
 
 source venv/bin/activate 2>/dev/null
 
+# Force the backend onto a known port so the tunnel matches it. (server.py
+# otherwise defaults to 3141 locally, which wouldn't match the tunnel → 502.)
+export PORT="${PORT:-8080}"
 PORT="${PORT:-8080}"
 
 # ── Backend watchdog (auto-restart) runs in the background ──────────────────
