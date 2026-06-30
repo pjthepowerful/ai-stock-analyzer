@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.38.5'
+const VERSION = '3.39.0'
 const VERSION_DATE = 'June 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.39.0', d: 'June 30, 2026', changes: [
+    'Scans now keep running when you switch chats \u2014 the result lands back in the chat that started it, even if you\u2019ve moved on. You\u2019ll get a heads-up when it\u2019s ready.',
+  ]},
   { v: '3.38.5', d: 'June 30, 2026', changes: [
     'Fixed the scan footer showing raw asterisks \u2014 those lines are now properly bold.',
   ]},
@@ -1316,17 +1319,16 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
 
   const switchChat = (id) => {
     if (id === chatIdRef.current) return
-    // If a request is in flight for the chat we're leaving, cancel it — no point
-    // burning server resources on a result the user has navigated away from.
+    // If a NORMAL message is in flight for the chat we're leaving, cancel it —
+    // those can't be backgrounded, so there's no point holding the request.
     if (sending && sendingChatRef.current === chatIdRef.current) {
       cancelSend()
     }
-    // Also cancel an async scan tied to the chat we're leaving.
-    if (scanReturnChatRef.current && scanReturnChatRef.current === chatIdRef.current) {
-      scanReturnChatRef.current = null
-      setScanProgress(null)
-      try { f(API + '/api/scan/cancel', { method: 'POST', headers: token ? { Authorization: 'Bearer ' + token } : {} }) } catch {}
-    }
+    // NOTE: we deliberately DON'T cancel an in-progress scan here. Scans run as a
+    // background task on the server and deliver their result over the websocket to
+    // the chat that started them (scanReturnChatRef). So you can fire a scan, switch
+    // chats to do other things, and the result still lands back in the original
+    // chat when it's ready — switching away no longer loses it.
     saveCurrentChat()
     setActiveChatId(id)
     const chat = chatsRef.current.find(c => c.id === id)
@@ -1442,19 +1444,31 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
             setMaint({ on: !!data.on, message: data.message || '' })
           }
           if (event === 'scan_result') {
-            // Async market scan finished — append the results and stop the spinner.
+            // Async market scan finished. It returns to the chat that started it
+            // (scanReturnChatRef), even if the user has since switched chats.
             const targetId = scanReturnChatRef.current || chatIdRef.current
             scanReturnChatRef.current = null
             setScanProgress(null)
             setSending(false)
             setLoadingText('')
+            const scanMsg = {
+              role: 'assistant',
+              content: data.message || 'Scan complete.',
+              tickers: data.tickers || [],
+              time: new Date().toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'})
+            }
             if (chatIdRef.current === targetId) {
-              setMessages(prev => [...prev, {
-                role: 'assistant',
-                content: data.message || 'Scan complete.',
-                tickers: data.tickers || [],
-                time: new Date().toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'})
-              }])
+              // Still on the origin chat — show it live.
+              setMessages(prev => [...prev, scanMsg])
+            } else {
+              // User switched away — write the result into the origin chat's saved
+              // history so it's there when they come back (and toast a heads-up).
+              const _updated = chatsRef.current.map(c =>
+                c.id === targetId ? { ...c, messages: [...(c.messages || []), scanMsg] } : c
+              )
+              persist(_updated)
+              const _oc = chatsRef.current.find(c => c.id === targetId)
+              addToast(`Scan ready in "${_oc?.title || 'your other chat'}"`, 'info')
             }
           }
           if (event === 'alert') {
