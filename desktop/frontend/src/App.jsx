@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.38.4'
+const VERSION = '3.38.5'
 const VERSION_DATE = 'June 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.38.5', d: 'June 30, 2026', changes: [
+    'Fixed the scan footer showing raw asterisks \u2014 those lines are now properly bold.',
+  ]},
   { v: '3.38.4', d: 'June 29, 2026', changes: [
     'Cleaner font on the performance chart tooltip and axis labels.',
   ]},

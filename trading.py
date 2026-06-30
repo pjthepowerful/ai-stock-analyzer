@@ -6251,9 +6251,9 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
                 msg.append("\n" + regime_line.strip())
             msg.append("\nNo clean setup is worth forcing — better to wait for one that lines up. "
                        "Ask me to scan again later, or I can analyze a specific ticker if you have one in mind.")
-            msg.append("\n*Based on my 21-factor signal engine — not financial advice.*")
+            msg.append("\n**Based on my 21-factor signal engine — not financial advice.**")
             if not is_plus:
-                msg.append("\n*Free scans cover the ~100 most-liquid stocks. Paula Plus scans the full ~1,000-name universe.*")
+                msg.append("\n**Free scans cover the ~100 most-liquid stocks. Paula Plus scans the full ~1,000-name universe.**")
             return {"ok": True, "type": "analysis", "ticker": top[0]["ticker"],
                     "tickers": [], "msg": "\n".join(msg)}
 
@@ -6269,18 +6269,18 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
             arrow = "▲" if p["change_pct"] >= 0 else "▼"
             lines.append(f"**{i}. {p['ticker']}** · ${p['price']:.2f} {arrow}{p['change_pct']:+.1f}% · score `{p['score']}` ✅")
             if p.get("setup"):
-                lines.append(f"   *The setup:* {p['setup']}")
+                lines.append(f"   **The setup:** {p['setup']}")
             if p["signals"]:
-                lines.append(f"   *Why:* {' · '.join(p['signals'][:3])}")
+                lines.append(f"   **Why:** {' · '.join(p['signals'][:3])}")
             if stop and t1:
                 _risk = abs(entry - stop) / entry * 100 if entry else 0
-                lines.append(f"   *The plan:* enter near `${entry:.2f}`, stop `${stop:.2f}` (risking ~{_risk:.1f}%), first target `${t1:.2f}`"
+                lines.append(f"   **The plan:** enter near `${entry:.2f}`, stop `${stop:.2f}` (risking ~{_risk:.1f}%), first target `${t1:.2f}`"
                              + (f" · {p['rr']:.1f}:1 reward-to-risk" if p.get('rr') else ""))
             lines.append("")
 
-        lines.append("*Based on my 21-factor signal engine — not financial advice. You make the call.*")
+        lines.append("**Based on my 21-factor signal engine — not financial advice. You make the call.**")
         if not is_plus:
-            lines.append("\n*Free scans cover the ~100 most-liquid stocks. Paula Plus scans the full ~1,000-name universe for more setups.*")
+            lines.append("\n**Free scans cover the ~100 most-liquid stocks. Paula Plus scans the full ~1,000-name universe for more setups.**")
         return {"ok": True, "type": "analysis", "ticker": buys[0]["ticker"],
                 "tickers": [p["ticker"] for p in buys],
                 "msg": "\n".join(lines)}
