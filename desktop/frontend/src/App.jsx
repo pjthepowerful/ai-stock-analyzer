@@ -20,21 +20,24 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.39.2'
-const VERSION_DATE = 'June 28, 2026'
+const VERSION = '3.39.3'
+const VERSION_DATE = 'July 3, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
-  { v: '3.39.2', d: 'June 30, 2026', changes: [
+  { v: '3.39.3', d: 'July 3, 2026', changes: [
+    'Corrected the dates on recent updates.',
+  ]},
+  { v: '3.39.2', d: 'July 3, 2026', changes: [
     'Fixed the sidebar still highlighting your chat as active when you\u2019re on the Analyze or Portfolio tab.',
   ]},
-  { v: '3.39.1', d: 'June 30, 2026', changes: [
+  { v: '3.39.1', d: 'July 3, 2026', changes: [
     'Bigger stop icon on the send button while a reply is generating.',
   ]},
-  { v: '3.39.0', d: 'June 30, 2026', changes: [
+  { v: '3.39.0', d: 'July 3, 2026', changes: [
     'Scans now keep running when you switch chats \u2014 the result lands back in the chat that started it, even if you\u2019ve moved on. You\u2019ll get a heads-up when it\u2019s ready.',
   ]},
-  { v: '3.38.5', d: 'June 30, 2026', changes: [
+  { v: '3.38.5', d: 'July 3, 2026', changes: [
     'Fixed the scan footer showing raw asterisks \u2014 those lines are now properly bold.',
   ]},
   { v: '3.38.4', d: 'June 29, 2026', changes: [
