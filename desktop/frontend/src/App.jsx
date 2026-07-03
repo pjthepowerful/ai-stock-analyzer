@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.39.1'
+const VERSION = '3.39.2'
 const VERSION_DATE = 'June 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.39.2', d: 'June 30, 2026', changes: [
+    'Fixed the sidebar still highlighting your chat as active when you\u2019re on the Analyze or Portfolio tab.',
+  ]},
   { v: '3.39.1', d: 'June 30, 2026', changes: [
     'Bigger stop icon on the send button while a reply is generating.',
   ]},
@@ -2076,7 +2079,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
               return tb - ta
             }).slice(0, 30)
             return sorted.map(c => (
-              <div key={c.id} className={'rl-chat' + (chatId === c.id ? ' rl-chat-on' : '')} onClick={() => {switchChat(c.id);setView('chat')}}>
+              <div key={c.id} className={'rl-chat' + (view === 'chat' && chatId === c.id ? ' rl-chat-on' : '')} onClick={() => {switchChat(c.id);setView('chat')}}>
                 <span className="rl-chat-title">{c.title}</span>
                 <button className="rl-chat-x" onClick={(e) => { e.stopPropagation(); deleteChat(c.id) }} aria-label="Delete chat">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
