@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.39.4'
+const VERSION = '3.39.5'
 const VERSION_DATE = 'July 3, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.39.5', d: 'July 3, 2026', changes: [
+    'The rotating prompts under the greeting switch a little quicker now.',
+  ]},
   { v: '3.39.4', d: 'July 3, 2026', changes: [
     'Autopilot now recognizes market holidays \u2014 it stays idle on days the market is closed (like July 3) instead of trying to trade.',
   ]},
@@ -2995,7 +2998,7 @@ function Typewriter() {
         setDisplay(phrase.slice(0, s.charIdx))
         if (s.charIdx >= phrase.length) {
           s.paused = true
-          setTimeout(() => { s.paused = false; s.deleting = true }, 8000)
+          setTimeout(() => { s.paused = false; s.deleting = true }, 6000)
         }
       } else {
         s.charIdx--
