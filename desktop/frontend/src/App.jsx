@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.39.0'
+const VERSION = '3.39.1'
 const VERSION_DATE = 'June 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.39.1', d: 'June 30, 2026', changes: [
+    'Bigger stop icon on the send button while a reply is generating.',
+  ]},
   { v: '3.39.0', d: 'June 30, 2026', changes: [
     'Scans now keep running when you switch chats \u2014 the result lands back in the chat that started it, even if you\u2019ve moved on. You\u2019ll get a heads-up when it\u2019s ready.',
   ]},
@@ -2270,7 +2273,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0014 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
             </button>
             {sending && sendingChatRef.current === chatIdRef.current
-              ? <button className="send send-stop" onClick={cancelSend} title="Stop generating"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="3"/></svg></button>
+              ? <button className="send send-stop" onClick={cancelSend} title="Stop generating"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="3"/></svg></button>
               : <button className="send" onClick={send}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9Z"/></svg></button>
             }
           </div>
