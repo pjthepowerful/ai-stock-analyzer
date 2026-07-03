@@ -3822,6 +3822,36 @@ def _get_spy_intraday_trend() -> dict | None:
         return None
 
 
+# NYSE full-day market holidays (observed dates). The market is fully closed on
+# these. Hardcoded because they're published years in advance and this avoids a
+# dependency. Extend as new years are announced. (Half-days like the day after
+# Thanksgiving / Christmas Eve are NOT full closes and aren't listed here.)
+_MARKET_HOLIDAYS = {
+    # 2026
+    "2026-01-01",  # New Year's Day
+    "2026-01-19",  # MLK Jr. Day
+    "2026-02-16",  # Washington's Birthday / Presidents' Day
+    "2026-04-03",  # Good Friday
+    "2026-05-25",  # Memorial Day
+    "2026-06-19",  # Juneteenth
+    "2026-07-03",  # Independence Day (observed — Jul 4 is a Saturday)
+    "2026-09-07",  # Labor Day
+    "2026-11-26",  # Thanksgiving
+    "2026-12-25",  # Christmas
+    # 2027
+    "2027-01-01",  # New Year's Day
+    "2027-01-18",  # MLK Jr. Day
+    "2027-02-15",  # Presidents' Day
+    "2027-03-26",  # Good Friday
+    "2027-05-31",  # Memorial Day
+    "2027-06-18",  # Juneteenth (observed — Jun 19 is a Saturday)
+    "2027-07-05",  # Independence Day (observed — Jul 4 is a Sunday)
+    "2027-09-06",  # Labor Day
+    "2027-11-25",  # Thanksgiving
+    "2027-12-24",  # Christmas (observed — Dec 25 is a Saturday)
+}
+
+
 def _market_is_open() -> tuple[bool, str]:
     """Check if US stock market is currently open."""
     et = ZoneInfo("US/Eastern")
@@ -3831,6 +3861,10 @@ def _market_is_open() -> tuple[bool, str]:
     if weekday >= 5:
         next_open = "Monday 8:30 AM CT"
         return False, f"Weekend — market reopens {next_open}"
+
+    # Market holiday? (weekday but exchange fully closed)
+    if now.strftime("%Y-%m-%d") in _MARKET_HOLIDAYS:
+        return False, "Market holiday — closed today, reopens next trading day 8:30 AM CT"
 
     market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
     market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
@@ -6525,6 +6559,8 @@ def _market_status_line() -> str:
         day = now.strftime("%A")
         if wd >= 5:
             return f"Market: CLOSED (weekend, {day})."
+        if now.strftime("%Y-%m-%d") in _MARKET_HOLIDAYS:
+            return f"Market: CLOSED (market holiday, {day})."
         if t < 9 * 60 + 30:
             return f"Market: PRE-MARKET ({day}, opens 9:30 AM ET)."
         if t < 16 * 60:
