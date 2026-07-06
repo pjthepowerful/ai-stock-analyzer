@@ -6236,22 +6236,6 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
         except Exception:
             pass
 
-        def _verdict(p):
-            """Autopilot-style verdict for a pick using its real trade thresholds."""
-            sc = p.get("score", 0); cf = p.get("confluence", 0); rr = p.get("rr", 0) or 0
-            act = p.get("action", "")
-            if act == "STRONG_BUY" and sc >= AP_SCORE and cf >= AP_CONF and rr >= AP_RR:
-                return "✅ **Autopilot would buy this** — clears every bar (score, confluence, and reward-to-risk)."
-            # Explain what's missing so it's a real recommendation, not a label.
-            misses = []
-            if sc < AP_SCORE: misses.append(f"score {sc} (wants ≥{AP_SCORE})")
-            if cf < AP_CONF: misses.append(f"only {cf} confirming signals (wants ≥{AP_CONF})")
-            if rr < AP_RR: misses.append(f"reward-to-risk {rr:.1f}:1 (wants ≥{AP_RR})")
-            if act != "STRONG_BUY": misses.append(f"signal is {act}, not STRONG_BUY")
-            if sc >= 70 and act in ("STRONG_BUY", "BUY"):
-                return "👀 **Worth watching** — close, but " + ("; ".join(misses)) + "."
-            return "⏸️ **Pass for now** — " + ("; ".join(misses)) + "."
-
         def _is_buy(p):
             return (p.get("action") == "STRONG_BUY" and p.get("score", 0) >= AP_SCORE
                     and p.get("confluence", 0) >= AP_CONF and (p.get("rr") or 0) >= AP_RR)
@@ -6279,8 +6263,8 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
         if not buys:
             # Nothing clears the bar — say so cleanly instead of listing watch-list
             # names the user didn't ask for.
-            msg = [f"I scanned {len(universe)} stocks and judged them the way autopilot does — "
-                   "**nothing clears the full buy bar right now** (score ≥82, 5+ confirming signals, and 2:1+ reward-to-risk)."]
+            msg = [f"I scanned {len(universe)} stocks and put each through my full screen — "
+                   "**nothing clears the bar right now.** None of them line up strongly enough on trend, momentum, and reward-to-risk together to call a real buy."]
             if regime_line:
                 msg.append("\n" + regime_line.strip())
             msg.append("\nNo clean setup is worth forcing — better to wait for one that lines up. "
@@ -6292,8 +6276,8 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
                     "tickers": [], "msg": "\n".join(msg)}
 
         _n = len(buys)
-        lines = [f"**{_n} buy{'s' if _n != 1 else ''} worth acting on** — scanned {len(universe)} stocks; "
-                 f"these are the only ones that clear autopilot's full bar (score ≥{AP_SCORE}, {AP_CONF}+ signals, {AP_RR:.0f}:1+ reward-to-risk).\n"]
+        lines = [f"**{_n} buy{'s' if _n != 1 else ''} worth acting on** — I scanned {len(universe)} stocks; "
+                 f"these are the only ones that clear my full bar (strong trend, multiple confirming signals, and solid reward-to-risk).\n"]
         if regime_line:
             lines.append(regime_line)
         for i, p in enumerate(buys, 1):

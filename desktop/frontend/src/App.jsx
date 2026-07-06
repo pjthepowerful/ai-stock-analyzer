@@ -20,11 +20,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.39.6'
+const VERSION = '3.40.0'
 const VERSION_DATE = 'July 3, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.40.0', d: 'July 3, 2026', changes: [
+    'The market snapshot now loads first on the welcome screen.',
+    'Polished the wording of scan recommendations.',
+  ]},
   { v: '3.39.6', d: 'July 3, 2026', changes: [
     'Welcome screen scales up on big/full-screen displays so it no longer feels small \u2014 bigger greeting and roomier cards.',
   ]},
@@ -1591,14 +1595,16 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
   }, [])
 
   useEffect(() => {
+    // Today's market mood — fire this FIRST so the snapshot/market card is the
+    // earliest thing to populate (it hits Yahoo and is the slowest call, so
+    // kicking it off before everything else minimizes how long it lags).
+    f(API+'/api/market-regime').then(r=>r.json()).then(d=>{ if(d.ok||d.regime) setMarketToday(d.data||d) }).catch(()=>{})
     // Load current chat messages on mount
     if (chatId) {
       const chat = chatsRef.current.find(c => c.id === chatId)
       if (chat?.messages) setMessages(chat.messages)
     }
     refreshData()
-    // Today's market mood — fetched once on mount (hits Yahoo, so not polled).
-    f(API+'/api/market-regime').then(r=>r.json()).then(d=>{ if(d.ok||d.regime) setMarketToday(d.data||d) }).catch(()=>{})
     const i = setInterval(() => { if (!document.hidden) refreshData() }, 5000)
     const onVis = () => { if (!document.hidden) refreshData() }
     document.addEventListener('visibilitychange', onVis)
@@ -2213,7 +2219,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
 
                 <div className="w-pills">
                   {[
-                    {q:'What should I buy?', cmd:'What should I invest in right now? Give me your real take, the way autopilot would judge it.'},
+                    {q:'What should I buy?', cmd:'What should I invest in right now? Give me your real take.'},
                     {q:'Check the market', cmd:'How is the market looking today for swing trading?'},
                   ].map((p,i)=>(
                     <button key={i} className="w-pill" disabled={sending && sendingChatRef.current === chatIdRef.current} onClick={()=>sendMessage(p.cmd)}>{p.q}</button>
