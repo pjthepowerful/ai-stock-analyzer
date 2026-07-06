@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.39.5'
+const VERSION = '3.39.6'
 const VERSION_DATE = 'July 3, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.39.6', d: 'July 3, 2026', changes: [
+    'Welcome screen scales up on big/full-screen displays so it no longer feels small \u2014 bigger greeting and roomier cards.',
+  ]},
   { v: '3.39.5', d: 'July 3, 2026', changes: [
     'The rotating prompts under the greeting switch a little quicker now.',
   ]},
