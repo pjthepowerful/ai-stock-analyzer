@@ -5294,6 +5294,51 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     if not sells:
         log.append("All positions still healthy — no sells needed")
 
+    # ── 3b. Over-limit trim ──
+    # If we're holding MORE than the cap (e.g. positions were opened manually, or
+    # the auto-tuner just lowered MAX_POSITIONS while we already held more), gently
+    # bring the count down. Safety rails so this never dumps good holdings:
+    #   • Only acts when genuinely OVER the cap.
+    #   • Ranks remaining positions by current signal score and closes the WEAKEST.
+    #   • NEVER closes a position that's in profit — winners are left alone; this
+    #     only trims positions that are flat/losing AND have a weak signal.
+    #   • Closes at most ONE per cycle, so it unwinds slowly instead of mass-selling.
+    if not dry_run and SWING_MODE:
+        remaining = [p for p in positions if p["ticker"] not in held_tickers]
+        over_by = len(remaining) - MAX_POSITIONS
+        if over_by > 0:
+            log.append(f"⚠️ Over position limit ({len(remaining)}/{MAX_POSITIONS}) — trimming the weakest.")
+            scored = []
+            for pos in remaining:
+                try:
+                    d = fetch_scan(pos["ticker"])
+                    if not d:
+                        continue
+                    sg = generate_trade_signal(d)
+                    upl = float(pos.get("unrealized_pnl", 0) or 0)
+                    scored.append((sg["score"], upl, pos))
+                except Exception:
+                    continue
+            # Weakest signal first; only consider non-profitable ones.
+            scored.sort(key=lambda x: x[0])
+            for score, upl, pos in scored:
+                if over_by <= 0:
+                    break
+                if upl > 0:
+                    continue  # never cut a winner just to hit a number
+                is_short = pos.get("side") == "short"
+                res = (alpaca_cover(ticker=pos["ticker"], cover_all=True) if is_short
+                       else alpaca_sell(ticker=pos["ticker"], sell_all=True))
+                if res.get("ok"):
+                    sells.append(f"✂️ Trimmed {pos['ticker']} to get back under the limit — weakest setup (score {score}).")
+                    log.append(sells[-1])
+                    held_tickers.add(pos["ticker"])
+                    over_by -= 1
+                else:
+                    log.append(f"⚠️ Tried to trim {pos['ticker']} but failed: {res.get('error','')}")
+            if over_by > 0:
+                log.append("Still over the limit, but the extra positions are in profit — holding them rather than selling winners.")
+
     # ── 4. Scan for new opportunities ──
     open_slots = MAX_POSITIONS - (len(positions) - len(sells))
     if open_slots <= 0 and not dry_run:

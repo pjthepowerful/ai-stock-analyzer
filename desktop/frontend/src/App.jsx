@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.40.0'
+const VERSION = '3.41.0'
 const VERSION_DATE = 'July 3, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.41.0', d: 'July 3, 2026', changes: [
+    'Autopilot now trims back down if it\u2019s ever holding more positions than its limit \u2014 closing the weakest setups first, and never selling a position that\u2019s in profit.',
+  ]},
   { v: '3.40.0', d: 'July 3, 2026', changes: [
     'The market snapshot now loads first on the welcome screen.',
     'Polished the wording of scan recommendations.',
