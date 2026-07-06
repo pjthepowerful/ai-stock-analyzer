@@ -3800,7 +3800,19 @@ def _get_spy_intraday_trend() -> dict | None:
         cum_vol = volume.cumsum()
         vwap = float((cum_tp_vol / cum_vol.replace(0, 1)).iloc[-1])
 
+        # Day change % must be measured against the PREVIOUS DAILY CLOSE (same basis
+        # as the market-regime card), NOT the first 5-min bar of the window — that
+        # baseline gave a wrong number that disagreed with the market card. Pull the
+        # prior daily close; fall back to the window's first bar only if unavailable.
         change_pct = round((price - open_price) / open_price * 100, 2)
+        try:
+            daily = spy.history(period="5d", interval="1d")
+            if daily is not None and not daily.empty and len(daily) >= 2:
+                prev_close = float(daily["Close"].iloc[-2])
+                if prev_close:
+                    change_pct = round((price - prev_close) / prev_close * 100, 2)
+        except Exception:
+            pass
         above_vwap = price > vwap
 
         if change_pct > 0.3 and above_vwap:
