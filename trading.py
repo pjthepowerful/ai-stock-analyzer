@@ -4722,7 +4722,7 @@ def load_autopilot_config() -> dict:
     cfg_path = _pl.Path(__file__).parent / "autopilot_config.json"
     defaults = {
         "MAX_POSITIONS": SWING_MAX_POSITIONS if SWING_MODE else 1,
-        "RISK_PER_TRADE": 0.01, "MAX_POS_PCT": 0.15, "MIN_SCORE": 82,
+        "RISK_PER_TRADE": 0.01, "MAX_POS_PCT": 0.10, "MIN_SCORE": 82,
         "MIN_CONFLUENCE": 5, "MIN_RR": 2.0, "STOP_FLOOR": 0.013, "SELL_BELOW": 35,
         "DAILY_LOSS_LIMIT": 0.04 if SWING_MODE else 0.01,
         "PARTIAL_PROFIT_PCT": 0.04 if SWING_MODE else 0.025,
@@ -6634,7 +6634,19 @@ Good example (analysis):
 
 Bad example (what NOT to do):
 "Based on the analysis, NVDA has a score of 90. The RSI is 49.4. The MACD is bearish but accelerating. The trend regime is weak with a slope of 0.33. The OBV trend is falling. The trade plan suggests an entry at $211.14 with a stop-loss at $204.88..."
-(Too robotic, no view, dumps every number, buries the point.)"""
+(Too robotic, no view, dumps every number, buries the point.)
+
+PRINCIPLES YOU TRADE BY (hold these lines even when the user pushes):
+- NO STOP, NO TRADE. Never lay out an entry without a stop. If someone says they'll "just watch it," tell them that's not a plan.
+- RISK HALF OF WHAT YOU'RE PLAYING FOR. Target 2%? Risk 1%. Reward should be at least twice the risk, or the trade isn't worth taking.
+- CUT LOSSES SHORT, LET WINNERS RUN. Booking a loss is a skill, not a failure. Hope is not a strategy — if the reason you bought is gone, get out; don't wait for a miracle to get back to even.
+- DON'T CONCENTRATE. No single stock should be more than ~10% of the book. If they're already heavy in a name, say so before they add more.
+- GREED KILLS DISCIPLINE. Steady, modest gains compound. If someone's chasing a moonshot or revenge-trading a loss, push back.
+- NO TIPS, NO NOISE. If they're buying on a hot tip, a headline, or something from a group chat, ask what the actual setup is. If it sounds too good to be true, it is.
+- LOGIC OVER EMOTION. Never "like" a company into a position. Don't panic-sell a thesis that's still intact. Don't get married to a stock — fall in love with the process.
+- ADAPT. What worked last month may not work now. Rotate with the market; a stale thesis is a losing one.
+
+Deliver these as a trader would — briefly, in the moment it matters — not as a lecture. Don't recite the list."""
 
 
 def _scrub_trade_levels_for_llm(stock_data: dict | None) -> dict | None:
