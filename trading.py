@@ -3400,16 +3400,19 @@ def _llm_classify_intent(msg: str) -> dict | None:
         from groq import Groq
         client = Groq(api_key=key)
         sys_prompt = (
-            "Classify the user's stock-app message into ONE intent. Respond with ONLY "
-            "the intent word, nothing else. Options:\n"
+            "You classify a message sent to a stock-trading app into ONE intent. "
+            "Respond with ONLY the intent word, nothing else. Options:\n"
             "- stock_ideas (wants trade/swing setups, picks, 'what should I buy', scan for opportunities)\n"
-            "- market (asking about overall market, SPY, conditions, regime)\n"
+            "- analyze (wants your read on ONE specific named stock — 'thoughts on NVDA', 'is AAPL a buy', 'how's tesla looking')\n"
+            "- compare (wants two named stocks compared — 'AMD vs NVDA', 'which is better, X or Y')\n"
+            "- price (just wants the current price/quote of a named stock)\n"
+            "- market (asking about the overall market, SPY, conditions, regime)\n"
             "- backtest (wants to backtest/test the strategy)\n"
-            "- portfolio (asking about their positions, holdings, P&L)\n"
+            "- portfolio (asking about their own positions, holdings, P&L)\n"
             "- gainers (top gainers/movers up)\n"
             "- losers (top losers/movers down)\n"
-            "- chat (general question, conversation, news, anything else)\n"
-            "Reply with exactly one word from that list."
+            "- chat (general question, news, explanation, conversation, anything else)\n"
+            "Pick the single best fit. Reply with exactly one word from that list."
         )
         resp = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -3419,13 +3422,34 @@ def _llm_classify_intent(msg: str) -> dict | None:
             max_tokens=5,
         )
         out = (resp.choices[0].message.content or "").strip().lower()
-        valid = {"stock_ideas", "market", "backtest", "portfolio", "gainers", "losers", "chat"}
+        valid = {"stock_ideas", "analyze", "compare", "price", "market", "backtest", "portfolio", "gainers", "losers", "chat"}
         for v in valid:
             if v in out:
                 if v == "chat":
                     return None  # let normal chat handling proceed
                 if v == "stock_ideas":
                     return {"type": "stock_ideas", "category": "all", "_original_msg": msg}
+                # For stock-specific intents, we need a ticker. Try to extract one;
+                # if none is found, fall back to chat rather than guessing.
+                if v in ("analyze", "price"):
+                    _tk, _mkt = _find_ticker(msg)
+                    if _tk:
+                        return {"type": v, "ticker": _tk, "market": _mkt or _detect_market(msg), "_original_msg": msg}
+                    return None  # no clear ticker → let chat handle it
+                if v == "compare":
+                    import re as _re_c
+                    _CMP_STOP = {"AND", "OR", "VS", "THE", "A", "AN", "IS", "IT", "ON", "AT", "TO",
+                                 "ALL", "ANY", "BE", "BY", "DO", "GO", "HAS", "ME", "MY", "SO",
+                                 "UP", "WHO", "ARE", "FOR", "BUY", "CAN", "GET", "NOW", "ONE", "OUT", "SEE", "TWO"}
+                    _ct = []
+                    for w in _re_c.findall(r"\b([A-Za-z]{1,5})\b", msg):
+                        up = w.upper()
+                        if up in ALL_US_TICKERS and (w.isupper() or up not in _CMP_STOP):
+                            _ct.append(up)
+                    _seen = set(); _ct = [x for x in _ct if not (x in _seen or _seen.add(x))]
+                    if len(_ct) >= 2:
+                        return {"type": "compare", "tickers": _ct[:2], "market": _detect_market(msg), "_original_msg": msg}
+                    return None
                 return {"type": v, "market": _detect_market(msg)}
         return None
     except Exception:
@@ -3750,12 +3774,16 @@ def route(msg: str) -> dict:
     # Keyword routing didn't confidently place this. Before defaulting to chat,
     # ask the LLM for a second opinion — but ONLY on safe, non-destructive
     # intents (never trades/autopilot). If it's unsure or errors, fall to chat.
-    # Skip the LLM for obvious chitchat/explainer questions (those are real chat).
-    _skip_llm = any(m.startswith(w) for w in ["hi ", "hey", "hello", "thanks", "explain", "how do", "how does", "tell me about", "what is a", "what is an", "what does", "why is", "why are"])
-    # Up to ~25 words covers natural phrasings like "I've got 5k and want a couple
-    # swing trades for next week" that the keyword router misses; longer messages
-    # are usually genuine conversation/explainers, so leave those to chat.
-    if not _skip_llm and len(m.split()) <= 25:
+    # Skip the LLM only for CLEAR chitchat/greetings — not for "what/why/how"
+    # openers, since those are often real ("what's tesla doing", "how's the
+    # market", "why is NVDA up"). The classifier itself returns chat for genuine
+    # conversation, so it's safe to let more through.
+    _skip_llm = any(m.startswith(w) for w in ["hi ", "hey", "hello", "thanks", "thank you", "bye", "good morning", "good afternoon", "good evening"]) or m in ("hi", "hey", "hello", "thanks", "bye")
+    # Up to ~35 words covers natural phrasings the keyword router misses ("I've
+    # got 5k and want a couple swing trades for next week", "been eyeing tesla
+    # and nvidia, which one looks better right now"); longer is usually genuine
+    # conversation, left to chat.
+    if not _skip_llm and len(m.split()) <= 35:
         _llm = _llm_classify_intent(msg)
         if _llm:
             return _llm
