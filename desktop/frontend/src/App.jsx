@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.43.0'
+const VERSION = '3.43.1'
 const VERSION_DATE = 'July 3, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.43.1', d: 'July 3, 2026', changes: [
+    'Cleaned up the scan list \u2014 removed companies that were acquired and no longer trade, and fixed two tickers that changed symbols. Scans waste less time and the errors are gone.',
+  ]},
   { v: '3.43.0', d: 'July 3, 2026', changes: [
     'Paula understands what you mean more often \u2014 improved how she reads requests so she misfires less on natural phrasing.',
   ]},

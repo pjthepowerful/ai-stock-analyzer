@@ -69,7 +69,7 @@ VALUE_DIVIDEND = [
     "O","SCHD","VZ","T","MO","PM","BTI","AGNC","NLY","STAG",
     "EPD","ET","MPLX","OKE","WMB","KMI","EMR","ITW","GPC","SWK",
     "DOW","LYB","NUE","CLF","AA","FCX","VALE","RIO","BHP",
-    "PFE","KHC","GIS","K","CAG","HRL","KMB","CL","ED","SO",
+    "PFE","KHC","GIS","CAG","HRL","KMB","CL","ED","SO",
 ]
 # ── Sector-specific (energy, biotech, fintech, defense, space) ──
 SECTOR_PICKS = [
@@ -168,7 +168,7 @@ _NOISE_WORDS = frozenset([
     "UNTIL","SHALL","GONNA","ABOUT","AGAIN",
     # Words commonly confused with tickers
     "CAPS","CAP","MEGA","MID","TOP","HOT","NEW","OLD","OWN","RUN",
-    "SET","TRY","WAY","DAY","BIG","FEW","FAR","OUR","OWN","SAY",
+    "SET","TRY","WAY","BIG","FEW","FAR","OUR","OWN","SAY",
     "ANY","WAR","END","AGE","AID","AIR","ARM","ART","BAD","BAR",
     "BED","BIT","BOX","BOY","BUS","CUT","DID","DOG","EAR","EAT",
     "EGG","ERA","EYE","FAN","FIT","FIX","FLY","GAS","GOD","GOT",
@@ -2756,10 +2756,10 @@ TICKER_SECTOR = {
     **{t: "XLV" for t in ["UNH","LLY","ABBV","MRK","JNJ","PFE","TMO","ABT","SYK","BSX",
         "ISRG","DHR","VRTX","REGN","AMGN","GILD","ALNY","ARGX","BMRN","TGTX","RXRX",
         "CRSP","NBIX","MOH","HUM","CNC","ELV","MCK","DXCM","PODD","ALGN","TMDX",
-        "MRNA","BNTX","HIMS","DOCS","RMD","ZBH","HOLX","EW"]},
+        "MRNA","BNTX","HIMS","DOCS","RMD","ZBH","EW"]},
     **{t: "XLF" for t in ["JPM","V","MA","GS","MS","BAC","WFC","BX","SCHW","COF","AXP",
         "HOOD","COIN","MSTR","PYPL","C","PNC","USB","TFC","MTB","CFG","HBAN","RF","KEY",
-        "ALL","PRU","AIG","HIG","ACGL","WRB","BRO","RJF","LPLA","BK","MMC","AON","CINF",
+        "ALL","PRU","AIG","HIG","ACGL","WRB","BRO","RJF","LPLA","BK","MRSH","AON","CINF",
         "UPST","LMND","ROOT"]},
     **{t: "XLY" for t in ["AMZN","TSLA","HD","COST","TJX","ROST","ORLY","AZO","CMG","DPZ",
         "MCD","SBUX","NKE","LULU","BKNG","MAR","HLT","RCL","UBER","ABNB","CVNA","DASH",
@@ -4318,7 +4318,7 @@ def run_backtest(years: int = 2, max_positions: int | None = None) -> dict:
         "MARA","RIOT","CLSK","IONQ","RGTI","RIVN","NIO",
         # ── More mid-cap ──
         "LULU","CPRT","WM","SNAP","PINS","MTCH","RBLX","ABNB","DASH",
-        "ANET","ZBRA","POOL","HOLX","GNRC","TYL","TTWO","NTRA","PCVX",
+        "ANET","ZBRA","POOL","GNRC","TYL","TTWO","NTRA","PCVX",
         "ALNY","MOH","TMDX","WST","ROKU","CHWY","ETSY","CVNA",
         # ── International ADRs ──
         "TSM","BABA","MELI","NU","SE","GRAB","CPNG","NVO","AZN","SAP",
@@ -5488,7 +5488,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             "AMP","MLM","MTB","WEC","CBRE","IDXX","RMD","EFX","DOW","GEHC",
             "ACGL","TSCO","IR","HIG","CDW","WAB","KEYS","BRO","RJF","IFF",
             "TDG","WST","TRGP","STE","ROK","DECK","CAH","EQR","VLTO","EBAY",
-            "NDAQ","ZBRA","POOL","HOLX","MPWR","ENTG","TER","SWKS","ALGN","GNRC",
+            "NDAQ","ZBRA","POOL","MPWR","ENTG","TER","SWKS","ALGN","GNRC",
             "WRB","TYL","MOH","TTWO","PODD","FICO","LPLA","HUBB","FTV","PTC",
             "NTAP","SMCI","TRMB","DPZ","BALL","CFG","HBAN","RF","KEY","CINF",
             "LUV","DAL","UAL","AAL","ALK","JBLU",
@@ -5503,12 +5503,12 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             "WIX","ETSY","CHWY","W","BURL","TJX","ROST","DG","DLTR","FIVE",
             "ULTA","LULU","TPR","CPRI","RL","PVH","VFC","HBI","GILD","BIIB",
             "REGN","ILMN","DXCM","VEEV","ZTS","WDAY","SPLK","TEAM","ATLZ",
-            "ANET","FFIV","JNPR","AKAM","GDDY","MTCH","IAC","ANSS","EPAM",
+            "ANET","FFIV","AKAM","GDDY","MTCH","IAC","ANSS","EPAM",
             "GLOB","INFY","WIT","SAP","ASML","LRCX","KLAC","ONTO","CRUS",
             "WOLF","GFS","STM","SSNC","FIS","FISV","GPN","WU","NVST","TFX",
             "BAX","BDX","CI","CVS","HCA","THC","TEVA","MYL","VTRS","ZBH",
             "SYY","USFD","US","KDP","STZ","TAP","BF-B","SAM","MNST","COKE",
-            "CLX","CHD","SJM","GIS","K","CPB","MKC","HRL","TSN","CAG",
+            "CLX","CHD","SJM","GIS","CPB","MKC","HRL","TSN","CAG",
             "BG","ADM","CTLT","LW","INGR","DAR","BERY","SEE","AMCR","IP",
             "WRK","PKG","CE","CC","LYB","EMN","APD","ECL","SHW","PPG",
             "NEM","GOLD","FNV","WPM","AEM","KGC","RGLD","PAAS","AG","HL",

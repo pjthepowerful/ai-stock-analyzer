@@ -1,22 +1,43 @@
 """Large liquid US equity universe for broad scanning (~900 names).
 Full S&P 500 plus liquid mid/large-caps. Curated to avoid delisted tickers.
 Kept in its own module so trading.py stays readable.
+
+── DO NOT RE-ADD (verified gone; each confirmed via company/SEC filings) ──
+These were removed after they turned up as a *stable* set of daily scan failures
+with explicit Yahoo 404 "Quote not found" (NOT rate-limit errors). They are real
+M&A completions, not throttling:
+    DFS   Capital One completed merger      → delisted 2025-05-19
+    JNPR  HPE acquisition closed            → delisted 2025-07-02
+    WBA   Sycamore take-private             → delisted 2025-08-28
+    IPG   Omnicom merger completed          → delisted 2025-11-28
+    K     Mars acquired Kellanova           → delisted 2025-12-11
+    DAY   Thoma Bravo took Dayforce private → delisted 2026-02-04
+    HOLX  Blackstone/TPG take-private       → delisted 2026-04-07
+    CMA   Fifth Third merger closed         → ~2026-02-01
+
+── TICKER RENAMES (company alive, symbol changed) ──
+    FI  → FISV   Fiserv moved back to FISV (now NASDAQ)
+    MMC → MRSH   Marsh McLennan rebranded to Marsh, NYSE symbol changed 2026-01-14
+
+NOTE: a ticker failing every scan with a 404 usually means delisted OR renamed —
+verify before assuming it's a Yahoo rate-limit. Rate-limit failures are large and
+rotate randomly; delisted/renamed failures are a small, identical set every run.
 """
 
 # Full S&P 500 (as of 2025-2026) + high-liquidity additions.
 SP500_FULL = [
     "A","AAPL","ABBV","ABNB","ABT","ACGL","ACN","ADBE","ADI","ADM","ADP","ADSK","AEE","AEP","AES","AFL","AIG","AIZ","AJG","AKAM","ALB","ALGN","ALL","ALLE","AMAT","AMCR","AMD","AME","AMGN","AMP","AMT","AMZN","ANET","AON","AOS","APA","APD","APH","APTV","ARE","ATO","AVB","AVGO","AVY","AWK","AXON","AXP","AZO","BA","BAC","BALL","BAX","BBY","BDX","BEN","BF-B","BG","BIIB","BK","BKNG","BKR","BLDR","BLK","BMY","BR","BRO","BSX","BWA","BX","BXP",
-    "C","CAG","CAH","CARR","CAT","CB","CBOE","CBRE","CCI","CCL","CDNS","CDW","CE","CEG","CF","CFG","CHD","CHRW","CHTR","CI","CINF","CL","CLX","CMA","CMCSA","CME","CMG","CMI","CMS","CNC","CNP","COF","COIN","COO","COP","COR","COST","CPAY","CPB","CPRT","CPT","CRL","CRM","CRWD","CSCO","CSGP","CSX","CTAS","CTRA","CTSH","CTVA","CVS","CVX","CZR",
-    "D","DAL","DAY","DD","DE","DECK","DELL","DFS","DG","DGX","DHI","DHR","DIS","DLR","DLTR","DOC","DOV","DOW","DPZ","DRI","DTE","DUK","DVA","DVN","DXCM",
+    "C","CAG","CAH","CARR","CAT","CB","CBOE","CBRE","CCI","CCL","CDNS","CDW","CE","CEG","CF","CFG","CHD","CHRW","CHTR","CI","CINF","CL","CLX","CMCSA","CME","CMG","CMI","CMS","CNC","CNP","COF","COIN","COO","COP","COR","COST","CPAY","CPB","CPRT","CPT","CRL","CRM","CRWD","CSCO","CSGP","CSX","CTAS","CTRA","CTSH","CTVA","CVS","CVX","CZR",
+    "D","DAL","DD","DE","DECK","DELL","DG","DGX","DHI","DHR","DIS","DLR","DLTR","DOC","DOV","DOW","DPZ","DRI","DTE","DUK","DVA","DVN","DXCM",
     "EA","EBAY","ECL","ED","EFX","EG","EIX","EL","ELV","EMN","EMR","ENPH","EOG","EPAM","EQIX","EQR","EQT","ERIE","ES","ESS","ETN","ETR","EVRG","EW","EXC","EXPD","EXPE","EXR",
-    "F","FANG","FAST","FCX","FDS","FDX","FE","FFIV","FI","FICO","FIS","FITB","FMC","FOX","FOXA","FRT","FSLR","FTNT","FTV",
+    "F","FANG","FAST","FCX","FDS","FDX","FE","FFIV","FISV","FICO","FIS","FITB","FMC","FOX","FOXA","FRT","FSLR","FTNT","FTV",
     "GD","GDDY","GE","GEHC","GEN","GEV","GILD","GIS","GL","GLW","GM","GNRC","GOOG","GOOGL","GPC","GPN","GRMN","GS","GWW",
-    "HAL","HAS","HBAN","HCA","HD","HIG","HII","HLT","HOLX","HON","HPE","HPQ","HRL","HSIC","HST","HSY","HUBB","HUM","HWM",
-    "IBM","ICE","IDXX","IEX","IFF","INCY","INTC","INTU","INVH","IP","IPG","IQV","IR","IRM","ISRG","IT","ITW","IVZ",
-    "J","JBHT","JBL","JCI","JKHY","JNJ","JNPR","JPM",
-    "K","KDP","KEY","KEYS","KHC","KIM","KKR","KLAC","KMB","KMI","KMX","KO","KR","KVUE",
+    "HAL","HAS","HBAN","HCA","HD","HIG","HII","HLT","HON","HPE","HPQ","HRL","HSIC","HST","HSY","HUBB","HUM","HWM",
+    "IBM","ICE","IDXX","IEX","IFF","INCY","INTC","INTU","INVH","IP","IQV","IR","IRM","ISRG","IT","ITW","IVZ",
+    "J","JBHT","JBL","JCI","JKHY","JNJ","JPM",
+    "KDP","KEY","KEYS","KHC","KIM","KKR","KLAC","KMB","KMI","KMX","KO","KR","KVUE",
     "L","LDOS","LEN","LH","LHX","LII","LIN","LKQ","LLY","LMT","LNT","LOW","LRCX","LULU","LUV","LVS","LW","LYB","LYV",
-    "MA","MAA","MAR","MAS","MCD","MCHP","MCK","MCO","MDLZ","MDT","MET","META","MGM","MHK","MKC","MKTX","MLM","MMC","MMM","MNST","MO","MOH","MOS","MPC","MPWR","MRK","MRNA","MS","MSCI","MSFT","MSI","MTB","MTCH","MTD","MU",
+    "MA","MAA","MAR","MAS","MCD","MCHP","MCK","MCO","MDLZ","MDT","MET","META","MGM","MHK","MKC","MKTX","MLM","MRSH","MMM","MNST","MO","MOH","MOS","MPC","MPWR","MRK","MRNA","MS","MSCI","MSFT","MSI","MTB","MTCH","MTD","MU",
     "NCLH","NDAQ","NDSN","NEE","NEM","NFLX","NI","NKE","NOC","NOW","NRG","NSC","NTAP","NTRS","NUE","NVDA","NVR","NWS","NWSA","NXPI",
     "O","ODFL","OKE","OMC","ON","ORCL","ORLY","OTIS","OXY",
     "PANW","PAYC","PAYX","PCAR","PCG","PEG","PEP","PFE","PFG","PG","PGR","PH","PHM","PKG","PLD","PLTR","PM","PNC","PNR","PNW","PODD","POOL","PPG","PPL","PRU","PSA","PSX","PTC","PWR","PYPL",
@@ -26,7 +47,7 @@ SP500_FULL = [
     "T","TAP","TDG","TDY","TECH","TEL","TER","TFC","TGT","TJX","TMO","TMUS","TPR","TRGP","TRMB","TROW","TRV","TSCO","TSLA","TSN","TT","TTWO","TXN","TXT","TYL",
     "UAL","UBER","UDR","UHS","ULTA","UNH","UNP","UPS","URI","USB",
     "V","VICI","VLO","VLTO","VMC","VRSK","VRSN","VRTX","VST","VTR","VTRS","VZ",
-    "WAB","WAT","WBA","WBD","WDC","WEC","WELL","WFC","WM","WMB","WMT","WRB","WST","WTW","WY","WYNN",
+    "WAB","WAT","WBD","WDC","WEC","WELL","WFC","WM","WMB","WMT","WRB","WST","WTW","WY","WYNN",
     "XEL","XOM","XYL","YUM","ZBH","ZBRA","ZTS",
 ]
 
