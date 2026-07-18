@@ -2057,6 +2057,28 @@ async def admin_bug_reports(authorization: str = Header(None), full: int = 0):
     return {"ok": True, "count": len(summaries), "reports": summaries}
 
 
+@app.delete("/api/admin/bug-reports/{report_id}")
+async def admin_delete_bug_report(report_id: str, authorization: str = Header(None)):
+    """Admin-only: delete a single bug report by id."""
+    user = _get_user(authorization)
+    if not user or user.get("email", "").lower() != ADMIN_EMAIL:
+        return {"ok": False, "error": "Unauthorized"}
+    reports = _load_bug_reports()
+    remaining = [r for r in reports if r.get("id") != report_id]
+    _save_bug_reports(remaining)
+    return {"ok": True, "deleted": len(reports) - len(remaining), "remaining": len(remaining)}
+
+
+@app.post("/api/admin/bug-reports/clear")
+async def admin_clear_bug_reports(authorization: str = Header(None)):
+    """Admin-only: delete all bug reports."""
+    user = _get_user(authorization)
+    if not user or user.get("email", "").lower() != ADMIN_EMAIL:
+        return {"ok": False, "error": "Unauthorized"}
+    _save_bug_reports([])
+    return {"ok": True}
+
+
 @app.post("/api/chat")
 async def chat(msg: ChatMessage, authorization: str = Header(None)):
     """Process a chat message through Paula's brain."""

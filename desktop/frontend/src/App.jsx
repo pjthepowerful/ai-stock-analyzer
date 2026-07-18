@@ -2946,18 +2946,22 @@ function AdminPanel({ token, onClose }) {
   const [loading, setLoading] = useState(true)
   const [maintOn, setMaintOn] = useState(false)
   const [maintMsg, setMaintMsg] = useState('')
+  const [reports, setReports] = useState([])
+  const [expandedReport, setExpandedReport] = useState(null)
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [u, s, m] = await Promise.all([
+        const [u, s, m, b] = await Promise.all([
           f(API + '/api/admin/users', { headers: { Authorization: 'Bearer ' + token } }).then(r => r.json()),
           f(API + '/api/admin/stats', { headers: { Authorization: 'Bearer ' + token } }).then(r => r.json()),
           f(API + '/api/maintenance').then(r => r.json()),
+          f(API + '/api/admin/bug-reports?full=1', { headers: { Authorization: 'Bearer ' + token } }).then(r => r.json()),
         ])
         if (u.ok) setUsers(u.users)
         if (s.ok) setStats(s)
         if (m.ok) { setMaintOn(m.on); setMaintMsg(m.message || '') }
+        if (b.ok) setReports(b.reports || [])
       } catch {
         // network/parse error — leave existing data, just stop the spinner
       } finally {
@@ -2966,6 +2970,18 @@ function AdminPanel({ token, onClose }) {
     }
     load()
   }, [])
+
+  const deleteReport = async (id) => {
+    setReports(prev => prev.filter(r => r.id !== id))
+    if (expandedReport === id) setExpandedReport(null)
+    await f(API + '/api/admin/bug-reports/' + id, { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } }).catch(() => {})
+  }
+
+  const clearReports = async () => {
+    if (!confirm('Delete ALL bug reports? This cannot be undone.')) return
+    setReports([]); setExpandedReport(null)
+    await f(API + '/api/admin/bug-reports/clear', { method: 'POST', headers: { Authorization: 'Bearer ' + token } }).catch(() => {})
+  }
 
   const toggleMaint = async (on) => {
     setMaintOn(on)
@@ -3041,6 +3057,46 @@ function AdminPanel({ token, onClose }) {
               </div>
             ))}
           </div>}
+
+          <div style={{display:'flex',alignItems:'center',marginTop:20,marginBottom:8}}>
+            <span style={{fontSize:'.52rem',textTransform:'uppercase',letterSpacing:'.12em',color:'var(--dim)',fontWeight:700}}>Bug Reports{reports.length?' · '+reports.length:''}</span>
+            {reports.length>0 && <button onClick={clearReports} style={{marginLeft:'auto',background:'none',border:'1px solid var(--red)',borderRadius:6,padding:'4px 12px',color:'var(--red)',fontSize:'.5rem',fontWeight:600,cursor:'pointer'}}>Clear all reports</button>}
+          </div>
+          {loading ? null : reports.length === 0 ? (
+            <div style={{color:'var(--dim)',fontSize:'.6rem',padding:'12px 4px'}}>No bug reports yet.</div>
+          ) : (
+            <div style={{display:'flex',flexDirection:'column',gap:6}}>
+              {reports.map(r => {
+                const open = expandedReport === r.id
+                return (
+                  <div key={r.id} style={{background:'var(--c2)',borderRadius:8,overflow:'hidden'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',cursor:'pointer'}} onClick={() => setExpandedReport(open ? null : r.id)}>
+                      <span style={{fontSize:'.7rem'}}>🐞</span>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:'.64rem',color:'var(--wh)',fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{r.note ? r.note : <span style={{color:'var(--dim)',fontWeight:400,fontStyle:'italic'}}>No description</span>}</div>
+                        <div style={{fontSize:'.5rem',color:'var(--dim)',marginTop:2}}>{r.user_email} · {r.at ? new Date(r.at).toLocaleString() : ''}{r.chat_title ? ' · '+r.chat_title : ''}{r.app_version ? ' · v'+r.app_version : ''} · {(r.messages||[]).length} msgs</div>
+                      </div>
+                      <button onClick={e => { e.stopPropagation(); deleteReport(r.id) }} style={{background:'none',border:'1px solid var(--brd)',borderRadius:6,padding:'3px 9px',color:'var(--red)',fontSize:'.5rem',fontWeight:600,cursor:'pointer'}}>Delete</button>
+                      <span style={{color:'var(--dim)',fontSize:'.6rem',transform:open?'rotate(90deg)':'none',transition:'transform .15s'}}>›</span>
+                    </div>
+                    {open && (
+                      <div style={{borderTop:'1px solid var(--brd)',padding:'10px 12px',maxHeight:280,overflowY:'auto'}}>
+                        {r.user_agent && <div style={{fontSize:'.48rem',color:'var(--dim)',marginBottom:8,wordBreak:'break-word'}}>{r.user_agent}</div>}
+                        {(r.messages||[]).length === 0 ? (
+                          <div style={{fontSize:'.56rem',color:'var(--dim)'}}>No transcript captured.</div>
+                        ) : (r.messages||[]).map((m, i) => (
+                          <div key={i} style={{marginBottom:8}}>
+                            <div style={{fontSize:'.46rem',textTransform:'uppercase',letterSpacing:'.08em',color: m.role==='user'?'var(--grn)':'var(--dim)',fontWeight:700,marginBottom:2}}>{m.role==='user'?'User':'Paula'}</div>
+                            <div style={{fontSize:'.58rem',color:'var(--lt)',whiteSpace:'pre-wrap',wordBreak:'break-word',lineHeight:1.4}}>{typeof m.content==='string'?m.content:JSON.stringify(m.content)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>
