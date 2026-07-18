@@ -162,6 +162,23 @@ def _load_autopilot_state() -> dict:
 
 # ── Maintenance mode ── (admin-only toggle; blocks the app for everyone but admin)
 _MAINT_FILE = os.path.join(os.environ.get("DB_DIR", os.path.dirname(os.path.abspath(__file__))), "maintenance.json")
+
+# Bug reports (testing feature): full chat + context dumped to a JSON file so the
+# admin can review them. Appended to; read via the admin endpoint below.
+_BUG_REPORTS_FILE = os.path.join(os.environ.get("DB_DIR", os.path.dirname(os.path.abspath(__file__))), "bug_reports.json")
+def _load_bug_reports() -> list:
+    try:
+        with open(_BUG_REPORTS_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return []
+def _save_bug_reports(reports: list):
+    try:
+        with open(_BUG_REPORTS_FILE, "w") as f:
+            json.dump(reports, f, indent=2, default=str)
+    except Exception as e:
+        print(f"[bug_report] save failed: {e}", flush=True)
+
 def _maint_state() -> dict:
     try:
         with open(_MAINT_FILE) as f:
@@ -881,7 +898,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.43.2",  # bump marker — confirms running code
+        "build": "v3.44.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1990,6 +2007,54 @@ async def cancel_scan(authorization: str = Header(None), token: str = None):
         task.cancel()
         return {"ok": True, "cancelled": True}
     return {"ok": True, "cancelled": False}
+
+
+@app.post("/api/report-bug")
+async def report_bug(req: dict, authorization: str = Header(None)):
+    """Save a bug report (full chat + context) to the backend for the admin to
+    review. Testing feature — any logged-in user can submit; nothing is emailed,
+    it's just stored server-side and pulled via /api/admin/bug-reports."""
+    user = _get_user(authorization)
+    reports = _load_bug_reports()
+    import uuid as _uuid
+    report = {
+        "id": _uuid.uuid4().hex[:12],
+        "at": datetime.now(ZoneInfo("US/Eastern")).isoformat(),
+        "user_email": (user.get("email") if user else None) or "anonymous",
+        "user_id": user.get("id") if user else None,
+        "note": str(req.get("note", ""))[:2000],           # optional user description
+        "chat_title": str(req.get("chat_title", ""))[:200],
+        "messages": req.get("messages", []),               # full chat transcript
+        "app_version": str(req.get("version", "")),
+        "user_agent": str(req.get("user_agent", ""))[:400],
+        "url": str(req.get("url", ""))[:400],
+    }
+    reports.append(report)
+    # Keep the file from growing without bound — retain the most recent 500.
+    if len(reports) > 500:
+        reports = reports[-500:]
+    _save_bug_reports(reports)
+    print(f"[bug_report] {report['id']} from {report['user_email']} — {report['note'][:80]}", flush=True)
+    return {"ok": True, "id": report["id"]}
+
+
+@app.get("/api/admin/bug-reports")
+async def admin_bug_reports(authorization: str = Header(None), full: int = 0):
+    """Admin-only: list bug reports. Pass ?full=1 to include the full message
+    transcripts; otherwise returns lightweight summaries (newest first)."""
+    user = _get_user(authorization)
+    if not user or user.get("email", "").lower() != ADMIN_EMAIL:
+        return {"ok": False, "error": "Unauthorized"}
+    reports = _load_bug_reports()
+    reports = list(reversed(reports))  # newest first
+    if full:
+        return {"ok": True, "count": len(reports), "reports": reports}
+    summaries = [{
+        "id": r.get("id"), "at": r.get("at"), "user_email": r.get("user_email"),
+        "note": r.get("note", ""), "chat_title": r.get("chat_title", ""),
+        "app_version": r.get("app_version", ""), "msg_count": len(r.get("messages", [])),
+    } for r in reports]
+    return {"ok": True, "count": len(summaries), "reports": summaries}
 
 
 @app.post("/api/chat")

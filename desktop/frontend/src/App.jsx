@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.43.2'
+const VERSION = '3.44.0'
 const VERSION_DATE = 'July 3, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.44.0', d: 'July 3, 2026', changes: [
+    'Added a \ud83d\udc1e Report Bug button in the top bar \u2014 tap it to send the current chat to the developer for testing.',
+  ]},
   { v: '3.43.2', d: 'July 3, 2026', changes: [
     'Fixed stocks showing \u201cNO_DATA\u201d with no score even though the chart loaded \u2014 analysis now falls back to a second data source when the main one is blocked.',
   ]},
@@ -1981,6 +1984,34 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
     setScanProgress(null)
   }
 
+  // Report-a-bug (testing feature): packages the CURRENT chat + a bit of context
+  // and sends it to the backend, where it's saved for the developer to review.
+  const reportBug = async () => {
+    const note = window.prompt("Describe the bug (optional) — the full chat will be sent:", "")
+    if (note === null) return  // user cancelled the prompt
+    const chat = chatsRef.current.find(c => c.id === chatIdRef.current)
+    const payload = {
+      note: note || "",
+      chat_title: chat?.title || "",
+      messages: (chat?.messages || messages || []),
+      version: VERSION,
+      user_agent: navigator.userAgent,
+      url: window.location.href,
+    }
+    try {
+      const res = await f(API + '/api/report-bug', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (data && data.ok) addToast(`Bug report sent — thank you! (#${data.id})`, 'info')
+      else addToast("Couldn't send the report. Try again.", 'error')
+    } catch {
+      addToast("Couldn't send the report — connection issue.", 'error')
+    }
+  }
+
   // Confirm or cancel a pending trade card. Only confirming actually places the
   // order (via /api/trade/execute) — so no trade happens without an explicit tap.
   const confirmTrade = async (msgIdx, trade) => {
@@ -2172,6 +2203,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
         <div className="hdr hdr-slim">
           <button className="ham" onClick={()=>setSideOpen(true)} aria-label="Open menu">☰</button>
           <button className="hdr-changelog" onClick={()=>setShowChangelog(true)} title="What's new">v{VERSION}</button>
+          <button className="hdr-bug" onClick={reportBug} title="Report a bug — sends this chat to the developer">🐞</button>
           <div className="hdr-ticker">
             {account&&<>
               <span className="hdr-eq">${account.equity.toLocaleString(undefined,{maximumFractionDigits:0})}</span>

@@ -910,6 +910,8 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 /* Slim top bar */
 .hdr-slim { justify-content: space-between; }
 .hdr-changelog { background: none; border: 1px solid var(--brd); color: var(--dim); font: inherit; font-family: var(--mono); font-size: 11px; padding: 4px 9px; border-radius: 7px; cursor: pointer; }
+.hdr-bug { background: none; border: 1px solid var(--brd); font-size: 13px; line-height: 1; padding: 3px 7px; border-radius: 7px; cursor: pointer; margin-left: 6px; opacity: .7; transition: opacity .12s; }
+.hdr-bug:hover { opacity: 1; }
 .hdr-changelog:hover { color: var(--grn); border-color: var(--grn); }
 .hdr-ticker { display: flex; align-items: center; gap: 12px; }
 .hdr-ticker .hdr-eq { font-family: var(--mono); font-weight: 600; font-size: 14px; color: var(--lt); }
