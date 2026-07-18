@@ -324,6 +324,45 @@ def _polygon_key() -> str | None:
 POLYGON_BASE = "https://api.polygon.io"
 
 
+@st.cache_data(ttl=300)
+def _polygon_daily_hist(ticker: str, days: int = 372) -> "pd.DataFrame | None":
+    """Fallback price history from Polygon, shaped like yfinance's .history().
+
+    Yahoo aggressively rate-limits/404s single-ticker history from datacenter IPs
+    (Railway), which made analysis return NO_DATA for perfectly alive stocks even
+    though the chart rendered fine (the chart endpoint already had a Polygon
+    fallback; the scan path did not). Returns a DataFrame with the same
+    Open/High/Low/Close/Volume columns + DatetimeIndex that compute_technicals
+    and _calc_relative_strength expect, or None.
+    """
+    key = _polygon_key()
+    if not key:
+        return None
+    try:
+        import requests as _rq
+        from datetime import datetime as _dt, timedelta as _td
+        end = _dt.utcnow().date()
+        start = end - _td(days=days)
+        url = (f"{POLYGON_BASE}/v2/aggs/ticker/{ticker.upper()}/range/1/day/"
+               f"{start.isoformat()}/{end.isoformat()}")
+        r = _rq.get(url, params={"adjusted": "true", "sort": "asc",
+                                 "limit": 50000, "apiKey": key}, timeout=12)
+        if r.status_code != 200:
+            return None
+        rows = (r.json() or {}).get("results") or []
+        if len(rows) < 50:
+            return None
+        df = pd.DataFrame([{
+            "Open": b.get("o"), "High": b.get("h"), "Low": b.get("l"),
+            "Close": b.get("c"), "Volume": b.get("v"),
+        } for b in rows])
+        df.index = pd.to_datetime([b["t"] for b in rows], unit="ms")
+        df = df.dropna(subset=["Close"])
+        return df if len(df) >= 50 else None
+    except Exception:
+        return None
+
+
 @st.cache_data(ttl=180)
 def web_search(query: str, max_results: int = 5) -> list[dict] | None:
     """Open-web search via Tavily (for questions Polygon stock-news can't cover,
@@ -3221,27 +3260,35 @@ def fetch_scan(ticker: str) -> dict | None:
     try:
         stk = yf.Ticker(ticker)
         hist = stk.history(period="1y")
+        _via_polygon = False
         if hist is None or hist.empty or len(hist) < 50:
             # Empty/thin can mean genuinely delisted OR Yahoo blocked us
-            # ("Invalid Crumb" 401). Don't poison the delisted cache on an empty
-            # response — that wrongly drops alive names when Yahoo throttles. We
-            # only treat the STALE-BAR case below (data returned, but last bar is
-            # days old) as a real delisting. Just skip this one for now.
-            return None
+            # ("Invalid Crumb" 401 / 404 from a datacenter IP). Don't poison the
+            # delisted cache on an empty response — that wrongly drops alive
+            # names when Yahoo throttles. Try POLYGON before giving up: the chart
+            # endpoint already does this, which is why the chart would render
+            # while analysis returned NO_DATA for a live stock (e.g. GE).
+            hist = _polygon_daily_hist(ticker)
+            _via_polygon = hist is not None
+            if hist is None or hist.empty or len(hist) < 50:
+                return None
         price = float(hist["Close"].iloc[-1])
         prev = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else price
         if not price or price < 1:
             return None
         # Delisted/halted guard: stale last bar = no longer trading (see batch scan).
-        try:
-            import pandas as _pd
-            last_ts = _pd.Timestamp(hist.index[-1])
-            now_ts = _pd.Timestamp.now(tz=last_ts.tz) if last_ts.tz else _pd.Timestamp.now()
-            if (now_ts - last_ts).days > 5:
-                _DELISTED_CACHE.add(ticker)
-                return None
-        except Exception:
-            pass
+        # Skip when the bars came from Polygon — its daily aggregates can lag a
+        # day or two, which is not evidence of a delisting.
+        if not _via_polygon:
+            try:
+                import pandas as _pd
+                last_ts = _pd.Timestamp(hist.index[-1])
+                now_ts = _pd.Timestamp.now(tz=last_ts.tz) if last_ts.tz else _pd.Timestamp.now()
+                if (now_ts - last_ts).days > 5:
+                    _DELISTED_CACHE.add(ticker)
+                    return None
+            except Exception:
+                pass
         tech = compute_technicals(hist)
         rs = _calc_relative_strength(hist)
         sector_etf = TICKER_SECTOR.get(ticker)
