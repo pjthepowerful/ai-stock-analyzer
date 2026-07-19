@@ -134,6 +134,43 @@ autopilot_owner_id: Optional[int] = None  # Only one user can own autopilot
 # navigates away / closes the tab (don't burn server resources for nobody).
 _active_scans: dict = {}
 
+# ── Concurrency lanes ────────────────────────────────────────────────────────
+# Problem this solves: a big market scan used to hog the shared thread pool, so a
+# second user asking something simple ("price of AAPL") would sit and wait until
+# the scan finished. We fix that by giving heavy scans their OWN pool, separate
+# from the pool everything else uses. A scan therefore can NEVER block a light
+# request — they run on different threads.
+#
+# Sizes are env-overridable so the container can be tuned without a code change.
+# Defaults are conservative to respect Railway's memory (two concurrent full
+# scans is the main memory risk, so SCAN stays small).
+from concurrent.futures import ThreadPoolExecutor as _TPE
+
+_SCAN_WORKERS = int(os.environ.get("SCAN_WORKERS", "2"))    # up to N scans at once
+_LIGHT_WORKERS = int(os.environ.get("LIGHT_WORKERS", "6"))  # everything else
+_scan_executor = _TPE(max_workers=_SCAN_WORKERS, thread_name_prefix="scan")
+_light_executor = _TPE(max_workers=_LIGHT_WORKERS, thread_name_prefix="light")
+
+def _set_default_executor():
+    """Make the light pool the loop's default so every plain run_in_executor(None,
+    …) call (price lookups, single-ticker analysis, AI replies) lands there and
+    stays clear of the scan pool."""
+    try:
+        asyncio.get_event_loop().set_default_executor(_light_executor)
+    except Exception:
+        pass
+
+# Heavy intents that should run on the dedicated scan pool instead of tying up a
+# light worker. Everything else falls through to the default (light) pool.
+_HEAVY_INTENTS = {"stock_ideas"}
+
+def _exec_pool_for(intent):
+    """Return the scan pool for heavy intents, else None (= default light pool)."""
+    try:
+        return _scan_executor if intent.get("type") in _HEAVY_INTENTS else None
+    except Exception:
+        return None
+
 # High-conviction alert dedup: ticker -> date last alerted. Prevents re-alerting
 # the same 90+ stock every 5-min cycle; it can re-alert on a new day.
 _alerted_today: dict = {}
@@ -256,6 +293,11 @@ async def lifespan(app: FastAPI):
     """Startup/shutdown."""
     print("🟢 Paula backend starting...")
 
+    # Route all default thread-pool work to the light pool so scans never block
+    # simple requests (see the executor definitions up top).
+    _set_default_executor()
+    print(f"  ✓ Concurrency lanes: {_LIGHT_WORKERS} light + {_SCAN_WORKERS} scan workers")
+
     # Load saved API keys from DB (first user's keys)
     try:
         db = auth._get_db()
@@ -298,6 +340,8 @@ async def lifespan(app: FastAPI):
     eod_task.cancel()
     if autopilot_task and not autopilot_task.done():
         autopilot_task.cancel()
+    _scan_executor.shutdown(wait=False, cancel_futures=True)
+    _light_executor.shutdown(wait=False, cancel_futures=True)
 
 
 app = FastAPI(title="Paula", lifespan=lifespan)
@@ -424,21 +468,47 @@ async def broadcast(event: str, data: dict):
             pass
 
 
+# A market scan isn't just "fetch data" — it fetches, then scores every result,
+# then pulls news + writes the analysis for the top picks. The old bar only
+# tracked fetching, so it jumped in a couple of big steps to 100% and then sat
+# there (looking frozen/done) while the rest of the scan actually ran. We now map
+# each phase onto its own slice of the overall bar so the percentage reflects the
+# WHOLE scan and climbs smoothly instead of finishing early.
+_SCAN_PHASE_RANGES = {
+    "fetching":   (0, 65),    # bulk price/history download — the long part
+    "scoring":    (65, 90),   # running the signal engine over every result
+    "finalizing": (90, 98),   # news + AI write-up for the top picks
+}
+# Human-readable label shown next to the bar for each phase.
+_SCAN_PHASE_LABELS = {
+    "fetching":   "Fetching market data",
+    "scoring":    "Scoring setups",
+    "finalizing": "Finalizing picks",
+}
+
 def _make_scan_progress_cb(loop):
     """Build a progress callback safe to call from the scan's worker thread.
-    It schedules a websocket broadcast onto the main event loop. Throttled so a
-    fast scan doesn't spam the socket. Returns None if there's no loop."""
+    It schedules a websocket broadcast onto the main event loop. The engine calls
+    it as (done, total, phase); we translate that into a single monotonic overall
+    percentage across all phases so the bar never goes backwards and never hits
+    100% before the results are actually ready. Returns None if there's no loop."""
     if loop is None:
         return None
     _last = {"pct": -1}
-    def _cb(done, total, phase="scanning"):
+    def _cb(done, total, phase="fetching"):
         try:
-            pct = int(done / total * 100) if total else 0
-            # Only push when the percent actually advances (avoid socket spam).
+            lo, hi = _SCAN_PHASE_RANGES.get(phase, (0, 98))
+            frac = (done / total) if total else 0
+            frac = 0.0 if frac < 0 else (1.0 if frac > 1 else frac)
+            pct = int(lo + (hi - lo) * frac)
+            # Monotonic: never let a later phase's low fraction drag the bar back.
             if pct <= _last["pct"]:
                 return
             _last["pct"] = pct
-            payload = {"done": int(done), "total": int(total), "pct": pct, "phase": phase}
+            payload = {
+                "done": int(done), "total": int(total), "pct": pct,
+                "phase": phase, "label": _SCAN_PHASE_LABELS.get(phase, "Scanning the market"),
+            }
             asyncio.run_coroutine_threadsafe(broadcast("scan_progress", payload), loop)
         except Exception:
             pass
@@ -898,7 +968,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.44.0",  # bump marker — confirms running code
+        "build": "v3.45.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1850,7 +1920,7 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
         loop = asyncio.get_event_loop()
         _prog = _make_scan_progress_cb(loop)
         _is_plus = bool(user) and (auth.is_plus(user["id"]) or _can_autopilot(user) or (user.get("email", "").lower() == ADMIN_EMAIL))
-        result = await loop.run_in_executor(None, functools.partial(engine.execute, intent, progress_cb=_prog, is_plus=_is_plus))
+        result = await loop.run_in_executor(_exec_pool_for(intent), functools.partial(engine.execute, intent, progress_cb=_prog, is_plus=_is_plus))
     except Exception as e:
         print(f"⚠️ Execute error: {e}")
 
@@ -2162,7 +2232,7 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
             try:
                 res = await asyncio.wait_for(
                     loop.run_in_executor(
-                        None, functools.partial(engine.execute, intent, progress_cb=_prog, is_plus=_is_plus)),
+                        _scan_executor, functools.partial(engine.execute, intent, progress_cb=_prog, is_plus=_is_plus)),
                     timeout=_scan_timeout,
                 )
                 msg_out = res.get("msg", "") if res and res.get("ok") else _friendly_error((res or {}).get("error", "Scan failed"))
@@ -2199,7 +2269,7 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                        else "On it — scanning the market for the best setups. This takes a moment…",
         }
 
-    result = await loop.run_in_executor(None, functools.partial(engine.execute, intent, progress_cb=_prog, is_plus=_is_plus))
+    result = await loop.run_in_executor(_exec_pool_for(intent), functools.partial(engine.execute, intent, progress_cb=_prog, is_plus=_is_plus))
 
     if result and result.get("ok"):
         resp = result.get("msg", "")

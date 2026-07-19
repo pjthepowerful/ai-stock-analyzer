@@ -2720,18 +2720,35 @@ def generate_trade_signal(data: dict) -> dict:
 
 @st.cache_data(ttl=120)
 def fetch_price(ticker: str) -> dict | None:
-    # Try yfinance first
+    # ── yfinance ──
+    # .info is the richest source but ALSO the most aggressively rate-limited
+    # endpoint yfinance has. When several tickers are fetched back-to-back, Yahoo
+    # throttles and .info starts failing — which is why the 3rd ticker in a
+    # portfolio ("AAPL, NVDA, TSLA") would come back empty while the first two
+    # worked. .history() holds up far better under throttling, so we try it
+    # INDEPENDENTLY rather than abandoning yfinance the moment .info throws.
+    info = {}
+    price = None
+    prev = None
     try:
         stk = yf.Ticker(ticker)
         info = stk.info or {}
         price = info.get("currentPrice") or info.get("regularMarketPrice")
         prev = info.get("previousClose") or info.get("regularMarketPreviousClose")
-        if not price or price <= 0:
-            hist = stk.history(period="5d")
-            if hist is None or hist.empty:
-                raise ValueError("No yfinance data")
-            price = float(hist["Close"].iloc[-1])
-            prev = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else price
+    except Exception:
+        info = {}
+    # If .info gave nothing usable (throttled or empty), rescue the price from
+    # history — this is what fixes the "no data" drops on otherwise-fine tickers.
+    if not price or price <= 0:
+        try:
+            hist = yf.Ticker(ticker).history(period="5d")
+            if hist is not None and not hist.empty:
+                price = float(hist["Close"].iloc[-1])
+                if not prev or prev <= 0:
+                    prev = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else price
+        except Exception:
+            pass
+    if price and price > 0:
         prev = prev or price
         return {
             "price": round(price, 2), "prev_close": round(prev, 2),
@@ -2745,33 +2762,36 @@ def fetch_price(ticker: str) -> dict | None:
             "target_price": info.get("targetMeanPrice"),
             "recommendation": info.get("recommendationKey"),
         }
-    except Exception:
-        pass
 
-    # Fallback: Polygon API
+    # Fallback: Polygon API. Free tier is 5 req/min, so under load the first call
+    # can 429 — retry once after a short pause before giving up.
     polygon_key = os.environ.get("POLYGON_API_KEY", "")
     if polygon_key:
-        try:
-            clean = ticker.replace(".NS", "").replace("-", ".")
-            r = requests.get(f"https://api.polygon.io/v2/aggs/ticker/{clean}/prev",
-                            params={"apiKey": polygon_key}, timeout=10)
-            if r.status_code == 200:
-                data = r.json()
-                results = data.get("results", [])
-                if results:
-                    bar = results[0]
-                    price = bar.get("c", 0)
-                    prev = bar.get("o", price)
-                    return {
-                        "price": round(price, 2), "prev_close": round(prev, 2),
-                        "change": round(price - prev, 2),
-                        "change_pct": round((price - prev) / prev * 100, 2) if prev else 0,
-                        "name": ticker, "market_cap": None, "pe_ratio": None,
-                        "forward_pe": None, "52w_high": None, "52w_low": None,
-                        "sector": None, "target_price": None, "recommendation": None,
-                    }
-        except Exception:
-            pass
+        clean = ticker.replace(".NS", "").replace("-", ".")
+        for _attempt in range(2):
+            try:
+                r = requests.get(f"https://api.polygon.io/v2/aggs/ticker/{clean}/prev",
+                                params={"apiKey": polygon_key}, timeout=10)
+                if r.status_code == 429:
+                    import time as _t; _t.sleep(1.5); continue
+                if r.status_code == 200:
+                    data = r.json()
+                    results = data.get("results", [])
+                    if results:
+                        bar = results[0]
+                        price = bar.get("c", 0)
+                        prev = bar.get("o", price)
+                        return {
+                            "price": round(price, 2), "prev_close": round(prev, 2),
+                            "change": round(price - prev, 2),
+                            "change_pct": round((price - prev) / prev * 100, 2) if prev else 0,
+                            "name": ticker, "market_cap": None, "pe_ratio": None,
+                            "forward_pe": None, "52w_high": None, "52w_low": None,
+                            "sector": None, "target_price": None, "recommendation": None,
+                        }
+                break
+            except Exception:
+                break
 
     return None
 
@@ -6263,20 +6283,37 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
             # stocks fast: one round-trip per ~150 tickers instead of one per
             # stock. News is skipped here; it's fetched only for the top picks.
             batch = batch_fetch_scan(universe, skip_news=True, progress_cb=progress_cb)
-            for _tk, _data in batch.items():
+            # Scoring is a real phase (signal engine over every result), so report
+            # it — otherwise the bar sat at the end of "fetching" looking frozen.
+            _items = list(batch.items())
+            _n = len(_items)
+            for _i, (_tk, _data) in enumerate(_items):
                 _r = _score_data(_tk, _data)
                 if _r:
                     picks.append(_r)
+                if progress_cb and (_i % 10 == 0 or _i == _n - 1):
+                    try: progress_cb(_i + 1, _n, "scoring")
+                    except Exception: pass
         else:
             # Smaller themed scans — per-ticker thread pool (keeps news inline).
+            # Report progress as each name completes so these show a live bar too.
             def _scan_one(ticker):
                 return _score_data(ticker, fetch_scan(ticker))
             from concurrent.futures import ThreadPoolExecutor
+            _n = len(universe)
+            _done = 0
             with ThreadPoolExecutor(max_workers=6) as _ex:
                 for _r in _ex.map(_scan_one, universe):
+                    _done += 1
                     if _r:
                         picks.append(_r)
+                    if progress_cb and (_done % 5 == 0 or _done == _n):
+                        try: progress_cb(_done, _n, "fetching")
+                        except Exception: pass
 
+        if progress_cb:
+            try: progress_cb(1, 1, "finalizing")
+            except Exception: pass
         picks.sort(key=lambda x: x["score"], reverse=True)
         # Apply price filter if user specified one
         if max_price:

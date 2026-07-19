@@ -20,11 +20,16 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.44.0'
-const VERSION_DATE = 'July 3, 2026'
+const VERSION = '3.45.0'
+const VERSION_DATE = 'July 19, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.45.0', d: 'July 19, 2026', changes: [
+    'Fixed a stock in your portfolio occasionally showing \u201cno data\u201d even though it\u2019s actively trading \u2014 price lookups now recover from rate-limits instead of coming back empty.',
+    'Ask something simple while a big market scan is running and it\u2019s answered right away \u2014 a scan no longer holds up other requests.',
+    'The market scan progress bar is more accurate \u2014 it now tracks the whole scan (fetching, scoring, finalizing) and climbs smoothly instead of racing to 100% and stalling.',
+  ]},
   { v: '3.44.0', d: 'July 3, 2026', changes: [
     'Added a \ud83d\udc1e Report Bug button in the top bar \u2014 tap it to send the current chat to the developer for testing.',
   ]},
@@ -1526,7 +1531,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
           }
           if (event === 'scan_progress') {
             // Live progress for the big market scan — show a bar while it runs.
-            setScanProgress({ pct: data.pct, done: data.done, total: data.total, phase: data.phase })
+            setScanProgress({ pct: data.pct, done: data.done, total: data.total, phase: data.phase, label: data.label })
             if (data.pct >= 100) setTimeout(() => setScanProgress(null), 1200)
           }
           if (event === 'autopilot') {
@@ -2331,7 +2336,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                   </div>
                 ):(<><div className="user-bubble">{m.content}</div></>)}
               </div>))}
-            {sending&&sendingChatRef.current===chatIdRef.current&&!messages.some(m=>m.streaming)&&<div className="msg msg-assistant"><div className="ai"><div className="ai-av">P</div><div className="ai-body"><div className="ai-name">Paula</div><div className="loading-state"><div className="dots"><span/><span/><span/></div><span className="loading-txt">{scanProgress ? ("Scanning the market… " + scanProgress.pct + "%") : loadingText}</span>{scanProgress ? <ScanBar pct={scanProgress.pct} /> : null}</div></div></div></div>}
+            {sending&&sendingChatRef.current===chatIdRef.current&&!messages.some(m=>m.streaming)&&<div className="msg msg-assistant"><div className="ai"><div className="ai-av">P</div><div className="ai-body"><div className="ai-name">Paula</div><div className="loading-state"><div className="dots"><span/><span/><span/></div><span className="loading-txt">{scanProgress ? ((scanProgress.label || "Scanning the market") + "… " + scanProgress.pct + "%") : loadingText}</span>{scanProgress ? <ScanBar pct={scanProgress.pct} /> : null}</div></div></div></div>}
             <div ref={messagesEnd}/>
             </div>
           </div>
@@ -2752,10 +2757,33 @@ function ChartTabs({ tickers, signal }) {
 }
 
 function ScanBar({ pct }) {
-  const w = Math.max(0, Math.min(100, pct || 0)) + '%'
+  // Ease the displayed width toward the real target so the coarse backend updates
+  // (which arrive a few seconds apart) render as a smooth climb instead of hard
+  // jumps. We only ever move forward — the bar never snaps backward.
+  const target = Math.max(0, Math.min(100, pct || 0))
+  const [shown, setShown] = useState(target)
+  const shownRef = useRef(target)
+  useEffect(() => {
+    let raf
+    const step = () => {
+      const cur = shownRef.current
+      const diff = target - cur
+      if (Math.abs(diff) < 0.3) {
+        shownRef.current = target
+        setShown(target)
+        return
+      }
+      const next = cur + diff * 0.12   // ease-out toward target
+      shownRef.current = next
+      setShown(next)
+      raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [target])
   return (
     <div className="scan-bar">
-      <div className="scan-bar-fill" style={{ width: w }} />
+      <div className="scan-bar-fill" style={{ width: shown.toFixed(1) + '%' }} />
     </div>
   )
 }
