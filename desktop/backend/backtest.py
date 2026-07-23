@@ -12,10 +12,17 @@ import warnings
 
 def run_backtest(tickers: list = None, days: int = 90, initial_capital: float = 26000,
                  min_score: int = 75, max_positions: int = 2, stop_pct: float = 0.01,
-                 target_mult: float = 2.5) -> dict:
+                 target_mult: float = 2.5, validate: bool = False,
+                 costs: dict = None, n_sims: int = 1000) -> dict:
     """
     Backtest the signal engine on historical daily data.
     Returns equity curve, trades, and stats.
+
+    validate=True additionally runs the statistical validation suite
+    (validation.py): applies real trading costs, tests the result against a
+    random-entry null hypothesis, bootstraps a confidence interval, and returns
+    a PASS / FAIL / INCONCLUSIVE verdict. A backtest says what happened; the
+    verdict says whether to believe it.
     """
     if not tickers:
         tickers = ["AAPL", "MSFT", "NVDA", "GOOGL", "META", "AMZN", "AMD", "TSLA",
@@ -26,10 +33,15 @@ def run_backtest(tickers: list = None, days: int = 90, initial_capital: float = 
     end = datetime.now(et)
     start = end - timedelta(days=days + 30)  # extra for indicator warmup
 
+    # SPY is downloaded purely as the buy-and-hold benchmark for validation —
+    # it's excluded from the tradeable universe below.
+    _benchmark = "SPY"
+    _dl = list(tickers) + ([_benchmark] if _benchmark not in tickers else [])
+
     # Download all data
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        data = yf.download(tickers, start=start.strftime("%Y-%m-%d"),
+        data = yf.download(_dl, start=start.strftime("%Y-%m-%d"),
                           end=end.strftime("%Y-%m-%d"), group_by="ticker",
                           progress=False, threads=False)
 
@@ -38,7 +50,7 @@ def run_backtest(tickers: list = None, days: int = 90, initial_capital: float = 
 
     # Build per-ticker DataFrames
     ticker_data = {}
-    for t in tickers:
+    for t in _dl:
         try:
             if t in data.columns.get_level_values(0):
                 df = data[t].dropna()
@@ -47,12 +59,15 @@ def run_backtest(tickers: list = None, days: int = 90, initial_capital: float = 
         except Exception:
             pass
 
-    if not ticker_data:
+    # The benchmark is for comparison only — never traded by the simulation.
+    _bench_df = ticker_data.get(_benchmark) if _benchmark not in tickers else None
+    tradeable = {k: v for k, v in ticker_data.items() if k in tickers}
+    if not tradeable:
         return {"ok": False, "error": "No valid ticker data"}
 
     # Get common trading dates (last N days)
     all_dates = set()
-    for df in ticker_data.values():
+    for df in tradeable.values():
         all_dates.update(str(d)[:10] for d in df.index)
     dates = sorted(all_dates)[-days:]
 
@@ -72,7 +87,7 @@ def run_backtest(tickers: list = None, days: int = 90, initial_capital: float = 
         closed = []
         for ticker, pos in list(positions.items()):
             try:
-                df = ticker_data[ticker]
+                df = tradeable[ticker]
                 row = df.loc[df.index.astype(str).str[:10] == date]
                 if row.empty:
                     continue
@@ -117,7 +132,7 @@ def run_backtest(tickers: list = None, days: int = 90, initial_capital: float = 
         # Score and enter new positions
         if len(positions) < max_positions:
             scored = []
-            for ticker, df in ticker_data.items():
+            for ticker, df in tradeable.items():
                 if ticker in positions:
                     continue
                 try:
@@ -201,14 +216,14 @@ def run_backtest(tickers: list = None, days: int = 90, initial_capital: float = 
                 trades.append({
                     "ticker": s["ticker"], "entry": price, "exit": None,
                     "pnl": None, "entry_date": date, "exit_date": None,
-                    "result": "open", "score": s["score"]
+                    "result": "open", "score": s["score"], "qty": qty
                 })
 
         # Calculate equity
         unrealized = 0
         for ticker, pos in positions.items():
             try:
-                df = ticker_data[ticker]
+                df = tradeable[ticker]
                 row = df.loc[df.index.astype(str).str[:10] == date]
                 if not row.empty:
                     unrealized += (float(row["Close"].iloc[0]) - pos["entry"]) * pos["qty"]
@@ -235,7 +250,7 @@ def run_backtest(tickers: list = None, days: int = 90, initial_capital: float = 
         if dd > max_dd:
             max_dd = dd
 
-    return {
+    result = {
         "ok": True,
         "equity_curve": equity_curve,
         "trades": completed[-50:],  # last 50
@@ -256,3 +271,18 @@ def run_backtest(tickers: list = None, days: int = 90, initial_capital: float = 
             "final_equity": equity_curve[-1]["equity"] if equity_curve else initial_capital,
         }
     }
+
+    # ── Validation ──
+    # The stats above describe what the simulation did. This says whether the
+    # result survives real costs and is distinguishable from luck.
+    if validate:
+        try:
+            import validation
+            result["validation"] = validation.validate(
+                completed, ticker_data=ticker_data, costs=costs,
+                n_sims=n_sims, benchmark=_benchmark,
+            )
+        except Exception as e:
+            result["validation"] = {"ok": False, "error": str(e)}
+
+    return result

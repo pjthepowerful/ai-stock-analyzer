@@ -1404,9 +1404,15 @@ async def market_regime():
 
 
 @app.post("/api/backtest")
-async def run_backtest_endpoint(authorization: str = Header(None)):
-    """Run backtest with current strategy params."""
+async def run_backtest_endpoint(body: dict = None, authorization: str = Header(None)):
+    """Run backtest with current strategy params.
+
+    Pass {"validate": true} to also run the statistical validation suite — real
+    trading costs, a random-entry null hypothesis, bootstrap confidence interval,
+    benchmark comparison, and a PASS/FAIL/INCONCLUSIVE verdict.
+    """
     import backtest
+    body = body or {}
     try:
         # Load current auto-tuner params
         config = {}
@@ -1414,12 +1420,22 @@ async def run_backtest_endpoint(authorization: str = Header(None)):
         if config_path.exists():
             config = json.loads(config_path.read_text())
 
+        _validate = bool(body.get("validate"))
+        _days = int(body.get("days", 90))
+        # Validation is meaningless on a handful of trades, so when it's requested
+        # we default to a longer window to build a usable sample.
+        if _validate and "days" not in body:
+            _days = 365
+
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, lambda: backtest.run_backtest(
-            days=90,
+        result = await loop.run_in_executor(_scan_executor, lambda: backtest.run_backtest(
+            days=_days,
             min_score=config.get("MIN_SCORE", 82),
             max_positions=config.get("MAX_POSITIONS", 1),
             stop_pct=config.get("STOP_FLOOR", 0.013),
+            validate=_validate,
+            costs=body.get("costs"),
+            n_sims=int(body.get("n_sims", 1000)),
         ))
         return result
     except Exception as e:
