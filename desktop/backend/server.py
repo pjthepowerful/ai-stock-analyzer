@@ -1000,7 +1000,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.46.0",  # bump marker — confirms running code
+        "build": "v3.47.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -2404,19 +2404,30 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                 # history attached unrelated data (e.g. AAPL from an earlier turn)
                 # to questions about something else entirely (e.g. "SpaceX IPO?").
                 if not (result and result.get("private_company")):
-                    _found_tickers = list(set(_re.findall(r'\b([A-Z]{1,5})\b', user_msg)))
-                    _known = KNOWN_TICKERS
-                    _valid = [t for t in _found_tickers if t in _known][:5]  # max 5 lookups
+                    # Resolve every stock the message names — by company name OR
+                    # ticker — so "Tesla or Google" prices BOTH, not just one.
+                    _valid = engine.find_all_tickers(user_msg, limit=5)
                     if _valid:
                         _multi = {}
+                        _missing = []
                         for _vt in _valid:
                             try:
                                 _vd = engine.fetch_full(_vt)
                                 if _vd and _vd.get("price"):
                                     _multi[_vt] = {"price": _vd["price"], "change_pct": _vd.get("change_pct", 0), "name": _vd.get("name", _vt)}
-                            except: pass
+                                else:
+                                    _missing.append(_vt)
+                            except Exception:
+                                _missing.append(_vt)
                         if _multi:
-                            _chat_data = {"stocks": _multi, "note": "Use ONLY these exact prices"}
+                            _note = "Use ONLY these exact prices"
+                            # If a named stock's data failed, tell the AI so it
+                            # says so plainly instead of vaguely hedging.
+                            if _missing:
+                                _note += (". Live data could NOT be retrieved for: "
+                                          + ", ".join(_missing)
+                                          + " — say so explicitly rather than guessing their numbers.")
+                            _chat_data = {"stocks": _multi, "note": _note}
                         elif len(_valid) == 1:
                             _chat_data = engine.fetch_full(_valid[0]) or {}
             except Exception:

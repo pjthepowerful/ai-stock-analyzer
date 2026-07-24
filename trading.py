@@ -293,11 +293,53 @@ def _find_ticker(text: str) -> tuple[str | None, str]:
     return None, _detect_market(text)
 
 
+def find_all_tickers(text: str, limit: int = 5) -> list[str]:
+    """Resolve EVERY stock a message refers to — by company name OR ticker
+    symbol — in order of first appearance, de-duplicated.
+
+    Single-stock resolution (_find_ticker) only returns one, which is why
+    multi-stock questions like 'should I buy Tesla or Google' used to fetch data
+    for at most one of them. This returns both -> ['TSLA','GOOGL'] so the data
+    layer can price each.
+    """
+    if not text:
+        return []
+    low = text.lower()
+    hits = []  # (position, ticker)
+
+    # 1) Company names (COMPANIES + the alias table shares many). Longest names
+    # first so 'coca cola' matches before a stray 'ko'.
+    for name in sorted(COMPANIES.keys(), key=len, reverse=True):
+        idx = low.find(name)
+        if idx != -1:
+            hits.append((idx, COMPANIES[name]))
+
+    # 2) Ticker symbols present as words (2–5 letters, in the US universe).
+    for mobj in re.finditer(r'\b([A-Za-z]{1,5})\b', text):
+        w = mobj.group(1)
+        up = w.upper()
+        # Require caps for short/ambiguous tokens so 'or', 'is', 'a' don't match
+        # tickers; longer lowercase words are fine to accept.
+        if up in ALL_US_TICKERS and up not in _NOISE_WORDS and (w.isupper() or len(up) >= 4):
+            hits.append((mobj.start(), up))
+
+    # Order by appearance, de-dupe.
+    hits.sort(key=lambda x: x[0])
+    out = []
+    seen = set()
+    for _, tk in hits:
+        if tk not in seen:
+            seen.add(tk)
+            out.append(tk)
+        if len(out) >= limit:
+            break
+    return out
+
+
 def _ensure_suffix(ticker: str, market: str) -> str:
     if market == "India" and "." not in ticker:
         return f"{ticker}.NS"
     return ticker
-
 
 def _safe(val, fallback=None):
     """Return val if it's a real number, else fallback."""
@@ -3561,6 +3603,34 @@ _REF_PRONOUNS = ("it", "that", "this", "them", "those", "these",
                  "the second", "the third", "the last one", "the other one")
 
 
+PRIVATE_COMPANIES = [
+    "spacex", "starlink", "openai", "anthropic", "stripe", "databricks",
+    "discord", "epic games", "valve", "chick-fil-a", "in-n-out", "ikea",
+    "mars inc", "cargill", "koch", "deloitte", "pwc", "ey ", "kpmg",
+    "fidelity", "vanguard", "bloomberg lp", "spacex's", "neuralink",
+    "the boring company", "xai", "x.ai", "fanatics", "canva", "revolut",
+]
+
+
+def _mentions_private_company(m: str) -> bool:
+    """True if the message names a private/non-tradeable company. Uses word
+    boundaries so a name doesn't match as a substring of an unrelated word —
+    e.g. the 'ey ' entry (Ernst & Young) must NOT fire inside 'disnEY which',
+    which was silently routing Disney questions to a private-company answer."""
+    for p in PRIVATE_COMPANIES:
+        p = p.strip()
+        if not p:
+            continue
+        # Names with dots/hyphens (x.ai, in-n-out) are distinctive enough for a
+        # plain substring; alphabetic names need boundary matching.
+        if any(c in p for c in ".-"):
+            if p in m:
+                return True
+        elif re.search(r'\b' + re.escape(p) + r'\b', m):
+            return True
+    return False
+
+
 def route(msg: str, history: list = None) -> dict:
     # Quoted lines (the user highlighted part of a prior reply and is asking
     # ABOUT it) are context, not commands. Strip them before routing so words
@@ -3629,14 +3699,7 @@ def route(msg: str, history: list = None) -> dict:
     # Questions about companies with no public ticker (or pre-IPO) should be a
     # plain conversational answer — NOT a stock lookup that attaches unrelated
     # data (e.g. "SpaceX IPO?" must not pull AAPL from earlier in the chat).
-    PRIVATE_COMPANIES = [
-        "spacex", "starlink", "openai", "anthropic", "stripe", "databricks",
-        "discord", "epic games", "valve", "chick-fil-a", "in-n-out", "ikea",
-        "mars inc", "cargill", "koch", "deloitte", "pwc", "ey ", "kpmg",
-        "fidelity", "vanguard", "bloomberg lp", "spacex's", "neuralink",
-        "the boring company", "xai", "x.ai", "fanatics", "canva", "revolut",
-    ]
-    if any(p in m for p in PRIVATE_COMPANIES):
+    if _mentions_private_company(m):
         return {"type": "chat", "private_company": True, "market": "US"}
 
     # ── Earnings calendar ── ("when does NVDA report earnings", "AAPL earnings date")
@@ -3671,17 +3734,9 @@ def route(msg: str, history: list = None) -> dict:
                         or m.startswith("compare ") or " compare " in m
                         or (" or " in m and any(w in m for w in ["better", "stronger", "buy", "which", "pick", "rather", "instead"])))
     if _compare_trigger:
-        # Case-insensitive ticker match, but skip common English words that happen
-        # to be valid tickers (AND, OR, ALL, ON, IT, etc.) unless typed in caps.
-        _CMP_STOP = {"AND", "OR", "VS", "THE", "A", "AN", "IS", "IT", "ON", "AT", "TO",
-                     "ALL", "ANY", "BE", "BY", "DO", "GO", "HAS", "ME", "MY", "SO",
-                     "UP", "WHO", "ARE", "FOR", "BUY", "CAN", "GET", "NOW", "ONE", "OUT", "SEE", "TWO"}
-        _ct = []
-        for w in _re_cmp.findall(r"\b([A-Za-z]{1,5})\b", msg):
-            up = w.upper()
-            if up in ALL_US_TICKERS and (w.isupper() or up not in _CMP_STOP):
-                _ct.append(up)
-        _seen = set(); _ct = [x for x in _ct if not (x in _seen or _seen.add(x))]
+        # Resolve BOTH company names and ticker symbols (so "Tesla vs Google"
+        # compares TSLA and GOOGL, not just whatever was typed in caps).
+        _ct = find_all_tickers(msg, limit=2)
         if len(_ct) >= 2:
             return {"type": "compare", "tickers": _ct[:2], "market": "US", "_original_msg": msg}
 

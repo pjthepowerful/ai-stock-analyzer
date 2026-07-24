@@ -20,11 +20,16 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.46.0'
+const VERSION = '3.47.0'
 const VERSION_DATE = 'July 24, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.47.0', d: 'July 24, 2026', changes: [
+    'Ask about companies by name and Paula pulls live data for all of them — “Tesla or Google”, “Netflix vs Disney” now price both, not just one.',
+    'If live data can’t be pulled for one stock in your question, Paula now says so plainly instead of glossing over it.',
+    'Fixed some company questions (like Disney) being mistaken for private companies and answered without live data.',
+  ]},
   { v: '3.46.0', d: 'July 24, 2026', changes: [
     'Your chats now sync across devices — start on your laptop, pick it up on your phone, all under the same account.',
     'Paula follows the thread better: say “analyze it”, “compare them”, or “the second one” and it knows which stocks you mean from earlier in the chat.',
