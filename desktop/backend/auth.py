@@ -157,6 +157,12 @@ def init_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id)
         );
+        CREATE TABLE IF NOT EXISTS synced_chats (
+            user_id INTEGER PRIMARY KEY,
+            chats_json TEXT NOT NULL DEFAULT '[]',
+            updated_at INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
         CREATE TABLE IF NOT EXISTS password_resets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -379,6 +385,52 @@ def save_settings(user_id: int, settings: dict) -> dict:
         ))
         db.commit()
         return {"ok": True}
+    finally:
+        db.close()
+
+
+def get_synced_chats(user_id: int) -> dict:
+    """Return the user's synced chat list + its server timestamp.
+    Shape: {"chats": [...], "updated_at": <ms>}. Empty if none stored yet."""
+    db = _get_db()
+    try:
+        row = db.execute(
+            "SELECT chats_json, updated_at FROM synced_chats WHERE user_id = ?",
+            (user_id,)
+        ).fetchone()
+        if not row:
+            return {"chats": [], "updated_at": 0}
+        import json as _json
+        try:
+            chats = _json.loads(row["chats_json"])
+        except Exception:
+            chats = []
+        return {"chats": chats, "updated_at": row["updated_at"] or 0}
+    finally:
+        db.close()
+
+
+def save_synced_chats(user_id: int, chats: list, updated_at: int) -> bool:
+    """Upsert the user's chat list. Last-write-wins: only overwrites if the
+    incoming updated_at is newer than what's stored, so a stale device can't
+    clobber a fresher one. Returns True if the write was applied."""
+    db = _get_db()
+    try:
+        import json as _json
+        row = db.execute("SELECT updated_at FROM synced_chats WHERE user_id = ?",
+                         (user_id,)).fetchone()
+        if row and (row["updated_at"] or 0) >= updated_at:
+            return False  # stored copy is same-or-newer; ignore
+        payload = _json.dumps(chats)[:5_000_000]  # hard cap ~5MB
+        db.execute(
+            "INSERT INTO synced_chats (user_id, chats_json, updated_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(user_id) DO UPDATE SET chats_json = excluded.chats_json, updated_at = excluded.updated_at",
+            (user_id, payload, updated_at)
+        )
+        db.commit()
+        return True
+    except Exception:
+        return False
     finally:
         db.close()
 

@@ -945,6 +945,38 @@ async def save_chat_msg(authorization: str = Header(None)):
     return {"ok": True}
 
 
+@app.get("/api/chats/sync")
+async def get_synced_chats_endpoint(authorization: str = Header(None)):
+    """Return the account's synced chat list so a fresh device (phone/laptop)
+    can pull the same chats. Returns the server copy plus its timestamp."""
+    user = _get_user(authorization)
+    if not user:
+        return {"ok": False, "error": "Not authenticated"}
+    data = auth.get_synced_chats(user["id"])
+    return {"ok": True, "chats": data["chats"], "updated_at": data["updated_at"]}
+
+
+@app.put("/api/chats/sync")
+async def put_synced_chats_endpoint(body: dict = None, authorization: str = Header(None)):
+    """Push this device's chat list up to the account. Last-write-wins by
+    timestamp, so an older device can't overwrite a newer one. The client sends
+    {"chats": [...], "updated_at": <ms epoch>}."""
+    user = _get_user(authorization)
+    if not user:
+        return {"ok": False, "error": "Not authenticated"}
+    body = body or {}
+    chats = body.get("chats")
+    if not isinstance(chats, list):
+        return {"ok": False, "error": "chats must be a list"}
+    updated_at = int(body.get("updated_at") or 0)
+    applied = auth.save_synced_chats(user["id"], chats, updated_at)
+    # If the server had something newer, hand it back so the client can adopt it.
+    if not applied:
+        latest = auth.get_synced_chats(user["id"])
+        return {"ok": True, "applied": False, "chats": latest["chats"], "updated_at": latest["updated_at"]}
+    return {"ok": True, "applied": True, "updated_at": updated_at}
+
+
 @app.post("/api/chat/import")
 async def import_guest_chats(req: dict = None, authorization: str = Header(None)):
     """Migrate a guest's locally-saved messages into their new account."""
@@ -968,7 +1000,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.45.0",  # bump marker — confirms running code
+        "build": "v3.46.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1902,8 +1934,8 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
     chat_history = _get_user_history(user_id)
     chat_history.append({"role": "user", "content": user_msg})
 
-    # Route the message
-    intent = engine.route(user_msg)
+    # Route the message — history lets referential follow-ups resolve tickers.
+    intent = engine.route(user_msg, history=chat_history[:-1])
     itype = intent.get("type", "chat")
 
     # Autopilot start/stop — admin only
@@ -2202,8 +2234,9 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
         chat_history = _get_user_history(user_id)
     chat_history.append({"role": "user", "content": user_msg})
 
-    # Route the message
-    intent = engine.route(user_msg)
+    # Route the message — pass recent history so referential follow-ups
+    # ("analyze it", "compare them") resolve to the right ticker.
+    intent = engine.route(user_msg, history=chat_history[:-1])
 
     # Autopilot — admin only
     if intent.get("type") == "autopilot":

@@ -3523,7 +3523,45 @@ def _llm_classify_intent(msg: str) -> dict | None:
         return None
 
 
-def route(msg: str) -> dict:
+def _recent_tickers_from_history(history: list, limit: int = 4) -> list:
+    """Pull the most-recently-mentioned tickers out of the conversation, newest
+    first. Used to resolve referential follow-ups ('analyze it', 'compare them')
+    when the current message names no ticker of its own."""
+    if not history:
+        return []
+    import re as _re_h
+    seen = set()
+    found = []
+    # Walk newest → oldest so the most recent subject wins.
+    for turn in reversed(history):
+        content = (turn or {}).get("content", "") or ""
+        # Tickers Paula writes as "(AXON)" or bare caps; validate against the
+        # known universe so we don't grab random capitalized words.
+        cands = _re_h.findall(r'\(([A-Z]{1,5})\)', content) + _re_h.findall(r'\b([A-Z]{2,5})\b', content)
+        for c in cands:
+            if c in ALL_US_TICKERS and c not in seen and c not in _NEVER_A_REFERENCE:
+                seen.add(c)
+                found.append(c)
+        if len(found) >= limit:
+            break
+    return found[:limit]
+
+
+# Caps words that are valid tickers but almost always English/UI noise in a
+# reply, so they don't get mistaken for the thing a user is referring back to.
+_NEVER_A_REFERENCE = {"A", "I", "IT", "ALL", "ANY", "BUY", "CEO", "EPS", "USD",
+                      "PM", "AM", "ET", "OK", "AI", "US", "IPO", "ATR", "RSI",
+                      "VWAP", "EMA", "SELL", "HOLD", "OPEN", "HIGH", "LOW"}
+
+# Referential cues: the message points back at something already discussed
+# rather than naming it. Split into "action" (implies re-running a tool on the
+# prior subject) vs pure continuation (just keep talking — stays conversational).
+_REF_PRONOUNS = ("it", "that", "this", "them", "those", "these",
+                 "that one", "the first one", "the second one", "the first",
+                 "the second", "the third", "the last one", "the other one")
+
+
+def route(msg: str, history: list = None) -> dict:
     # Quoted lines (the user highlighted part of a prior reply and is asking
     # ABOUT it) are context, not commands. Strip them before routing so words
     # inside a quote — e.g. a "BUY" signal — never trigger a real trade.
@@ -3535,6 +3573,57 @@ def route(msg: str) -> dict:
     m = msg.lower().strip()
     if m in ("hi", "hello", "hey", "thanks", "thank you", "help", "bye"):
         return {"type": "chat"}
+
+    # ── Referential follow-up resolution ─────────────────────────────────────
+    # "analyze it", "is that a buy?", "compare them" — the subject lives in the
+    # previous turns, not this message. If the current message has NO ticker of
+    # its own but clearly refers back, resolve the ticker(s) from history and
+    # rewrite the message so the normal routing below can handle it. Pure
+    # continuations ("go on", "tell me more") are left alone — they already fall
+    # through to a conversational reply that gets the full history.
+    import re as _re_ref
+    _has_own_ticker = any(
+        t.upper() in ALL_US_TICKERS and (t.isupper() or len(t) >= 3)
+        for t in _re_ref.findall(r'\b([A-Za-z]{1,5})\b', msg)
+    )
+    if history and not _has_own_ticker:
+        _mwords = m.split()
+        _short = len(_mwords) <= 8
+        _has_pronoun = any(
+            (" " + p + " ") in (" " + m + " ") or m.endswith(" " + p) or m == p
+            for p in _REF_PRONOUNS
+        )
+        # An action verb + a pronoun (or a very short pronoun-y message) means
+        # "do this thing to what we were just talking about."
+        _action = any(w in m for w in (
+            "analyz", "look at", "check", "price of", "quote", "chart",
+            "should i buy", "should i sell", "is it a buy", "is that a buy",
+            "buy it", "sell it", "worth", "how's", "hows", "what about",
+            "tell me about", "break down", "explain", "compare", "which",
+        ))
+        if _has_pronoun and (_action or _short):
+            _ctx = _recent_tickers_from_history(history)
+            if _ctx:
+                _wants_compare = ("compare" in m or "them" in _mwords or "those" in _mwords
+                                  or "vs" in _mwords or "versus" in m)
+                if _wants_compare and len(_ctx) >= 2:
+                    return {"type": "compare", "tickers": _ctx[:2], "market": "US",
+                            "_original_msg": msg, "_resolved_from_history": True}
+                # Ordinal reference — "the second one" → 2nd most recent subject.
+                _ord = None
+                for _i, _word in enumerate(("first", "second", "third")):
+                    if _word in m:
+                        _ord = _i
+                if _ord is not None and _ord < len(_ctx):
+                    _tk = _ctx[_ord]
+                else:
+                    _tk = _ctx[0]  # default: the thing most recently discussed
+                # Rewrite to an explicit request the downstream router handles.
+                msg = re.sub(r'\b(it|that|this|that one|the (first|second|third|last|other) one)\b',
+                             _tk, msg, flags=re.IGNORECASE)
+                m = msg.lower().strip()
+                # Fall through — the resolved ticker now routes normally below.
+
 
     # ── Private / non-tradeable companies ──
     # Questions about companies with no public ticker (or pre-IPO) should be a

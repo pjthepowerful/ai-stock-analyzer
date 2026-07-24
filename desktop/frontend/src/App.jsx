@@ -20,11 +20,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.45.0'
-const VERSION_DATE = 'July 19, 2026'
+const VERSION = '3.46.0'
+const VERSION_DATE = 'July 24, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.46.0', d: 'July 24, 2026', changes: [
+    'Your chats now sync across devices — start on your laptop, pick it up on your phone, all under the same account.',
+    'Paula follows the thread better: say “analyze it”, “compare them”, or “the second one” and it knows which stocks you mean from earlier in the chat.',
+  ]},
   { v: '3.45.0', d: 'July 19, 2026', changes: [
     'Fixed a stock in your portfolio occasionally showing \u201cno data\u201d even though it\u2019s actively trading \u2014 price lookups now recover from rate-limits instead of coming back empty.',
     'Ask something simple while a big market scan is running and it\u2019s answered right away \u2014 a scan no longer holds up other requests.',
@@ -1277,22 +1281,88 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
   // ── Chat system ──
   const isGuest = !!user.isGuest
   const chatKey = 'paula-chats-' + user.id
+  const tsKey = 'paula-chats-ts-' + user.id
   const chatsRef = useRef(JSON.parse(localStorage.getItem(chatKey) || '[]'))
   const [chats, _setChats] = useState(chatsRef.current)
   const chatIdRef = useRef(localStorage.getItem('paula-chat-id-' + user.id) || null)
   const [chatId, _setChatId] = useState(chatIdRef.current)
 
+  // ── Cross-device sync ──
+  // Chats live in localStorage per device; we mirror them to the account so
+  // phone and laptop stay in step. Reconciliation is last-write-wins by
+  // timestamp. Guests have no account, so they never sync.
+  // syncReady gates pushes until the initial pull has reconciled — otherwise a
+  // fresh device's blank "New chat" would push up and clobber real chats.
+  const [syncReady, setSyncReady] = useState(isGuest)
+  const pushTimer = useRef(null)
+
+  const pushSync = () => {
+    if (isGuest || !token) return
+    clearTimeout(pushTimer.current)
+    pushTimer.current = setTimeout(() => {
+      const updated_at = parseInt(localStorage.getItem(tsKey) || '0') || Date.now()
+      f(API + '/api/chats/sync', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ chats: chatsRef.current, updated_at })
+      }).then(r => r.json()).then(res => {
+        // Server had a newer copy (another device wrote in between) — adopt it.
+        if (res && res.ok && res.applied === false && Array.isArray(res.chats)) {
+          adoptRemote(res.chats, res.updated_at)
+        }
+      }).catch(() => {})
+    }, 800)  // debounce burst edits into one write
+  }
+
   const persist = (updated) => {
     chatsRef.current = updated
     _setChats(updated)
     localStorage.setItem(chatKey, JSON.stringify(updated))
+    localStorage.setItem(tsKey, String(Date.now()))
     // Guests: mirror to the migration key so a later sign-up can import them.
     if (isGuest) localStorage.setItem('paula-guest-chats', JSON.stringify(updated))
+    else if (syncReady) pushSync()
   }
 
-  // New account / no chats yet → open a fresh blank chat (welcome screen) by
-  // default so the user lands in a ready-to-type conversation, not an empty void.
+  // Apply a chat list pulled from the server WITHOUT pushing it back (no echo).
+  const adoptRemote = (remoteChats, remoteTs) => {
+    chatsRef.current = remoteChats
+    _setChats(remoteChats)
+    localStorage.setItem(chatKey, JSON.stringify(remoteChats))
+    localStorage.setItem(tsKey, String(remoteTs || Date.now()))
+    // If the chat we were viewing no longer exists, jump to the newest one.
+    if (!remoteChats.some(c => c.id === chatIdRef.current)) {
+      const first = remoteChats[0]
+      if (first) { chatIdRef.current = first.id; _setChatId(first.id); localStorage.setItem('paula-chat-id-' + user.id, first.id) }
+    }
+  }
+
+  // On mount (logged-in users): pull the account's chats and reconcile.
   useEffect(() => {
+    if (isGuest || !token) { setSyncReady(true); return }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await f(API + '/api/chats/sync', { headers: { Authorization: 'Bearer ' + token } }).then(r => r.json())
+        if (cancelled) return
+        const localTs = parseInt(localStorage.getItem(tsKey) || '0')
+        if (res && res.ok && Array.isArray(res.chats) && res.chats.length && (res.updated_at || 0) > localTs) {
+          // Server is newer — adopt it.
+          adoptRemote(res.chats, res.updated_at)
+        } else if (chatsRef.current.length && localTs > (res?.updated_at || 0)) {
+          // Local is newer — push it up.
+          pushSync()
+        }
+      } catch { /* offline — keep working from local copy */ }
+      finally { if (!cancelled) setSyncReady(true) }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  // New account / no chats yet → open a fresh blank chat. Wait for sync so we
+  // don't create a throwaway blank before the account's real chats arrive.
+  useEffect(() => {
+    if (!syncReady) return
     if (chatsRef.current.length === 0) {
       const id = Date.now().toString() + "-" + Math.random().toString(36).slice(2, 8)
       const fresh = [{ id, title: 'New chat', messages: [], created: new Date().toISOString() }]
@@ -1301,7 +1371,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
       localStorage.setItem('paula-chat-id-' + user.id, id)
       setMessages([])
     }
-  }, [])
+  }, [syncReady])
 
   const setActiveChatId = (id) => {
     chatIdRef.current = id
@@ -2999,15 +3069,18 @@ function AdminPanel({ token, onClose }) {
     load()
   }, [])
 
+  const [confirmDelete, setConfirmDelete] = useState(null)  // report id awaiting confirm
+
   const deleteReport = async (id) => {
     setReports(prev => prev.filter(r => r.id !== id))
     if (expandedReport === id) setExpandedReport(null)
+    setConfirmDelete(null)
     await f(API + '/api/admin/bug-reports/' + id, { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } }).catch(() => {})
   }
 
   const clearReports = async () => {
     if (!confirm('Delete ALL bug reports? This cannot be undone.')) return
-    setReports([]); setExpandedReport(null)
+    setReports([]); setExpandedReport(null); setConfirmDelete(null)
     await f(API + '/api/admin/bug-reports/clear', { method: 'POST', headers: { Authorization: 'Bearer ' + token } }).catch(() => {})
   }
 
@@ -3104,7 +3177,15 @@ function AdminPanel({ token, onClose }) {
                         <div style={{fontSize:'.64rem',color:'var(--wh)',fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{r.note ? r.note : <span style={{color:'var(--dim)',fontWeight:400,fontStyle:'italic'}}>No description</span>}</div>
                         <div style={{fontSize:'.5rem',color:'var(--dim)',marginTop:2}}>{r.user_email} · {r.at ? new Date(r.at).toLocaleString() : ''}{r.chat_title ? ' · '+r.chat_title : ''}{r.app_version ? ' · v'+r.app_version : ''} · {(r.messages||[]).length} msgs</div>
                       </div>
-                      <button onClick={e => { e.stopPropagation(); deleteReport(r.id) }} style={{background:'none',border:'1px solid var(--brd)',borderRadius:6,padding:'3px 9px',color:'var(--red)',fontSize:'.5rem',fontWeight:600,cursor:'pointer'}}>Delete</button>
+                      {confirmDelete === r.id ? (
+                        <span onClick={e => e.stopPropagation()} style={{display:'inline-flex',gap:6,alignItems:'center'}}>
+                          <span style={{fontSize:'.5rem',color:'var(--dim)'}}>Sure?</span>
+                          <button onClick={e => { e.stopPropagation(); deleteReport(r.id) }} style={{background:'var(--red)',border:'none',borderRadius:6,padding:'3px 10px',color:'#fff',fontSize:'.5rem',fontWeight:700,cursor:'pointer'}}>Delete</button>
+                          <button onClick={e => { e.stopPropagation(); setConfirmDelete(null) }} style={{background:'none',border:'1px solid var(--brd)',borderRadius:6,padding:'3px 9px',color:'var(--dim)',fontSize:'.5rem',fontWeight:600,cursor:'pointer'}}>Cancel</button>
+                        </span>
+                      ) : (
+                        <button onClick={e => { e.stopPropagation(); setConfirmDelete(r.id) }} style={{background:'none',border:'1px solid var(--brd)',borderRadius:6,padding:'3px 9px',color:'var(--red)',fontSize:'.5rem',fontWeight:600,cursor:'pointer'}}>Delete</button>
+                      )}
                       <span style={{color:'var(--dim)',fontSize:'.6rem',transform:open?'rotate(90deg)':'none',transition:'transform .15s'}}>›</span>
                     </div>
                     {open && (
