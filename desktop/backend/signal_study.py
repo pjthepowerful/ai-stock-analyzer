@@ -348,9 +348,12 @@ def download(universe: list, years: float, refresh: bool = False) -> dict:
         print(f"Downloading {len(universe)} tickers via yfinance, {years}y + warmup…")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
+            # threads=False on purpose: yfinance keeps a SQLite timezone cache, and
+            # parallel downloads race on it → "unable to open database file" across
+            # dozens of tickers. Serial is a touch slower but reliable.
             data = yf.download(universe, start=start.strftime("%Y-%m-%d"),
                                end=end.strftime("%Y-%m-%d"), group_by="ticker",
-                               progress=False, threads=True, auto_adjust=True)
+                               progress=False, threads=False, auto_adjust=True)
         for tk in universe:
             try:
                 if tk in data.columns.get_level_values(0):
