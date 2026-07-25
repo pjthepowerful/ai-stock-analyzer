@@ -314,15 +314,32 @@ def maybe_plot(table: pd.DataFrame, corr: pd.DataFrame, outdir: str):
 
 
 # ── Data download ────────────────────────────────────────────────────────────
-def download(universe: list, years: float) -> dict:
+def download(universe: list, years: float, refresh: bool = False) -> dict:
     """Fetch daily history for the universe. Tries yfinance in bulk first; for any
     ticker it misses (Yahoo throttling, the fc.yahoo.com cookie failure, DNS
     blockers, etc.) it falls back to Polygon — the same key Paula's engine uses —
-    so a flaky Yahoo can't stop the study."""
+    so a flaky Yahoo can't stop the study.
+
+    The raw history is cached to disk so re-runs (e.g. sweeping horizons) skip the
+    download entirely. Pass refresh=True to force a fresh pull."""
+    import hashlib, pickle
     from datetime import datetime, timedelta
     days = int(365 * years) + 320  # +warmup for SMA200 / 52w range
-    out = {}
 
+    outdir = os.path.dirname(os.path.abspath(__file__))
+    key = hashlib.md5((",".join(sorted(universe)) + f"|{years}").encode()).hexdigest()[:10]
+    cache = os.path.join(outdir, f"_hist_cache_{key}.pkl")
+    if not refresh and os.path.exists(cache):
+        try:
+            with open(cache, "rb") as fh:
+                out = pickle.load(fh)
+            print(f"Loaded cached history for {len(out)} tickers "
+                  f"(delete {os.path.basename(cache)} or pass --refresh to re-download)")
+            return out
+        except Exception:
+            pass
+
+    out = {}
     # ── 1) yfinance bulk (fast when it works) ──
     try:
         import yfinance as yf
@@ -370,6 +387,12 @@ def download(universe: list, years: float) -> dict:
         print(f"  Polygon recovered {got}/{len(missing)}")
 
     print(f"Usable history for {len(out)}/{len(universe)} tickers total")
+    try:
+        with open(cache, "wb") as fh:
+            pickle.dump(out, fh)
+        print(f"  cached to {os.path.basename(cache)} (reused on next run)")
+    except Exception:
+        pass
     return out
 
 
@@ -377,18 +400,47 @@ def main():
     ap = argparse.ArgumentParser(description="Paula signal decile + factor study")
     ap.add_argument("--years", type=float, default=2.0)
     ap.add_argument("--horizon", type=int, default=5, help="forward return horizon in trading days")
+    ap.add_argument("--horizons", type=str, default=None,
+                    help="comma list to sweep, e.g. 1,2,3,5,10 — prints IC per horizon so you can find the one that matches how you actually trade")
     ap.add_argument("--sample", type=int, default=1, help="evaluate every Nth day (use 5 for non-overlapping 5d windows)")
     ap.add_argument("--universe", type=str, default=None, help="file with one ticker per line")
     ap.add_argument("--threshold", type=float, default=0.8, help="collinearity flag threshold")
+    ap.add_argument("--refresh", action="store_true", help="force re-download (ignore cached history)")
     args = ap.parse_args()
 
     universe = DEFAULT_UNIVERSE
     if args.universe and os.path.exists(args.universe):
         universe = [ln.strip().upper() for ln in open(args.universe) if ln.strip()]
 
-    hist = download(universe, args.years)
+    hist = download(universe, args.years, refresh=args.refresh)
     if not hist:
         print("No data. Are you online / is Yahoo reachable?")
+        return
+
+    outdir = os.path.dirname(os.path.abspath(__file__))
+
+    # ── Horizon sweep: the key diagnostic for matching the test to your hold ──
+    if args.horizons:
+        horizons = [int(x) for x in args.horizons.split(",") if x.strip()]
+        print("\n" + "=" * 60)
+        print("HORIZON SWEEP — where (if anywhere) does the score work?")
+        print("=" * 60)
+        print(f"{'horizon':>8} {'obs':>8} {'rank_IC':>10} {'top-bot%':>10}  read")
+        for h in horizons:
+            # sample==h gives non-overlapping windows for a clean IC at each horizon
+            df_h = build_observations(hist, horizon=h, sample_every=max(args.sample, h))
+            if df_h.empty:
+                print(f"{h:>8} {'--':>8}   (no obs)")
+                continue
+            ic = _spearman(df_h["score"], df_h["fwd_ret"])
+            q = pd.qcut(df_h["score"].rank(method="first"), 10, labels=False) + 1
+            means = df_h.groupby(q)["fwd_ret"].mean() * 100
+            tb = means.iloc[-1] - means.iloc[0]
+            read = ("score PREDICTS" if ic >= 0.03 else
+                    "score INVERTED" if ic <= -0.03 else "flat/noise")
+            print(f"{h:>8} {len(df_h):>8} {ic:>+10.4f} {tb:>+10.3f}  {read}")
+        print("\nIC ≥ +0.03 = score orders winners; ≤ −0.03 = it's a fade signal; "
+              "between = no edge at that horizon.")
         return
 
     df = build_observations(hist, horizon=args.horizon, sample_every=args.sample)
@@ -396,7 +448,6 @@ def main():
         print("No observations produced.")
         return
 
-    outdir = os.path.dirname(os.path.abspath(__file__))
     df.to_csv(os.path.join(outdir, "signal_observations.csv"), index=False)
     table = decile_study(df, args.horizon)
     table.to_csv(os.path.join(outdir, "signal_deciles.csv"), index=False)
