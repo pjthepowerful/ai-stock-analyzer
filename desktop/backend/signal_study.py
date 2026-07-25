@@ -146,6 +146,15 @@ def extract_factors(tech: dict, price: float) -> dict:
 FACTOR_COLS = None  # filled after first extraction
 
 
+def _spearman(a: pd.Series, b: pd.Series) -> float:
+    """Rank Information Coefficient without scipy: Spearman is just Pearson on the
+    ranks, and pandas' Pearson path has no scipy dependency."""
+    try:
+        return float(a.rank().corr(b.rank(), method="pearson"))
+    except Exception:
+        return float("nan")
+
+
 # ── Observation builder ──────────────────────────────────────────────────────
 def build_observations(hist_by_ticker: dict, horizon: int = 5,
                        min_history: int = 260, sample_every: int = 1) -> pd.DataFrame:
@@ -191,7 +200,7 @@ def decile_study(df: pd.DataFrame, horizon: int) -> pd.DataFrame:
     if n < 100:
         print(f"\n⚠️  Only {n} observations — too few to trust. Widen the window.")
     # Rank IC: Spearman correlation of score vs forward return. This is THE metric.
-    ic = df["score"].corr(df["fwd_ret"], method="spearman")
+    ic = _spearman(df["score"], df["fwd_ret"])
     pearson = df["score"].corr(df["fwd_ret"], method="pearson")
 
     # Deciles by score (qcut handles ties/uneven distributions).
@@ -252,7 +261,7 @@ def factor_correlation(df: pd.DataFrame, threshold: float = 0.8) -> pd.DataFrame
     print("=" * 74)
     # Also show each factor's own IC vs forward return — a factor that's both
     # redundant AND uncorrelated with returns is pure dead weight.
-    ics = {c: df[c].corr(df["fwd_ret"], method="spearman") for c in cols}
+    ics = {c: _spearman(df[c], df["fwd_ret"]) for c in cols}
     redundant = []
     for i in range(len(cols)):
         for j in range(i + 1, len(cols)):
