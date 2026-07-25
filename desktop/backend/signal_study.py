@@ -315,25 +315,61 @@ def maybe_plot(table: pd.DataFrame, corr: pd.DataFrame, outdir: str):
 
 # ── Data download ────────────────────────────────────────────────────────────
 def download(universe: list, years: float) -> dict:
-    import yfinance as yf
+    """Fetch daily history for the universe. Tries yfinance in bulk first; for any
+    ticker it misses (Yahoo throttling, the fc.yahoo.com cookie failure, DNS
+    blockers, etc.) it falls back to Polygon — the same key Paula's engine uses —
+    so a flaky Yahoo can't stop the study."""
     from datetime import datetime, timedelta
-    end = datetime.now()
-    start = end - timedelta(days=int(365 * years) + 320)  # +warmup for SMA200/52w
-    print(f"Downloading {len(universe)} tickers, {years}y + warmup…")
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        data = yf.download(universe, start=start.strftime("%Y-%m-%d"),
-                           end=end.strftime("%Y-%m-%d"), group_by="ticker",
-                           progress=False, threads=True, auto_adjust=True)
+    days = int(365 * years) + 320  # +warmup for SMA200 / 52w range
     out = {}
-    for tk in universe:
-        try:
-            df = data[tk].dropna() if tk in data.columns.get_level_values(0) else None
-            if df is not None and len(df) > 260:
-                out[tk] = df
-        except Exception:
-            pass
-    print(f"  got usable history for {len(out)}/{len(universe)} tickers")
+
+    # ── 1) yfinance bulk (fast when it works) ──
+    try:
+        import yfinance as yf
+        end = datetime.now()
+        start = end - timedelta(days=days)
+        print(f"Downloading {len(universe)} tickers via yfinance, {years}y + warmup…")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            data = yf.download(universe, start=start.strftime("%Y-%m-%d"),
+                               end=end.strftime("%Y-%m-%d"), group_by="ticker",
+                               progress=False, threads=True, auto_adjust=True)
+        for tk in universe:
+            try:
+                if tk in data.columns.get_level_values(0):
+                    df = data[tk].dropna()
+                    if len(df) > 260:
+                        out[tk] = df
+            except Exception:
+                pass
+        print(f"  yfinance: {len(out)}/{len(universe)} tickers")
+    except Exception as e:
+        print(f"  yfinance bulk failed ({str(e)[:80]}) — falling back to Polygon for all.")
+
+    # ── 2) Polygon fallback for whatever's missing ──
+    missing = [t for t in universe if t not in out]
+    if missing:
+        import time as _time
+        print(f"  Polygon fallback for {len(missing)} ticker(s)…")
+        print("  (Polygon free tier is 5 req/min — this throttles to stay under it;")
+        print("   if you're on the free plan and this crawls, use a smaller --universe.)")
+        got = 0
+        for i, tk in enumerate(missing, 1):
+            try:
+                df = T._polygon_daily_hist(tk, days=days)
+                if df is not None and len(df) > 260:
+                    out[tk] = df
+                    got += 1
+            except Exception:
+                pass
+            if i % 5 == 0:
+                print(f"    …{i}/{len(missing)} ({got} recovered)")
+                _time.sleep(60)  # respect the 5-req/min free-tier limit
+            else:
+                _time.sleep(0.3)
+        print(f"  Polygon recovered {got}/{len(missing)}")
+
+    print(f"Usable history for {len(out)}/{len(universe)} tickers total")
     return out
 
 
