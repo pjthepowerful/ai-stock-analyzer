@@ -20,11 +20,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.48.0'
-const VERSION_DATE = 'July 26, 2026'
+const VERSION = '3.49.0'
+const VERSION_DATE = 'July 27, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.49.0', d: 'July 27, 2026', changes: [
+    'Ask about specific stocks by name (“when should I buy TSLA and GOOG?”) and Paula now analyzes those tickers instead of running a generic market scan.',
+    'Fixed shorthand tickers like GOOG resolving to the right stock in multi-stock questions.',
+  ]},
   { v: '3.48.0', d: 'July 26, 2026', changes: [
     'New admin Signal Validation panel: runs a real decile / rank-IC study on the score and shows whether it actually predicts forward returns — an honest instrument, not a confluence display.',
   ]},

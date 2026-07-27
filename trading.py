@@ -194,6 +194,61 @@ def _detect_market(text: str) -> str:
     return "India" if india > us else "US"
 
 
+_TICKER_ALIASES = {
+    # Apple
+    "appl": "AAPL", "aple": "AAPL", "apple": "AAPL", "aaple": "AAPL",
+    # Google
+    "goog": "GOOGL", "googl": "GOOGL", "google": "GOOGL", "gogle": "GOOGL",
+    # Microsoft
+    "msft": "MSFT", "microsoft": "MSFT", "micosoft": "MSFT", "mircosoft": "MSFT",
+    # Amazon
+    "amzn": "AMZN", "amazon": "AMAZON", "amazn": "AMZN",
+    # Tesla
+    "tsla": "TSLA", "tesla": "TSLA", "telsa": "TSLA", "tesle": "TSLA",
+    # Nvidia
+    "nvda": "NVDA", "nvidia": "NVDA", "nvidea": "NVDA", "nviida": "NVDA",
+    # Meta
+    "meta": "META", "facebook": "META",
+    # Netflix
+    "nflx": "NFLX", "netflix": "NFLX", "netflex": "NFLX", "netflx": "NFLX",
+    # Intel
+    "intc": "INTC", "intel": "INTC",
+    # AMD
+    "amd": "AMD",
+    # Coinbase
+    "coin": "COIN", "coinbase": "COIN",
+    # Palantir
+    "pltr": "PLTR", "palantir": "PLTR", "palentir": "PLTR",
+    # Others
+    "baba": "BABA", "alibaba": "BABA",
+    "snap": "SNAP", "snapchat": "SNAP",
+    "uber": "UBER",
+    "disney": "DIS", "dis": "DIS",
+    "nike": "NKE", "nke": "NKE",
+    "starbucks": "SBUX", "sbux": "SBUX",
+    "walmart": "WMT", "wmt": "WMT",
+    "costco": "COST", "cost": "COST",
+    "boeing": "BA",
+    "ford": "F",
+    "shopify": "SHOP", "shop": "SHOP",
+    "robinhood": "HOOD", "hood": "HOOD",
+    "sofi": "SOFI",
+    "roblox": "RBLX", "rblx": "RBLX",
+    "celsius": "CELH", "celh": "CELH",
+    "rivian": "RIVN", "rivn": "RIVN",
+    "duolingo": "DUOL", "duol": "DUOL",
+    "chipotle": "CMG", "cmg": "CMG",
+    "moderna": "MRNA", "mrna": "MRNA",
+    "crowdstrike": "CRWD", "crwd": "CRWD",
+    "datadog": "DDOG", "ddog": "DDOG",
+    "snowflake": "SNOW", "snow": "SNOW",
+    "broadcom": "AVGO", "avgo": "AVGO",
+    "jpmorgan": "JPM", "jpm": "JPM", "jp morgan": "JPM",
+    "goldman": "GS", "goldman sachs": "GS",
+    "berkshire": "BRK-B",
+}
+
+
 def _find_ticker(text: str) -> tuple[str | None, str]:
     low = text.lower()
     # 1) Known company names
@@ -210,59 +265,7 @@ def _find_ticker(text: str) -> tuple[str | None, str]:
             if clean in us_set:
                 return clean, "US"
     # 2.5) Common misspellings, typos, voice recognition, and aliases
-    ALIASES = {
-        # Apple
-        "appl": "AAPL", "aple": "AAPL", "apple": "AAPL", "aaple": "AAPL",
-        # Google
-        "goog": "GOOGL", "googl": "GOOGL", "google": "GOOGL", "gogle": "GOOGL",
-        # Microsoft
-        "msft": "MSFT", "microsoft": "MSFT", "micosoft": "MSFT", "mircosoft": "MSFT",
-        # Amazon
-        "amzn": "AMZN", "amazon": "AMAZON", "amazn": "AMZN",
-        # Tesla
-        "tsla": "TSLA", "tesla": "TSLA", "telsa": "TSLA", "tesle": "TSLA",
-        # Nvidia
-        "nvda": "NVDA", "nvidia": "NVDA", "nvidea": "NVDA", "nviida": "NVDA",
-        # Meta
-        "meta": "META", "facebook": "META",
-        # Netflix
-        "nflx": "NFLX", "netflix": "NFLX", "netflex": "NFLX", "netflx": "NFLX",
-        # Intel
-        "intc": "INTC", "intel": "INTC",
-        # AMD
-        "amd": "AMD",
-        # Coinbase
-        "coin": "COIN", "coinbase": "COIN",
-        # Palantir
-        "pltr": "PLTR", "palantir": "PLTR", "palentir": "PLTR",
-        # Others
-        "baba": "BABA", "alibaba": "BABA",
-        "snap": "SNAP", "snapchat": "SNAP",
-        "uber": "UBER",
-        "disney": "DIS", "dis": "DIS",
-        "nike": "NKE", "nke": "NKE",
-        "starbucks": "SBUX", "sbux": "SBUX",
-        "walmart": "WMT", "wmt": "WMT",
-        "costco": "COST", "cost": "COST",
-        "boeing": "BA",
-        "ford": "F",
-        "shopify": "SHOP", "shop": "SHOP",
-        "robinhood": "HOOD", "hood": "HOOD",
-        "sofi": "SOFI",
-        "roblox": "RBLX", "rblx": "RBLX",
-        "celsius": "CELH", "celh": "CELH",
-        "rivian": "RIVN", "rivn": "RIVN",
-        "duolingo": "DUOL", "duol": "DUOL",
-        "chipotle": "CMG", "cmg": "CMG",
-        "moderna": "MRNA", "mrna": "MRNA",
-        "crowdstrike": "CRWD", "crwd": "CRWD",
-        "datadog": "DDOG", "ddog": "DDOG",
-        "snowflake": "SNOW", "snow": "SNOW",
-        "broadcom": "AVGO", "avgo": "AVGO",
-        "jpmorgan": "JPM", "jpm": "JPM", "jp morgan": "JPM",
-        "goldman": "GS", "goldman sachs": "GS",
-        "berkshire": "BRK-B",
-    }
+    ALIASES = _TICKER_ALIASES
     for word in text.lower().split():
         clean = re.sub(r"[^a-z]", "", word)
         if clean in ALIASES:
@@ -314,14 +317,19 @@ def find_all_tickers(text: str, limit: int = 5) -> list[str]:
         if idx != -1:
             hits.append((idx, COMPANIES[name]))
 
-    # 2) Ticker symbols present as words (2–5 letters, in the US universe).
+    # 2) Ticker symbols present as words (2–5 letters, in the US universe), plus
+    # aliases (GOOG→GOOGL, misspellings) so uppercase shorthands don't get dropped.
     for mobj in re.finditer(r'\b([A-Za-z]{1,5})\b', text):
         w = mobj.group(1)
         up = w.upper()
-        # Require caps for short/ambiguous tokens so 'or', 'is', 'a' don't match
-        # tickers; longer lowercase words are fine to accept.
+        low = w.lower()
+        resolved = None
         if up in ALL_US_TICKERS and up not in _NOISE_WORDS and (w.isupper() or len(up) >= 4):
-            hits.append((mobj.start(), up))
+            resolved = up
+        elif low in _TICKER_ALIASES and (w.isupper() or len(low) >= 4):
+            resolved = _TICKER_ALIASES[low]
+        if resolved:
+            hits.append((mobj.start(), resolved))
 
     # Order by appearance, de-dupe.
     hits.sort(key=lambda x: x[0])
@@ -3537,6 +3545,11 @@ def _llm_classify_intent(msg: str) -> dict | None:
                 if v == "chat":
                     return None  # let normal chat handling proceed
                 if v == "stock_ideas":
+                    # Even if the LLM says "scan", named tickers win — the user
+                    # asked about specific stocks, not the whole market.
+                    _ov = _named_ticker_override(msg)
+                    if _ov:
+                        return _ov
                     return {"type": "stock_ideas", "category": "all", "_original_msg": msg}
                 # For stock-specific intents, we need a ticker. Try to extract one;
                 # if none is found, fall back to chat rather than guessing.
@@ -3629,6 +3642,25 @@ def _mentions_private_company(m: str) -> bool:
         elif re.search(r'\b' + re.escape(p) + r'\b', m):
             return True
     return False
+
+
+def _named_ticker_override(msg: str):
+    """If the user explicitly named specific stocks, return an analyze/compare
+    intent for THOSE — even when the message also contains scan-ish language like
+    'swing trading opportunities' or 'what should I buy'. Someone asking "when
+    should I buy TSLA and GOOG" wants those two analyzed, not a generic 500-stock
+    scan. Returns None when no explicit tickers are named (so pure 'what should I
+    buy' / 'find me tech setups' still scan).
+
+    Only counts EXPLICIT mentions — company names or resolvable symbols/aliases —
+    via find_all_tickers, which already excludes lowercase words that merely
+    happen to be tickers."""
+    tks = find_all_tickers(msg, limit=3)
+    if not tks:
+        return None
+    if len(tks) >= 2:
+        return {"type": "compare", "tickers": tks[:2], "market": "US", "_original_msg": msg}
+    return {"type": "analyze", "ticker": tks[0], "market": "US", "_original_msg": msg}
 
 
 def route(msg: str, history: list = None) -> dict:
@@ -3790,6 +3822,11 @@ def route(msg: str, history: list = None) -> dict:
     if wants_picks and not any(cmd in m for cmd in [
         "close all", "sell everything", "liquidate",
     ]):
+        # If the user named specific stocks, analyze THOSE instead of scanning —
+        # "should I buy TSLA and GOOG" must not become a generic market scan.
+        _ov = _named_ticker_override(msg)
+        if _ov:
+            return _ov
         # Determine category
         cat = "all"
         if any(w in m for w in ["large cap", "large-cap", "mega cap", "big cap", "blue chip", "sp500", "s&p"]):
