@@ -58,6 +58,7 @@ import argparse
 import os
 import sys
 import warnings
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -193,6 +194,80 @@ def build_observations(hist_by_ticker: dict, horizon: int = 5,
 
 
 # ── Decile study ─────────────────────────────────────────────────────────────
+def run_signal_validation(universe: list = None, years: float = 2.0,
+                          horizon: int = 5, refresh: bool = False) -> dict:
+    """Run the decile/IC study and return a JSON-serializable summary for the
+    in-app Signal Validation panel. This is the honest instrument: it reports the
+    score's REAL out-of-sample predictive power rather than pretending the score
+    picks winners. Reuses the same download + build_observations + IC machinery
+    as the CLI study, so the numbers match exactly."""
+    uni = universe or DEFAULT_UNIVERSE[:24]  # small liquid set → runs in-app fast
+    try:
+        hist = download(uni, years, refresh=refresh)
+        if not hist:
+            return {"ok": False, "error": "No price data could be fetched."}
+        df = build_observations(hist, horizon=horizon, sample_every=max(1, horizon))
+        if df is None or df.empty:
+            return {"ok": False, "error": "No observations produced."}
+
+        n = len(df)
+        ic = _spearman(df["score"], df["fwd_ret"])
+        df = df.copy()
+        try:
+            df["decile"] = pd.qcut(df["score"].rank(method="first"), 10, labels=False) + 1
+        except Exception:
+            df["decile"] = pd.cut(df["score"], 10, labels=False) + 1
+        g = df.groupby("decile")
+        deciles = []
+        for d, sub in g:
+            deciles.append({
+                "decile": int(d),
+                "n": int(len(sub)),
+                "score_min": round(float(sub["score"].min()), 1),
+                "score_max": round(float(sub["score"].max()), 1),
+                "mean_fwd_ret_pct": round(float(sub["fwd_ret"].mean() * 100), 3),
+                "hit_rate_pct": round(float((sub["fwd_ret"] > 0).mean() * 100), 1),
+            })
+        means = [d["mean_fwd_ret_pct"] for d in deciles]
+        up_steps = sum(1 for a, b in zip(means, means[1:]) if b > a)
+        top_minus_bottom = round(means[-1] - means[0], 3) if means else 0.0
+
+        ic = round(float(ic), 4) if ic == ic else 0.0  # NaN guard
+        if abs(ic) < 0.03:
+            verdict = "NO EDGE"
+            detail = ("The score does not rank forward returns — its predictive "
+                      "power is statistically indistinguishable from random. "
+                      "Tuning MIN_SCORE won't change that.")
+        elif ic >= 0.03 and up_steps >= 6 and top_minus_bottom > 0:
+            verdict = "SIGNAL"
+            detail = ("The score orders returns: higher deciles tend to earn more. "
+                      "MIN_SCORE tuning is justified around where the slope rises.")
+        else:
+            verdict = "MIXED"
+            detail = ("Some correlation, but not cleanly monotonic. Treat any "
+                      "threshold tuning with suspicion.")
+
+        return {
+            "ok": True,
+            "generated_at": datetime.now().isoformat(),
+            "universe_size": len(hist),
+            "n_observations": n,
+            "horizon": horizon,
+            "years": years,
+            "rank_ic": ic,
+            "top_minus_bottom_pct": top_minus_bottom,
+            "monotonic_up_steps": up_steps,
+            "verdict": verdict,
+            "detail": detail,
+            "deciles": deciles,
+            "caveats": ("Gross of costs, survivorship-biased (current names only), "
+                        "and overlapping windows. Treat a positive result as an "
+                        "optimistic ceiling."),
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
+
+
 def decile_study(df: pd.DataFrame, horizon: int) -> pd.DataFrame:
     """Bucket observations into deciles by score and report mean forward return
     per decile, plus the rank Information Coefficient (the headline number)."""

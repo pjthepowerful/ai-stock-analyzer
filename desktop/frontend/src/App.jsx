@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.47.0'
-const VERSION_DATE = 'July 24, 2026'
+const VERSION = '3.48.0'
+const VERSION_DATE = 'July 26, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.48.0', d: 'July 26, 2026', changes: [
+    'New admin Signal Validation panel: runs a real decile / rank-IC study on the score and shows whether it actually predicts forward returns — an honest instrument, not a confluence display.',
+  ]},
   { v: '3.47.0', d: 'July 24, 2026', changes: [
     'Ask about companies by name and Paula pulls live data for all of them — “Tesla or Google”, “Netflix vs Disney” now price both, not just one.',
     'If live data can’t be pulled for one stock in your question, Paula now says so plainly instead of glossing over it.',
@@ -3076,6 +3079,42 @@ function AdminPanel({ token, onClose }) {
 
   const [confirmDelete, setConfirmDelete] = useState(null)  // report id awaiting confirm
 
+  // ── Signal Validation ──
+  const [sigval, setSigval] = useState(null)         // last result
+  const [sigvalStatus, setSigvalStatus] = useState('idle')
+  const [sigvalHorizon, setSigvalHorizon] = useState(5)
+  const sigvalPoll = useRef(null)
+
+  const loadSigval = async () => {
+    try {
+      const r = await f(API + '/api/admin/signal-validation', { headers: { Authorization: 'Bearer ' + token } }).then(r => r.json())
+      if (r && r.ok) {
+        if (r.result) setSigval(r.result)
+        setSigvalStatus(r.status || 'idle')
+        if (r.status === 'running' && !sigvalPoll.current) startSigvalPoll()
+        if (r.status !== 'running' && sigvalPoll.current) { clearInterval(sigvalPoll.current); sigvalPoll.current = null }
+      }
+    } catch { /* offline */ }
+  }
+
+  const startSigvalPoll = () => {
+    sigvalPoll.current = setInterval(loadSigval, 4000)
+  }
+
+  const runSigval = async () => {
+    setSigvalStatus('running')
+    await f(API + '/api/admin/signal-validation/run', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ horizon: sigvalHorizon })
+    }).catch(() => {})
+    startSigvalPoll()
+  }
+
+  useEffect(() => {
+    loadSigval()
+    return () => { if (sigvalPoll.current) clearInterval(sigvalPoll.current) }
+  }, [])
+
   const deleteReport = async (id) => {
     setReports(prev => prev.filter(r => r.id !== id))
     if (expandedReport === id) setExpandedReport(null)
@@ -3163,6 +3202,64 @@ function AdminPanel({ token, onClose }) {
               </div>
             ))}
           </div>}
+
+          {/* ── Signal Validation: the honest instrument ── */}
+          <div style={{display:'flex',alignItems:'center',marginTop:20,marginBottom:8}}>
+            <span style={{fontSize:'.52rem',textTransform:'uppercase',letterSpacing:'.12em',color:'var(--dim)',fontWeight:700}}>Signal Validation</span>
+            <select value={sigvalHorizon} onChange={e => setSigvalHorizon(parseInt(e.target.value))} disabled={sigvalStatus==='running'}
+              style={{marginLeft:'auto',background:'var(--c2)',border:'1px solid var(--brd)',borderRadius:6,padding:'3px 8px',color:'var(--lt)',fontSize:'.5rem'}}>
+              <option value={1}>1-day</option><option value={2}>2-day</option>
+              <option value={3}>3-day</option><option value={5}>5-day</option>
+            </select>
+            <button onClick={runSigval} disabled={sigvalStatus==='running'}
+              style={{marginLeft:6,background:sigvalStatus==='running'?'var(--c2)':'var(--grn)',border:'none',borderRadius:6,padding:'4px 12px',color:sigvalStatus==='running'?'var(--dim)':'#04130d',fontSize:'.5rem',fontWeight:700,cursor:sigvalStatus==='running'?'default':'pointer'}}>
+              {sigvalStatus==='running' ? 'Running…' : (sigval ? 'Re-run' : 'Run analysis')}
+            </button>
+          </div>
+          <div style={{fontSize:'.5rem',color:'var(--dim)',lineHeight:1.5,marginBottom:8}}>
+            Measures whether the score actually predicts forward returns — the real out-of-sample rank IC, not a confluence display. Higher deciles should earn more if the score works.
+          </div>
+
+          {sigvalStatus==='running' && !sigval && (
+            <div style={{color:'var(--dim)',fontSize:'.58rem',padding:'12px 4px'}}>Downloading prices and scoring thousands of setups… this takes a few minutes.</div>
+          )}
+          {sigval && sigval.ok && (
+            <div style={{background:'var(--c2)',borderRadius:8,padding:'12px',marginBottom:6}}>
+              <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
+                <span style={{fontSize:'.7rem',fontWeight:800,letterSpacing:'.04em',
+                  color: sigval.verdict==='SIGNAL'?'var(--grn)':sigval.verdict==='NO EDGE'?'var(--red)':'var(--lt)'}}>{sigval.verdict}</span>
+                <span style={{fontSize:'.56rem',color:'var(--dim)'}}>Rank IC <b style={{color:'var(--wh)'}}>{sigval.rank_ic>=0?'+':''}{sigval.rank_ic.toFixed(4)}</b> · {sigval.horizon}-day · {sigval.n_observations.toLocaleString()} obs</span>
+              </div>
+              <div style={{fontSize:'.56rem',color:'var(--lt)',lineHeight:1.5,marginBottom:10}}>{sigval.detail}</div>
+              {/* decile bars */}
+              <div style={{display:'flex',alignItems:'flex-end',gap:3,height:70,marginBottom:4}}>
+                {sigval.deciles.map(d => {
+                  const mx = Math.max(...sigval.deciles.map(x => Math.abs(x.mean_fwd_ret_pct)), 0.01)
+                  const h = Math.abs(d.mean_fwd_ret_pct)/mx*32
+                  const pos = d.mean_fwd_ret_pct >= 0
+                  return (
+                    <div key={d.decile} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%'}} title={`Decile ${d.decile}: ${d.mean_fwd_ret_pct>=0?'+':''}${d.mean_fwd_ret_pct}% · score ${d.score_min}-${d.score_max} · n=${d.n}`}>
+                      <div style={{flex:1,display:'flex',flexDirection:'column',justifyContent:'flex-end',width:'100%'}}>
+                        {pos && <div style={{height:h+'px',background:'var(--grn)',borderRadius:'2px 2px 0 0'}} />}
+                      </div>
+                      <div style={{height:1,background:'var(--brd)',width:'100%'}} />
+                      <div style={{flex:1,display:'flex',flexDirection:'column',justifyContent:'flex-start',width:'100%'}}>
+                        {!pos && <div style={{height:h+'px',background:'var(--red)',borderRadius:'0 0 2px 2px'}} />}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:'.44rem',color:'var(--dim)',marginBottom:8}}>
+                <span>← lowest score</span><span>mean forward return by decile</span><span>highest score →</span>
+              </div>
+              <div style={{fontSize:'.46rem',color:'var(--dim)',lineHeight:1.5,fontStyle:'italic'}}>{sigval.caveats}</div>
+              {sigval.generated_at && <div style={{fontSize:'.44rem',color:'var(--dim)',marginTop:6}}>Last run {new Date(sigval.generated_at).toLocaleString()}</div>}
+            </div>
+          )}
+          {sigval && !sigval.ok && (
+            <div style={{color:'var(--red)',fontSize:'.56rem',padding:'8px 4px'}}>Couldn't run: {sigval.error}</div>
+          )}
 
           <div style={{display:'flex',alignItems:'center',marginTop:20,marginBottom:8}}>
             <span style={{fontSize:'.52rem',textTransform:'uppercase',letterSpacing:'.12em',color:'var(--dim)',fontWeight:700}}>Bug Reports{reports.length?' · '+reports.length:''}</span>

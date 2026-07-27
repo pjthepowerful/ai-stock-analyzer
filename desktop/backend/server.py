@@ -1000,7 +1000,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.47.0",  # bump marker — confirms running code
+        "build": "v3.48.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -3130,3 +3130,69 @@ async def admin_stats(authorization: str = Header(None)):
                 "autopilot_owner": autopilot_owner_id}
     finally:
         db.close()
+
+
+# ── Signal Validation ────────────────────────────────────────────────────────
+# The honest instrument: runs the decile/IC study in-app and reports the score's
+# REAL out-of-sample predictive power. Admin-only. The run is slow (downloads +
+# scores thousands of bars), so it runs in the background and the last result is
+# cached to disk so the panel loads instantly.
+_signal_validation = {"status": "idle", "result": None, "error": None, "started_at": None}
+_SIGVAL_CACHE = pathlib.Path(os.environ.get("DB_DIR", os.path.dirname(os.path.abspath(__file__)))) / "signal_validation.json"
+
+
+def _load_sigval_cache():
+    try:
+        if _SIGVAL_CACHE.exists():
+            return json.loads(_SIGVAL_CACHE.read_text())
+    except Exception:
+        pass
+    return None
+
+
+@app.get("/api/admin/signal-validation")
+async def get_signal_validation(authorization: str = Header(None)):
+    """Return the current run status and the last computed result (from disk if
+    this process hasn't run one yet)."""
+    user = _get_user(authorization)
+    if not user or user.get("email", "").lower() != ADMIN_EMAIL:
+        return {"ok": False, "error": "Unauthorized"}
+    result = _signal_validation["result"] or _load_sigval_cache()
+    return {"ok": True, "status": _signal_validation["status"],
+            "result": result, "error": _signal_validation["error"]}
+
+
+@app.post("/api/admin/signal-validation/run")
+async def run_signal_validation_endpoint(body: dict = None, authorization: str = Header(None)):
+    """Kick off a background validation run. Returns immediately; poll the GET
+    endpoint for completion."""
+    user = _get_user(authorization)
+    if not user or user.get("email", "").lower() != ADMIN_EMAIL:
+        return {"ok": False, "error": "Unauthorized"}
+    if _signal_validation["status"] == "running":
+        return {"ok": True, "status": "running"}  # already going
+
+    horizon = int((body or {}).get("horizon", 5))
+    _signal_validation.update({"status": "running", "error": None,
+                               "started_at": time.time()})
+
+    async def _bg():
+        try:
+            import signal_study
+            loop = asyncio.get_event_loop()
+            res = await loop.run_in_executor(
+                _scan_executor,
+                lambda: signal_study.run_signal_validation(years=2.0, horizon=horizon))
+            _signal_validation["result"] = res
+            _signal_validation["status"] = "done" if res.get("ok") else "error"
+            _signal_validation["error"] = None if res.get("ok") else res.get("error")
+            try:
+                _SIGVAL_CACHE.write_text(json.dumps(res))
+            except Exception:
+                pass
+        except Exception as e:
+            _signal_validation["status"] = "error"
+            _signal_validation["error"] = str(e)[:200]
+
+    asyncio.create_task(_bg())
+    return {"ok": True, "status": "running"}
