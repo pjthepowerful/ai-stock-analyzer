@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.0.0'
+const VERSION = '4.0.1'
 const VERSION_DATE = 'July 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.0.1', d: 'July 28, 2026', changes: [
+    'Buying power now shows thousands separators as you type (e.g. 1,172.30).',
+  ]},
   { v: '4.0.0', d: 'July 28, 2026', changes: [
     'Co-Pilot now respects a position cap like autopilot — it won’t suggest more stocks than you can hold, showing the top picks as actionable and the rest as over-cap.',
     'Fixed a chart bug where moving-average overlays could error out while switching tickers.',
@@ -3558,6 +3561,23 @@ function CoPilot({ token, isPlus, setView }) {
   const card = { background: 'var(--c2)', borderRadius: 10, padding: 14, marginBottom: 10 }
   const lbl = { fontSize: '.5rem', textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--dim)', fontWeight: 700 }
 
+  // Display the buying-power value with thousands separators while keeping the
+  // stored value a plain number string. Preserves a trailing "." or decimals
+  // the user is mid-typing so the cursor doesn't fight them.
+  const fmtBP = (v) => {
+    if (v === '' || v == null) return ''
+    const [i, d] = String(v).split('.')
+    const withCommas = (i || '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    return d !== undefined ? withCommas + '.' + d : withCommas
+  }
+  const onBPChange = (raw) => {
+    let s = raw.replace(/,/g, '').replace(/[^0-9.]/g, '')
+    const parts = s.split('.')
+    if (parts.length > 2) s = parts[0] + '.' + parts.slice(1).join('')  // one dot only
+    if (parts.length === 2 && parts[1].length > 2) s = parts[0] + '.' + parts[1].slice(0, 2)  // max 2 decimals
+    saveBP(s === '' ? '' : s)
+  }
+
   return (
     <div style={{ maxWidth: 620, margin: '0 auto', padding: '20px 16px', width: '100%', overflowY: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
@@ -3573,8 +3593,8 @@ function CoPilot({ token, isPlus, setView }) {
         <div style={lbl}>Buying power</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
           <span style={{ fontSize: '1.1rem', color: 'var(--dim)' }}>$</span>
-          <input type="number" inputMode="decimal" value={buyingPower} placeholder="0.00"
-            onChange={e => saveBP(e.target.value === '' ? '' : parseFloat(e.target.value))}
+          <input type="text" inputMode="decimal" value={fmtBP(buyingPower)} placeholder="0.00"
+            onChange={e => onBPChange(e.target.value)}
             style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: '1px solid var(--brd)', color: 'var(--wh)', fontSize: '1.1rem', padding: '4px 0', outline: 'none' }} />
         </div>
         <div style={{ fontSize: '.5rem', color: 'var(--dim)', marginTop: 6 }}>Fractional shares: enabled</div>
