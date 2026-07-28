@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.0.2'
+const VERSION = '4.0.3'
 const VERSION_DATE = 'July 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.0.3', d: 'July 28, 2026', changes: [
+    'Co-Pilot P/L now updates live — refreshes every 60 seconds (and the moment you return to the tab), with a “last updated” time. Pauses in the background to save data.',
+  ]},
   { v: '4.0.2', d: 'July 28, 2026', changes: [
     'Co-Pilot no longer dumps all your buying power into one stock — you now choose how many positions to spread across (default 4), separate from the autopilot bot’s cap.',
   ]},
@@ -3479,6 +3482,9 @@ function CoPilot({ token, isPlus, setView }) {
   const prevTickers = useRef([])
   const scanTimer = useRef(null)
   const priceTimer = useRef(null)
+  const positionsRef = useRef(positions)
+  const [lastPnl, setLastPnl] = useState(null)
+  const [pnlRefreshing, setPnlRefreshing] = useState(false)
 
   const savePositions = (p) => { setPositions(p); localStorage.setItem(POS_KEY, JSON.stringify(p)) }
   const saveBP = (v) => { setBuyingPower(v); localStorage.setItem(BP_KEY, v === '' ? '' : String(v)) }
@@ -3508,24 +3514,42 @@ function CoPilot({ token, isPlus, setView }) {
   }
 
   const refreshPrices = async () => {
-    if (!positions.length) return
-    const updated = await Promise.all(positions.map(async pos => {
+    const cur = positionsRef.current
+    if (!cur.length) return
+    setPnlRefreshing(true)
+    const priceByTicker = {}
+    await Promise.all(cur.map(async pos => {
       try {
         const r = await f(API + '/api/price/' + pos.ticker).then(r => r.json())
-        if (r && r.ok && r.data && r.data.price) return { ...pos, live: r.data.price }
+        if (r && r.ok && r.data && r.data.price) priceByTicker[pos.ticker] = r.data.price
       } catch {}
-      return pos
     }))
-    savePositions(updated)
+    // Merge into the latest positions (not a stale snapshot) so a buy/remove
+    // during the fetch isn't clobbered.
+    const merged = positionsRef.current.map(p => priceByTicker[p.ticker] ? { ...p, live: priceByTicker[p.ticker] } : p)
+    savePositions(merged)
+    setLastPnl(new Date())
+    setPnlRefreshing(false)
   }
 
-  // 5-minute loops: silent re-scan (for alerts) and price refresh (for P/L).
+  // Keep the ref in sync so the interval always sees current positions.
+  useEffect(() => { positionsRef.current = positions }, [positions])
+
+  // Live P/L: refresh every 60s, but only while the tab is visible (don't burn
+  // API calls in the background), and refresh immediately on returning to it.
   useEffect(() => {
     refreshPrices()
     scanTimer.current = setInterval(() => runScan(true), 5 * 60 * 1000)
-    priceTimer.current = setInterval(refreshPrices, 5 * 60 * 1000)
-    return () => { clearInterval(scanTimer.current); clearInterval(priceTimer.current) }
-  }, [positions.length])
+    priceTimer.current = setInterval(() => {
+      if (document.visibilityState === 'visible') refreshPrices()
+    }, 60 * 1000)
+    const onVis = () => { if (document.visibilityState === 'visible') refreshPrices() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      clearInterval(scanTimer.current); clearInterval(priceTimer.current)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [])
 
   const bp = parseFloat(buyingPower) || 0
   // How many positions to spread buying power across. This is YOUR
@@ -3696,7 +3720,12 @@ function CoPilot({ token, isPlus, setView }) {
       {/* Positions */}
       <div style={{ display: 'flex', alignItems: 'center', marginTop: 18, marginBottom: 8 }}>
         <span style={lbl}>Your positions{positions.length ? ' · ' + positions.length : ''}</span>
-        {positions.length > 0 && <button onClick={refreshPrices} style={{ marginLeft: 'auto', background: 'none', border: '1px solid var(--brd)', borderRadius: 6, padding: '3px 10px', color: 'var(--dim)', fontSize: '.5rem', cursor: 'pointer' }}>Refresh P/L</button>}
+        {positions.length > 0 && <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: '.44rem', color: 'var(--dim)' }}>
+            {pnlRefreshing ? 'updating…' : lastPnl ? `live · updated ${lastPnl.toLocaleTimeString()}` : 'live'}
+          </span>
+          <button onClick={refreshPrices} style={{ background: 'none', border: '1px solid var(--brd)', borderRadius: 6, padding: '3px 10px', color: 'var(--dim)', fontSize: '.5rem', cursor: 'pointer' }}>Refresh now</button>
+        </span>}
       </div>
       {positions.length === 0 ? (
         <div style={{ color: 'var(--dim)', fontSize: '.58rem', padding: '10px 2px' }}>No positions yet. Run a scan and add the ones you buy.</div>
