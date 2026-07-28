@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.0.3'
+const VERSION = '4.1.0'
 const VERSION_DATE = 'July 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.1.0', d: 'July 28, 2026', changes: [
+    'Co-Pilot price alerts: set a stop and target when you add a position, and get an on-screen badge (plus a browser notification) the moment price crosses your level — so you don’t miss an exit. You set the levels; it just watches them.',
+  ]},
   { v: '4.0.3', d: 'July 28, 2026', changes: [
     'Co-Pilot P/L now updates live — refreshes every 60 seconds (and the moment you return to the tab), with a “last updated” time. Pauses in the background to save data.',
   ]},
@@ -3483,8 +3486,18 @@ function CoPilot({ token, isPlus, setView }) {
   const scanTimer = useRef(null)
   const priceTimer = useRef(null)
   const positionsRef = useRef(positions)
+  const alertedRef = useRef({})  // ticker -> 'stop' | 'target' | null (last alerted level)
   const [lastPnl, setLastPnl] = useState(null)
   const [pnlRefreshing, setPnlRefreshing] = useState(false)
+
+  // Fire a browser notification if allowed; always keep the in-app badge too.
+  const notify = (text) => {
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification('Paula Co-Pilot', { body: text })
+      }
+    } catch {}
+  }
 
   const savePositions = (p) => { setPositions(p); localStorage.setItem(POS_KEY, JSON.stringify(p)) }
   const saveBP = (v) => { setBuyingPower(v); localStorage.setItem(BP_KEY, v === '' ? '' : String(v)) }
@@ -3527,6 +3540,22 @@ function CoPilot({ token, isPlus, setView }) {
     // Merge into the latest positions (not a stale snapshot) so a buy/remove
     // during the fetch isn't clobbered.
     const merged = positionsRef.current.map(p => priceByTicker[p.ticker] ? { ...p, live: priceByTicker[p.ticker] } : p)
+    // Fire an alert the FIRST time a position crosses its stop/target (tracked in
+    // alertedRef so we don't re-notify every 60s; resets when it crosses back).
+    merged.forEach(p => {
+      const live = p.live || p.avg
+      const key = p.ticker
+      const prev = alertedRef.current[key] || null
+      let now = null
+      if (p.stop && live <= +p.stop) now = 'stop'
+      else if (p.target && live >= +p.target) now = 'target'
+      if (now && now !== prev) {
+        notify(now === 'stop'
+          ? `${p.ticker} hit your stop $${(+p.stop).toFixed(2)} (now $${live.toFixed(2)})`
+          : `${p.ticker} hit your target $${(+p.target).toFixed(2)} (now $${live.toFixed(2)})`)
+      }
+      alertedRef.current[key] = now
+    })
     savePositions(merged)
     setLastPnl(new Date())
     setPnlRefreshing(false)
@@ -3539,6 +3568,7 @@ function CoPilot({ token, isPlus, setView }) {
   // API calls in the background), and refresh immediately on returning to it.
   useEffect(() => {
     refreshPrices()
+    try { if (typeof Notification !== 'undefined' && Notification.permission === 'default') Notification.requestPermission() } catch {}
     scanTimer.current = setInterval(() => runScan(true), 5 * 60 * 1000)
     priceTimer.current = setInterval(() => {
       if (document.visibilityState === 'visible') refreshPrices()
@@ -3565,10 +3595,11 @@ function CoPilot({ token, isPlus, setView }) {
   const startConfirm = (p) => {
     setConfirming(p.ticker)
     const shares = suggestDollars > 0 && p.price ? +(suggestDollars / p.price).toFixed(4) : ''
-    setDraft({ shares: shares || '', price: p.entry || p.price || '' })
+    setDraft({ shares: shares || '', price: p.entry || p.price || '', stop: p.stop || '', target: p.target || '' })
   }
   const addPosition = (p) => {
     const shares = parseFloat(draft.shares), price = parseFloat(draft.price)
+    const stop = parseFloat(draft.stop) || null, target = parseFloat(draft.target) || null
     if (!shares || !price || shares <= 0 || price <= 0) return
     const existing = positions.find(x => x.ticker === p.ticker)
     let next
@@ -3576,9 +3607,9 @@ function CoPilot({ token, isPlus, setView }) {
       // average in
       const totShares = existing.shares + shares
       const avg = (existing.shares * existing.avg + shares * price) / totShares
-      next = positions.map(x => x.ticker === p.ticker ? { ...x, shares: +totShares.toFixed(4), avg: +avg.toFixed(2), live: p.price } : x)
+      next = positions.map(x => x.ticker === p.ticker ? { ...x, shares: +totShares.toFixed(4), avg: +avg.toFixed(2), live: p.price, stop: stop ?? x.stop, target: target ?? x.target } : x)
     } else {
-      next = [...positions, { ticker: p.ticker, shares: +shares.toFixed(4), avg: +price.toFixed(2), live: p.price, stop: p.stop, target: p.target }]
+      next = [...positions, { ticker: p.ticker, shares: +shares.toFixed(4), avg: +price.toFixed(2), live: p.price, stop, target }]
     }
     savePositions(next)
     // deduct from buying power
@@ -3708,6 +3739,19 @@ function CoPilot({ token, isPlus, setView }) {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={lbl}>Stop (alert)</div>
+                    <input type="number" value={draft.stop} placeholder="optional" onChange={e => setDraft({ ...draft, stop: e.target.value })}
+                      style={{ width: '100%', background: 'transparent', border: '1px solid var(--brd)', borderRadius: 6, color: 'var(--red)', padding: '5px 8px', fontSize: '.62rem', marginTop: 3 }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={lbl}>Target (alert)</div>
+                    <input type="number" value={draft.target} placeholder="optional" onChange={e => setDraft({ ...draft, target: e.target.value })}
+                      style={{ width: '100%', background: 'transparent', border: '1px solid var(--brd)', borderRadius: 6, color: 'var(--grn)', padding: '5px 8px', fontSize: '.62rem', marginTop: 3 }} />
+                  </div>
+                </div>
+                <div style={{ fontSize: '.44rem', color: 'var(--dim)', marginTop: 6 }}>You'll get an alert when price crosses either level. Leave blank to skip. (Re-add the ticker to change them.)</div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                   <button onClick={() => addPosition(p)} style={{ flex: 1, background: 'var(--grn)', border: 'none', borderRadius: 6, padding: '7px', color: '#04130d', fontSize: '.55rem', fontWeight: 700, cursor: 'pointer' }}>Confirm buy</button>
                   <button onClick={() => setConfirming(null)} style={{ background: 'none', border: '1px solid var(--brd)', borderRadius: 6, padding: '7px 14px', color: 'var(--dim)', fontSize: '.55rem', cursor: 'pointer' }}>Cancel</button>
                 </div>
@@ -3747,14 +3791,23 @@ function CoPilot({ token, isPlus, setView }) {
             const live = p.live || p.avg
             const pl = (live - p.avg) * p.shares
             const plpct = p.avg > 0 ? (live - p.avg) / p.avg * 100 : 0
+            const hitStop = p.stop && live <= +p.stop
+            const hitTarget = p.target && live >= +p.target
             return (
-              <div key={p.ticker} style={{ ...card, marginBottom: 6 }}>
+              <div key={p.ticker} style={{ ...card, marginBottom: 6, border: hitStop ? '1px solid var(--red)' : hitTarget ? '1px solid var(--grn)' : undefined }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontWeight: 700, color: 'var(--wh)', fontSize: '.72rem' }}>{p.ticker}</span>
                   <span style={{ fontSize: '.52rem', color: 'var(--dim)' }}>{p.shares} sh @ ${p.avg.toFixed(2)}</span>
                   <span style={{ marginLeft: 'auto', fontWeight: 700, fontSize: '.72rem', color: pl >= 0 ? 'var(--grn)' : 'var(--red)' }}>{pl >= 0 ? '+' : '−'}${Math.abs(pl).toFixed(2)}</span>
                   <span style={{ fontSize: '.52rem', color: pl >= 0 ? 'var(--grn)' : 'var(--red)' }}>({plpct >= 0 ? '+' : ''}{plpct.toFixed(1)}%)</span>
                 </div>
+                {(hitStop || hitTarget) && (
+                  <div style={{ marginTop: 7, padding: '6px 9px', borderRadius: 6, fontSize: '.54rem', fontWeight: 700,
+                    background: hitStop ? 'rgba(255,59,92,.14)' : 'rgba(34,197,94,.14)', color: hitStop ? 'var(--red)' : 'var(--grn)' }}>
+                    {hitStop ? `⚠ Hit your stop ($${(+p.stop).toFixed(2)}) — consider selling to cap the loss.`
+                             : `✓ Hit your target ($${(+p.target).toFixed(2)}) — consider taking profit.`}
+                  </div>
+                )}
                 <div style={{ display: 'flex', alignItems: 'center', fontSize: '.5rem', color: 'var(--dim)', marginTop: 5 }}>
                   <span>now ${live.toFixed(2)}{p.stop ? ` · stop $${(+p.stop).toFixed(2)}` : ''}{p.target ? ` · target $${(+p.target).toFixed(2)}` : ''}</span>
                   <button onClick={() => removePosition(p.ticker)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--red)', fontSize: '.5rem', cursor: 'pointer' }}>Remove</button>
