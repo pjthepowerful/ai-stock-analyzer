@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.1.3'
+const VERSION = '4.2.0'
 const VERSION_DATE = 'July 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.2.0', d: 'July 28, 2026', changes: [
+    'Autopilot now takes profits faster — it scales out of winners sooner and starts protecting gains earlier, tightest in day-trade mode so intraday moves aren’t round-tripped.',
+  ]},
   { v: '4.1.3', d: 'July 28, 2026', changes: [
     'Made the Co-Pilot text larger and easier to read.',
   ]},

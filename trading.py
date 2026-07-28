@@ -5001,7 +5001,9 @@ def load_autopilot_config() -> dict:
         "RISK_PER_TRADE": 0.01, "MAX_POS_PCT": 0.10, "MIN_SCORE": 82,
         "MIN_CONFLUENCE": 5, "MIN_RR": 2.0, "STOP_FLOOR": 0.013, "SELL_BELOW": 35,
         "DAILY_LOSS_LIMIT": 0.04 if SWING_MODE else 0.01,
-        "PARTIAL_PROFIT_PCT": 0.04 if SWING_MODE else 0.025,
+        "PARTIAL_PROFIT_PCT": 0.035 if SWING_MODE else 0.015,
+        "TRAIL_ACTIVATE_PCT": 2.5 if SWING_MODE else 1.2,
+        "TRAIL_DISTANCE_PCT": 2.0 if SWING_MODE else 1.2,
         "MAX_DAILY_ENTRIES": 4,
         "MAX_HOLD_DAYS": SWING_MAX_HOLD_DAYS if SWING_MODE else 0,
         "STALE_MINUTES": 0 if SWING_MODE else 120,
@@ -5025,6 +5027,20 @@ def load_autopilot_config() -> dict:
         params["PARTIAL_PROFIT_PCT"] = 0.04
         params["STALE_MINUTES"] = 0
         params["DAILY_LOSS_LIMIT"] = 0.04
+
+    # ── Faster profit-taking (especially for day trading) ──
+    # Bank gains quicker rather than round-tripping winners: scale out half of a
+    # position sooner, and start ratcheting the stop up earlier and tighter. These
+    # are FORCED (not setdefault) so they take effect over any stale config, and
+    # day-trade mode is the tightest since intraday moves reverse fast.
+    if SWING_MODE:
+        params["PARTIAL_PROFIT_PCT"] = 0.035  # half off at +3.5% (was 4%)
+        params["TRAIL_ACTIVATE_PCT"] = 2.5    # start trailing at +2.5% (was 3%)
+        params["TRAIL_DISTANCE_PCT"] = 2.0    # stop 2% below the high (was 2.5%)
+    else:
+        params["PARTIAL_PROFIT_PCT"] = 0.015  # half off at +1.5% — quick day scalp
+        params["TRAIL_ACTIVATE_PCT"] = 1.2    # start trailing at +1.2%
+        params["TRAIL_DISTANCE_PCT"] = 1.2    # stop 1.2% below high — lock gains tight
 
     # ── AUTO RISK ────────────────────────────────────────────────────────────
     # Risk per trade is determined automatically from market conditions, the
