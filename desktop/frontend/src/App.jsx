@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.1.0'
+const VERSION = '4.1.1'
 const VERSION_DATE = 'July 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.1.1', d: 'July 28, 2026', changes: [
+    'Co-Pilot now shows the exact dollar amount you’d gain if your target hits and lose if your stop hits — both on each position and as a preview before you buy (with the reward-to-risk ratio).',
+  ]},
   { v: '4.1.0', d: 'July 28, 2026', changes: [
     'Co-Pilot price alerts: set a stop and target when you add a position, and get an on-screen badge (plus a browser notification) the moment price crosses your level — so you don’t miss an exit. You set the levels; it just watches them.',
   ]},
@@ -3751,6 +3754,19 @@ function CoPilot({ token, isPlus, setView }) {
                   </div>
                 </div>
                 <div style={{ fontSize: '.44rem', color: 'var(--dim)', marginTop: 6 }}>You'll get an alert when price crosses either level. Leave blank to skip. (Re-add the ticker to change them.)</div>
+                {(() => {
+                  const s = parseFloat(draft.shares), pr = parseFloat(draft.price)
+                  const st = parseFloat(draft.stop), tg = parseFloat(draft.target)
+                  if (!s || !pr) return null
+                  const gain = tg ? (tg - pr) * s : null
+                  const loss = st ? (st - pr) * s : null
+                  if (gain == null && loss == null) return null
+                  return <div style={{ fontSize: '.5rem', marginTop: 6, display: 'flex', gap: 12 }}>
+                    {gain != null && <span style={{ color: 'var(--grn)' }}>At target: {gain >= 0 ? '+' : '−'}${Math.abs(gain).toFixed(2)}</span>}
+                    {loss != null && <span style={{ color: 'var(--red)' }}>At stop: {loss >= 0 ? '+' : '−'}${Math.abs(loss).toFixed(2)}</span>}
+                    {gain != null && loss != null && Math.abs(loss) > 0 && <span style={{ color: 'var(--dim)' }}>({(Math.abs(gain) / Math.abs(loss)).toFixed(1)}:1)</span>}
+                  </div>
+                })()}
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                   <button onClick={() => addPosition(p)} style={{ flex: 1, background: 'var(--grn)', border: 'none', borderRadius: 6, padding: '7px', color: '#04130d', fontSize: '.55rem', fontWeight: 700, cursor: 'pointer' }}>Confirm buy</button>
                   <button onClick={() => setConfirming(null)} style={{ background: 'none', border: '1px solid var(--brd)', borderRadius: 6, padding: '7px 14px', color: 'var(--dim)', fontSize: '.55rem', cursor: 'pointer' }}>Cancel</button>
@@ -3793,6 +3809,9 @@ function CoPilot({ token, isPlus, setView }) {
             const plpct = p.avg > 0 ? (live - p.avg) / p.avg * 100 : 0
             const hitStop = p.stop && live <= +p.stop
             const hitTarget = p.target && live >= +p.target
+            // Total $ outcome from your avg cost if each level is hit.
+            const atTarget = p.target ? (+p.target - p.avg) * p.shares : null
+            const atStop = p.stop ? (+p.stop - p.avg) * p.shares : null
             return (
               <div key={p.ticker} style={{ ...card, marginBottom: 6, border: hitStop ? '1px solid var(--red)' : hitTarget ? '1px solid var(--grn)' : undefined }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -3801,6 +3820,22 @@ function CoPilot({ token, isPlus, setView }) {
                   <span style={{ marginLeft: 'auto', fontWeight: 700, fontSize: '.72rem', color: pl >= 0 ? 'var(--grn)' : 'var(--red)' }}>{pl >= 0 ? '+' : '−'}${Math.abs(pl).toFixed(2)}</span>
                   <span style={{ fontSize: '.52rem', color: pl >= 0 ? 'var(--grn)' : 'var(--red)' }}>({plpct >= 0 ? '+' : ''}{plpct.toFixed(1)}%)</span>
                 </div>
+                {(atTarget != null || atStop != null) && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 7 }}>
+                    {atTarget != null && (
+                      <div style={{ flex: 1, background: 'rgba(34,197,94,.10)', borderRadius: 6, padding: '5px 8px' }}>
+                        <div style={{ fontSize: '.42rem', textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--dim)', fontWeight: 700 }}>If target hit</div>
+                        <div style={{ fontSize: '.66rem', fontWeight: 800, color: 'var(--grn)', marginTop: 1 }}>{atTarget >= 0 ? '+' : '−'}${Math.abs(atTarget).toFixed(2)}</div>
+                      </div>
+                    )}
+                    {atStop != null && (
+                      <div style={{ flex: 1, background: 'rgba(255,59,92,.10)', borderRadius: 6, padding: '5px 8px' }}>
+                        <div style={{ fontSize: '.42rem', textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--dim)', fontWeight: 700 }}>If stop hit</div>
+                        <div style={{ fontSize: '.66rem', fontWeight: 800, color: 'var(--red)', marginTop: 1 }}>{atStop >= 0 ? '+' : '−'}${Math.abs(atStop).toFixed(2)}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {(hitStop || hitTarget) && (
                   <div style={{ marginTop: 7, padding: '6px 9px', borderRadius: 6, fontSize: '.54rem', fontWeight: 700,
                     background: hitStop ? 'rgba(255,59,92,.14)' : 'rgba(34,197,94,.14)', color: hitStop ? 'var(--red)' : 'var(--grn)' }}>
