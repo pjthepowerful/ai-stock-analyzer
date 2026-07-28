@@ -6649,8 +6649,22 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
         lines.append("**Based on my 21-factor signal engine — not financial advice. You make the call.**")
         if not is_plus:
             lines.append("\n**Free scans cover the ~100 most-liquid stocks. Paula Plus scans the full ~1,000-name universe for more setups.**")
+        # Structured picks for programmatic consumers (the Co-Pilot). Same data
+        # the text above is built from, machine-readable.
+        _picks = []
+        for p in buys:
+            _tr = p.get("trade", {})
+            _picks.append({
+                "ticker": p["ticker"], "price": p["price"],
+                "change_pct": p.get("change_pct", 0), "score": p["score"],
+                "setup": p.get("setup", ""), "signals": (p.get("signals") or [])[:3],
+                "entry": _tr.get("entry", p["price"]),
+                "stop": _tr.get("stop_loss", 0), "target": _tr.get("target_1", 0),
+                "rr": p.get("rr", 0),
+            })
         return {"ok": True, "type": "analysis", "ticker": buys[0]["ticker"],
                 "tickers": [p["ticker"] for p in buys],
+                "picks": _picks,
                 "msg": "\n".join(lines)}
 
     if t == "chart":

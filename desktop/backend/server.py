@@ -1000,7 +1000,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.49.0",  # bump marker — confirms running code
+        "build": "v3.50.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1307,6 +1307,33 @@ def market_tape():
         _TAPE_CACHE["data"] = out
         _TAPE_CACHE["at"] = _t.time()
     return {"ok": True, "tape": out or _TAPE_CACHE["data"]}
+
+
+@app.post("/api/copilot/scan")
+async def copilot_scan(body: dict = None, authorization: str = Header(None)):
+    """Run a market scan and return structured picks for the Co-Pilot (buying
+    power sizing, confirm-each). Same engine as autopilot — the picks carry the
+    same unvalidated signal, so the UI tags them accordingly."""
+    user = _get_user(authorization)
+    body = body or {}
+    category = body.get("category", "all")
+    _is_plus = bool(user) and (auth.is_plus(user["id"]) or _can_autopilot(user)
+                               or (user.get("email", "").lower() == ADMIN_EMAIL)) if user else False
+    try:
+        loop = asyncio.get_event_loop()
+        intent = {"type": "stock_ideas", "category": category, "_original_msg": "copilot scan"}
+        result = await asyncio.wait_for(
+            loop.run_in_executor(_scan_executor,
+                lambda: engine.execute(intent, is_plus=_is_plus)),
+            timeout=240)
+        if not result or not result.get("ok"):
+            return {"ok": False, "error": (result or {}).get("error", "Scan failed")}
+        return {"ok": True, "picks": result.get("picks", []),
+                "count": len(result.get("picks", []))}
+    except asyncio.TimeoutError:
+        return {"ok": False, "error": "Scan timed out — try again."}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
 
 
 @app.get("/api/price/{ticker}")

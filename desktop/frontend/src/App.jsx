@@ -20,11 +20,16 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.49.0'
-const VERSION_DATE = 'July 27, 2026'
+const VERSION = '3.50.0'
+const VERSION_DATE = 'July 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '3.50.0', d: 'July 28, 2026', changes: [
+    'New Co-Pilot (under Autopilot): enter your buying power, scan for picks, and it suggests a position size for each — you confirm the ones you actually buy.',
+    'Tracks your positions with live P/L, refreshing every 5 minutes, and re-scans for new picks automatically.',
+    'Fractional shares supported. Everything stays on your device.',
+  ]},
   { v: '3.49.0', d: 'July 27, 2026', changes: [
     'Ask about specific stocks by name (“when should I buy TSLA and GOOG?”) and Paula now analyzes those tickers instead of running a generic market scan.',
     'Fixed shorthand tickers like GOOG resolving to the right stock in multi-stock questions.',
@@ -2225,6 +2230,9 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
           <button className={'rl-item rl-ap'+(autopilot?' rl-ap-on':'')} onClick={()=>toggleAutopilot()} title="Autopilot">
             <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg></i><span>Autopilot<small className={autopilot?'c-on':''}>{autopilot?'on':'off'}</small></span>
           </button>
+          <button className={'rl-item'+(view==='copilot'?' rl-on':'')} onClick={()=>{setView('copilot');if(window.innerWidth<=760)setSideOpen(false)}} title="Co-Pilot — scan picks, position sizing, live P/L">
+            <i className="rl-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 6v6l4 2"/></svg></i><span>Co-Pilot</span>
+          </button>
           </>}
           <div className="rl-sec">Chats</div>
           {(()=>{
@@ -2304,6 +2312,8 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
         :view==='stats'?<DashView perf={perf}/>
 
         :view==='plus'?<PlusPage isPlus={isPlus} token={token} setView={setView} onUnlocked={()=>setUser&&setUser(u=>({...u,plus:true}))}/>
+
+        :view==='copilot'?<CoPilot token={token} isPlus={isPlus} setView={setView}/>
 
         :view==='settings'?<SetView settings={settings} update={updateSetting} user={user} token={token} logout={logout} autopilot={autopilot} setAutopilot={setAutopilot} persist={persist} setActiveChatId={setActiveChatId} setMessages={setMessages} setShowChangelog={setShowChangelog} setUser={setUser} theme={theme} setTheme={setTheme} setView={setView}/>
         :(<>
@@ -3436,6 +3446,233 @@ function DashView({perf}){
     {d.recent_trades?.length>0&&<div className="card wide"><label>Recent Trades</label>{d.recent_trades.slice().reverse().slice(0,12).map((t,i)=>(
       <div key={i} className="tr-row"><span className={'tr-act '+(t.action==='buy'?'up':'dn')}>{t.action?.toUpperCase()}</span><span className="tr-sym">{t.ticker}</span><span className="tr-time">{t.time?.slice(11,16)}</span></div>))}</div>}
   </div>)
+}
+
+function CoPilot({ token, isPlus, setView }) {
+  // Manual co-pilot: scan for picks, size positions against your buying power
+  // (confirm each), then track your entered positions with live P/L. Positions
+  // and buying power are stored on THIS device only (per the user's choice).
+  const BP_KEY = 'paula-copilot-bp'
+  const POS_KEY = 'paula-copilot-positions'
+  const [buyingPower, setBuyingPower] = useState(() => parseFloat(localStorage.getItem(BP_KEY) || '') || '')
+  const [positions, setPositions] = useState(() => { try { return JSON.parse(localStorage.getItem(POS_KEY) || '[]') } catch { return [] } })
+  const [picks, setPicks] = useState([])
+  const [scanning, setScanning] = useState(false)
+  const [scanErr, setScanErr] = useState('')
+  const [lastScan, setLastScan] = useState(null)
+  const [confirming, setConfirming] = useState(null)  // ticker being confirmed
+  const [draft, setDraft] = useState({ shares: '', price: '' })
+  const [newAlert, setNewAlert] = useState(null)
+  const prevTickers = useRef([])
+  const scanTimer = useRef(null)
+  const priceTimer = useRef(null)
+
+  const savePositions = (p) => { setPositions(p); localStorage.setItem(POS_KEY, JSON.stringify(p)) }
+  const saveBP = (v) => { setBuyingPower(v); localStorage.setItem(BP_KEY, v === '' ? '' : String(v)) }
+
+  const runScan = async (silent = false) => {
+    if (!silent) { setScanning(true); setScanErr('') }
+    try {
+      const r = await f(API + '/api/copilot/scan', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ category: 'all' })
+      }).then(r => r.json())
+      if (r && r.ok) {
+        const newPicks = r.picks || []
+        // Alert on tickers that weren't in the previous scan.
+        const prev = prevTickers.current
+        const fresh = newPicks.map(p => p.ticker).filter(t => !prev.includes(t))
+        if (silent && prev.length && fresh.length) setNewAlert(fresh)
+        prevTickers.current = newPicks.map(p => p.ticker)
+        setPicks(newPicks)
+        setLastScan(new Date())
+      } else if (!silent) {
+        setScanErr(r?.error || 'Scan failed')
+      }
+    } catch { if (!silent) setScanErr('Network error') }
+    if (!silent) setScanning(false)
+  }
+
+  const refreshPrices = async () => {
+    if (!positions.length) return
+    const updated = await Promise.all(positions.map(async pos => {
+      try {
+        const r = await f(API + '/api/price/' + pos.ticker).then(r => r.json())
+        if (r && r.ok && r.data && r.data.price) return { ...pos, live: r.data.price }
+      } catch {}
+      return pos
+    }))
+    savePositions(updated)
+  }
+
+  // 5-minute loops: silent re-scan (for alerts) and price refresh (for P/L).
+  useEffect(() => {
+    refreshPrices()
+    scanTimer.current = setInterval(() => runScan(true), 5 * 60 * 1000)
+    priceTimer.current = setInterval(refreshPrices, 5 * 60 * 1000)
+    return () => { clearInterval(scanTimer.current); clearInterval(priceTimer.current) }
+  }, [positions.length])
+
+  const bp = parseFloat(buyingPower) || 0
+  const suggestDollars = picks.length ? bp / picks.length : 0
+
+  const startConfirm = (p) => {
+    setConfirming(p.ticker)
+    const shares = suggestDollars > 0 && p.price ? +(suggestDollars / p.price).toFixed(4) : ''
+    setDraft({ shares: shares || '', price: p.entry || p.price || '' })
+  }
+  const addPosition = (p) => {
+    const shares = parseFloat(draft.shares), price = parseFloat(draft.price)
+    if (!shares || !price || shares <= 0 || price <= 0) return
+    const existing = positions.find(x => x.ticker === p.ticker)
+    let next
+    if (existing) {
+      // average in
+      const totShares = existing.shares + shares
+      const avg = (existing.shares * existing.avg + shares * price) / totShares
+      next = positions.map(x => x.ticker === p.ticker ? { ...x, shares: +totShares.toFixed(4), avg: +avg.toFixed(2), live: p.price } : x)
+    } else {
+      next = [...positions, { ticker: p.ticker, shares: +shares.toFixed(4), avg: +price.toFixed(2), live: p.price, stop: p.stop, target: p.target }]
+    }
+    savePositions(next)
+    // deduct from buying power
+    if (bp > 0) saveBP(Math.max(0, +(bp - shares * price).toFixed(2)))
+    setConfirming(null)
+  }
+  const removePosition = (ticker) => savePositions(positions.filter(x => x.ticker !== ticker))
+
+  const posValue = positions.reduce((s, p) => s + (p.live || p.avg) * p.shares, 0)
+  const posCost = positions.reduce((s, p) => s + p.avg * p.shares, 0)
+  const totalPL = posValue - posCost
+  const totalPLpct = posCost > 0 ? totalPL / posCost * 100 : 0
+
+  const card = { background: 'var(--c2)', borderRadius: 10, padding: 14, marginBottom: 10 }
+  const lbl = { fontSize: '.5rem', textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--dim)', fontWeight: 700 }
+
+  return (
+    <div style={{ maxWidth: 620, margin: '0 auto', padding: '20px 16px', width: '100%', overflowY: 'auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+        <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--wh)', margin: 0 }}>Co-Pilot</h2>
+        <span style={{ fontSize: '.5rem', background: 'var(--c3,var(--c2))', border: '1px solid var(--brd)', borderRadius: 5, padding: '2px 7px', color: 'var(--dim)' }}>on this device</span>
+      </div>
+      <p style={{ fontSize: '.62rem', color: 'var(--dim)', lineHeight: 1.5, marginBottom: 14 }}>
+        Scan for picks, size each against your buying power, and confirm the ones you actually buy. Then track live P/L. You place the trades in your broker — this is a tracker and sizing helper, not a trading bot.
+      </p>
+
+      {/* Buying power */}
+      <div style={card}>
+        <div style={lbl}>Buying power</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+          <span style={{ fontSize: '1.1rem', color: 'var(--dim)' }}>$</span>
+          <input type="number" inputMode="decimal" value={buyingPower} placeholder="0.00"
+            onChange={e => saveBP(e.target.value === '' ? '' : parseFloat(e.target.value))}
+            style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: '1px solid var(--brd)', color: 'var(--wh)', fontSize: '1.1rem', padding: '4px 0', outline: 'none' }} />
+        </div>
+        <div style={{ fontSize: '.5rem', color: 'var(--dim)', marginTop: 6 }}>Fractional shares: enabled</div>
+      </div>
+
+      {/* Scan */}
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8, marginTop: 4 }}>
+        <span style={lbl}>Scan picks{picks.length ? ' · ' + picks.length : ''}</span>
+        <button onClick={() => runScan(false)} disabled={scanning}
+          style={{ marginLeft: 'auto', background: scanning ? 'var(--c2)' : 'var(--grn)', border: 'none', borderRadius: 7, padding: '6px 14px', color: scanning ? 'var(--dim)' : '#04130d', fontSize: '.55rem', fontWeight: 700, cursor: scanning ? 'default' : 'pointer' }}>
+          {scanning ? 'Scanning…' : (picks.length ? 'Re-scan' : 'Run scan')}
+        </button>
+      </div>
+      {lastScan && <div style={{ fontSize: '.46rem', color: 'var(--dim)', marginBottom: 8 }}>Last scan {lastScan.toLocaleTimeString()} · auto re-scans every 5 min</div>}
+      {newAlert && <div style={{ background: 'rgba(34,197,94,.12)', border: '1px solid var(--grn)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: '.56rem', color: 'var(--grn)', display: 'flex', alignItems: 'center' }}>
+        New in latest scan: {newAlert.join(', ')}
+        <button onClick={() => setNewAlert(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--dim)', cursor: 'pointer', fontSize: '.7rem' }}>✕</button>
+      </div>}
+      {scanErr && <div style={{ color: 'var(--red)', fontSize: '.56rem', marginBottom: 10 }}>{scanErr}</div>}
+
+      {picks.map(p => {
+        const shares = suggestDollars > 0 && p.price ? (suggestDollars / p.price) : 0
+        const isConfirming = confirming === p.ticker
+        return (
+          <div key={p.ticker} style={card}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontWeight: 700, color: 'var(--wh)', fontSize: '.8rem' }}>{p.ticker}</span>
+              <span style={{ fontSize: '.6rem', color: 'var(--dim)' }}>${p.price?.toFixed(2)}</span>
+              <span style={{ fontSize: '.46rem', background: 'rgba(148,163,184,.15)', color: 'var(--dim)', borderRadius: 4, padding: '2px 6px' }} title="This pick comes from the technical score, which testing shows does not reliably predict returns. Your call.">signal unvalidated</span>
+              {!isConfirming && <button onClick={() => startConfirm(p)} style={{ marginLeft: 'auto', background: 'var(--grn)', border: 'none', borderRadius: 6, padding: '4px 12px', color: '#04130d', fontSize: '.5rem', fontWeight: 700, cursor: 'pointer' }}>Add</button>}
+            </div>
+            {p.setup && <div style={{ fontSize: '.54rem', color: 'var(--dim)', marginTop: 5 }}>{p.setup}</div>}
+            <div style={{ fontSize: '.52rem', color: 'var(--dim)', marginTop: 4 }}>
+              Suggested: <b style={{ color: 'var(--lt)' }}>{shares ? shares.toFixed(4) : '—'}</b> shares (~${suggestDollars.toFixed(0)})
+              {p.stop ? ` · stop $${p.stop.toFixed(2)}` : ''}{p.target ? ` · target $${p.target.toFixed(2)}` : ''}
+            </div>
+            {isConfirming && (
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--brd)' }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={lbl}>Shares</div>
+                    <input type="number" value={draft.shares} onChange={e => setDraft({ ...draft, shares: e.target.value })}
+                      style={{ width: '100%', background: 'transparent', border: '1px solid var(--brd)', borderRadius: 6, color: 'var(--wh)', padding: '5px 8px', fontSize: '.62rem', marginTop: 3 }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={lbl}>Avg price paid</div>
+                    <input type="number" value={draft.price} onChange={e => setDraft({ ...draft, price: e.target.value })}
+                      style={{ width: '100%', background: 'transparent', border: '1px solid var(--brd)', borderRadius: 6, color: 'var(--wh)', padding: '5px 8px', fontSize: '.62rem', marginTop: 3 }} />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <button onClick={() => addPosition(p)} style={{ flex: 1, background: 'var(--grn)', border: 'none', borderRadius: 6, padding: '7px', color: '#04130d', fontSize: '.55rem', fontWeight: 700, cursor: 'pointer' }}>Confirm buy</button>
+                  <button onClick={() => setConfirming(null)} style={{ background: 'none', border: '1px solid var(--brd)', borderRadius: 6, padding: '7px 14px', color: 'var(--dim)', fontSize: '.55rem', cursor: 'pointer' }}>Cancel</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      {/* Positions */}
+      <div style={{ display: 'flex', alignItems: 'center', marginTop: 18, marginBottom: 8 }}>
+        <span style={lbl}>Your positions{positions.length ? ' · ' + positions.length : ''}</span>
+        {positions.length > 0 && <button onClick={refreshPrices} style={{ marginLeft: 'auto', background: 'none', border: '1px solid var(--brd)', borderRadius: 6, padding: '3px 10px', color: 'var(--dim)', fontSize: '.5rem', cursor: 'pointer' }}>Refresh P/L</button>}
+      </div>
+      {positions.length === 0 ? (
+        <div style={{ color: 'var(--dim)', fontSize: '.58rem', padding: '10px 2px' }}>No positions yet. Run a scan and add the ones you buy.</div>
+      ) : (
+        <>
+          <div style={{ ...card, display: 'flex', alignItems: 'center' }}>
+            <div>
+              <div style={lbl}>Total P/L</div>
+              <div style={{ fontSize: '1.05rem', fontWeight: 800, color: totalPL >= 0 ? 'var(--grn)' : 'var(--red)', marginTop: 2 }}>
+                {totalPL >= 0 ? '+' : '−'}${Math.abs(totalPL).toFixed(2)} <span style={{ fontSize: '.6rem' }}>({totalPLpct >= 0 ? '+' : ''}{totalPLpct.toFixed(2)}%)</span>
+              </div>
+            </div>
+            <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+              <div style={lbl}>Market value</div>
+              <div style={{ fontSize: '.75rem', color: 'var(--wh)', marginTop: 2 }}>${posValue.toFixed(2)}</div>
+            </div>
+          </div>
+          {positions.map(p => {
+            const live = p.live || p.avg
+            const pl = (live - p.avg) * p.shares
+            const plpct = p.avg > 0 ? (live - p.avg) / p.avg * 100 : 0
+            return (
+              <div key={p.ticker} style={{ ...card, marginBottom: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontWeight: 700, color: 'var(--wh)', fontSize: '.72rem' }}>{p.ticker}</span>
+                  <span style={{ fontSize: '.52rem', color: 'var(--dim)' }}>{p.shares} sh @ ${p.avg.toFixed(2)}</span>
+                  <span style={{ marginLeft: 'auto', fontWeight: 700, fontSize: '.72rem', color: pl >= 0 ? 'var(--grn)' : 'var(--red)' }}>{pl >= 0 ? '+' : '−'}${Math.abs(pl).toFixed(2)}</span>
+                  <span style={{ fontSize: '.52rem', color: pl >= 0 ? 'var(--grn)' : 'var(--red)' }}>({plpct >= 0 ? '+' : ''}{plpct.toFixed(1)}%)</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', fontSize: '.5rem', color: 'var(--dim)', marginTop: 5 }}>
+                  <span>now ${live.toFixed(2)}{p.stop ? ` · stop $${(+p.stop).toFixed(2)}` : ''}{p.target ? ` · target $${(+p.target).toFixed(2)}` : ''}</span>
+                  <button onClick={() => removePosition(p.ticker)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--red)', fontSize: '.5rem', cursor: 'pointer' }}>Remove</button>
+                </div>
+              </div>
+            )
+          })}
+        </>
+      )}
+      <div style={{ fontSize: '.46rem', color: 'var(--dim)', lineHeight: 1.5, marginTop: 14, fontStyle: 'italic' }}>
+        Picks come from the same 21-factor score as autopilot. Testing shows that score doesn't reliably predict forward returns, so treat picks as starting points, not advice. You place and own every trade.
+      </div>
+    </div>
+  )
 }
 
 function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persist,setActiveChatId,setMessages,setShowChangelog,setUser,theme,setTheme,setView}){
