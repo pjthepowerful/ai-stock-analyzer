@@ -20,11 +20,17 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '3.50.0'
+const VERSION = '4.0.0'
 const VERSION_DATE = 'July 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.0.0', d: 'July 28, 2026', changes: [
+    'Co-Pilot now respects a position cap like autopilot — it won’t suggest more stocks than you can hold, showing the top picks as actionable and the rest as over-cap.',
+    'Fixed a chart bug where moving-average overlays could error out while switching tickers.',
+    'Charts load faster and hit the data source less — recently viewed charts are cached, and the chart no longer rebuilds when it doesn’t need to.',
+    'Reliability cleanup under the hood.',
+  ]},
   { v: '3.50.0', d: 'July 28, 2026', changes: [
     'New Co-Pilot (under Autopilot): enter your buying power, scan for picks, and it suggests a position size for each — you confirm the ones you actually buy.',
     'Tracks your positions with live P/L, refreshing every 5 minutes, and re-scans for new picks automatically.',
@@ -3460,6 +3466,7 @@ function CoPilot({ token, isPlus, setView }) {
   const [scanning, setScanning] = useState(false)
   const [scanErr, setScanErr] = useState('')
   const [lastScan, setLastScan] = useState(null)
+  const [maxPositions, setMaxPositions] = useState(4)
   const [confirming, setConfirming] = useState(null)  // ticker being confirmed
   const [draft, setDraft] = useState({ shares: '', price: '' })
   const [newAlert, setNewAlert] = useState(null)
@@ -3479,6 +3486,7 @@ function CoPilot({ token, isPlus, setView }) {
       }).then(r => r.json())
       if (r && r.ok) {
         const newPicks = r.picks || []
+        if (r.max_positions) setMaxPositions(r.max_positions)
         // Alert on tickers that weren't in the previous scan.
         const prev = prevTickers.current
         const fresh = newPicks.map(p => p.ticker).filter(t => !prev.includes(t))
@@ -3514,7 +3522,8 @@ function CoPilot({ token, isPlus, setView }) {
   }, [positions.length])
 
   const bp = parseFloat(buyingPower) || 0
-  const suggestDollars = picks.length ? bp / picks.length : 0
+  const slotsLeft = Math.max(0, maxPositions - positions.length)
+  const suggestDollars = slotsLeft > 0 ? bp / slotsLeft : 0
 
   const startConfirm = (p) => {
     setConfirming(p.ticker)
@@ -3580,28 +3589,42 @@ function CoPilot({ token, isPlus, setView }) {
         </button>
       </div>
       {lastScan && <div style={{ fontSize: '.46rem', color: 'var(--dim)', marginBottom: 8 }}>Last scan {lastScan.toLocaleTimeString()} · auto re-scans every 5 min</div>}
+      {picks.length > 0 && (() => {
+        const slotsLeft = Math.max(0, maxPositions - positions.length)
+        return <div style={{ fontSize: '.5rem', color: slotsLeft > 0 ? 'var(--dim)' : 'var(--red)', marginBottom: 8 }}>
+          {slotsLeft > 0
+            ? `Position cap ${maxPositions} · you hold ${positions.length} · ${slotsLeft} slot${slotsLeft !== 1 ? 's' : ''} left. Top ${slotsLeft} shown as actionable.`
+            : `At your ${maxPositions}-position cap. Close a position before adding more — matching how autopilot limits exposure.`}
+        </div>
+      })()}
       {newAlert && <div style={{ background: 'rgba(34,197,94,.12)', border: '1px solid var(--grn)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: '.56rem', color: 'var(--grn)', display: 'flex', alignItems: 'center' }}>
         New in latest scan: {newAlert.join(', ')}
         <button onClick={() => setNewAlert(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--dim)', cursor: 'pointer', fontSize: '.7rem' }}>✕</button>
       </div>}
       {scanErr && <div style={{ color: 'var(--red)', fontSize: '.56rem', marginBottom: 10 }}>{scanErr}</div>}
 
-      {picks.map(p => {
+      {(() => { let actionableCount = 0; return picks.map(p => {
+        const held = positions.some(x => x.ticker === p.ticker)
+        // Actionable = within remaining slots and not already held.
+        const actionable = !held && actionableCount < slotsLeft
+        if (actionable) actionableCount++
         const shares = suggestDollars > 0 && p.price ? (suggestDollars / p.price) : 0
         const isConfirming = confirming === p.ticker
         return (
-          <div key={p.ticker} style={card}>
+          <div key={p.ticker} style={{ ...card, opacity: (actionable || held) ? 1 : 0.5 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontWeight: 700, color: 'var(--wh)', fontSize: '.8rem' }}>{p.ticker}</span>
               <span style={{ fontSize: '.6rem', color: 'var(--dim)' }}>${p.price?.toFixed(2)}</span>
               <span style={{ fontSize: '.46rem', background: 'rgba(148,163,184,.15)', color: 'var(--dim)', borderRadius: 4, padding: '2px 6px' }} title="This pick comes from the technical score, which testing shows does not reliably predict returns. Your call.">signal unvalidated</span>
-              {!isConfirming && <button onClick={() => startConfirm(p)} style={{ marginLeft: 'auto', background: 'var(--grn)', border: 'none', borderRadius: 6, padding: '4px 12px', color: '#04130d', fontSize: '.5rem', fontWeight: 700, cursor: 'pointer' }}>Add</button>}
+              {held && <span style={{ fontSize: '.46rem', color: 'var(--grn)', fontWeight: 700 }}>held</span>}
+              {!held && !actionable && <span style={{ fontSize: '.46rem', color: 'var(--dim)' }}>over cap</span>}
+              {actionable && !isConfirming && <button onClick={() => startConfirm(p)} style={{ marginLeft: 'auto', background: 'var(--grn)', border: 'none', borderRadius: 6, padding: '4px 12px', color: '#04130d', fontSize: '.5rem', fontWeight: 700, cursor: 'pointer' }}>Add</button>}
             </div>
             {p.setup && <div style={{ fontSize: '.54rem', color: 'var(--dim)', marginTop: 5 }}>{p.setup}</div>}
-            <div style={{ fontSize: '.52rem', color: 'var(--dim)', marginTop: 4 }}>
+            {actionable && <div style={{ fontSize: '.52rem', color: 'var(--dim)', marginTop: 4 }}>
               Suggested: <b style={{ color: 'var(--lt)' }}>{shares ? shares.toFixed(4) : '—'}</b> shares (~${suggestDollars.toFixed(0)})
               {p.stop ? ` · stop $${p.stop.toFixed(2)}` : ''}{p.target ? ` · target $${p.target.toFixed(2)}` : ''}
-            </div>
+            </div>}
             {isConfirming && (
               <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--brd)' }}>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -3624,7 +3647,7 @@ function CoPilot({ token, isPlus, setView }) {
             )}
           </div>
         )
-      })}
+      }) })()}
 
       {/* Positions */}
       <div style={{ display: 'flex', alignItems: 'center', marginTop: 18, marginBottom: 8 }}>

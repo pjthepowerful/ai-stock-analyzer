@@ -607,7 +607,7 @@ def _get_user(authorization: str = Header(None)):
             if row and row["email"]:
                 user["email"] = row["email"]
             db.close()
-        except: pass
+        except Exception: pass
         # Apply this user's Alpaca keys for the request (per-account trading).
         try:
             creds = auth.get_user_alpaca_creds(user["id"])
@@ -1000,7 +1000,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v3.50.0",  # bump marker — confirms running code
+        "build": "v4.0.0",  # bump marker — confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1328,8 +1328,19 @@ async def copilot_scan(body: dict = None, authorization: str = Header(None)):
             timeout=240)
         if not result or not result.get("ok"):
             return {"ok": False, "error": (result or {}).get("error", "Scan failed")}
-        return {"ok": True, "picks": result.get("picks", []),
-                "count": len(result.get("picks", []))}
+        picks = result.get("picks", [])
+        # Respect autopilot's position cap so the Co-Pilot doesn't suggest a wall
+        # of stocks — same MAX_POSITIONS the bot uses (default 4). The frontend
+        # subtracts positions the user already holds to get "slots left".
+        max_positions = getattr(engine, "SWING_MAX_POSITIONS", 4)
+        try:
+            cfg_path = pathlib.Path(__file__).parent / "autopilot_config.json"
+            if cfg_path.exists():
+                max_positions = int(json.loads(cfg_path.read_text()).get("MAX_POSITIONS", max_positions))
+        except Exception:
+            pass
+        return {"ok": True, "picks": picks, "count": len(picks),
+                "max_positions": max_positions}
     except asyncio.TimeoutError:
         return {"ok": False, "error": "Scan timed out — try again."}
     except Exception as e:
@@ -2552,7 +2563,7 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                         mentioned = float(match.group(1).replace(",", ""))
                         if mentioned > 1 and abs(mentioned - rp) / rp > 0.25:
                             return f"${rp:.2f}"
-                    except: pass
+                    except Exception: pass
                     return match.group(0)
                 return _pre.sub(r'\$(\d{1,5}(?:,\d{3})*\.?\d{0,2})', _repl, text)
             resp = _fix_ai_prices(resp, _real_price)
@@ -2900,7 +2911,7 @@ async def _autopilot_loop():
                         for p in parts_l:
                             if p.startswith("$"):
                                 try: price_l = float(p.replace("$","").replace(",",""))
-                                except: pass
+                                except Exception: pass
                         log_trade(action_l, ticker_l, price=price_l, extra={"source": "autopilot", "score": result.get("score", 0)})
                 parts = []
                 if buys: parts.append(f"📈 {buys} bought")

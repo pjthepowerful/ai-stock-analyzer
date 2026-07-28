@@ -3,6 +3,20 @@ import { createChart, CrosshairMode } from 'lightweight-charts'
 
 const API_DEFAULT = (import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://127.0.0.1:3141' : window.location.origin)).replace(/\/+$/, '')
 
+// Short-lived cache of chart payloads so flipping between tickers/periods (or a
+// re-render) doesn't re-hit the data API and trip rate limits. 60s TTL.
+const _chartCache = new Map()
+const _CHART_TTL = 60000
+function _chartCacheGet(key) {
+  const hit = _chartCache.get(key)
+  if (hit && Date.now() - hit.ts < _CHART_TTL) return hit.data
+  return null
+}
+function _chartCacheSet(key, data) {
+  _chartCache.set(key, { data, ts: Date.now() })
+  if (_chartCache.size > 40) _chartCache.delete(_chartCache.keys().next().value)
+}
+
 export default function Chart({ ticker, signal, height = 360, apiUrl }) {
   const API = apiUrl || API_DEFAULT
   const containerRef = useRef(null)
@@ -11,6 +25,9 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
   const [period, setPeriod] = useState('1y')
   const [loadErr, setLoadErr] = useState(null)
   const [retryTick, setRetryTick] = useState(0)
+  // Stable key over just the signal fields the chart draws, so a re-rendered
+  // parent passing an equivalent `signal` object doesn't rebuild the whole chart.
+  const sigKey = signal ? (signal.action || '') + ':' + JSON.stringify(signal.trade || {}) : ''
 
   useEffect(() => {
     if (!ticker || !containerRef.current) return
@@ -28,6 +45,10 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
       handleScroll: true, handleScale: true,
     })
     chartRef.current = chart
+    // Guards the async data callback below: if the component re-renders or
+    // unmounts mid-fetch, the chart gets disposed — without this, the overlay
+    // code would call addLineSeries on a dead chart ("Object is disposed").
+    let cancelled = false
 
     const candleSeries = chart.addCandlestickSeries({
       upColor: '#00e5a0', downColor: '#ff3b5c',
@@ -38,12 +59,20 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
     const volumeSeries = chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'volume' })
     chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } })
 
-    fetch(`${API}/api/chart/${ticker}?period=${period || '1y'}`, {
-      headers: { 'ngrok-skip-browser-warning': '1' }
-    }).then(r => {
-      if (!r.ok) throw new Error('Failed')
-      return r.json()
-    }).then(data => {
+    const _cacheKey = `${ticker}:${period || '1y'}`
+    const _cached = _chartCacheGet(_cacheKey)
+    const _chartFetch = _cached
+      ? Promise.resolve(_cached)
+      : fetch(`${API}/api/chart/${ticker}?period=${period || '1y'}`, {
+          headers: { 'ngrok-skip-browser-warning': '1' }
+        }).then(r => {
+          if (!r.ok) throw new Error('Failed')
+          return r.json()
+        }).then(d => { if (d && d.ok) _chartCacheSet(_cacheKey, d); return d })
+
+    _chartFetch.then(data => {
+      // Bail if this chart was torn down while the fetch was in flight.
+      if (cancelled || chartRef.current !== chart) return
       if (!data.ok) {
         console.error('Chart API error:', data.error)
         const rateLimited = /rate|too many/i.test(data.error || '')
@@ -158,13 +187,14 @@ export default function Chart({ ticker, signal, height = 360, apiUrl }) {
     const handleResize = () => { if (containerRef.current && chartRef.current) { try { chartRef.current.applyOptions({ width: containerRef.current.clientWidth }) } catch {} } }
     window.addEventListener('resize', handleResize)
     return () => {
+      cancelled = true
       window.removeEventListener('resize', handleResize)
       if (chartRef.current) {
         try { chartRef.current.remove() } catch {}
         chartRef.current = null
       }
     }
-  }, [ticker, signal, height, period, retryTick])
+  }, [ticker, sigKey, height, period, retryTick])
 
   const fmtVol = (v) => { if (!v) return '0'; if (v >= 1e9) return (v/1e9).toFixed(1)+'B'; if (v >= 1e6) return (v/1e6).toFixed(1)+'M'; if (v >= 1e3) return (v/1e3).toFixed(0)+'K'; return v.toString() }
 

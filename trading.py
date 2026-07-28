@@ -3099,7 +3099,7 @@ Headlines:
                 try:
                     ai_score = int(float(line.replace("SCORE:", "").strip()))
                     ai_score = max(-10, min(10, ai_score))
-                except:
+                except Exception:
                     pass
             elif line.startswith("MACRO_RISK:"):
                 macro_risk = "YES" in line.upper()
