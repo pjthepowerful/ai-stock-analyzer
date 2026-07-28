@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.1.2'
+const VERSION = '4.1.3'
 const VERSION_DATE = 'July 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.1.3', d: 'July 28, 2026', changes: [
+    'Made the Co-Pilot text larger and easier to read.',
+  ]},
   { v: '4.1.2', d: 'July 28, 2026', changes: [
     'Buying power now shows full cents (1,299.50 instead of 1,299.5) once you finish typing.',
   ]},
@@ -3630,7 +3633,7 @@ function CoPilot({ token, isPlus, setView }) {
   const totalPLpct = posCost > 0 ? totalPL / posCost * 100 : 0
 
   const card = { background: 'var(--c2)', borderRadius: 10, padding: 14, marginBottom: 10 }
-  const lbl = { fontSize: '.5rem', textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--dim)', fontWeight: 700 }
+  const lbl = { fontSize: '.92rem', textTransform: 'uppercase', letterSpacing: '.1em', color: 'var(--dim)', fontWeight: 700 }
 
   // Display the buying-power value with thousands separators while keeping the
   // stored value a plain number string. Preserves a trailing "." or decimals
@@ -3658,10 +3661,10 @@ function CoPilot({ token, isPlus, setView }) {
   return (
     <div style={{ maxWidth: 620, margin: '0 auto', padding: '20px 16px', width: '100%', overflowY: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-        <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--wh)', margin: 0 }}>Co-Pilot</h2>
-        <span style={{ fontSize: '.5rem', background: 'var(--c3,var(--c2))', border: '1px solid var(--brd)', borderRadius: 5, padding: '2px 7px', color: 'var(--dim)' }}>on this device</span>
+        <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--wh)', margin: 0 }}>Co-Pilot</h2>
+        <span style={{ fontSize: '.92rem', background: 'var(--c3,var(--c2))', border: '1px solid var(--brd)', borderRadius: 5, padding: '2px 7px', color: 'var(--dim)' }}>on this device</span>
       </div>
-      <p style={{ fontSize: '.62rem', color: 'var(--dim)', lineHeight: 1.5, marginBottom: 14 }}>
+      <p style={{ fontSize: '.82rem', color: 'var(--dim)', lineHeight: 1.5, marginBottom: 14 }}>
         Scan for picks, size each against your buying power, and confirm the ones you actually buy. Then track live P/L. You place the trades in your broker — this is a tracker and sizing helper, not a trading bot.
       </p>
 
@@ -3669,22 +3672,22 @@ function CoPilot({ token, isPlus, setView }) {
       <div style={card}>
         <div style={lbl}>Buying power</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-          <span style={{ fontSize: '1.1rem', color: 'var(--dim)' }}>$</span>
+          <span style={{ fontSize: '1.4rem', color: 'var(--dim)' }}>$</span>
           <input type="text" inputMode="decimal" value={fmtBP(buyingPower)} placeholder="0.00"
             onChange={e => onBPChange(e.target.value)} onBlur={onBPBlur}
-            style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: '1px solid var(--brd)', color: 'var(--wh)', fontSize: '1.1rem', padding: '4px 0', outline: 'none' }} />
+            style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: '1px solid var(--brd)', color: 'var(--wh)', fontSize: '1.4rem', padding: '4px 0', outline: 'none' }} />
         </div>
-        <div style={{ fontSize: '.5rem', color: 'var(--dim)', marginTop: 6 }}>Fractional shares: enabled</div>
+        <div style={{ fontSize: '.92rem', color: 'var(--dim)', marginTop: 6 }}>Fractional shares: enabled</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
           <span style={lbl}>Spread across</span>
           <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
             {[1, 2, 3, 4, 5].map(n => (
               <button key={n} onClick={() => setSplit(n)}
-                style={{ background: splitCount === n ? 'var(--grn)' : 'var(--c2)', border: '1px solid var(--brd)', borderRadius: 6, padding: '3px 10px', color: splitCount === n ? '#04130d' : 'var(--dim)', fontSize: '.55rem', fontWeight: 700, cursor: 'pointer' }}>{n}</button>
+                style={{ background: splitCount === n ? 'var(--grn)' : 'var(--c2)', border: '1px solid var(--brd)', borderRadius: 6, padding: '3px 10px', color: splitCount === n ? '#04130d' : 'var(--dim)', fontSize: '.74rem', fontWeight: 700, cursor: 'pointer' }}>{n}</button>
             ))}
           </div>
         </div>
-        <div style={{ fontSize: '.46rem', color: 'var(--dim)', marginTop: 5 }}>
+        <div style={{ fontSize: '.64rem', color: 'var(--dim)', marginTop: 5 }}>
           {splitCount === 1
             ? 'All buying power into one position — high concentration risk.'
             : `Buying power split evenly across up to ${splitCount} positions${bp > 0 ? ` (~$${(bp / splitCount).toFixed(0)} each)` : ''}.`}
@@ -3695,24 +3698,24 @@ function CoPilot({ token, isPlus, setView }) {
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8, marginTop: 4 }}>
         <span style={lbl}>Scan picks{picks.length ? ' · ' + picks.length : ''}</span>
         <button onClick={() => runScan(false)} disabled={scanning}
-          style={{ marginLeft: 'auto', background: scanning ? 'var(--c2)' : 'var(--grn)', border: 'none', borderRadius: 7, padding: '6px 14px', color: scanning ? 'var(--dim)' : '#04130d', fontSize: '.55rem', fontWeight: 700, cursor: scanning ? 'default' : 'pointer' }}>
+          style={{ marginLeft: 'auto', background: scanning ? 'var(--c2)' : 'var(--grn)', border: 'none', borderRadius: 7, padding: '6px 14px', color: scanning ? 'var(--dim)' : '#04130d', fontSize: '.74rem', fontWeight: 700, cursor: scanning ? 'default' : 'pointer' }}>
           {scanning ? 'Scanning…' : (picks.length ? 'Re-scan' : 'Run scan')}
         </button>
       </div>
-      {lastScan && <div style={{ fontSize: '.46rem', color: 'var(--dim)', marginBottom: 8 }}>Last scan {lastScan.toLocaleTimeString()} · auto re-scans every 5 min</div>}
+      {lastScan && <div style={{ fontSize: '.64rem', color: 'var(--dim)', marginBottom: 8 }}>Last scan {lastScan.toLocaleTimeString()} · auto re-scans every 5 min</div>}
       {picks.length > 0 && (() => {
-        return <div style={{ fontSize: '.5rem', color: slotsLeft > 0 ? 'var(--dim)' : 'var(--red)', marginBottom: 8 }}>
+        return <div style={{ fontSize: '.92rem', color: slotsLeft > 0 ? 'var(--dim)' : 'var(--red)', marginBottom: 8 }}>
           {slotsLeft > 0
             ? `Spreading across ${splitCount} · you hold ${positions.length} · top ${slotsLeft} shown as actionable.`
             : `You're holding your target ${splitCount} position${splitCount !== 1 ? 's' : ''}. Raise "spread across" or close one to add more.`}
           {maxPositions === 1 ? ' · Note: autopilot bot itself holds 1 at a time.' : ''}
         </div>
       })()}
-      {newAlert && <div style={{ background: 'rgba(34,197,94,.12)', border: '1px solid var(--grn)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: '.56rem', color: 'var(--grn)', display: 'flex', alignItems: 'center' }}>
+      {newAlert && <div style={{ background: 'rgba(34,197,94,.12)', border: '1px solid var(--grn)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: '.76rem', color: 'var(--grn)', display: 'flex', alignItems: 'center' }}>
         New in latest scan: {newAlert.join(', ')}
-        <button onClick={() => setNewAlert(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--dim)', cursor: 'pointer', fontSize: '.7rem' }}>✕</button>
+        <button onClick={() => setNewAlert(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--dim)', cursor: 'pointer', fontSize: '.92rem' }}>✕</button>
       </div>}
-      {scanErr && <div style={{ color: 'var(--red)', fontSize: '.56rem', marginBottom: 10 }}>{scanErr}</div>}
+      {scanErr && <div style={{ color: 'var(--red)', fontSize: '.76rem', marginBottom: 10 }}>{scanErr}</div>}
 
       {(() => { let actionableCount = 0; return picks.map(p => {
         const held = positions.some(x => x.ticker === p.ticker)
@@ -3724,15 +3727,15 @@ function CoPilot({ token, isPlus, setView }) {
         return (
           <div key={p.ticker} style={{ ...card, opacity: (actionable || held) ? 1 : 0.5 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontWeight: 700, color: 'var(--wh)', fontSize: '.8rem' }}>{p.ticker}</span>
-              <span style={{ fontSize: '.6rem', color: 'var(--dim)' }}>${p.price?.toFixed(2)}</span>
-              <span style={{ fontSize: '.46rem', background: 'rgba(148,163,184,.15)', color: 'var(--dim)', borderRadius: 4, padding: '2px 6px' }} title="This pick comes from the technical score, which testing shows does not reliably predict returns. Your call.">signal unvalidated</span>
-              {held && <span style={{ fontSize: '.46rem', color: 'var(--grn)', fontWeight: 700 }}>held</span>}
-              {!held && !actionable && <span style={{ fontSize: '.46rem', color: 'var(--dim)' }}>over cap</span>}
-              {actionable && !isConfirming && <button onClick={() => startConfirm(p)} style={{ marginLeft: 'auto', background: 'var(--grn)', border: 'none', borderRadius: 6, padding: '4px 12px', color: '#04130d', fontSize: '.5rem', fontWeight: 700, cursor: 'pointer' }}>Add</button>}
+              <span style={{ fontWeight: 700, color: 'var(--wh)', fontSize: '1.05rem' }}>{p.ticker}</span>
+              <span style={{ fontSize: '1.05rem', color: 'var(--dim)' }}>${p.price?.toFixed(2)}</span>
+              <span style={{ fontSize: '.64rem', background: 'rgba(148,163,184,.15)', color: 'var(--dim)', borderRadius: 4, padding: '2px 6px' }} title="This pick comes from the technical score, which testing shows does not reliably predict returns. Your call.">signal unvalidated</span>
+              {held && <span style={{ fontSize: '.64rem', color: 'var(--grn)', fontWeight: 700 }}>held</span>}
+              {!held && !actionable && <span style={{ fontSize: '.64rem', color: 'var(--dim)' }}>over cap</span>}
+              {actionable && !isConfirming && <button onClick={() => startConfirm(p)} style={{ marginLeft: 'auto', background: 'var(--grn)', border: 'none', borderRadius: 6, padding: '4px 12px', color: '#04130d', fontSize: '.92rem', fontWeight: 700, cursor: 'pointer' }}>Add</button>}
             </div>
-            {p.setup && <div style={{ fontSize: '.54rem', color: 'var(--dim)', marginTop: 5 }}>{p.setup}</div>}
-            {actionable && <div style={{ fontSize: '.52rem', color: 'var(--dim)', marginTop: 4 }}>
+            {p.setup && <div style={{ fontSize: '.74rem', color: 'var(--dim)', marginTop: 5 }}>{p.setup}</div>}
+            {actionable && <div style={{ fontSize: '.95rem', color: 'var(--dim)', marginTop: 4 }}>
               Suggested: <b style={{ color: 'var(--lt)' }}>{shares ? shares.toFixed(4) : '—'}</b> shares (~${suggestDollars.toFixed(0)})
               {p.stop ? ` · stop $${p.stop.toFixed(2)}` : ''}{p.target ? ` · target $${p.target.toFixed(2)}` : ''}
             </div>}
@@ -3742,27 +3745,27 @@ function CoPilot({ token, isPlus, setView }) {
                   <div style={{ flex: 1 }}>
                     <div style={lbl}>Shares</div>
                     <input type="number" value={draft.shares} onChange={e => setDraft({ ...draft, shares: e.target.value })}
-                      style={{ width: '100%', background: 'transparent', border: '1px solid var(--brd)', borderRadius: 6, color: 'var(--wh)', padding: '5px 8px', fontSize: '.62rem', marginTop: 3 }} />
+                      style={{ width: '100%', background: 'transparent', border: '1px solid var(--brd)', borderRadius: 6, color: 'var(--wh)', padding: '5px 8px', fontSize: '.82rem', marginTop: 3 }} />
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={lbl}>Avg price paid</div>
                     <input type="number" value={draft.price} onChange={e => setDraft({ ...draft, price: e.target.value })}
-                      style={{ width: '100%', background: 'transparent', border: '1px solid var(--brd)', borderRadius: 6, color: 'var(--wh)', padding: '5px 8px', fontSize: '.62rem', marginTop: 3 }} />
+                      style={{ width: '100%', background: 'transparent', border: '1px solid var(--brd)', borderRadius: 6, color: 'var(--wh)', padding: '5px 8px', fontSize: '.82rem', marginTop: 3 }} />
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                   <div style={{ flex: 1 }}>
                     <div style={lbl}>Stop (alert)</div>
                     <input type="number" value={draft.stop} placeholder="optional" onChange={e => setDraft({ ...draft, stop: e.target.value })}
-                      style={{ width: '100%', background: 'transparent', border: '1px solid var(--brd)', borderRadius: 6, color: 'var(--red)', padding: '5px 8px', fontSize: '.62rem', marginTop: 3 }} />
+                      style={{ width: '100%', background: 'transparent', border: '1px solid var(--brd)', borderRadius: 6, color: 'var(--red)', padding: '5px 8px', fontSize: '.82rem', marginTop: 3 }} />
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={lbl}>Target (alert)</div>
                     <input type="number" value={draft.target} placeholder="optional" onChange={e => setDraft({ ...draft, target: e.target.value })}
-                      style={{ width: '100%', background: 'transparent', border: '1px solid var(--brd)', borderRadius: 6, color: 'var(--grn)', padding: '5px 8px', fontSize: '.62rem', marginTop: 3 }} />
+                      style={{ width: '100%', background: 'transparent', border: '1px solid var(--brd)', borderRadius: 6, color: 'var(--grn)', padding: '5px 8px', fontSize: '.82rem', marginTop: 3 }} />
                   </div>
                 </div>
-                <div style={{ fontSize: '.44rem', color: 'var(--dim)', marginTop: 6 }}>You'll get an alert when price crosses either level. Leave blank to skip. (Re-add the ticker to change them.)</div>
+                <div style={{ fontSize: '.82rem', color: 'var(--dim)', marginTop: 6 }}>You'll get an alert when price crosses either level. Leave blank to skip. (Re-add the ticker to change them.)</div>
                 {(() => {
                   const s = parseFloat(draft.shares), pr = parseFloat(draft.price)
                   const st = parseFloat(draft.stop), tg = parseFloat(draft.target)
@@ -3770,15 +3773,15 @@ function CoPilot({ token, isPlus, setView }) {
                   const gain = tg ? (tg - pr) * s : null
                   const loss = st ? (st - pr) * s : null
                   if (gain == null && loss == null) return null
-                  return <div style={{ fontSize: '.5rem', marginTop: 6, display: 'flex', gap: 12 }}>
+                  return <div style={{ fontSize: '.92rem', marginTop: 6, display: 'flex', gap: 12 }}>
                     {gain != null && <span style={{ color: 'var(--grn)' }}>At target: {gain >= 0 ? '+' : '−'}${Math.abs(gain).toFixed(2)}</span>}
                     {loss != null && <span style={{ color: 'var(--red)' }}>At stop: {loss >= 0 ? '+' : '−'}${Math.abs(loss).toFixed(2)}</span>}
                     {gain != null && loss != null && Math.abs(loss) > 0 && <span style={{ color: 'var(--dim)' }}>({(Math.abs(gain) / Math.abs(loss)).toFixed(1)}:1)</span>}
                   </div>
                 })()}
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <button onClick={() => addPosition(p)} style={{ flex: 1, background: 'var(--grn)', border: 'none', borderRadius: 6, padding: '7px', color: '#04130d', fontSize: '.55rem', fontWeight: 700, cursor: 'pointer' }}>Confirm buy</button>
-                  <button onClick={() => setConfirming(null)} style={{ background: 'none', border: '1px solid var(--brd)', borderRadius: 6, padding: '7px 14px', color: 'var(--dim)', fontSize: '.55rem', cursor: 'pointer' }}>Cancel</button>
+                  <button onClick={() => addPosition(p)} style={{ flex: 1, background: 'var(--grn)', border: 'none', borderRadius: 6, padding: '7px', color: '#04130d', fontSize: '.74rem', fontWeight: 700, cursor: 'pointer' }}>Confirm buy</button>
+                  <button onClick={() => setConfirming(null)} style={{ background: 'none', border: '1px solid var(--brd)', borderRadius: 6, padding: '7px 14px', color: 'var(--dim)', fontSize: '.74rem', cursor: 'pointer' }}>Cancel</button>
                 </div>
               </div>
             )}
@@ -3790,26 +3793,26 @@ function CoPilot({ token, isPlus, setView }) {
       <div style={{ display: 'flex', alignItems: 'center', marginTop: 18, marginBottom: 8 }}>
         <span style={lbl}>Your positions{positions.length ? ' · ' + positions.length : ''}</span>
         {positions.length > 0 && <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: '.44rem', color: 'var(--dim)' }}>
+          <span style={{ fontSize: '.82rem', color: 'var(--dim)' }}>
             {pnlRefreshing ? 'updating…' : lastPnl ? `live · updated ${lastPnl.toLocaleTimeString()}` : 'live'}
           </span>
-          <button onClick={refreshPrices} style={{ background: 'none', border: '1px solid var(--brd)', borderRadius: 6, padding: '3px 10px', color: 'var(--dim)', fontSize: '.5rem', cursor: 'pointer' }}>Refresh now</button>
+          <button onClick={refreshPrices} style={{ background: 'none', border: '1px solid var(--brd)', borderRadius: 6, padding: '3px 10px', color: 'var(--dim)', fontSize: '.92rem', cursor: 'pointer' }}>Refresh now</button>
         </span>}
       </div>
       {positions.length === 0 ? (
-        <div style={{ color: 'var(--dim)', fontSize: '.58rem', padding: '10px 2px' }}>No positions yet. Run a scan and add the ones you buy.</div>
+        <div style={{ color: 'var(--dim)', fontSize: '.78rem', padding: '10px 2px' }}>No positions yet. Run a scan and add the ones you buy.</div>
       ) : (
         <>
           <div style={{ ...card, display: 'flex', alignItems: 'center' }}>
             <div>
               <div style={lbl}>Total P/L</div>
-              <div style={{ fontSize: '1.05rem', fontWeight: 800, color: totalPL >= 0 ? 'var(--grn)' : 'var(--red)', marginTop: 2 }}>
-                {totalPL >= 0 ? '+' : '−'}${Math.abs(totalPL).toFixed(2)} <span style={{ fontSize: '.6rem' }}>({totalPLpct >= 0 ? '+' : ''}{totalPLpct.toFixed(2)}%)</span>
+              <div style={{ fontSize: '1.3rem', fontWeight: 800, color: totalPL >= 0 ? 'var(--grn)' : 'var(--red)', marginTop: 2 }}>
+                {totalPL >= 0 ? '+' : '−'}${Math.abs(totalPL).toFixed(2)} <span style={{ fontSize: '1.05rem' }}>({totalPLpct >= 0 ? '+' : ''}{totalPLpct.toFixed(2)}%)</span>
               </div>
             </div>
             <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
               <div style={lbl}>Market value</div>
-              <div style={{ fontSize: '.75rem', color: 'var(--wh)', marginTop: 2 }}>${posValue.toFixed(2)}</div>
+              <div style={{ fontSize: '.98rem', color: 'var(--wh)', marginTop: 2 }}>${posValue.toFixed(2)}</div>
             </div>
           </div>
           {positions.map(p => {
@@ -3824,44 +3827,44 @@ function CoPilot({ token, isPlus, setView }) {
             return (
               <div key={p.ticker} style={{ ...card, marginBottom: 6, border: hitStop ? '1px solid var(--red)' : hitTarget ? '1px solid var(--grn)' : undefined }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontWeight: 700, color: 'var(--wh)', fontSize: '.72rem' }}>{p.ticker}</span>
-                  <span style={{ fontSize: '.52rem', color: 'var(--dim)' }}>{p.shares} sh @ ${p.avg.toFixed(2)}</span>
-                  <span style={{ marginLeft: 'auto', fontWeight: 700, fontSize: '.72rem', color: pl >= 0 ? 'var(--grn)' : 'var(--red)' }}>{pl >= 0 ? '+' : '−'}${Math.abs(pl).toFixed(2)}</span>
-                  <span style={{ fontSize: '.52rem', color: pl >= 0 ? 'var(--grn)' : 'var(--red)' }}>({plpct >= 0 ? '+' : ''}{plpct.toFixed(1)}%)</span>
+                  <span style={{ fontWeight: 700, color: 'var(--wh)', fontSize: '.95rem' }}>{p.ticker}</span>
+                  <span style={{ fontSize: '.95rem', color: 'var(--dim)' }}>{p.shares} sh @ ${p.avg.toFixed(2)}</span>
+                  <span style={{ marginLeft: 'auto', fontWeight: 700, fontSize: '.95rem', color: pl >= 0 ? 'var(--grn)' : 'var(--red)' }}>{pl >= 0 ? '+' : '−'}${Math.abs(pl).toFixed(2)}</span>
+                  <span style={{ fontSize: '.95rem', color: pl >= 0 ? 'var(--grn)' : 'var(--red)' }}>({plpct >= 0 ? '+' : ''}{plpct.toFixed(1)}%)</span>
                 </div>
                 {(atTarget != null || atStop != null) && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 7 }}>
                     {atTarget != null && (
                       <div style={{ flex: 1, background: 'rgba(34,197,94,.10)', borderRadius: 6, padding: '5px 8px' }}>
-                        <div style={{ fontSize: '.42rem', textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--dim)', fontWeight: 700 }}>If target hit</div>
-                        <div style={{ fontSize: '.66rem', fontWeight: 800, color: 'var(--grn)', marginTop: 1 }}>{atTarget >= 0 ? '+' : '−'}${Math.abs(atTarget).toFixed(2)}</div>
+                        <div style={{ fontSize: '1.05rem', textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--dim)', fontWeight: 700 }}>If target hit</div>
+                        <div style={{ fontSize: '.9rem', fontWeight: 800, color: 'var(--grn)', marginTop: 1 }}>{atTarget >= 0 ? '+' : '−'}${Math.abs(atTarget).toFixed(2)}</div>
                       </div>
                     )}
                     {atStop != null && (
                       <div style={{ flex: 1, background: 'rgba(255,59,92,.10)', borderRadius: 6, padding: '5px 8px' }}>
-                        <div style={{ fontSize: '.42rem', textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--dim)', fontWeight: 700 }}>If stop hit</div>
-                        <div style={{ fontSize: '.66rem', fontWeight: 800, color: 'var(--red)', marginTop: 1 }}>{atStop >= 0 ? '+' : '−'}${Math.abs(atStop).toFixed(2)}</div>
+                        <div style={{ fontSize: '1.05rem', textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--dim)', fontWeight: 700 }}>If stop hit</div>
+                        <div style={{ fontSize: '.9rem', fontWeight: 800, color: 'var(--red)', marginTop: 1 }}>{atStop >= 0 ? '+' : '−'}${Math.abs(atStop).toFixed(2)}</div>
                       </div>
                     )}
                   </div>
                 )}
                 {(hitStop || hitTarget) && (
-                  <div style={{ marginTop: 7, padding: '6px 9px', borderRadius: 6, fontSize: '.54rem', fontWeight: 700,
+                  <div style={{ marginTop: 7, padding: '6px 9px', borderRadius: 6, fontSize: '.74rem', fontWeight: 700,
                     background: hitStop ? 'rgba(255,59,92,.14)' : 'rgba(34,197,94,.14)', color: hitStop ? 'var(--red)' : 'var(--grn)' }}>
                     {hitStop ? `⚠ Hit your stop ($${(+p.stop).toFixed(2)}) — consider selling to cap the loss.`
                              : `✓ Hit your target ($${(+p.target).toFixed(2)}) — consider taking profit.`}
                   </div>
                 )}
-                <div style={{ display: 'flex', alignItems: 'center', fontSize: '.5rem', color: 'var(--dim)', marginTop: 5 }}>
+                <div style={{ display: 'flex', alignItems: 'center', fontSize: '.92rem', color: 'var(--dim)', marginTop: 5 }}>
                   <span>now ${live.toFixed(2)}{p.stop ? ` · stop $${(+p.stop).toFixed(2)}` : ''}{p.target ? ` · target $${(+p.target).toFixed(2)}` : ''}</span>
-                  <button onClick={() => removePosition(p.ticker)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--red)', fontSize: '.5rem', cursor: 'pointer' }}>Remove</button>
+                  <button onClick={() => removePosition(p.ticker)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--red)', fontSize: '.92rem', cursor: 'pointer' }}>Remove</button>
                 </div>
               </div>
             )
           })}
         </>
       )}
-      <div style={{ fontSize: '.46rem', color: 'var(--dim)', lineHeight: 1.5, marginTop: 14, fontStyle: 'italic' }}>
+      <div style={{ fontSize: '.64rem', color: 'var(--dim)', lineHeight: 1.5, marginTop: 14, fontStyle: 'italic' }}>
         Picks come from the same 21-factor score as autopilot. Testing shows that score doesn't reliably predict forward returns, so treat picks as starting points, not advice. You place and own every trade.
       </div>
     </div>
