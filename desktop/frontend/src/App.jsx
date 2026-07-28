@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.1.1'
+const VERSION = '4.1.2'
 const VERSION_DATE = 'July 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.1.2', d: 'July 28, 2026', changes: [
+    'Buying power now shows full cents (1,299.50 instead of 1,299.5) once you finish typing.',
+  ]},
   { v: '4.1.1', d: 'July 28, 2026', changes: [
     'Co-Pilot now shows the exact dollar amount you’d gain if your target hits and lose if your stop hits — both on each position and as a preview before you buy (with the reward-to-risk ratio).',
   ]},
@@ -3616,7 +3619,7 @@ function CoPilot({ token, isPlus, setView }) {
     }
     savePositions(next)
     // deduct from buying power
-    if (bp > 0) saveBP(Math.max(0, +(bp - shares * price).toFixed(2)))
+    if (bp > 0) saveBP(Math.max(0, bp - shares * price).toFixed(2))
     setConfirming(null)
   }
   const removePosition = (ticker) => savePositions(positions.filter(x => x.ticker !== ticker))
@@ -3645,6 +3648,12 @@ function CoPilot({ token, isPlus, setView }) {
     if (parts.length === 2 && parts[1].length > 2) s = parts[0] + '.' + parts[1].slice(0, 2)  // max 2 decimals
     saveBP(s === '' ? '' : s)
   }
+  const onBPBlur = () => {
+    // On finishing entry, normalize to exactly 2 decimals so 1299.5 → 1299.50.
+    if (buyingPower === '' || buyingPower == null) return
+    const n = parseFloat(String(buyingPower))
+    if (!isNaN(n)) saveBP(n.toFixed(2))
+  }
 
   return (
     <div style={{ maxWidth: 620, margin: '0 auto', padding: '20px 16px', width: '100%', overflowY: 'auto' }}>
@@ -3662,7 +3671,7 @@ function CoPilot({ token, isPlus, setView }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
           <span style={{ fontSize: '1.1rem', color: 'var(--dim)' }}>$</span>
           <input type="text" inputMode="decimal" value={fmtBP(buyingPower)} placeholder="0.00"
-            onChange={e => onBPChange(e.target.value)}
+            onChange={e => onBPChange(e.target.value)} onBlur={onBPBlur}
             style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: '1px solid var(--brd)', color: 'var(--wh)', fontSize: '1.1rem', padding: '4px 0', outline: 'none' }} />
         </div>
         <div style={{ fontSize: '.5rem', color: 'var(--dim)', marginTop: 6 }}>Fractional shares: enabled</div>
