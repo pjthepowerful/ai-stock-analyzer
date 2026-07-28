@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.0.1'
+const VERSION = '4.0.2'
 const VERSION_DATE = 'July 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.0.2', d: 'July 28, 2026', changes: [
+    'Co-Pilot no longer dumps all your buying power into one stock — you now choose how many positions to spread across (default 4), separate from the autopilot bot’s cap.',
+  ]},
   { v: '4.0.1', d: 'July 28, 2026', changes: [
     'Buying power now shows thousands separators as you type (e.g. 1,172.30).',
   ]},
@@ -3525,7 +3528,14 @@ function CoPilot({ token, isPlus, setView }) {
   }, [positions.length])
 
   const bp = parseFloat(buyingPower) || 0
-  const slotsLeft = Math.max(0, maxPositions - positions.length)
+  // How many positions to spread buying power across. This is YOUR
+  // diversification choice for manual trading — deliberately separate from the
+  // autopilot bot's concentrated position cap (which can be 1). Sizing all your
+  // money into a single unvalidated pick is the last thing you want.
+  const SPLIT_KEY = 'paula-copilot-split'
+  const [splitCount, setSplitCount] = useState(() => parseInt(localStorage.getItem(SPLIT_KEY) || '') || 4)
+  const setSplit = (n) => { setSplitCount(n); localStorage.setItem(SPLIT_KEY, String(n)) }
+  const slotsLeft = Math.max(0, splitCount - positions.length)
   const suggestDollars = slotsLeft > 0 ? bp / slotsLeft : 0
 
   const startConfirm = (p) => {
@@ -3598,6 +3608,20 @@ function CoPilot({ token, isPlus, setView }) {
             style={{ flex: 1, background: 'transparent', border: 'none', borderBottom: '1px solid var(--brd)', color: 'var(--wh)', fontSize: '1.1rem', padding: '4px 0', outline: 'none' }} />
         </div>
         <div style={{ fontSize: '.5rem', color: 'var(--dim)', marginTop: 6 }}>Fractional shares: enabled</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+          <span style={lbl}>Spread across</span>
+          <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+            {[1, 2, 3, 4, 5].map(n => (
+              <button key={n} onClick={() => setSplit(n)}
+                style={{ background: splitCount === n ? 'var(--grn)' : 'var(--c2)', border: '1px solid var(--brd)', borderRadius: 6, padding: '3px 10px', color: splitCount === n ? '#04130d' : 'var(--dim)', fontSize: '.55rem', fontWeight: 700, cursor: 'pointer' }}>{n}</button>
+            ))}
+          </div>
+        </div>
+        <div style={{ fontSize: '.46rem', color: 'var(--dim)', marginTop: 5 }}>
+          {splitCount === 1
+            ? 'All buying power into one position — high concentration risk.'
+            : `Buying power split evenly across up to ${splitCount} positions${bp > 0 ? ` (~$${(bp / splitCount).toFixed(0)} each)` : ''}.`}
+        </div>
       </div>
 
       {/* Scan */}
@@ -3610,11 +3634,11 @@ function CoPilot({ token, isPlus, setView }) {
       </div>
       {lastScan && <div style={{ fontSize: '.46rem', color: 'var(--dim)', marginBottom: 8 }}>Last scan {lastScan.toLocaleTimeString()} · auto re-scans every 5 min</div>}
       {picks.length > 0 && (() => {
-        const slotsLeft = Math.max(0, maxPositions - positions.length)
         return <div style={{ fontSize: '.5rem', color: slotsLeft > 0 ? 'var(--dim)' : 'var(--red)', marginBottom: 8 }}>
           {slotsLeft > 0
-            ? `Position cap ${maxPositions} · you hold ${positions.length} · ${slotsLeft} slot${slotsLeft !== 1 ? 's' : ''} left. Top ${slotsLeft} shown as actionable.`
-            : `At your ${maxPositions}-position cap. Close a position before adding more — matching how autopilot limits exposure.`}
+            ? `Spreading across ${splitCount} · you hold ${positions.length} · top ${slotsLeft} shown as actionable.`
+            : `You're holding your target ${splitCount} position${splitCount !== 1 ? 's' : ''}. Raise "spread across" or close one to add more.`}
+          {maxPositions === 1 ? ' · Note: autopilot bot itself holds 1 at a time.' : ''}
         </div>
       })()}
       {newAlert && <div style={{ background: 'rgba(34,197,94,.12)', border: '1px solid var(--grn)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: '.56rem', color: 'var(--grn)', display: 'flex', alignItems: 'center' }}>
