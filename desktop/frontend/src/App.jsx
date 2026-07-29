@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.2.0'
+const VERSION = '4.2.1'
 const VERSION_DATE = 'July 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.2.1', d: 'July 28, 2026', changes: [
+    'High-conviction alert banner now triggers at a slightly higher bar (score 92+ instead of 90+), so it fires only on the strongest setups.',
+  ]},
   { v: '4.2.0', d: 'July 28, 2026', changes: [
     'Autopilot now takes profits faster — it scales out of winners sooner and starts protecting gains earlier, tightest in day-trade mode so intraday moves aren’t round-tripped.',
   ]},
@@ -1640,7 +1643,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
             }
           }
           if (event === 'alert') {
-            // High-conviction setup flagged (90+ score) — show an in-app banner.
+            // High-conviction setup flagged (92+ score) — show an in-app banner.
             setAlerts(prev => {
               if (prev.some(a => a.ticker === data.ticker)) return prev
               return [{ ticker: data.ticker, score: data.score, rr: data.rr, id: Date.now() + data.ticker }, ...prev].slice(0, 4)

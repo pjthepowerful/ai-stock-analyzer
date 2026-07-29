@@ -6072,7 +6072,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     for row in all_scores:
         try:
             tkr, sc, act, conf, rr = row
-            if sc >= 90 and act == "STRONG_BUY":
+            if sc >= 92 and act == "STRONG_BUY":
                 high_conviction.append({"ticker": tkr, "score": int(sc), "rr": round(float(rr), 1)})
         except Exception:
             continue
