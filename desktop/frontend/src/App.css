@@ -28,32 +28,33 @@
   --sans: 'Outfit', system-ui, sans-serif;
 }
 
-/* ── Light theme ── (remaps surfaces + text; keeps the green accent) */
+/* ── Light theme ── Editorial-mono: warm off-white paper, ink black, no accent
+   colour except green/red on P/L data. Deliberately un-generic. */
 [data-theme="light"] {
-  --bg: #f7f8fa;
-  --sb: #eef0f4;
+  --bg: #fbfaf7;
+  --sb: #f4f2ec;
   --c1: #ffffff;
-  --c2: #f1f3f7;
-  --c3: #e7eaf0;
-  --brd: #dde1e9;
-  --dim: #8a8fa3;
-  --txt: #4a4f63;
-  --lt: #2c3040;
-  --wh: #14161f;
-  --grn: #059669;
-  --grn2: #047857;
-  --grn3: #059669;
-  --red: #dc2626;
-  --red2: #e11d48;
-  --amb: #d97706;
-  --blu: #2563eb;
-  --pur: #7c3aed;
-  --ubg: #eaf2ff;
-  --ubrd: #cfe0ff;
-  --rail: #eef0f4;
-  --rail-hover: #e2e6ee;
+  --c2: #faf8f3;
+  --c3: #f0eee7;
+  --brd: #e4e2dc;
+  --dim: #8c887e;
+  --txt: #55524b;
+  --lt: #2a2824;
+  --wh: #161513;
+  --grn: #0e7a4f;
+  --grn2: #0b6340;
+  --grn3: #0e7a4f;
+  --red: #c0392b;
+  --red2: #a93226;
+  --amb: #b45309;
+  --blu: #161513;
+  --pur: #161513;
+  --ubg: #f4f2ec;
+  --ubrd: #e4e2dc;
+  --rail: #f4f2ec;
+  --rail-hover: #ece9e2;
 }
-[data-theme="light"] .up { color: #059669 } [data-theme="light"] .dn { color: #dc2626 }
+[data-theme="light"] .up { color: #0e7a4f } [data-theme="light"] .dn { color: #c0392b }
 
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 /* Smooth theme switch — animate color/background changes under 0.5s. */

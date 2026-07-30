@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.2.2'
+const VERSION = '4.3.0'
 const VERSION_DATE = 'July 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.3.0', d: 'July 30, 2026', changes: [
+    'New editorial-mono light theme (now the default): warm off-white, ink black, deepened green/red on P/L only — cleaner and less generic. Toggle back to dark anytime in settings.',
+  ]},
   { v: '4.2.2', d: 'July 30, 2026', changes: [
     'Fixed the daily change % in the stock header sometimes disagreeing with the chart — it now computes the change from the previous close like the chart does, instead of the day’s open.',
   ]},
@@ -559,7 +562,7 @@ function App() {
   const [token, setToken] = useState(localStorage.getItem('paula-token'))
   const [authLoading, setAuthLoading] = useState(true)
   const [maint, setMaint] = useState({ on: false, message: '' })
-  const [theme, setTheme] = useState(() => localStorage.getItem('paula-theme') || 'dark')
+  const [theme, setTheme] = useState(() => localStorage.getItem('paula-theme') || 'light')
 
   // Apply the theme to the document root and persist it.
   useEffect(() => {
