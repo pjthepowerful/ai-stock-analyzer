@@ -1,5 +1,5 @@
 """
-Paula — Stock Analysis & Trade Signal Engine
+Paula  Stock Analysis & Trade Signal Engine
 Built for future automation. Every analysis outputs a machine-readable
 trade_signal dict alongside the human-readable response.
 """
@@ -271,7 +271,7 @@ def _find_ticker(text: str) -> tuple[str | None, str]:
         if clean in ALIASES:
             tick = ALIASES[clean]
             return tick, "US"
-    # 2.6) Fuzzy match — if a word is 1-2 chars off from a known ticker
+    # 2.6) Fuzzy match  if a word is 1-2 chars off from a known ticker
     for word in text.upper().split():
         clean = re.sub(r"[^A-Z]", "", word)
         if clean and 3 <= len(clean) <= 5 and clean not in _NOISE_WORDS:
@@ -280,7 +280,7 @@ def _find_ticker(text: str) -> tuple[str | None, str]:
                     diffs = sum(1 for a, b in zip(known, clean) if a != b)
                     if diffs == 1:  # only 1 letter off
                         return known, "US"
-    # 3) Polygon search — only if the message looks like a specific stock query
+    # 3) Polygon search  only if the message looks like a specific stock query
     stock_intent = any(w in low for w in [
         "analyze", "analysis", "price", "buy", "sell", "short", "cover", "chart", "graph", "quote",
         "stock", "ticker", "how is", "how's", "what about", "look at",
@@ -289,7 +289,7 @@ def _find_ticker(text: str) -> tuple[str | None, str]:
     if stock_intent:
         words = [w for w in text.split() if len(w) > 3 and w.upper() not in _NOISE_WORDS]
         if words:
-            query = " ".join(words[:3])
+            query = "".join(words[:3])
             found = polygon_search_ticker(query)
             if found:
                 return found, "US"
@@ -297,8 +297,8 @@ def _find_ticker(text: str) -> tuple[str | None, str]:
 
 
 def find_all_tickers(text: str, limit: int = 5) -> list[str]:
-    """Resolve EVERY stock a message refers to — by company name OR ticker
-    symbol — in order of first appearance, de-duplicated.
+    """Resolve EVERY stock a message refers to  by company name OR ticker
+    symbol  in order of first appearance, de-duplicated.
 
     Single-stock resolution (_find_ticker) only returns one, which is why
     multi-stock questions like 'should I buy Tesla or Google' used to fetch data
@@ -317,8 +317,8 @@ def find_all_tickers(text: str, limit: int = 5) -> list[str]:
         if idx != -1:
             hits.append((idx, COMPANIES[name]))
 
-    # 2) Ticker symbols present as words (2–5 letters, in the US universe), plus
-    # aliases (GOOG→GOOGL, misspellings) so uppercase shorthands don't get dropped.
+    # 2) Ticker symbols present as words (25 letters, in the US universe), plus
+    # aliases (GOOGGOOGL, misspellings) so uppercase shorthands don't get dropped.
     for mobj in re.finditer(r'\b([A-Za-z]{1,5})\b', text):
         w = mobj.group(1)
         up = w.upper()
@@ -361,7 +361,7 @@ def _safe(val, fallback=None):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  POLYGON.IO API — scans the ENTIRE market, not just a hardcoded list
+#  POLYGON.IO API  scans the ENTIRE market, not just a hardcoded list
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _polygon_key() -> str | None:
@@ -417,7 +417,7 @@ def _polygon_daily_hist(ticker: str, days: int = 372) -> "pd.DataFrame | None":
 def web_search(query: str, max_results: int = 5) -> list[dict] | None:
     """Open-web search via Tavily (for questions Polygon stock-news can't cover,
     e.g. 'SpaceX IPO', macro, anything beyond a ticker). Reads TAVILY_API_KEY
-    from the environment — never hardcoded. Returns [{title, url, content}] or
+    from the environment  never hardcoded. Returns [{title, url, content}] or
     None if no key / failure (caller falls back to training knowledge)."""
     key = os.environ.get("TAVILY_API_KEY")
     if not key:
@@ -481,7 +481,7 @@ def fetch_news(ticker: str | None = None, limit: int = 6) -> list[dict] | None:
 
 
 def polygon_gainers(limit: int = 20) -> list[dict] | None:
-    """Top gainers across ALL US stocks — one API call."""
+    """Top gainers across ALL US stocks  one API call."""
     key = _polygon_key()
     if not key:
         return None
@@ -515,7 +515,7 @@ def polygon_gainers(limit: int = 20) -> list[dict] | None:
 
 @st.cache_data(ttl=180)
 def polygon_losers(limit: int = 20) -> list[dict] | None:
-    """Top losers across ALL US stocks — one API call."""
+    """Top losers across ALL US stocks  one API call."""
     key = _polygon_key()
     if not key:
         return None
@@ -553,7 +553,7 @@ def yahoo_top_movers() -> dict:
     {'gainer': {...}, 'loser': {...}} with whatever it could compute.
 
     Note: this is a large-cap-only readout (not the whole market), so it won't
-    surface a tiny stock up 300% — but it's reliable and free, and a big liquid
+    surface a tiny stock up 300%  but it's reliable and free, and a big liquid
     name making a move is more meaningful for context anyway.
     """
     universe = [
@@ -595,7 +595,7 @@ def yahoo_top_movers() -> dict:
 @st.cache_data(ttl=180)
 def polygon_all_snapshots() -> list[dict] | None:
     """
-    Get snapshot of ALL tickers — finds the real movers, not just a curated list.
+    Get snapshot of ALL tickers  finds the real movers, not just a curated list.
     Falls back to grouped daily bars if snapshots aren't available on plan.
     """
     key = _polygon_key()
@@ -633,7 +633,7 @@ def polygon_all_snapshots() -> list[dict] | None:
 
 @st.cache_data(ttl=300)
 def polygon_search_ticker(query: str) -> str | None:
-    """Search for a ticker by company name — finds ANY stock, not just our list."""
+    """Search for a ticker by company name  finds ANY stock, not just our list."""
     key = _polygon_key()
     if not key:
         return None
@@ -669,22 +669,22 @@ def polygon_search_ticker(query: str) -> str | None:
 ALPACA_BASE = "https://paper-api.alpaca.markets"
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  TRADING HORIZON — Paula is a SWING trader, not a day trader.
+#  TRADING HORIZON  Paula is a SWING trader, not a day trader.
 #  Swing mode: holds positions across days (no end-of-day force-close), uses
 #  daily-bar signals, wider stops/targets to ride multi-day moves. Target hold
-#  is roughly 3–10 trading days; positions are only closed on stop, target,
-#  signal reversal, or the max-hold timeout — never just because the bell rang.
+#  is roughly 310 trading days; positions are only closed on stop, target,
+#  signal reversal, or the max-hold timeout  never just because the bell rang.
 # ═══════════════════════════════════════════════════════════════════════════
 SWING_MODE = True
 SWING_MAX_HOLD_DAYS = 10      # exit a stale trade after ~2 weeks
 SWING_STOP_ATR_MULT = 2.0     # wider stop than intraday to survive overnight noise
 SWING_MIN_STOP_PCT = 0.03     # at least 3% room
 SWING_MAX_STOP_PCT = 0.10     # at most 10% risk on a multi-day hold
-# Concurrent positions — the single knob controlling how much capital is
+# Concurrent positions  the single knob controlling how much capital is
 # deployed at once. Higher = more trades captured & higher return, but larger
 # drawdown. Used by BOTH the backtest and the live autopilot so they stay in
 # sync (change here = changes everywhere). 2 ≈ ~8% drawdown in backtest.
-SWING_MAX_POSITIONS = 4      # backtest: ~+11% / 14% max DD — balanced; leaves headroom since live < backtest
+SWING_MAX_POSITIONS = 4      # backtest: ~+11% / 14% max DD  balanced; leaves headroom since live < backtest
 
 
 
@@ -884,12 +884,12 @@ def alpaca_buy(ticker: str, qty: int = None, notional: float = None,
     """
     # Validate inputs
     if qty is not None and qty <= 0:
-        return {"ok": False, "error": f"Can't buy {qty} shares — need at least 1"}
+        return {"ok": False, "error": f"Can't buy {qty} shares  need at least 1"}
     if notional is not None and notional <= 0:
-        return {"ok": False, "error": f"Can't buy ${notional} — need a positive amount"}
+        return {"ok": False, "error": f"Can't buy ${notional}  need a positive amount"}
 
     # In swing mode, orders must persist across days. A "day" TIF makes Alpaca
-    # auto-cancel the bracket's stop/target legs at the closing bell — which
+    # auto-cancel the bracket's stop/target legs at the closing bell  which
     # silently turned swing positions into same-day exits. GTC keeps them alive.
     _tif = "gtc" if SWING_MODE else "day"
     order = {
@@ -956,7 +956,7 @@ def alpaca_buy(ticker: str, qty: int = None, notional: float = None,
 def alpaca_sell(ticker: str, qty: int = None, sell_all: bool = False) -> dict:
     """Sell shares or close entire position."""
     if qty is not None and qty <= 0 and not sell_all:
-        return {"ok": False, "error": f"Can't sell {qty} shares — need at least 1"}
+        return {"ok": False, "error": f"Can't sell {qty} shares  need at least 1"}
     if sell_all:
         try:
             r = requests.delete(f"{ALPACA_BASE}/v2/positions/{ticker.upper()}",
@@ -1010,7 +1010,7 @@ def alpaca_cancel_all_orders() -> dict:
 
 
 def alpaca_close_all() -> dict:
-    """Close ALL positions — cancel orders first, then close."""
+    """Close ALL positions  cancel orders first, then close."""
     try:
         # Step 1: Cancel ALL pending orders (stops, limits, brackets)
         # These block position closes if not cancelled first
@@ -1032,11 +1032,11 @@ def alpaca_close_all() -> dict:
 def alpaca_short(ticker: str, qty: int = 1,
                  stop_loss: float = None, take_profit: float = None) -> dict:
     """
-    Short sell — sell shares you don't own, profit when price drops.
+    Short sell  sell shares you don't own, profit when price drops.
     Alpaca paper trading supports shorting via regular sell orders.
     """
     if qty <= 0:
-        return {"ok": False, "error": f"Can't short {qty} shares — need at least 1"}
+        return {"ok": False, "error": f"Can't short {qty} shares  need at least 1"}
 
     order = {
         "symbol": ticker.upper(),
@@ -1108,12 +1108,12 @@ def _update_stop_order(ticker: str, new_stop: float, qty: int) -> dict:
 
 
 def alpaca_cover(ticker: str, qty: int = None, cover_all: bool = False) -> dict:
-    """Cover a short position — buy back shares to close."""
-    # Always use DELETE endpoint — it handles qty correctly
+    """Cover a short position  buy back shares to close."""
+    # Always use DELETE endpoint  it handles qty correctly
     try:
         url = f"{ALPACA_BASE}/v2/positions/{ticker.upper()}"
         if qty and not cover_all:
-            # Partial cover — use query param
+            # Partial cover  use query param
             r = requests.delete(url, headers=_alpaca_headers(),
                                 params={"qty": str(qty)}, timeout=10)
         else:
@@ -1151,7 +1151,7 @@ def alpaca_orders(status: str = "open", limit: int = 10) -> list[dict]:
                 "qty": o.get("qty") or o.get("notional", ""),
                 "type": o.get("type", ""),
                 "status": o.get("status", ""),
-                "filled_avg": o.get("filled_avg_price", "—"),
+                "filled_avg": o.get("filled_avg_price", ""),
                 "submitted": o.get("submitted_at", "")[:16],
             })
         return orders
@@ -1262,7 +1262,7 @@ def alpaca_smart_buy(ticker: str, trade_signal: dict, risk_pct: float = 0.02, dr
     target = trade.get("target_1", 0)
 
     if not entry or not stop or entry <= stop:
-        return {"ok": False, "error": "Invalid trade signal — no entry/stop calculated"}
+        return {"ok": False, "error": "Invalid trade signal  no entry/stop calculated"}
 
     # Position sizing: risk X% of equity per trade
     equity = account["equity"]
@@ -1275,7 +1275,7 @@ def alpaca_smart_buy(ticker: str, trade_signal: dict, risk_pct: float = 0.02, dr
     qty = min(qty, max_qty_by_bp)
 
     if qty < 1:
-        return {"ok": False, "error": f"Position too small — need at least ${ entry:.2f} buying power"}
+        return {"ok": False, "error": f"Position too small  need at least ${ entry:.2f} buying power"}
 
     cost = qty * entry
     if dry_run:
@@ -1485,7 +1485,7 @@ def compute_technicals(hist: pd.DataFrame) -> dict:
 
     # ── Volatility contraction (VCP-style: range tightening before a move) ──
     # Compare recent ATR% to the prior baseline. A contracting range while the
-    # trend holds is a classic swing setup — energy coiling for a breakout.
+    # trend holds is a classic swing setup  energy coiling for a breakout.
     try:
         atr_series = _compute_atr(h, l, c, 14) / c * 100  # ATR as % of price
         if len(atr_series.dropna()) >= 30:
@@ -1501,7 +1501,7 @@ def compute_technicals(hist: pd.DataFrame) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  INTRADAY SIGNAL ENGINE — 5-minute bar analysis for day trading
+#  INTRADAY SIGNAL ENGINE  5-minute bar analysis for day trading
 #
 #  Uses VWAP, intraday EMAs, 5min RSI/MACD, and volume spikes.
 #  Completely separate from the daily signal engine.
@@ -1562,7 +1562,7 @@ def compute_intraday_technicals(hist: pd.DataFrame) -> dict:
     rsi_series = 100 - (100 / (1 + rs))
     rsi = float(rsi_series.iloc[-1]) if not rsi_series.empty else 50
 
-    # ── RSI(2) — ultra-short-term for VWAP pullback strategy ──
+    # ── RSI(2)  ultra-short-term for VWAP pullback strategy ──
     rsi_2 = 50.0
     if len(close) >= 3:
         delta_2 = close.diff()
@@ -1622,9 +1622,9 @@ def compute_intraday_technicals(hist: pd.DataFrame) -> dict:
     last_5_high = float(high.tail(5).max())
     last_5_low = float(low.tail(5).min())
     if last_5_high > prev_day_high and price < prev_day_high:
-        stop_hunt = "bull_trap"  # swept highs, reversed down → short signal
+        stop_hunt = "bull_trap"  # swept highs, reversed down  short signal
     elif last_5_low < prev_day_low and price > prev_day_low:
-        stop_hunt = "bear_trap"  # swept lows, reversed up → long signal
+        stop_hunt = "bear_trap"  # swept lows, reversed up  long signal
 
     # ── Higher lows / Lower highs ──
     recent_lows = low.tail(6).values
@@ -1660,12 +1660,12 @@ def compute_intraday_technicals(hist: pd.DataFrame) -> dict:
         if greens >= 5:
             # Check if last candle is red (reversal starting)
             if float(close.iloc[-1]) < float(open_.iloc[-1]):
-                parabolic = "bear_reversal"  # was parabolic green, first red → short
+                parabolic = "bear_reversal"  # was parabolic green, first red  short
             else:
                 parabolic = "extended_bull"  # still running but exhaustion likely
         elif reds >= 5:
             if float(close.iloc[-1]) > float(open_.iloc[-1]):
-                parabolic = "bull_reversal"  # was parabolic red, first green → long
+                parabolic = "bull_reversal"  # was parabolic red, first green  long
             else:
                 parabolic = "extended_bear"
 
@@ -1726,10 +1726,10 @@ def compute_intraday_technicals(hist: pd.DataFrame) -> dict:
         c2_body = abs(c2_close - c2_open)
         c2_green = c2_close > c2_open
 
-        # Hammer (bullish reversal) — long lower wick, small body at top
+        # Hammer (bullish reversal)  long lower wick, small body at top
         if c1_lower_wick > c1_body * 2 and c1_upper_wick < c1_body * 0.5 and c1_range > 0:
             candle_pattern = "hammer"
-        # Shooting star (bearish reversal) — long upper wick, small body at bottom
+        # Shooting star (bearish reversal)  long upper wick, small body at bottom
         elif c1_upper_wick > c1_body * 2 and c1_lower_wick < c1_body * 0.5 and c1_range > 0:
             candle_pattern = "shooting_star"
         # Bullish engulfing
@@ -1738,7 +1738,7 @@ def compute_intraday_technicals(hist: pd.DataFrame) -> dict:
         # Bearish engulfing
         elif not c1_green and c2_green and c1_body > c2_body * 1.3 and c1_close < c2_open:
             candle_pattern = "bearish_engulfing"
-        # Doji — body is tiny vs range
+        # Doji  body is tiny vs range
         elif c1_range > 0 and c1_body / c1_range < 0.1:
             candle_pattern = "doji"
     except Exception:
@@ -1820,7 +1820,7 @@ def compute_intraday_technicals(hist: pd.DataFrame) -> dict:
 
 def generate_intraday_signal(data: dict) -> dict:
     """
-    Day Trading Signal Engine — Buy intraday momentum above VWAP.
+    Day Trading Signal Engine  Buy intraday momentum above VWAP.
 
     Strategy: Buy when price is above VWAP with EMA confirmation,
     on a pullback with volume. Tight stops, quick targets.
@@ -1864,29 +1864,29 @@ def generate_intraday_signal(data: dict) -> dict:
     vwap_dist = (price - vwap) / vwap * 100 if vwap else 0
     if above_vwap and vwap_dist > 0.5:
         score += 12
-        signals.append(f"✓ Above VWAP (${vwap:.2f}) — buyers in control")
+        signals.append(f"Above VWAP (${vwap:.2f})  buyers in control")
     elif above_vwap:
         score += 6
         signals.append(f"Near VWAP (${vwap:.2f})")
     elif vwap_dist < -0.5:
         score -= 12
-        warnings.append(f"Below VWAP (${vwap:.2f}) — sellers in control")
+        warnings.append(f"Below VWAP (${vwap:.2f})  sellers in control")
     else:
         score -= 4
 
     # ── 2. EMA Trend (±12 points) ──
     if ema_bullish and ema_9 > ema_50:
         score += 12
-        signals.append("✓ Strong EMA alignment (9 > 20 > 50)")
+        signals.append("Strong EMA alignment (9 > 20 > 50)")
     elif ema_bullish:
         score += 8
-        signals.append("✓ 9 EMA above 20 EMA — momentum up")
+        signals.append("9 EMA above 20 EMA  momentum up")
     elif not ema_bullish and ema_9 < ema_50:
         score -= 12
         warnings.append("EMAs bearish (9 < 20 < 50)")
     else:
         score -= 6
-        warnings.append("9 EMA below 20 EMA — momentum down")
+        warnings.append("9 EMA below 20 EMA  momentum down")
 
     # ── 3. Pullback Quality (±10 points) ──
     # Best entry: price above VWAP but pulled back near it or near 20 EMA
@@ -1895,40 +1895,40 @@ def generate_intraday_signal(data: dict) -> dict:
 
     if above_vwap and dist_to_vwap < 0.3:
         score += 10
-        signals.append("✓ Pullback to VWAP — ideal entry")
+        signals.append("Pullback to VWAP  ideal entry")
     elif above_vwap and dist_to_ema20 < 0.2:
         score += 8
-        signals.append("✓ Pullback to 20 EMA")
+        signals.append("Pullback to 20 EMA")
     elif above_vwap and dist_to_vwap > 1.5:
         score -= 3
-        warnings.append("Extended above VWAP — risky chase")
+        warnings.append("Extended above VWAP  risky chase")
 
     # ── 4. RSI (±8 points) ──
     if 35 <= rsi <= 55:
         score += 8
-        signals.append(f"✓ RSI {rsi:.0f} — pulled back, room to run")
+        signals.append(f"RSI {rsi:.0f}  pulled back, room to run")
     elif 55 < rsi <= 65:
         score += 3
     elif rsi > 75:
         score -= 8
-        warnings.append(f"RSI {rsi:.0f} — overbought, avoid chasing")
+        warnings.append(f"RSI {rsi:.0f}  overbought, avoid chasing")
     elif rsi < 30:
         score -= 6
-        warnings.append(f"RSI {rsi:.0f} — oversold, wait for reversal")
+        warnings.append(f"RSI {rsi:.0f}  oversold, wait for reversal")
     elif rsi > 65:
         score -= 3
-        warnings.append(f"RSI {rsi:.0f} — getting hot")
+        warnings.append(f"RSI {rsi:.0f}  getting hot")
 
     # ── 5. Volume (±10 points) ──
     if vol_ratio >= 2.0:
         score += 10
-        signals.append(f"✓ Volume spike ({vol_ratio:.1f}x avg) — strong interest")
+        signals.append(f"Volume spike ({vol_ratio:.1f}x avg)  strong interest")
     elif vol_ratio >= 1.3:
         score += 6
         signals.append(f"Above-average volume ({vol_ratio:.1f}x)")
     elif vol_ratio < 0.5:
         score -= 6
-        warnings.append(f"Dead volume ({vol_ratio:.1f}x) — no conviction")
+        warnings.append(f"Dead volume ({vol_ratio:.1f}x)  no conviction")
     elif vol_ratio < 0.8:
         score -= 3
 
@@ -1943,10 +1943,10 @@ def generate_intraday_signal(data: dict) -> dict:
     # ── 7. Price Action (±6 points) ──
     if higher_lows and above_vwap:
         score += 6
-        signals.append("✓ Higher lows — buyers stepping up")
+        signals.append("Higher lows  buyers stepping up")
     elif lower_highs and not above_vwap:
         score -= 6
-        warnings.append("Lower highs — sellers pressing")
+        warnings.append("Lower highs  sellers pressing")
 
     # ── 8. News Sentiment (±8 points) ──
     news_sent = data.get("news_sentiment", {})
@@ -1966,67 +1966,67 @@ def generate_intraday_signal(data: dict) -> dict:
     adx = tech.get("adx", 20)
     if adx >= 30:
         score += 8 if above_vwap else -6
-        signals.append(f"✓ Strong trend (ADX {adx:.0f}) — {'ride it' if above_vwap else 'trending down'}")
+        signals.append(f"Strong trend (ADX {adx:.0f})  {'ride it' if above_vwap else 'trending down'}")
     elif adx >= 22:
         score += 4 if above_vwap else -3
         signals.append(f"Moderate trend (ADX {adx:.0f})")
     elif adx < 15:
         score -= 2
-        warnings.append(f"No trend (ADX {adx:.0f}) — choppy, beware fakeouts")
+        warnings.append(f"No trend (ADX {adx:.0f})  choppy, beware fakeouts")
 
     # ── 10. Breakout Detection (±10 points) ──
     breakout = tech.get("breakout", "none")
     if breakout == "above_prev_high" and vol_ratio >= 1.3:
         score += 10
-        signals.append(f"✓ Breakout above prev day high (${tech.get('prev_day_high', 0):.2f}) on volume")
+        signals.append(f"Breakout above prev day high (${tech.get('prev_day_high', 0):.2f}) on volume")
     elif breakout == "above_prev_high":
         score += 5
-        signals.append(f"Above prev day high — needs volume confirmation")
+        signals.append(f"Above prev day high  needs volume confirmation")
     elif breakout == "below_prev_low" and vol_ratio >= 1.3:
         score -= 10
         warnings.append(f"Breakdown below prev day low (${tech.get('prev_day_low', 0):.2f}) on volume")
     elif breakout == "below_prev_low":
         score -= 5
-        warnings.append(f"Below prev day low — weak")
+        warnings.append(f"Below prev day low  weak")
 
     # ── 11. Candlestick Patterns (±8 points) ──
     candle = tech.get("candle_pattern", "none")
     if candle == "hammer":
         score += 8
-        signals.append("✓ Hammer candle — bullish reversal pattern")
+        signals.append("Hammer candle  bullish reversal pattern")
     elif candle == "bullish_engulfing":
         score += 8
-        signals.append("✓ Bullish engulfing — strong reversal")
+        signals.append("Bullish engulfing  strong reversal")
     elif candle == "shooting_star":
         score -= 8
-        warnings.append("Shooting star — bearish reversal pattern")
+        warnings.append("Shooting star  bearish reversal pattern")
     elif candle == "bearish_engulfing":
         score -= 8
-        warnings.append("Bearish engulfing — strong reversal down")
+        warnings.append("Bearish engulfing  strong reversal down")
     elif candle == "doji":
         score -= 2
-        warnings.append("Doji — indecision, wait for confirmation")
+        warnings.append("Doji  indecision, wait for confirmation")
 
     # ── 12. Stop Hunt / Liquidity Sweep (±6 points) ──
     stop_hunt = tech.get("stop_hunt", "none")
     if stop_hunt == "bear_trap":
         score += 6
-        signals.append("✓ Bear trap — swept lows then reversed up (smart money long)")
+        signals.append("Bear trap  swept lows then reversed up (smart money long)")
     elif stop_hunt == "bull_trap":
         score -= 6
-        warnings.append("Bull trap — swept highs then reversed down (smart money short)")
+        warnings.append("Bull trap  swept highs then reversed down (smart money short)")
 
     # ── 13. Parabolic / Exhaustion (±6 points) ──
     parabolic = tech.get("parabolic", "none")
     if parabolic == "bull_reversal":
         score += 6
-        signals.append("✓ Parabolic sell-off reversing — bounce play")
+        signals.append("Parabolic sell-off reversing  bounce play")
     elif parabolic == "bear_reversal":
         score -= 6
-        warnings.append("Parabolic rally exhausted — reversal candle")
+        warnings.append("Parabolic rally exhausted  reversal candle")
     elif parabolic == "extended_bull":
         score -= 3
-        warnings.append("Extended run (5+ green candles) — exhaustion risk")
+        warnings.append("Extended run (5+ green candles)  exhaustion risk")
     elif parabolic == "extended_bear":
         score += 2
 
@@ -2035,10 +2035,10 @@ def generate_intraday_signal(data: dict) -> dict:
     stoch_d = tech.get("stoch_d", 50)
     if stoch_k < 20 and stoch_k > stoch_d:
         score += 6
-        signals.append(f"✓ Stoch RSI oversold ({stoch_k:.0f}) crossing up — momentum turning")
+        signals.append(f"Stoch RSI oversold ({stoch_k:.0f}) crossing up  momentum turning")
     elif stoch_k > 80 and stoch_k < stoch_d:
         score -= 6
-        warnings.append(f"Stoch RSI overbought ({stoch_k:.0f}) crossing down — momentum fading")
+        warnings.append(f"Stoch RSI overbought ({stoch_k:.0f}) crossing down  momentum fading")
     elif stoch_k > 85:
         score -= 3
         warnings.append(f"Stoch RSI stretched ({stoch_k:.0f})")
@@ -2047,92 +2047,92 @@ def generate_intraday_signal(data: dict) -> dict:
     fh_trend = tech.get("first_hour_trend", "neutral")
     if fh_trend == "bullish" and above_vwap:
         score += 5
-        signals.append("✓ First hour trend bullish — momentum from open")
+        signals.append("First hour trend bullish  momentum from open")
     elif fh_trend == "bearish" and not above_vwap:
         score -= 5
-        warnings.append("First hour trend bearish — selling from open")
+        warnings.append("First hour trend bearish  selling from open")
 
     # ── 16. Higher Timeframe Bias (±5 points) ──
     htf = tech.get("htf_bias", "neutral")
     if htf == "bullish":
         score += 5
-        signals.append("✓ Hourly trend bullish — higher timeframe supports longs")
+        signals.append("Hourly trend bullish  higher timeframe supports longs")
     elif htf == "bearish":
         score -= 5
-        warnings.append("Hourly trend bearish — higher timeframe favors shorts")
+        warnings.append("Hourly trend bearish  higher timeframe favors shorts")
 
     # ── 17. Range Warning (±4 points) ──
     is_ranging = tech.get("is_ranging", False)
     if is_ranging:
         score -= 4
-        warnings.append("Stock is range-bound (ADX low, tight price action) — breakout or fade")
+        warnings.append("Stock is range-bound (ADX low, tight price action)  breakout or fade")
 
     # ── 18. VWAP Bounce Quality (±4 points) ──
     vwap_bounce = tech.get("vwap_bounce_quality", 0)
     if vwap_bounce >= 3:
         score += 4
-        signals.append("✓ Clean VWAP bounce with volume — institutional buying")
+        signals.append("Clean VWAP bounce with volume  institutional buying")
     elif vwap_bounce >= 2:
         score += 2
         signals.append("VWAP bounce detected")
 
     # ── 19. VWAP Pullback Strategy (±10 points) ──
-    # Based on Brian Shannon method — backtested at 1.69 profit factor
+    # Based on Brian Shannon method  backtested at 1.69 profit factor
     # Buy when: price above VWAP + RSI(2) oversold (price pulled back to VWAP)
     rsi_2 = tech.get("rsi_2", 50)
     if above_vwap and rsi_2 < 25 and dist_to_vwap < 0.5:
         score += 10
-        signals.append(f"✓ VWAP Pullback Setup — RSI(2)={rsi_2:.0f}, price at VWAP support")
+        signals.append(f"VWAP Pullback Setup  RSI(2)={rsi_2:.0f}, price at VWAP support")
     elif above_vwap and rsi_2 < 35 and dist_to_vwap < 0.8:
         score += 5
-        signals.append(f"Near VWAP pullback — RSI(2)={rsi_2:.0f}")
+        signals.append(f"Near VWAP pullback  RSI(2)={rsi_2:.0f}")
     elif not above_vwap and rsi_2 > 75 and dist_to_vwap < 0.5:
         score -= 10
-        warnings.append(f"Bearish VWAP pullback — RSI(2)={rsi_2:.0f}, price at VWAP resistance")
+        warnings.append(f"Bearish VWAP pullback  RSI(2)={rsi_2:.0f}, price at VWAP resistance")
     elif not above_vwap and rsi_2 > 65 and dist_to_vwap < 0.8:
         score -= 5
 
     # ── 20. Open = High/Low Strategy (±8 points) ──
-    # If open = day high after 15 min → bearish (sellers immediately took over)
-    # If open = day low after 15 min → bullish (buyers stepped in immediately)
+    # If open = day high after 15 min  bearish (sellers immediately took over)
+    # If open = day low after 15 min  bullish (buyers stepped in immediately)
     day_open = tech.get("day_open", 0)
     if day_open > 0 and day_high > 0 and day_low > 0:
         open_is_high = abs(day_open - day_high) / price < 0.001  # within 0.1%
         open_is_low = abs(day_open - day_low) / price < 0.001
         if open_is_low and price > day_open:
             score += 8
-            signals.append("✓ Open = Day Low — buyers dominated from the bell")
+            signals.append("Open = Day Low  buyers dominated from the bell")
         elif open_is_high and price < day_open:
             score -= 8
-            warnings.append("Open = Day High — sellers dominated from the bell")
+            warnings.append("Open = Day High  sellers dominated from the bell")
 
     # ── 21. Volume Breakout Confirmation (±6 points) ──
-    # Breakouts only matter with 2x+ volume — confirmed by 2025 research
+    # Breakouts only matter with 2x+ volume  confirmed by 2025 research
     if breakout in ("above_prev_high", "below_prev_low"):
         if vol_ratio >= 2.0:
             score += 6 if breakout == "above_prev_high" else -6
-            signals.append(f"✓ Volume-confirmed breakout ({vol_ratio:.1f}x) — high probability")
+            signals.append(f"Volume-confirmed breakout ({vol_ratio:.1f}x)  high probability")
         elif vol_ratio < 1.0:
-            # Fake breakout — low volume
+            # Fake breakout  low volume
             if breakout == "above_prev_high":
                 score -= 4
-                warnings.append(f"Low-volume breakout ({vol_ratio:.1f}x) — likely fakeout")
+                warnings.append(f"Low-volume breakout ({vol_ratio:.1f}x)  likely fakeout")
             else:
                 score += 4
-                signals.append(f"Low-volume breakdown ({vol_ratio:.1f}x) — likely fakeout bounce")
+                signals.append(f"Low-volume breakdown ({vol_ratio:.1f}x)  likely fakeout bounce")
 
     # ── DETERMINE ACTION ──
     # Raw positives can total ~+115 over the 50 baseline, so genuinely strong
     # stocks used to slam into the 100 ceiling and all read identically (the
     # "why are they all 100" bug). Compress the above-50 portion so a perfect
-    # setup lands ~95, not 150 — preserving real differentiation between good
+    # setup lands ~95, not 150  preserving real differentiation between good
     # and great. Below 50 is left linear (a bad stock should read clearly bad).
     if score > 50:
         # Diminishing returns above baseline: 0.6x compression, capped at 98.
         score = 50 + min(48, (score - 50) * 0.6)
     score = max(0, min(100, round(score)))
 
-    bullish_count = sum(1 for s in signals if "✓" in s)
+    bullish_count = sum(1 for s in signals if "" in s)
     bearish_count = len(warnings)
 
     if score >= 68 and above_vwap and ema_bullish:
@@ -2151,7 +2151,7 @@ def generate_intraday_signal(data: dict) -> dict:
         action = "HOLD"
         confidence = max(40, 100 - abs(score - 50) * 2)
 
-    # ── RISK MANAGEMENT (Intraday — uses 5min ATR) ──
+    # ── RISK MANAGEMENT (Intraday  uses 5min ATR) ──
     # Load stop floor from config
     _stop_floor = 0.013  # default 1.3%
     try:
@@ -2164,7 +2164,7 @@ def generate_intraday_signal(data: dict) -> dict:
 
     if action in ("BUY", "STRONG_BUY"):
         entry = price
-        # Stop: 3x intraday ATR — give room to breathe
+        # Stop: 3x intraday ATR  give room to breathe
         stop_atr = round(entry - 3.0 * atr, 2)
         stop_vwap = round(vwap - 1.0 * atr, 2) if above_vwap and dist_to_vwap < 0.5 else stop_atr
         stop_loss = max(stop_atr, stop_vwap)
@@ -2188,7 +2188,7 @@ def generate_intraday_signal(data: dict) -> dict:
         target_2 = round(entry - 4.0 * risk, 2)
         risk_pct = round(risk / entry * 100, 2)
     else:
-        # HOLD — no high-conviction entry. Guard against tiny/zero ATR collapsing
+        # HOLD  no high-conviction entry. Guard against tiny/zero ATR collapsing
         # entry=stop=target, and bias direction by intraday structure (VWAP/EMA20).
         entry = price
         eff_atr = atr if atr and atr > 0 else max(round(price * 0.01, 2), 0.01)
@@ -2275,7 +2275,7 @@ def fetch_scan_intraday(ticker: str) -> dict | None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  TRADE SIGNAL GENERATOR — daily chart engine (used for manual analysis)
+#  TRADE SIGNAL GENERATOR  daily chart engine (used for manual analysis)
 #
 #  Confluence categories (each votes bullish/bearish with a cap):
 #    1. Trend       (regime + MAs)              max ±30
@@ -2370,14 +2370,14 @@ def generate_trade_signal(data: dict) -> dict:
     # -- Trend health (0-25 points) --
     if above_200:
         score += 8
-        signals.append("Above 200 SMA — long-term uptrend ✓")
+        signals.append("Above 200 SMA  long-term uptrend ")
     else:
         score -= 15
-        warnings.append("Below 200 SMA — no uptrend")
+        warnings.append("Below 200 SMA  no uptrend")
     
     if above_50:
         score += 6
-        signals.append("Above 50 SMA — medium-term uptrend ✓")
+        signals.append("Above 50 SMA  medium-term uptrend ")
     else:
         score -= 10
         warnings.append("Below 50 SMA")
@@ -2403,10 +2403,10 @@ def generate_trade_signal(data: dict) -> dict:
     # -- Pullback quality (0-15 points) --
     if pullback_to_20 and above_50:
         score += int(max(0, pullback_quality))
-        signals.append(f"Pulled back to 20 SMA — buy-the-dip setup")
+        signals.append(f"Pulled back to 20 SMA  buy-the-dip setup")
     if pullback_to_50 and above_200:
         score += 6
-        signals.append(f"Deeper pullback to 50 SMA in uptrend — high value entry")
+        signals.append(f"Deeper pullback to 50 SMA in uptrend  high value entry")
     
     # -- RSI sweet spot (0-10 points) --
     if 35 <= rsi <= 50:
@@ -2419,10 +2419,10 @@ def generate_trade_signal(data: dict) -> dict:
         score += 3  # okay, not ideal
     elif rsi > 75:
         score -= 8
-        warnings.append(f"RSI overbought ({rsi:.0f}) — don't chase")
+        warnings.append(f"RSI overbought ({rsi:.0f})  don't chase")
     elif rsi < 25:
         score -= 5
-        warnings.append(f"RSI crashing ({rsi:.0f}) — could keep falling")
+        warnings.append(f"RSI crashing ({rsi:.0f})  could keep falling")
     
     # -- Momentum confirmation (0-10 points) --
     if macd_h > 0 and macd_accel == "expanding":
@@ -2450,10 +2450,10 @@ def generate_trade_signal(data: dict) -> dict:
     if pullback_to_20 or pullback_to_50:
         if vol_ratio < 0.8:
             score += 4
-            signals.append(f"Low volume on pullback ({vol_ratio:.1f}x) — healthy dip")
+            signals.append(f"Low volume on pullback ({vol_ratio:.1f}x)  healthy dip")
         elif vol_ratio > 2.0:
             score -= 3
-            warnings.append(f"High volume on pullback ({vol_ratio:.1f}x) — possible distribution")
+            warnings.append(f"High volume on pullback ({vol_ratio:.1f}x)  possible distribution")
     else:
         if vol_ratio > 1.5:
             score += 3
@@ -2464,19 +2464,19 @@ def generate_trade_signal(data: dict) -> dict:
     
     if obv_trend == "rising":
         score += 3
-        signals.append("OBV rising — accumulation")
+        signals.append("OBV rising  accumulation")
     elif obv_trend == "falling":
         score -= 3
-        warnings.append("OBV falling — distribution")
+        warnings.append("OBV falling  distribution")
     
     # -- Bollinger Band context (0-5 points) --
     if bb_pct_b is not None:
         if bb_pct_b <= 0.15 and above_50:
             score += 5
-            signals.append(f"At lower Bollinger in uptrend — bounce likely")
+            signals.append(f"At lower Bollinger in uptrend  bounce likely")
         elif bb_pct_b >= 0.95:
             score -= 4
-            warnings.append(f"At upper Bollinger — extended")
+            warnings.append(f"At upper Bollinger  extended")
     
     # -- Support proximity (0-4 points) --
     if supports:
@@ -2570,7 +2570,7 @@ def generate_trade_signal(data: dict) -> dict:
     pct_from_high = tech.get("pct_from_52w_high", -100)
     if pct_from_high >= -3:
         score += 6
-        signals.append("Near 52-week high — leadership strength")
+        signals.append("Near 52-week high  leadership strength")
     elif pct_from_high >= -10:
         score += 4
         signals.append(f"Within {abs(pct_from_high):.0f}% of 52-week high")
@@ -2578,13 +2578,13 @@ def generate_trade_signal(data: dict) -> dict:
         score += 1
     elif pct_from_high <= -50:
         score -= 4
-        warnings.append("Far below 52-week high — deep downtrend")
+        warnings.append("Far below 52-week high  deep downtrend")
 
     # -- Volatility contraction (coiling before a breakout) --
     if tech.get("volatility_contracting") and (above_50 or above_200):
         score += 6
         vcr = tech.get("vol_contraction_ratio", 1)
-        signals.append(f"Volatility contracting ({vcr:.2f}x) — coiling for a move")
+        signals.append(f"Volatility contracting ({vcr:.2f}x)  coiling for a move")
 
     # ═══ STEP 4: DETERMINE ACTION ═══
     # Compress the above-baseline portion so genuinely strong setups spread
@@ -2593,7 +2593,7 @@ def generate_trade_signal(data: dict) -> dict:
         score = 50 + min(48, (score - 50) * 0.6)
     score = max(0, min(100, round(score)))
     
-    bullish_count = sum(1 for s in signals if "✓" in s or "bullish" in s.lower() or "uptrend" in s.lower() or "rising" in s.lower() or "buy" in s.lower() or "outperform" in s.lower() or "sector" in s.lower())
+    bullish_count = sum(1 for s in signals if "" in s or "bullish" in s.lower() or "uptrend" in s.lower() or "rising" in s.lower() or "buy" in s.lower() or "outperform" in s.lower() or "sector" in s.lower())
     bearish_count = sum(1 for w in warnings)
     
     # BUY requires: uptrend confirmed + quality score
@@ -2640,8 +2640,8 @@ def generate_trade_signal(data: dict) -> dict:
 
     # ═══ STEP 5: RISK MANAGEMENT ═══
     # Stop distance is bounded both ways. In SWING mode the band is wider
-    # (3–10%) so a multi-day hold can survive normal overnight noise; the
-    # legacy intraday band was tight (1.5–4%).
+    # (310%) so a multi-day hold can survive normal overnight noise; the
+    # legacy intraday band was tight (1.54%).
     if SWING_MODE:
         MAX_STOP_PCT = SWING_MAX_STOP_PCT   # 0.10
         MIN_STOP_PCT = SWING_MIN_STOP_PCT   # 0.03
@@ -2679,7 +2679,7 @@ def generate_trade_signal(data: dict) -> dict:
         target_2 = round(entry - 5.0 * risk, 2)
         risk_pct = round(risk / entry * 100, 2)
     else:
-        # HOLD — no high-conviction entry. Still show indicative levels, but make
+        # HOLD  no high-conviction entry. Still show indicative levels, but make
         # them directional (down-bias if the stock is below its MAs) and never let
         # them collapse onto the entry when ATR is tiny/zero.
         entry = price
@@ -2709,10 +2709,10 @@ def generate_trade_signal(data: dict) -> dict:
     _ma_dir = (1 if above_200 else -1) + (1 if _above50 else -1) + (1 if _above20 else -1)  # -3..+3
     _strong = adx > 25
     if regime == "strong_downtrend" or _ma_dir <= -2:
-        # Confirmed downtrend — strength makes it worse
+        # Confirmed downtrend  strength makes it worse
         trend_sub = max(0, 35 - (15 if _strong else 0) + _ma_dir * 5)
     elif regime == "strong_uptrend" or _ma_dir >= 2:
-        # Confirmed uptrend — strength helps
+        # Confirmed uptrend  strength helps
         trend_sub = min(100, 60 + (15 if _strong else 0) + _ma_dir * 5)
     else:
         # Mixed / sideways
@@ -2724,7 +2724,7 @@ def generate_trade_signal(data: dict) -> dict:
 
     trend_lbl = "strong uptrend" if trend_sub >= 70 else "uptrend" if trend_sub >= 55 else "sideways" if trend_sub >= 42 else "downtrend" if trend_sub >= 25 else "strong downtrend"
     momentum_lbl = f"RSI {int(rsi)}, {'overbought' if rsi > 70 else 'oversold' if rsi < 30 else 'trending up' if macd_h > 0 else 'trending down'}"
-    mr_lbl = "low — not overstretched" if mr_sub >= 50 else "extended — pullback likely"
+    mr_lbl = "low  not overstretched" if mr_sub >= 50 else "extended  pullback likely"
     news_lbl = f"{'bullish' if news_sub >= 60 else 'neutral' if news_sub >= 40 else 'bearish'} coverage last 3d"
 
     # Earnings warning
@@ -2773,7 +2773,7 @@ def fetch_price(ticker: str) -> dict | None:
     # ── yfinance ──
     # .info is the richest source but ALSO the most aggressively rate-limited
     # endpoint yfinance has. When several tickers are fetched back-to-back, Yahoo
-    # throttles and .info starts failing — which is why the 3rd ticker in a
+    # throttles and .info starts failing  which is why the 3rd ticker in a
     # portfolio ("AAPL, NVDA, TSLA") would come back empty while the first two
     # worked. .history() holds up far better under throttling, so we try it
     # INDEPENDENTLY rather than abandoning yfinance the moment .info throws.
@@ -2788,7 +2788,7 @@ def fetch_price(ticker: str) -> dict | None:
     except Exception:
         info = {}
     # If .info gave nothing usable (throttled or empty), rescue the price from
-    # history — this is what fixes the "no data" drops on otherwise-fine tickers.
+    # history  this is what fixes the "no data" drops on otherwise-fine tickers.
     if not price or price <= 0:
         try:
             hist = yf.Ticker(ticker).history(period="5d")
@@ -2814,14 +2814,14 @@ def fetch_price(ticker: str) -> dict | None:
         }
 
     # Fallback: Polygon API. Free tier is 5 req/min, so under load the first call
-    # can 429 — retry once after a short pause before giving up.
+    # can 429  retry once after a short pause before giving up.
     polygon_key = os.environ.get("POLYGON_API_KEY", "")
     if polygon_key:
         clean = ticker.replace(".NS", "").replace("-", ".")
         # Pull the last several DAILY bars and compute the change from two real
         # closes (latest close vs the prior day's close). The old code used the
         # single /prev bar and took its OPEN as the baseline, which produced a
-        # wrong "daily change" (really that one bar's open→close move) and made
+        # wrong "daily change" (really that one bar's openclose move) and made
         # the header disagree with the chart.
         from datetime import datetime as _dt, timedelta as _td
         _to = _dt.now().strftime("%Y-%m-%d")
@@ -3086,7 +3086,7 @@ def _ai_news_analysis(ticker: str) -> dict:
                 "content": f"""Analyze these news headlines for {ticker}. Respond in EXACTLY this format, nothing else:
 
 SCORE: [number from -10 to 10, negative=bearish, positive=bullish]
-MACRO_RISK: [YES or NO — is there a macro event like war, sanctions, recession, rate hike that could cause a crash?]
+MACRO_RISK: [YES or NO  is there a macro event like war, sanctions, recession, rate hike that could cause a crash?]
 SUMMARY: [one sentence summary of the news sentiment and why]
 
 Headlines:
@@ -3130,7 +3130,7 @@ _DELISTED_CACHE = set()
 # minute to minute, so reusing it across back-to-back scans (e.g. a broad scan
 # then a themed one) avoids re-downloading the same 1y history. 90s TTL.
 _SCAN_DATA_CACHE = {}   # ticker -> (timestamp, data)
-_SCAN_CACHE_TTL = 300   # 5 min — daily bars barely move intraday, so repeat
+_SCAN_CACHE_TTL = 300   # 5 min  daily bars barely move intraday, so repeat
                         # scans (or overlapping universes) reuse data and are
                         # near-instant instead of re-downloading.
 
@@ -3167,7 +3167,7 @@ def _clear_yf_session():
 def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None) -> dict:
     """Bulk-fetch 1-year history for MANY tickers in a few HTTP requests using
     yf.download (multi-ticker). Returns {ticker: scan_data_dict}. Far faster than
-    per-ticker fetch_scan for big universes — one network round-trip per chunk
+    per-ticker fetch_scan for big universes  one network round-trip per chunk
     instead of one per stock. News is skipped here (fetched only for top picks).
     Chunks are downloaded IN PARALLEL so a 1000-name scan isn't 7 sequential
     round-trips but a handful of concurrent ones.
@@ -3196,7 +3196,7 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None) ->
     # call is one request for the whole chunk), which is what actually keeps us
     # under Yahoo's rate limit. Combined with modest concurrency, this is fast
     # WITHOUT triggering "Too Many Requests". Going too parallel (8+ workers,
-    # tiny chunks) floods Yahoo and gets the whole scan throttled — which then
+    # tiny chunks) floods Yahoo and gets the whole scan throttled  which then
     # returns no data and makes the AI fall back to guessing.
     CHUNK = 175
     chunks = [tickers[i:i + CHUNK] for i in range(0, len(tickers), CHUNK)]
@@ -3217,7 +3217,7 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None) ->
                         threads=True, progress=False,
                     )
                 # Empty frame can signal a soft rate-limit OR a stale-crumb block
-                # ("Invalid Crumb" 401) — clear yfinance's cached session/crumb and
+                # ("Invalid Crumb" 401)  clear yfinance's cached session/crumb and
                 # retry, which usually fixes the crumb case.
                 if (df is None or df.empty) and attempt < 2:
                     _clear_yf_session()
@@ -3236,7 +3236,7 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None) ->
         return chunk, None
 
     from concurrent.futures import ThreadPoolExecutor
-    # Modest concurrency — 3 chunks at a time. Process each chunk's frame as it
+    # Modest concurrency  3 chunks at a time. Process each chunk's frame as it
     # finishes and drop it immediately, so we never hold all ~500 tickers' worth
     # of 1y data in memory at once (that peak was a contributor to OOM kills).
     from concurrent.futures import as_completed
@@ -3248,13 +3248,13 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None) ->
     # IMPORTANT: only 2 chunks in flight at once. Each yf.download(threads=True)
     # spawns its OWN internal thread pool, so N outer workers multiply into N×
     # internal threads. On a small Railway container that exhausts the thread
-    # limit ("can't start new thread" → container crash mid-scan). 2 outer workers
+    # limit ("can't start new thread"  container crash mid-scan). 2 outer workers
     # keeps total threads bounded while still overlapping network waits.
     with ThreadPoolExecutor(max_workers=min(2, len(chunks))) as _ex:
         try:
             futures = [_ex.submit(_fetch_chunk, ch) for ch in chunks]
         except RuntimeError as _re:
-            # "can't start new thread" — the host is out of thread budget. Bail
+            # "can't start new thread"  the host is out of thread budget. Bail
             # gracefully with whatever we have rather than crashing the process.
             _log.warning(f"scan thread-pool submit failed: {_re}")
             futures = []
@@ -3332,7 +3332,7 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None) ->
 
 
 def fetch_scan(ticker: str) -> dict | None:
-    """Lightweight fetch for scanning — skips slow .info calls, just gets history + technicals."""
+    """Lightweight fetch for scanning  skips slow .info calls, just gets history + technicals."""
     if ticker in _DELISTED_CACHE:
         return None
     try:
@@ -3342,7 +3342,7 @@ def fetch_scan(ticker: str) -> dict | None:
         if hist is None or hist.empty or len(hist) < 50:
             # Empty/thin can mean genuinely delisted OR Yahoo blocked us
             # ("Invalid Crumb" 401 / 404 from a datacenter IP). Don't poison the
-            # delisted cache on an empty response — that wrongly drops alive
+            # delisted cache on an empty response  that wrongly drops alive
             # names when Yahoo throttles. Try POLYGON before giving up: the chart
             # endpoint already does this, which is why the chart would render
             # while analysis returned NO_DATA for a live stock (e.g. GE).
@@ -3355,7 +3355,7 @@ def fetch_scan(ticker: str) -> dict | None:
         if not price or price < 1:
             return None
         # Delisted/halted guard: stale last bar = no longer trading (see batch scan).
-        # Skip when the bars came from Polygon — its daily aggregates can lag a
+        # Skip when the bars came from Polygon  its daily aggregates can lag a
         # day or two, which is not evidence of a delisting.
         if not _via_polygon:
             try:
@@ -3387,12 +3387,12 @@ def fetch_scan(ticker: str) -> dict | None:
         return None
 
 
-_FULL_CACHE = {}  # ticker -> (timestamp, data) — short TTL so analyze tab & chat agree
+_FULL_CACHE = {}  # ticker -> (timestamp, data)  short TTL so analyze tab & chat agree
 
 def fetch_full(ticker: str) -> dict | None:
     # Serve a recent cached result so two independent calls for the same ticker
     # (e.g. the Analyze tab and a chat analysis moments apart) return identical
-    # data — and therefore identical scores. 60s TTL keeps it fresh enough.
+    # data  and therefore identical scores. 60s TTL keeps it fresh enough.
     import time as _t
     _key = ticker.upper()
     _now = _t.time()
@@ -3511,7 +3511,7 @@ def build_chart(ticker: str, period: str = "6mo", trade_signal: dict | None = No
 def _llm_classify_intent(msg: str) -> dict | None:
     """Second-opinion intent classifier for messages the keyword router can't
     confidently place (it only runs on the chat fallthrough). Restricted to
-    SAFE, non-destructive intents — never trades or autopilot, so a
+    SAFE, non-destructive intents  never trades or autopilot, so a
     misclassification can't execute an order. Returns an intent dict or None
     (caller then falls back to plain chat). Cached so repeated identical short
     queries don't re-hit the LLM (helps with Groq rate limits)."""
@@ -3528,8 +3528,8 @@ def _llm_classify_intent(msg: str) -> dict | None:
             "You classify a message sent to a stock-trading app into ONE intent. "
             "Respond with ONLY the intent word, nothing else. Options:\n"
             "- stock_ideas (wants trade/swing setups, picks, 'what should I buy', scan for opportunities)\n"
-            "- analyze (wants your read on ONE specific named stock — 'thoughts on NVDA', 'is AAPL a buy', 'how's tesla looking')\n"
-            "- compare (wants two named stocks compared — 'AMD vs NVDA', 'which is better, X or Y')\n"
+            "- analyze (wants your read on ONE specific named stock  'thoughts on NVDA', 'is AAPL a buy', 'how's tesla looking')\n"
+            "- compare (wants two named stocks compared  'AMD vs NVDA', 'which is better, X or Y')\n"
             "- price (just wants the current price/quote of a named stock)\n"
             "- market (asking about the overall market, SPY, conditions, regime)\n"
             "- backtest (wants to backtest/test the strategy)\n"
@@ -3553,7 +3553,7 @@ def _llm_classify_intent(msg: str) -> dict | None:
                 if v == "chat":
                     return None  # let normal chat handling proceed
                 if v == "stock_ideas":
-                    # Even if the LLM says "scan", named tickers win — the user
+                    # Even if the LLM says "scan", named tickers win  the user
                     # asked about specific stocks, not the whole market.
                     _ov = _named_ticker_override(msg)
                     if _ov:
@@ -3565,7 +3565,7 @@ def _llm_classify_intent(msg: str) -> dict | None:
                     _tk, _mkt = _find_ticker(msg)
                     if _tk:
                         return {"type": v, "ticker": _tk, "market": _mkt or _detect_market(msg), "_original_msg": msg}
-                    return None  # no clear ticker → let chat handle it
+                    return None  # no clear ticker  let chat handle it
                 if v == "compare":
                     import re as _re_c
                     _CMP_STOP = {"AND", "OR", "VS", "THE", "A", "AN", "IS", "IT", "ON", "AT", "TO",
@@ -3595,7 +3595,7 @@ def _recent_tickers_from_history(history: list, limit: int = 4) -> list:
     import re as _re_h
     seen = set()
     found = []
-    # Walk newest → oldest so the most recent subject wins.
+    # Walk newest  oldest so the most recent subject wins.
     for turn in reversed(history):
         content = (turn or {}).get("content", "") or ""
         # Tickers Paula writes as "(AXON)" or bare caps; validate against the
@@ -3618,7 +3618,7 @@ _NEVER_A_REFERENCE = {"A", "I", "IT", "ALL", "ANY", "BUY", "CEO", "EPS", "USD",
 
 # Referential cues: the message points back at something already discussed
 # rather than naming it. Split into "action" (implies re-running a tool on the
-# prior subject) vs pure continuation (just keep talking — stays conversational).
+# prior subject) vs pure continuation (just keep talking  stays conversational).
 _REF_PRONOUNS = ("it", "that", "this", "them", "those", "these",
                  "that one", "the first one", "the second one", "the first",
                  "the second", "the third", "the last one", "the other one")
@@ -3635,7 +3635,7 @@ PRIVATE_COMPANIES = [
 
 def _mentions_private_company(m: str) -> bool:
     """True if the message names a private/non-tradeable company. Uses word
-    boundaries so a name doesn't match as a substring of an unrelated word —
+    boundaries so a name doesn't match as a substring of an unrelated word 
     e.g. the 'ey ' entry (Ernst & Young) must NOT fire inside 'disnEY which',
     which was silently routing Disney questions to a private-company answer."""
     for p in PRIVATE_COMPANIES:
@@ -3654,13 +3654,13 @@ def _mentions_private_company(m: str) -> bool:
 
 def _named_ticker_override(msg: str):
     """If the user explicitly named specific stocks, return an analyze/compare
-    intent for THOSE — even when the message also contains scan-ish language like
+    intent for THOSE  even when the message also contains scan-ish language like
     'swing trading opportunities' or 'what should I buy'. Someone asking "when
     should I buy TSLA and GOOG" wants those two analyzed, not a generic 500-stock
     scan. Returns None when no explicit tickers are named (so pure 'what should I
     buy' / 'find me tech setups' still scan).
 
-    Only counts EXPLICIT mentions — company names or resolvable symbols/aliases —
+    Only counts EXPLICIT mentions  company names or resolvable symbols/aliases 
     via find_all_tickers, which already excludes lowercase words that merely
     happen to be tickers."""
     tks = find_all_tickers(msg, limit=3)
@@ -3674,7 +3674,7 @@ def _named_ticker_override(msg: str):
 def route(msg: str, history: list = None) -> dict:
     # Quoted lines (the user highlighted part of a prior reply and is asking
     # ABOUT it) are context, not commands. Strip them before routing so words
-    # inside a quote — e.g. a "BUY" signal — never trigger a real trade.
+    # inside a quote  e.g. a "BUY" signal  never trigger a real trade.
     if msg and "\n" in msg or (msg and msg.lstrip().startswith(">")):
         _lines = [ln for ln in msg.split("\n") if not ln.lstrip().startswith(">")]
         _stripped = "\n".join(_lines).strip()
@@ -3685,11 +3685,11 @@ def route(msg: str, history: list = None) -> dict:
         return {"type": "chat"}
 
     # ── Referential follow-up resolution ─────────────────────────────────────
-    # "analyze it", "is that a buy?", "compare them" — the subject lives in the
+    # "analyze it", "is that a buy?", "compare them"  the subject lives in the
     # previous turns, not this message. If the current message has NO ticker of
     # its own but clearly refers back, resolve the ticker(s) from history and
     # rewrite the message so the normal routing below can handle it. Pure
-    # continuations ("go on", "tell me more") are left alone — they already fall
+    # continuations ("go on", "tell me more") are left alone  they already fall
     # through to a conversational reply that gets the full history.
     import re as _re_ref
     _has_own_ticker = any(
@@ -3719,7 +3719,7 @@ def route(msg: str, history: list = None) -> dict:
                 if _wants_compare and len(_ctx) >= 2:
                     return {"type": "compare", "tickers": _ctx[:2], "market": "US",
                             "_original_msg": msg, "_resolved_from_history": True}
-                # Ordinal reference — "the second one" → 2nd most recent subject.
+                # Ordinal reference  "the second one"  2nd most recent subject.
                 _ord = None
                 for _i, _word in enumerate(("first", "second", "third")):
                     if _word in m:
@@ -3732,12 +3732,12 @@ def route(msg: str, history: list = None) -> dict:
                 msg = re.sub(r'\b(it|that|this|that one|the (first|second|third|last|other) one)\b',
                              _tk, msg, flags=re.IGNORECASE)
                 m = msg.lower().strip()
-                # Fall through — the resolved ticker now routes normally below.
+                # Fall through  the resolved ticker now routes normally below.
 
 
     # ── Private / non-tradeable companies ──
     # Questions about companies with no public ticker (or pre-IPO) should be a
-    # plain conversational answer — NOT a stock lookup that attaches unrelated
+    # plain conversational answer  NOT a stock lookup that attaches unrelated
     # data (e.g. "SpaceX IPO?" must not pull AAPL from earlier in the chat).
     if _mentions_private_company(m):
         return {"type": "chat", "private_company": True, "market": "US"}
@@ -3751,7 +3751,7 @@ def route(msg: str, history: list = None) -> dict:
             return {"type": "earnings", "ticker": _et[0], "market": "US", "_original_msg": msg}
 
     # ── Position sizing ── ("how many shares of NVDA if I risk $200")
-    # Must mention RISK specifically — "how many shares can I buy with $5k" is an
+    # Must mention RISK specifically  "how many shares can I buy with $5k" is an
     # affordability question (handled elsewhere), not risk-based sizing.
     _size_trigger = (("how many shares" in m or "position size" in m or "size a position" in m
                       or "shares should i" in m or "size my position" in m)
@@ -3780,7 +3780,7 @@ def route(msg: str, history: list = None) -> dict:
         if len(_ct) >= 2:
             return {"type": "compare", "tickers": _ct[:2], "market": "US", "_original_msg": msg}
 
-    # ── Detect questions/advice requests → send to AI, not execute commands ──
+    # ── Detect questions/advice requests  send to AI, not execute commands ──
     is_question = any(q in m for q in [
         "should i", "which", "what should", "can you tell", "can you suggest",
         "recommend", "suggestion", "advice", "ideas", "what are the best",
@@ -3790,7 +3790,7 @@ def route(msg: str, history: list = None) -> dict:
         "how many shares", "how many do i", "do i own", "do i have",
         "am i holding", "shares do i", "my shares",
     ])
-    # Stock recommendation questions → smart scan
+    # Stock recommendation questions  smart scan
     wants_picks = any(q in m for q in [
         "what should i buy", "what to buy", "give me trade ideas", "trade ideas",
         "what stocks", "what stock", "which stocks", "which stock",
@@ -3816,7 +3816,7 @@ def route(msg: str, history: list = None) -> dict:
         "money into", "into the market", "into stocks",
     ])
     # A specific ticker named alongside a "how many shares / what's it worth /
-    # can I afford" question is a position-math question about THAT stock — not
+    # can I afford" question is a position-math question about THAT stock  not
     # a request to scan for ideas. Route to analyze so price-math can answer it.
     _named_ticker, _named_market = _find_ticker(msg)
     shares_math = any(p in m for p in [
@@ -3830,7 +3830,7 @@ def route(msg: str, history: list = None) -> dict:
     if wants_picks and not any(cmd in m for cmd in [
         "close all", "sell everything", "liquidate",
     ]):
-        # If the user named specific stocks, analyze THOSE instead of scanning —
+        # If the user named specific stocks, analyze THOSE instead of scanning 
         # "should I buy TSLA and GOOG" must not become a generic market scan.
         _ov = _named_ticker_override(msg)
         if _ov:
@@ -3861,7 +3861,7 @@ def route(msg: str, history: list = None) -> dict:
             cat = "full"
         return {"type": "stock_ideas", "category": cat, "_original_msg": msg}
 
-    # ── Position queries — check before is_question short-circuits to analyze ──
+    # ── Position queries  check before is_question short-circuits to analyze ──
     is_position_query = any(w in m for w in [
         "my positions", "what do i own", "what am i holding", "open positions", "show positions",
         "what positions", "current positions", "what do we have", "what are we holding",
@@ -3929,7 +3929,7 @@ def route(msg: str, history: list = None) -> dict:
                             "how many shares", "shares do i", "shares of", "do i own", "do i have",
                             "am i holding", "my shares", "what am i long", "what am i short"]):
         return {"type": "positions"}
-    # Cancel open orders — must come before the "show orders" check so
+    # Cancel open orders  must come before the "show orders" check so
     # "cancel all orders" / "cancel my orders" isn't read as "show orders".
     if "cancel" in m and any(w in m for w in ["order", "orders", "all trade", "active trade", "pending", "everything"]):
         return {"type": "cancel_orders"}
@@ -3945,7 +3945,7 @@ def route(msg: str, history: list = None) -> dict:
 
     # A trade command is an IMPERATIVE ("buy AAPL"), not a question or an
     # explanation request. If the message reads as a question/explainer, never
-    # route it to a real buy/sell/short/cover — even if those words appear (e.g.
+    # route it to a real buy/sell/short/cover  even if those words appear (e.g.
     # quoting a "BUY" signal and asking "explain this"). This prevents accidental
     # order execution from analytical questions.
     _is_question = (
@@ -3958,7 +3958,7 @@ def route(msg: str, history: list = None) -> dict:
         ])
     )
     # But an explicit imperative like "yes buy it" / "go ahead and buy 5 AAPL"
-    # should still work — only treat as a question when there's no clear command lead.
+    # should still work  only treat as a question when there's no clear command lead.
     _explicit_cmd = bool(re.match(r'^\s*(buy|sell|short|cover|close|go ahead|yes,? (buy|sell)|do it|execute|confirm)\b', m))
     _block_trade = _is_question and not _explicit_cmd
 
@@ -4028,9 +4028,9 @@ def route(msg: str, history: list = None) -> dict:
         return {"type": "analyze", "ticker": ticker, "market": market, "_original_msg": msg}
 
     # Keyword routing didn't confidently place this. Before defaulting to chat,
-    # ask the LLM for a second opinion — but ONLY on safe, non-destructive
+    # ask the LLM for a second opinion  but ONLY on safe, non-destructive
     # intents (never trades/autopilot). If it's unsure or errors, fall to chat.
-    # Skip the LLM only for CLEAR chitchat/greetings — not for "what/why/how"
+    # Skip the LLM only for CLEAR chitchat/greetings  not for "what/why/how"
     # openers, since those are often real ("what's tesla doing", "how's the
     # market", "why is NVDA up"). The classifier itself returns chat for genuine
     # conversation, so it's safe to let more through.
@@ -4085,7 +4085,7 @@ def _get_spy_intraday_trend() -> dict | None:
         vwap = float((cum_tp_vol / cum_vol.replace(0, 1)).iloc[-1])
 
         # Day change % must be measured against the PREVIOUS DAILY CLOSE (same basis
-        # as the market-regime card), NOT the first 5-min bar of the window — that
+        # as the market-regime card), NOT the first 5-min bar of the window  that
         # baseline gave a wrong number that disagreed with the market card. Pull the
         # prior daily close; fall back to the window's first bar only if unavailable.
         change_pct = round((price - open_price) / open_price * 100, 2)
@@ -4130,7 +4130,7 @@ _MARKET_HOLIDAYS = {
     "2026-04-03",  # Good Friday
     "2026-05-25",  # Memorial Day
     "2026-06-19",  # Juneteenth
-    "2026-07-03",  # Independence Day (observed — Jul 4 is a Saturday)
+    "2026-07-03",  # Independence Day (observed  Jul 4 is a Saturday)
     "2026-09-07",  # Labor Day
     "2026-11-26",  # Thanksgiving
     "2026-12-25",  # Christmas
@@ -4140,11 +4140,11 @@ _MARKET_HOLIDAYS = {
     "2027-02-15",  # Presidents' Day
     "2027-03-26",  # Good Friday
     "2027-05-31",  # Memorial Day
-    "2027-06-18",  # Juneteenth (observed — Jun 19 is a Saturday)
-    "2027-07-05",  # Independence Day (observed — Jul 4 is a Sunday)
+    "2027-06-18",  # Juneteenth (observed  Jun 19 is a Saturday)
+    "2027-07-05",  # Independence Day (observed  Jul 4 is a Sunday)
     "2027-09-06",  # Labor Day
     "2027-11-25",  # Thanksgiving
-    "2027-12-24",  # Christmas (observed — Dec 25 is a Saturday)
+    "2027-12-24",  # Christmas (observed  Dec 25 is a Saturday)
 }
 
 
@@ -4156,19 +4156,19 @@ def _market_is_open() -> tuple[bool, str]:
 
     if weekday >= 5:
         next_open = "Monday 8:30 AM CT"
-        return False, f"Weekend — market reopens {next_open}"
+        return False, f"Weekend  market reopens {next_open}"
 
     # Market holiday? (weekday but exchange fully closed)
     if now.strftime("%Y-%m-%d") in _MARKET_HOLIDAYS:
-        return False, "Market holiday — closed today, reopens next trading day 8:30 AM CT"
+        return False, "Market holiday  closed today, reopens next trading day 8:30 AM CT"
 
     market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
     market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
 
     if now < market_open:
-        return False, f"Pre-market — opens at 8:30 AM CT"
+        return False, f"Pre-market  opens at 8:30 AM CT"
     if now >= market_close:
-        return False, "Market closed for today — reopens tomorrow 8:30 AM CT"
+        return False, "Market closed for today  reopens tomorrow 8:30 AM CT"
 
     return True, "Market is open"
 
@@ -4230,18 +4230,18 @@ def check_market_regime() -> dict:
 
         if regime in ("strong_bear", "bear"):
             safe = False
-            reason = f"SPY below 200 SMA — bear market (SPY ${price:.2f}, 200 SMA ${sma_200:.2f})"
+            reason = f"SPY below 200 SMA  bear market (SPY ${price:.2f}, 200 SMA ${sma_200:.2f})"
         elif regime == "weakening":
             safe = True  # can still buy but with caution
-            reason = f"Market weakening — SPY slipping below 50 SMA (RSI {rsi:.0f})"
+            reason = f"Market weakening  SPY slipping below 50 SMA (RSI {rsi:.0f})"
         elif rsi > 80:
             safe = False
-            reason = f"SPY overbought (RSI {rsi:.0f}) — wait for pullback"
+            reason = f"SPY overbought (RSI {rsi:.0f})  wait for pullback"
         elif rsi < 25:
             safe = False
-            reason = f"SPY extremely oversold (RSI {rsi:.0f}) — possible crash, stay out"
+            reason = f"SPY extremely oversold (RSI {rsi:.0f})  possible crash, stay out"
         else:
-            reason = f"SPY ${price:.2f} — {regime} regime, RSI {rsi:.0f}"
+            reason = f"SPY ${price:.2f}  {regime} regime, RSI {rsi:.0f}"
 
         return {
             "regime": regime,
@@ -4368,7 +4368,7 @@ def next_earnings_date(ticker: str) -> dict | None:
 def update_trailing_stops(positions: list[dict], log: list) -> list[str]:
     """
     For each open position, check if price has moved up enough to trail the stop.
-    Uses 2x intraday ATR (5min bars) trailing stop — tighter for day trading.
+    Uses 2x intraday ATR (5min bars) trailing stop  tighter for day trading.
     """
     actions = []
     for pos in positions:
@@ -4408,7 +4408,7 @@ def update_trailing_stops(positions: list[dict], log: list) -> list[str]:
                         r = requests.post(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(),
                                           json=stop_order, timeout=10)
                         if r.status_code in (200, 201):
-                            actions.append(f"🔒 Breakeven stop on {ticker} @ ${breakeven_stop:.2f} (+{pnl_pct:.1f}%)")
+                            actions.append(f"Breakeven stop on {ticker} @ ${breakeven_stop:.2f} (+{pnl_pct:.1f}%)")
                     except Exception:
                         pass
                 continue
@@ -4471,7 +4471,7 @@ def update_trailing_stops(positions: list[dict], log: list) -> list[str]:
                         r = requests.post(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(),
                                           json=stop_order, timeout=10)
                         if r.status_code in (200, 201):
-                            actions.append(f"📈 Trailed stop on {ticker}: ${new_stop:.2f} (locking +${new_stop - entry:.2f}/share)")
+                            actions.append(f"Trailed stop on {ticker}: ${new_stop:.2f} (locking +${new_stop - entry:.2f}/share)")
                     except Exception:
                         pass
             else:
@@ -4504,7 +4504,7 @@ def update_trailing_stops(positions: list[dict], log: list) -> list[str]:
                         r = requests.post(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(),
                                           json=stop_order, timeout=10)
                         if r.status_code in (200, 201):
-                            actions.append(f"📈 Trailed stop on {ticker} (short): ${new_stop:.2f} (locking +${entry - new_stop:.2f}/share)")
+                            actions.append(f"Trailed stop on {ticker} (short): ${new_stop:.2f} (locking +${entry - new_stop:.2f}/share)")
                     except Exception:
                         pass
         except Exception:
@@ -4521,10 +4521,10 @@ def run_backtest(years: int = 2, max_positions: int | None = None) -> dict:
     Simulates autopilot with trailing stops over the last N years.
     """
     STARTING_CAPITAL = 25_000
-    RISK_PER_TRADE = 0.01        # 1% risk per trade — matches the live engine
-    MIN_SCORE = 50               # lower bar — backtester has ~20-30 pts missing data
+    RISK_PER_TRADE = 0.01        # 1% risk per trade  matches the live engine
+    MIN_SCORE = 50               # lower bar  backtester has ~20-30 pts missing data
     MIN_RR = 1.2                 # lower R:R bar = more trades
-    SLIPPAGE = 0.0005            # 5 bps per side — models realistic fill cost
+    SLIPPAGE = 0.0005            # 5 bps per side  models realistic fill cost
 
     # 100 stocks
     TEST_UNIVERSE = [
@@ -4592,10 +4592,10 @@ def run_backtest(years: int = 2, max_positions: int | None = None) -> dict:
     log = [f"**Backtesting {len(TEST_UNIVERSE)} stocks over {years} years...**",
            f"Starting capital: ${STARTING_CAPITAL:,}",
            f"Mode: {'SWING (~%d-day holds)' % SWING_MAX_HOLD_DAYS if SWING_MODE else 'Intraday'} · score≥{MIN_SCORE} · R:R≥{MIN_RR}",
-           f"Stops: {'2x ATR, 3–10% band' if SWING_MODE else '3x ATR, 1.5–4% band'} · partial @ +{4 if SWING_MODE else 2}% · trail {SWING_STOP_ATR_MULT if SWING_MODE else 1.5}x ATR",
+           f"Stops: {'2x ATR, 310% band' if SWING_MODE else '3x ATR, 1.54% band'} · partial @ +{4 if SWING_MODE else 2}% · trail {SWING_STOP_ATR_MULT if SWING_MODE else 1.5}x ATR",
            f"Fills: {SLIPPAGE*10000:.0f}bps slippage/side · stop wins intrabar ties · chronological compounding",
-           f"⚠️ Score threshold lowered to {MIN_SCORE} (live has RS/sector/news data worth ~20+ extra pts)",
-           f"⚠️ Fixed universe of current names → results carry survivorship bias; treat as optimistic"]
+           f" Score threshold lowered to {MIN_SCORE} (live has RS/sector/news data worth ~20+ extra pts)",
+           f" Fixed universe of current names  results carry survivorship bias; treat as optimistic"]
 
     step = 3        # check every 3 bars
     max_hold = SWING_MAX_HOLD_DAYS if SWING_MODE else 25   # swing: ~10 trading days
@@ -4645,7 +4645,7 @@ def run_backtest(years: int = 2, max_positions: int | None = None) -> dict:
                 if entry_price <= stop or stop <= 0:
                     continue
 
-                # Position sizing — tiered by conviction.
+                # Position sizing  tiered by conviction.
                 # NOTE: sizing is resolved later (after sorting trades by date)
                 # so capital compounds chronologically, not in ticker order.
                 risk_per_share = entry_price - stop
@@ -4766,7 +4766,7 @@ def run_backtest(years: int = 2, max_positions: int | None = None) -> dict:
     # The live engine holds at most a couple positions at once. Summing every
     # signal independently (the old pass) let the backtest hold hundreds of
     # correlated positions simultaneously, so a market dip crushed all of them
-    # together → fake 90%+ drawdowns. This walks the real timeline: a new trade
+    # together  fake 90%+ drawdowns. This walks the real timeline: a new trade
     # can only open when a slot is free, exactly like live trading.
     def _to_dt(d):
         try:
@@ -4887,11 +4887,11 @@ def run_backtest(years: int = 2, max_positions: int | None = None) -> dict:
     log.append(f"Sharpe ratio: {sharpe:.2f}")
     log.append("")
     log.append("**Capital:**")
-    log.append(f"Starting: ${STARTING_CAPITAL:,} → Final: ${capital:,.2f}")
+    log.append(f"Starting: ${STARTING_CAPITAL:,}  Final: ${capital:,.2f}")
     log.append(f"Total return: {total_return:+.1f}%")
     log.append(f"Max drawdown: {max_drawdown:.1f}%")
     if skipped_full or skipped_dd:
-        log.append(f"📋 Held max {MAX_CONCURRENT} positions · skipped {skipped_full} (slots full) + {skipped_dd} (drawdown brake)")
+        log.append(f"Held max {MAX_CONCURRENT} positions · skipped {skipped_full} (slots full) + {skipped_dd} (drawdown brake)")
     log.append(f"Peak: ${peak:,.2f} · Trough: ${min_capital:,.2f}")
 
     if trades:
@@ -4899,12 +4899,12 @@ def run_backtest(years: int = 2, max_positions: int | None = None) -> dict:
         log.append("**Top 5 winners:**")
         best = sorted(trades, key=lambda x: x["pnl"], reverse=True)[:5]
         for t in best:
-            log.append(f"🟢 {t['ticker']}: ${t['entry']} → ${t['exit']} ({t['pnl_pct']:+.1f}%) = ${t['pnl']:+,.2f} [{t['result']}]")
+            log.append(f"{t['ticker']}: ${t['entry']}  ${t['exit']} ({t['pnl_pct']:+.1f}%) = ${t['pnl']:+,.2f} [{t['result']}]")
         log.append("")
         log.append("**Top 5 losers:**")
         worst = sorted(trades, key=lambda x: x["pnl"])[:5]
         for t in worst:
-            log.append(f"🔴 {t['ticker']}: ${t['entry']} → ${t['exit']} ({t['pnl_pct']:+.1f}%) = ${t['pnl']:+,.2f} [{t['result']}]")
+            log.append(f"{t['ticker']}: ${t['entry']}  ${t['exit']} ({t['pnl_pct']:+.1f}%) = ${t['pnl']:+,.2f} [{t['result']}]")
 
         targets_hit = sum(1 for t in trades if t["result"] == "TARGET")
         stops_hit = sum(1 for t in trades if t["result"] == "STOPPED")
@@ -4924,9 +4924,9 @@ def run_backtest(years: int = 2, max_positions: int | None = None) -> dict:
     }
 
 def premarket_scan() -> dict:
-    """Run at 8:15 AM CT — build today's watchlist BEFORE market opens."""
+    """Run at 8:15 AM CT  build today's watchlist BEFORE market opens."""
     import yfinance as yf
-    log = ["🌅 **Pre-Market Scan** — building today's watchlist"]
+    log = [" **Pre-Market Scan**  building today's watchlist"]
 
     # Get pre-market movers from Polygon
     all_snaps = polygon_all_snapshots() or []
@@ -4943,14 +4943,14 @@ def premarket_scan() -> dict:
             if ticker and not _has_earnings_today(ticker):
                 watchlist.append(ticker)
                 arrow = "▲" if s.get("Chg%", 0) > 0 else "▼"
-                log.append(f"  {arrow} {ticker} {s.get('Chg%', 0):+.1f}% · Vol: {s.get('Volume', 0):,.0f}")
+                log.append(f"{arrow} {ticker} {s.get('Chg%', 0):+.1f}% · Vol: {s.get('Volume', 0):,.0f}")
 
     # Add consistent large-cap movers
     for ticker in NASDAQ_100[:15]:
         if ticker not in watchlist:
             watchlist.append(ticker)
 
-    log.append(f"\n📋 Watchlist: {len(watchlist)} stocks ready for open")
+    log.append(f"\n Watchlist: {len(watchlist)} stocks ready for open")
 
     # Store in session state
     st.session_state["premarket_watchlist"] = watchlist
@@ -4960,7 +4960,7 @@ def premarket_scan() -> dict:
 
 
 def _has_earnings_today(ticker: str) -> bool:
-    """Check if a stock has earnings today — never trade on earnings day."""
+    """Check if a stock has earnings today  never trade on earnings day."""
     try:
         import yfinance as yf
         cal = yf.Ticker(ticker).calendar
@@ -4987,7 +4987,7 @@ def _check_sector_correlation(ticker: str, positions: list, max_per_sector: int 
     """Returns True if adding this ticker would exceed sector limit."""
     new_sector = TICKER_SECTOR.get(ticker)
     if not new_sector:
-        return False  # Unknown sector — allow it
+        return False  # Unknown sector  allow it
 
     sector_count = 0
     for pos in positions:
@@ -5046,9 +5046,9 @@ def load_autopilot_config() -> dict:
         params["TRAIL_ACTIVATE_PCT"] = 2.5    # start trailing at +2.5% (was 3%)
         params["TRAIL_DISTANCE_PCT"] = 2.0    # stop 2% below the high (was 2.5%)
     else:
-        params["PARTIAL_PROFIT_PCT"] = 0.015  # half off at +1.5% — quick day scalp
+        params["PARTIAL_PROFIT_PCT"] = 0.015  # half off at +1.5%  quick day scalp
         params["TRAIL_ACTIVATE_PCT"] = 1.2    # start trailing at +1.2%
-        params["TRAIL_DISTANCE_PCT"] = 1.2    # stop 1.2% below high — lock gains tight
+        params["TRAIL_DISTANCE_PCT"] = 1.2    # stop 1.2% below high  lock gains tight
 
     # ── AUTO RISK ────────────────────────────────────────────────────────────
     # Risk per trade is determined automatically from market conditions, the
@@ -5120,13 +5120,13 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     # ── Market hours check ──
     is_open, status_msg = _market_is_open()
     if not is_open and not skip_market_check:
-        log.append(f"⏸️ {status_msg}")
-        log.append("Autopilot is paused — will resume when market opens.")
+        log.append(f"⏸ {status_msg}")
+        log.append("Autopilot is paused  will resume when market opens.")
         return {"ok": True, "log": log, "buys": 0, "sells": 0, "scanned": 0, "opportunities": 0, "market_closed": True}
     if not is_open and skip_market_check:
-        log.append(f"⚠️ {status_msg} — scanning anyway (forced)")
+        log.append(f"{status_msg}  scanning anyway (forced)")
 
-    # Sync today's entries from Alpaca (filled buy orders) — the real source of
+    # Sync today's entries from Alpaca (filled buy orders)  the real source of
     # truth. Works across restarts and doesn't depend on in-memory state. This
     # is how a resumed autopilot knows what it already did today.
     et = ZoneInfo("US/Eastern")
@@ -5137,7 +5137,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     account = alpaca_account()
     if not account:
         return {"ok": False, "error": "Can't connect to Alpaca."}
-    log.append(f"💰 Portfolio: ${account['equity']:,.2f} · Cash: ${account['cash']:,.2f} · Buying power: ${account['buying_power']:,.2f}")
+    log.append(f"Portfolio: ${account['equity']:,.2f} · Cash: ${account['cash']:,.2f} · Buying power: ${account['buying_power']:,.2f}")
 
     positions = alpaca_positions()
     # Don't re-buy anything we already hold OR already bought today.
@@ -5198,35 +5198,35 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                 tune_msg = []
 
                 if total_trades >= 2:
-                    # RULE 1: Losing day → tighten (fast)
+                    # RULE 1: Losing day  tighten (fast)
                     if total_pnl < 0:
                         params["MIN_SCORE"] = min(90, params["MIN_SCORE"] + 2)
                         params["MAX_DAILY_ENTRIES"] = max(2, params["MAX_DAILY_ENTRIES"] - 1)
-                        tune_msg.append(f"Loss day (${total_pnl:.0f}) → score={params['MIN_SCORE']}, entries={params['MAX_DAILY_ENTRIES']}")
+                        tune_msg.append(f"Loss day (${total_pnl:.0f})  score={params['MIN_SCORE']}, entries={params['MAX_DAILY_ENTRIES']}")
 
-                    # RULE 2: Win rate below 30% → tighten hard
+                    # RULE 2: Win rate below 30%  tighten hard
                     if win_rate < 0.30 and total_trades >= 3:
                         params["MIN_SCORE"] = min(90, params["MIN_SCORE"] + 3)
                         params["MIN_CONFLUENCE"] = min(6, params["MIN_CONFLUENCE"] + 1)
-                        tune_msg.append(f"Low WR ({win_rate:.0%}) → score={params['MIN_SCORE']}, confluence={params['MIN_CONFLUENCE']}")
+                        tune_msg.append(f"Low WR ({win_rate:.0%})  score={params['MIN_SCORE']}, confluence={params['MIN_CONFLUENCE']}")
 
-                    # RULE 3: Profitable day → relax VERY slowly (1 point, only if above floor)
+                    # RULE 3: Profitable day  relax VERY slowly (1 point, only if above floor)
                     if total_pnl > 50 and win_rate > 0.40:
                         if params["MIN_SCORE"] > FLOOR_MIN_SCORE + 2:
                             params["MIN_SCORE"] = max(FLOOR_MIN_SCORE, params["MIN_SCORE"] - 1)
-                            tune_msg.append(f"Profit day +${total_pnl:.0f} ({win_rate:.0%} WR) → score={params['MIN_SCORE']} (relaxed 1pt)")
+                            tune_msg.append(f"Profit day +${total_pnl:.0f} ({win_rate:.0%} WR)  score={params['MIN_SCORE']} (relaxed 1pt)")
 
-                    # RULE 4: Big loss → widen stops slightly (less noise stopouts)
+                    # RULE 4: Big loss  widen stops slightly (less noise stopouts)
                     if total_pnl < -100:
                         params["STOP_FLOOR"] = min(0.020, params.get("STOP_FLOOR", 0.013) + 0.001)
-                        tune_msg.append(f"Big loss → stop_floor={params['STOP_FLOOR']:.1%}")
+                        tune_msg.append(f"Big loss  stop_floor={params['STOP_FLOOR']:.1%}")
 
-                    # RULE 5: 3+ wins in a row → narrow stops back (confidence)
+                    # RULE 5: 3+ wins in a row  narrow stops back (confidence)
                     if wins >= 3 and losses == 0:
                         params["STOP_FLOOR"] = max(FLOOR_STOP, params.get("STOP_FLOOR", 0.013) - 0.001)
-                        tune_msg.append(f"Clean sweep ({wins}W) → stop_floor={params['STOP_FLOOR']:.1%}")
+                        tune_msg.append(f"Clean sweep ({wins}W)  stop_floor={params['STOP_FLOOR']:.1%}")
 
-                    # HARD CLAMPS — never violate proven floors
+                    # HARD CLAMPS  never violate proven floors
                     params["MIN_SCORE"] = max(FLOOR_MIN_SCORE, min(92, params["MIN_SCORE"]))
                     params["MAX_POSITIONS"] = max(1, min(FLOOR_MAX_POS, params["MAX_POSITIONS"]))
                     params["MAX_DAILY_ENTRIES"] = max(2, min(FLOOR_MAX_ENTRIES, params["MAX_DAILY_ENTRIES"]))
@@ -5238,9 +5238,9 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                     params["AVOID_MIDDAY"] = True  # always skip midday chop
 
                 if tune_msg:
-                    log.append("🔧 **Auto-Tune** — adjusted based on yesterday:")
+                    log.append("**Auto-Tune**  adjusted based on yesterday:")
                     for m in tune_msg:
-                        log.append(f"   • {m}")
+                        log.append(f"{m}")
                     params["tune_history"].append({"date": today, "changes": tune_msg,
                                                    "stats": {"trades": total_trades, "wins": wins, "losses": losses, "pnl": round(total_pnl, 2)}})
                     params["tune_history"] = params["tune_history"][-30:]
@@ -5248,7 +5248,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                 params["last_tuned"] = today
                 CONFIG_PATH.write_text(json.dumps(params, indent=2))
         except Exception as e:
-            log.append(f"⚠️ Auto-tune skipped: {str(e)[:60]}")
+            log.append(f"Auto-tune skipped: {str(e)[:60]}")
 
     # Apply params
     MAX_POSITIONS = params["MAX_POSITIONS"]
@@ -5263,7 +5263,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     daily_entries = len(bought_today)
 
     log.append(f"Open positions: {len(positions)} · Max: {MAX_POSITIONS} · Entries today: {daily_entries}/{MAX_DAILY_ENTRIES}")
-    log.append(f"📊 Mode: **{'Swing' if SWING_MODE else 'Selective Intraday'}** · Score≥{MIN_SCORE} · R:R≥{MIN_RR} · Max {MAX_POSITIONS} pos")
+    log.append(f"Mode: **{'Swing' if SWING_MODE else 'Selective Intraday'}** · Score≥{MIN_SCORE} · R:R≥{MIN_RR} · Max {MAX_POSITIONS} pos")
     DAILY_LOSS_LIMIT = params["DAILY_LOSS_LIMIT"]
     PARTIAL_PROFIT_PCT = params["PARTIAL_PROFIT_PCT"]
     PARTIAL_PROFIT_SOLD_KEY = "autopilot_partial_sold"
@@ -5271,17 +5271,17 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     # ── 1b. Daily loss limit ──
     daily_pnl_pct = account.get("daily_pnl_pct", 0)
     if daily_pnl_pct <= -DAILY_LOSS_LIMIT * 100 and not dry_run:
-        log.append(f"🛑 **DAILY LOSS LIMIT HIT** — down {daily_pnl_pct:.2f}% today")
+        log.append(f"**DAILY LOSS LIMIT HIT**  down {daily_pnl_pct:.2f}% today")
         log.append("Closing all positions and shutting down autopilot.")
         result = alpaca_close_all()
         if result.get("ok"):
             log.append("All positions closed.")
         else:
-            log.append(f"⚠️ Failed to close: {result.get('error', '')}")
+            log.append(f"Failed to close: {result.get('error', '')}")
         st.session_state["autopilot_active"] = False
         return {"ok": True, "log": log, "buys": 0, "sells": len(positions), "scanned": 0, "opportunities": 0}
     elif daily_pnl_pct <= -DAILY_LOSS_LIMIT * 100 and dry_run:
-        log.append(f"🛑 Daily loss limit would trigger — down {daily_pnl_pct:.2f}% today")
+        log.append(f"Daily loss limit would trigger  down {daily_pnl_pct:.2f}% today")
     elif daily_pnl_pct < 0:
         log.append(f"Daily P&L: {daily_pnl_pct:+.2f}% (limit: -{DAILY_LOSS_LIMIT*100:.0f}%)")
     else:
@@ -5290,29 +5290,29 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     # ── 1b. EOD handling ──
     now_et = datetime.now(et)
     weekday = now_et.strftime("%A")
-    log.append(f"📅 {weekday} {now_et.strftime('%I:%M %p ET')}")
+    log.append(f"{weekday} {now_et.strftime('%I:%M %p ET')}")
 
     if SWING_MODE:
         # Swing trading: positions are held across days. We do NOT force-close
-        # at the bell — exits happen on stop/target/reversal/max-hold only.
-        log.append("📈 Swing mode — positions held overnight, no EOD liquidation")
+        # at the bell  exits happen on stop/target/reversal/max-hold only.
+        log.append("Swing mode  positions held overnight, no EOD liquidation")
         no_new_buys_eod = False
     else:
-        # (legacy intraday path — kept for reference, disabled while SWING_MODE)
+        # (legacy intraday path  kept for reference, disabled while SWING_MODE)
         eod_warning = now_et.replace(hour=15, minute=30, second=0, microsecond=0)
         eod_liquidation = now_et.replace(hour=15, minute=45, second=0, microsecond=0)
         eod_hard_close = now_et.replace(hour=15, minute=55, second=0, microsecond=0)
 
         if now_et >= eod_warning and now_et < eod_liquidation and positions:
-            log.append(f"⏰ **EOD WARNING** — closing all in {(eod_liquidation - now_et).seconds // 60} min")
+            log.append(f"⏰ **EOD WARNING**  closing all in {(eod_liquidation - now_et).seconds // 60} min")
 
         if now_et >= eod_liquidation and positions and not dry_run:
-            log.append(f"🔔 **EOD LIQUIDATION (2:45 PM CT)** — closing ALL {len(positions)} positions")
+            log.append(f"**EOD LIQUIDATION (2:45 PM CT)**  closing ALL {len(positions)} positions")
             result = alpaca_close_all()
             if result.get("ok"):
-                log.append(f"✅ Closed {len(positions)} positions — flat for the day")
+                log.append(f"Closed {len(positions)} positions  flat for the day")
             else:
-                log.append(f"⚠️ Bulk close failed: {result.get('error', '')} — trying individually")
+                log.append(f"Bulk close failed: {result.get('error', '')}  trying individually")
                 for pos in positions:
                     try:
                         ticker = pos["ticker"]
@@ -5329,31 +5329,31 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                             timeout=10
                         )
                         if r.status_code in (200, 201, 207):
-                            log.append(f"✅ Closed {ticker} ({pos.get('side', 'long')})")
+                            log.append(f"Closed {ticker} ({pos.get('side', 'long')})")
                         else:
                             err = r.json().get("message", "") if r.text else "unknown"
-                            log.append(f"⚠️ Failed {ticker}: {err}")
+                            log.append(f"Failed {ticker}: {err}")
                     except Exception as e:
-                        log.append(f"⚠️ Error closing {ticker}: {str(e)[:60]}")
+                        log.append(f"Error closing {ticker}: {str(e)[:60]}")
 
             if now_et >= eod_hard_close:
                 remaining = alpaca_positions()
                 if remaining:
-                    log.append(f"🔴 **HARD CLOSE** — {len(remaining)} positions still open at 2:55 PM CT")
+                    log.append(f"**HARD CLOSE**  {len(remaining)} positions still open at 2:55 PM CT")
                     requests.delete(f"{ALPACA_BASE}/v2/orders", headers=_alpaca_headers(), timeout=10)
                     requests.delete(f"{ALPACA_BASE}/v2/positions", headers=_alpaca_headers(),
                                    params={"cancel_orders": "true"}, timeout=10)
-                    log.append("🔴 Cancelled all orders + closed all positions")
+                    log.append("Cancelled all orders + closed all positions")
 
             return {"ok": True, "log": log, "buys": 0, "sells": len(positions), "scanned": 0, "opportunities": 0}
         elif now_et >= eod_liquidation and positions and dry_run:
-            log.append(f"🔔 EOD: Would close {len(positions)} positions (dry run)")
+            log.append(f"EOD: Would close {len(positions)} positions (dry run)")
 
         # No new trades in last 60min of trading (intraday only)
         last_buy_cutoff = now_et.replace(hour=15, minute=30, second=0, microsecond=0)
         no_new_buys_eod = now_et >= last_buy_cutoff
 
-    # ── 1b2. Avoid the open — first 15min is pure chop ──
+    # ── 1b2. Avoid the open  first 15min is pure chop ──
     start_h, start_m = [int(x) for x in params.get("TRADING_HOURS_START", "09:45").split(":")]
     end_h, end_m = [int(x) for x in params.get("TRADING_HOURS_END", "15:00").split(":")]
     market_open_safe = now_et.replace(hour=start_h, minute=start_m, second=0, microsecond=0)
@@ -5362,10 +5362,10 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     too_early = market_open_actual <= now_et < market_open_safe
     too_late = now_et >= trading_end
     if too_early:
-        log.append(f"⏳ Waiting until {start_h}:{start_m:02d} AM — first 15min is chop, letting VWAP establish")
+        log.append(f"⏳ Waiting until {start_h}:{start_m:02d} AM  first 15min is chop, letting VWAP establish")
         no_new_buys_eod = True
     if too_late:
-        log.append(f"⏳ Past {end_h}:{end_m:02d} — no new entries, managing exits only")
+        log.append(f"⏳ Past {end_h}:{end_m:02d}  no new entries, managing exits only")
         no_new_buys_eod = True
 
     # ── 1b3. Midday chop filter ──
@@ -5375,37 +5375,37 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         midday_start = now_et.replace(hour=mid_start_h, minute=mid_start_m, second=0, microsecond=0)
         midday_end = now_et.replace(hour=mid_end_h, minute=mid_end_m, second=0, microsecond=0)
         if midday_start <= now_et < midday_end:
-            log.append(f"⏳ Midday ({mid_start_h}:{mid_start_m:02d}-{mid_end_h}:{mid_end_m:02d}) — low volume chop, skipping entries")
+            log.append(f"⏳ Midday ({mid_start_h}:{mid_start_m:02d}-{mid_end_h}:{mid_end_m:02d})  low volume chop, skipping entries")
             no_new_buys_eod = True
 
-    # ── 1b4. SPY correlation filter — don't go long into a dump ──
+    # ── 1b4. SPY correlation filter  don't go long into a dump ──
     spy_trend = _get_spy_intraday_trend()
     if spy_trend:
-        log.append(f"📈 SPY: {spy_trend['direction']} ({spy_trend['change_pct']:+.2f}%) · VWAP {'above' if spy_trend['above_vwap'] else 'below'}")
+        log.append(f"SPY: {spy_trend['direction']} ({spy_trend['change_pct']:+.2f}%) · VWAP {'above' if spy_trend['above_vwap'] else 'below'}")
 
     # ── 1c. Market regime + VIX check ──
     regime = check_market_regime()
     vix = regime.get("vix", {})
     vix_level = vix.get("level", 0)
     vix_status = vix.get("status", "unknown")
-    log.append(f"📊 Market: {regime['reason']}")
+    log.append(f"Market: {regime['reason']}")
     if vix_level > 0:
-        vix_emoji = "🟢" if vix_level < 20 else "🟡" if vix_level < 25 else "🔴"
-        log.append(f"{vix_emoji} VIX: {vix_level} ({vix_status}) — {'fear is low, good for trading' if vix_level < 20 else 'elevated fear, trade smaller' if vix_level < 30 else 'EXTREME FEAR — reducing exposure'}")
+        vix_emoji = "" if vix_level < 20 else "" if vix_level < 25 else ""
+        log.append(f"{vix_emoji} VIX: {vix_level} ({vix_status})  {'fear is low, good for trading' if vix_level < 20 else 'elevated fear, trade smaller' if vix_level < 30 else 'EXTREME FEAR  reducing exposure'}")
 
-    # VIX panic mode — shut down longs, only allow shorts
+    # VIX panic mode  shut down longs, only allow shorts
     vix_panic = vix_level >= 35
     vix_cautious = vix_level >= 25
 
     if vix_panic and not dry_run:
-        log.append("🛑 **VIX EXTREME (≥35)** — closing all long positions, only shorts allowed")
+        log.append("**VIX EXTREME (≥35)**  closing all long positions, only shorts allowed")
         for pos in positions:
             if pos.get("side", "long") == "long":
                 alpaca_sell(ticker=pos["ticker"], sell_all=True)
-                log.append(f"🔴 Emergency closed {pos['ticker']} (VIX panic)")
+                log.append(f"Emergency closed {pos['ticker']} (VIX panic)")
 
     if not regime["safe_to_buy"]:
-        log.append("⛔ Market regime unsafe — skipping new longs, only managing existing")
+        log.append("Market regime unsafe  skipping new longs, only managing existing")
 
     # ── 1d. Sector strength report ──
     sectors = _get_sector_strength()
@@ -5423,9 +5423,9 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         for a in trail_actions:
             log.append(a)
         if not trail_actions:
-            log.append("No stops to trail — positions not yet profitable enough")
+            log.append("No stops to trail  positions not yet profitable enough")
 
-    # ── 2a. Time-based stops — kill flat trades (dead money) ──
+    # ── 2a. Time-based stops  kill flat trades (dead money) ──
     STALE_KEY = "autopilot_entry_times"
     if STALE_KEY not in st.session_state:
         st.session_state[STALE_KEY] = {}
@@ -5442,24 +5442,24 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     STALE_MINUTES = params.get("STALE_MINUTES", 90)
     for pos in positions:
         if SWING_MODE or STALE_MINUTES <= 0:
-            break  # swing holds across days — no intraday "dead money" kill
+            break  # swing holds across days  no intraday "dead money" kill
         ticker = pos["ticker"]
         pnl_pct = pos.get("unrealized_pnl_pct", 0)
         entry_time = st.session_state[STALE_KEY].get(ticker, time.time())
         minutes_held = (time.time() - entry_time) / 60
 
-        # If held 90+ min and PnL between -0.5% and +0.5% — it's dead money
+        # If held 90+ min and PnL between -0.5% and +0.5%  it's dead money
         if minutes_held >= STALE_MINUTES and -0.2 <= pnl_pct <= 0.15:
             is_short = pos.get("side") == "short"
             if dry_run:
-                stale_kills.append(f"⏰ Would close {ticker} {'(short)' if is_short else ''} — flat for {minutes_held:.0f}min ({pnl_pct:+.1f}%)")
+                stale_kills.append(f"⏰ Would close {ticker} {'(short)' if is_short else ''}  flat for {minutes_held:.0f}min ({pnl_pct:+.1f}%)")
             else:
                 if is_short:
                     result = alpaca_cover(ticker=ticker, cover_all=True)
                 else:
                     result = alpaca_sell(ticker=ticker, sell_all=True)
                 if result.get("ok"):
-                    stale_kills.append(f"⏰ Closed {ticker} {'(short)' if is_short else ''} — dead money, flat for {minutes_held:.0f}min ({pnl_pct:+.1f}%)")
+                    stale_kills.append(f"⏰ Closed {ticker} {'(short)' if is_short else ''}  dead money, flat for {minutes_held:.0f}min ({pnl_pct:+.1f}%)")
                     st.session_state[STALE_KEY].pop(ticker, None)
 
     for s in stale_kills:
@@ -5467,7 +5467,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     if stale_kills:
         log.append(f"Killed {len(stale_kills)} stale positions")
 
-    # ── 2b. Partial profit-taking — sell half at +4% to lock in gains ──
+    # ── 2b. Partial profit-taking  sell half at +4% to lock in gains ──
     if PARTIAL_PROFIT_SOLD_KEY not in st.session_state:
         st.session_state[PARTIAL_PROFIT_SOLD_KEY] = set()
     # Reset daily
@@ -5487,17 +5487,17 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                 and qty > 1):
             half = max(1, qty // 2)
             if dry_run:
-                partials.append(f"💰 Would close {half}/{qty} shares of {ticker} {'(short)' if is_short else ''} at +{pnl_pct:.1f}%")
+                partials.append(f"Would close {half}/{qty} shares of {ticker} {'(short)' if is_short else ''} at +{pnl_pct:.1f}%")
             else:
                 if is_short:
                     result = alpaca_cover(ticker=ticker, qty=half)
                 else:
                     result = alpaca_sell(ticker=ticker, qty=half)
                 if result.get("ok"):
-                    partials.append(f"💰 {'Covered' if is_short else 'Sold'} {half}/{qty} {ticker} {'(short)' if is_short else ''} at +{pnl_pct:.1f}% — half off, letting rest ride")
+                    partials.append(f"{'Covered' if is_short else 'Sold'} {half}/{qty} {ticker} {'(short)' if is_short else ''} at +{pnl_pct:.1f}%  half off, letting rest ride")
                     st.session_state[PARTIAL_PROFIT_SOLD_KEY].add(ticker)
                 else:
-                    partials.append(f"⚠️ Partial close failed for {ticker}: {result.get('error', '')}")
+                    partials.append(f"Partial close failed for {ticker}: {result.get('error', '')}")
 
     for p in partials:
         log.append(p)
@@ -5540,19 +5540,19 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         except Exception:
             cur_stop = 0.0
         if new_stop <= cur_stop + 0.01:
-            continue  # would not raise the stop — leave it
+            continue  # would not raise the stop  leave it
         if dry_run:
-            trails.append(f"🪜 Would trail {ticker} stop → ${new_stop} (high ${high:.2f}, +{pnl_pct:.1f}%)")
+            trails.append(f"Would trail {ticker} stop  ${new_stop} (high ${high:.2f}, +{pnl_pct:.1f}%)")
         else:
             res = _update_stop_order(ticker, new_stop, int(abs(pos.get("qty", 0))))
             if res.get("ok"):
-                trails.append(f"🪜 Trailed {ticker} stop up → ${new_stop} (locking in below ${high:.2f})")
+                trails.append(f"Trailed {ticker} stop up  ${new_stop} (locking in below ${high:.2f})")
             else:
-                trails.append(f"⚠️ Trail failed for {ticker}: {res.get('error', '')[:50]}")
+                trails.append(f"Trail failed for {ticker}: {res.get('error', '')[:50]}")
     for tr in trails:
         log.append(tr)
 
-    # ── 3. Check existing positions — close if signal flipped ──
+    # ── 3. Check existing positions  close if signal flipped ──
     log.append("")
     log.append("**Step 2: Checking if positions need closing**")
     sells = []
@@ -5586,40 +5586,40 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             if should_close:
                 action_word = "Covered" if is_short else "Sold"
                 if dry_run:
-                    sells.append(f"🔴 Would close {pos['ticker']} {'(short)' if is_short else ''} — score {sig['score']}, signal: {sig['action']}")
+                    sells.append(f"Would close {pos['ticker']} {'(short)' if is_short else ''}  score {sig['score']}, signal: {sig['action']}")
                 else:
                     if is_short:
                         result = alpaca_cover(ticker=pos["ticker"], cover_all=True)
                     else:
                         result = alpaca_sell(ticker=pos["ticker"], sell_all=True)
                     if result.get("ok"):
-                        sells.append(f"🔴 {action_word} {pos['ticker']} {'(short)' if is_short else ''} — score {sig['score']}, signal: {sig['action']}")
+                        sells.append(f"{action_word} {pos['ticker']} {'(short)' if is_short else ''}  score {sig['score']}, signal: {sig['action']}")
                         # Prevent re-buying this ticker today
                         held_tickers.add(pos["ticker"])
                     else:
-                        sells.append(f"⚠️ Tried to close {pos['ticker']} but failed: {result.get('error','')}")
+                        sells.append(f"Tried to close {pos['ticker']} but failed: {result.get('error','')}")
         except Exception:
             continue
 
     for s in sells:
         log.append(s)
     if not sells:
-        log.append("All positions still healthy — no sells needed")
+        log.append("All positions still healthy  no sells needed")
 
     # ── 3b. Over-limit trim ──
     # If we're holding MORE than the cap (e.g. positions were opened manually, or
     # the auto-tuner just lowered MAX_POSITIONS while we already held more), gently
     # bring the count down. Safety rails so this never dumps good holdings:
-    #   • Only acts when genuinely OVER the cap.
-    #   • Ranks remaining positions by current signal score and closes the WEAKEST.
-    #   • NEVER closes a position that's in profit — winners are left alone; this
+    #    Only acts when genuinely OVER the cap.
+    #    Ranks remaining positions by current signal score and closes the WEAKEST.
+    #    NEVER closes a position that's in profit  winners are left alone; this
     #     only trims positions that are flat/losing AND have a weak signal.
-    #   • Closes at most ONE per cycle, so it unwinds slowly instead of mass-selling.
+    #    Closes at most ONE per cycle, so it unwinds slowly instead of mass-selling.
     if not dry_run and SWING_MODE:
         remaining = [p for p in positions if p["ticker"] not in held_tickers]
         over_by = len(remaining) - MAX_POSITIONS
         if over_by > 0:
-            log.append(f"⚠️ Over position limit ({len(remaining)}/{MAX_POSITIONS}) — trimming the weakest.")
+            log.append(f"Over position limit ({len(remaining)}/{MAX_POSITIONS})  trimming the weakest.")
             scored = []
             for pos in remaining:
                 try:
@@ -5642,44 +5642,44 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                 res = (alpaca_cover(ticker=pos["ticker"], cover_all=True) if is_short
                        else alpaca_sell(ticker=pos["ticker"], sell_all=True))
                 if res.get("ok"):
-                    sells.append(f"✂️ Trimmed {pos['ticker']} to get back under the limit — weakest setup (score {score}).")
+                    sells.append(f"Trimmed {pos['ticker']} to get back under the limit  weakest setup (score {score}).")
                     log.append(sells[-1])
                     held_tickers.add(pos["ticker"])
                     over_by -= 1
                 else:
-                    log.append(f"⚠️ Tried to trim {pos['ticker']} but failed: {res.get('error','')}")
+                    log.append(f"Tried to trim {pos['ticker']} but failed: {res.get('error','')}")
             if over_by > 0:
-                log.append("Still over the limit, but the extra positions are in profit — holding them rather than selling winners.")
+                log.append("Still over the limit, but the extra positions are in profit  holding them rather than selling winners.")
 
     # ── 4. Scan for new opportunities ──
     open_slots = MAX_POSITIONS - (len(positions) - len(sells))
     if open_slots <= 0 and not dry_run:
-        log.append(f"Max positions ({MAX_POSITIONS}) reached — skipping scan")
+        log.append(f"Max positions ({MAX_POSITIONS}) reached  skipping scan")
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells)}
     if open_slots <= 0 and dry_run:
         open_slots = MAX_POSITIONS  # show what we'd buy if we had room
-        log.append(f"Max positions reached — but scanning anyway (dry run)")
+        log.append(f"Max positions reached  but scanning anyway (dry run)")
 
     if account["buying_power"] < 100 and not dry_run:
-        log.append("Not enough buying power — skipping scan")
+        log.append("Not enough buying power  skipping scan")
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells)}
 
     if no_new_buys_eod and not dry_run:
-        log.append("⏰ **2:30 PM CT** — no new trades, managing existing positions only")
+        log.append("⏰ **2:30 PM CT**  no new trades, managing existing positions only")
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells), "scanned": 0, "opportunities": 0}
 
     # Gate: daily entry cap reached
     if daily_entries >= MAX_DAILY_ENTRIES and not dry_run:
-        log.append(f"🛑 **Daily entry cap reached** ({daily_entries}/{MAX_DAILY_ENTRIES}) — no more new trades today")
+        log.append(f"**Daily entry cap reached** ({daily_entries}/{MAX_DAILY_ENTRIES})  no more new trades today")
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells), "scanned": 0, "opportunities": 0}
 
     # Gate: don't buy in bear markets
     if not regime["safe_to_buy"]:
-        log.append("Skipped scan — waiting for better market conditions")
+        log.append("Skipped scan  waiting for better market conditions")
         return {"ok": True, "log": log, "buys": 0, "sells": len(sells), "scanned": 0, "opportunities": 0}
 
     # ── 4. Scan for new opportunities ──
-    # Step A: Pre-market gap scan — find stocks gapping hard on volume
+    # Step A: Pre-market gap scan  find stocks gapping hard on volume
     log.append("")
     log.append("**Step 3: Scanning market for new setups**")
     log.append("Pre-screening for gaps and momentum...")
@@ -5687,7 +5687,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     candidates = []
     gap_stocks = []
 
-    # Get top gainers and losers — these are today's movers with gaps
+    # Get top gainers and losers  these are today's movers with gaps
     gainers = polygon_gainers(limit=20) or []
     all_snaps = polygon_all_snapshots() or []
 
@@ -5695,7 +5695,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         # Filter: real stocks, decent volume, price > $5
         viable = [s for s in all_snaps if s.get("Price", 0) > 5 and s.get("Volume", 0) > 200_000]
 
-        # Gap scan: stocks moving >1.5% with volume — these gapped
+        # Gap scan: stocks moving >1.5% with volume  these gapped
         gappers_up = sorted([s for s in viable if s.get("Chg%", 0) > 1.5], key=lambda x: x["Chg%"], reverse=True)[:25]
         gappers_down = sorted([s for s in viable if s.get("Chg%", 0) < -1.5], key=lambda x: x["Chg%"])[:25]
 
@@ -5720,7 +5720,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         negative = sorted([s for s in viable if s.get("Chg%", 0) < -0.5], key=lambda x: x["Chg%"])[:40]
 
         seen = set()
-        # Gappers first — highest priority for day trading
+        # Gappers first  highest priority for day trading
         for s in gappers_up + gappers_down:
             t = s["Ticker"]
             if t not in seen and t not in held_tickers:
@@ -5733,7 +5733,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                 seen.add(t)
                 candidates.append(t)
 
-        log.append(f"Polygon found {len(viable)} viable stocks → narrowed to {len(candidates)} candidates")
+        log.append(f"Polygon found {len(viable)} viable stocks  narrowed to {len(candidates)} candidates")
 
     # Fallback: full S&P 500 + Russell growth + popular mid/small caps
     if len(candidates) < 30:
@@ -5798,9 +5798,9 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             pass
         random.shuffle(fallback)
         candidates.extend(fallback[:600])
-        log.append(f"Large-cap universe → {len(candidates)} candidates")
+        log.append(f"Large-cap universe  {len(candidates)} candidates")
 
-    # ── SECTOR ROTATION FILTER — prioritize hot sectors ──
+    # ── SECTOR ROTATION FILTER  prioritize hot sectors ──
     hot_sectors = set()
     if sectors:
         ranked_sectors = sorted(sectors.items(), key=lambda x: x[1].get("rank", 99))
@@ -5821,7 +5821,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         # Hot sector stocks first, then rest
         candidates = hot_tickers + neutral_tickers
         if hot_tickers:
-            log.append(f"🔥 Sector filter: {len(hot_tickers)} stocks in hot sectors, {len(neutral_tickers)} neutral, skipped cold")
+            log.append(f"Sector filter: {len(hot_tickers)} stocks in hot sectors, {len(neutral_tickers)} neutral, skipped cold")
 
     scan_list = candidates
     log.append(f"Deep-analyzing {len(scan_list)} stocks...")
@@ -5865,20 +5865,20 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                     errors += 1
                     continue
                 price = data.get("price", 0)
-                if not price or price < 5:  # $5 minimum — skip penny stocks
+                if not price or price < 5:  # $5 minimum  skip penny stocks
                     continue
                 # Liquidity: skip if intraday volume too thin
                 itech = data.get("intraday_technicals", {})
                 if itech.get("vol_ratio", 1) < 0.3:
                     continue  # dead volume
 
-                # ── EARNINGS FILTER — never trade on earnings day ──
+                # ── EARNINGS FILTER  never trade on earnings day ──
                 if _has_earnings_today(ticker):
                     continue
 
-                # ── MOMENTUM FILTER — stock must be moving today ──
+                # ── MOMENTUM FILTER  stock must be moving today ──
                 day_change = data.get("change_pct", 0)
-                # Skip stocks barely moving (between -0.3% and +0.3%) — no momentum
+                # Skip stocks barely moving (between -0.3% and +0.3%)  no momentum
                 if abs(day_change) < 0.3:
                     continue
 
@@ -5902,7 +5902,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                     "data": data,
                 })
 
-            # SHORT opportunities — bearish signals with conviction
+            # SHORT opportunities  bearish signals with conviction
             elif (sig["score"] <= (100 - MIN_SCORE)
                     and sig["confluence"]["bearish"] >= MIN_CONFLUENCE
                     and sig["trade"]["risk_reward"] >= MIN_RR
@@ -5919,7 +5919,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                 })
 
             if len(opportunities) >= open_slots + 5:
-                log.append(f"Found {len(opportunities)} opportunities — stopping early")
+                log.append(f"Found {len(opportunities)} opportunities  stopping early")
                 break
         except Exception:
             errors += 1
@@ -5932,7 +5932,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     top_10 = all_scores[:10]
     log.append("**Top 10 scores found:**")
     for t, s, a, c, rr in top_10:
-        passed = "✓" if s >= MIN_SCORE and c >= MIN_CONFLUENCE and rr >= MIN_RR else "✗"
+        passed = "" if s >= MIN_SCORE and c >= MIN_CONFLUENCE and rr >= MIN_RR else ""
         log.append(f"{passed} {t}: score {s}, {a}, {c} bullish, R:R {rr:.1f}")
 
     # Sort: STRONG signals first, then by score (higher = more conviction for both sides)
@@ -5957,41 +5957,41 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         trade = sig["trade"]
         is_short = opp["side"] == "short"
 
-        # Earnings check — skip stocks reporting within 7 days
+        # Earnings check  skip stocks reporting within 7 days
         has_earnings, earn_date = _has_upcoming_earnings(ticker, days=7)
         if has_earnings:
-            log.append(f"⏭️ Skipped {ticker} — earnings on {earn_date}")
+            log.append(f"⏭ Skipped {ticker}  earnings on {earn_date}")
             continue
 
-        # Deep news check via AI — HARD GATE
+        # Deep news check via AI  HARD GATE
         opp_news = _ai_news_analysis(ticker)
         if not is_short and opp_news.get("ai_score", 0) <= -3:
-            log.append(f"⏭️ Skipped {ticker} long — AI news bearish ({opp_news.get('ai_summary', '')[:60]})")
+            log.append(f"⏭ Skipped {ticker} long  AI news bearish ({opp_news.get('ai_summary', '')[:60]})")
             continue
         if is_short and opp_news.get("ai_score", 0) >= 3:
-            log.append(f"⏭️ Skipped {ticker} short — AI news bullish ({opp_news.get('ai_summary', '')[:60]})")
+            log.append(f"⏭ Skipped {ticker} short  AI news bullish ({opp_news.get('ai_summary', '')[:60]})")
             continue
         if opp_news.get("macro_risk"):
-            log.append(f"⚠️ MACRO RISK detected for {ticker}: {opp_news.get('ai_summary', '')[:80]}")
+            log.append(f"MACRO RISK detected for {ticker}: {opp_news.get('ai_summary', '')[:80]}")
             if not is_short:
-                log.append(f"⏭️ Skipped {ticker} long — macro risk active")
+                log.append(f"⏭ Skipped {ticker} long  macro risk active")
                 continue
 
-        # SPY directional filter — don't fight the market
+        # SPY directional filter  don't fight the market
         if spy_trend and spy_trend.get("strong"):
             if not is_short and spy_trend["direction"] == "bearish":
-                log.append(f"⏭️ Skipped {ticker} long — SPY dumping ({spy_trend['change_pct']:+.1f}%)")
+                log.append(f"⏭ Skipped {ticker} long  SPY dumping ({spy_trend['change_pct']:+.1f}%)")
                 continue
             if is_short and spy_trend["direction"] == "bullish":
-                log.append(f"⏭️ Skipped {ticker} short — SPY ripping ({spy_trend['change_pct']:+.1f}%)")
+                log.append(f"⏭ Skipped {ticker} short  SPY ripping ({spy_trend['change_pct']:+.1f}%)")
                 continue
 
-        # VIX filter — block longs in panic, reduce size in fear
+        # VIX filter  block longs in panic, reduce size in fear
         if vix_panic and not is_short:
-            log.append(f"⏭️ Skipped {ticker} long — VIX ≥35 (panic mode, shorts only)")
+            log.append(f"⏭ Skipped {ticker} long  VIX ≥35 (panic mode, shorts only)")
             continue
         if vix_cautious and not is_short and not regime["safe_to_buy"]:
-            log.append(f"⏭️ Skipped {ticker} long — VIX elevated + bear regime")
+            log.append(f"⏭ Skipped {ticker} long  VIX elevated + bear regime")
             continue
 
         entry = trade["entry"]
@@ -6008,25 +6008,25 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             continue
 
         # Scale risk down when VIX is elevated
-        # ── SECTOR CORRELATION — max 1 position per sector ──
+        # ── SECTOR CORRELATION  max 1 position per sector ──
         if _check_sector_correlation(ticker, positions):
-            log.append(f"⏭️ Skipped {ticker} — already have a position in same sector")
+            log.append(f"⏭ Skipped {ticker}  already have a position in same sector")
             continue
 
-        # ── SMART POSITION SIZING — scale with conviction ──
+        # ── SMART POSITION SIZING  scale with conviction ──
         risk_mult = 1.0
         if vix_cautious:
             risk_mult = 0.5
-            log.append(f"⚠️ VIX elevated — half position size for {ticker}")
+            log.append(f"VIX elevated  half position size for {ticker}")
 
         # Score-based sizing: 75-79 = 0.7x, 80-84 = 1.0x, 85+ = 1.3x
         score = opp["score"]
         if score >= 85:
-            risk_mult *= 1.3  # high conviction — larger position
+            risk_mult *= 1.3  # high conviction  larger position
         elif score >= 80:
             risk_mult *= 1.0  # standard
         else:
-            risk_mult *= 0.7  # lower conviction — smaller position
+            risk_mult *= 0.7  # lower conviction  smaller position
 
         max_risk_dollars = account["equity"] * RISK_PER_TRADE * risk_mult
         qty = max(1, int(max_risk_dollars / risk_per_share))
@@ -6043,14 +6043,14 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             continue
 
         cost = qty * entry
-        side_emoji = "🔴" if is_short else "🟢"
+        side_emoji = "" if is_short else ""
         side_word = "Short" if is_short else "Bought"
 
         if dry_run:
             executions.append(f"{side_emoji} Would {'short' if is_short else 'buy'} {qty} {ticker} @ ~${entry:.2f} · Stop ${stop:.2f} · Target ${target:.2f} · Score {opp['score']} · R:R {opp['rr']:.1f}:1")
             account["buying_power"] -= cost
         else:
-            # After 1:00 PM CT (2:00 PM ET): NO bracket orders — they block EOD closes
+            # After 1:00 PM CT (2:00 PM ET): NO bracket orders  they block EOD closes
             late_session = now_et.hour > 15 or (now_et.hour == 15 and now_et.minute >= 30)  # After 3:30 PM ET = 2:30 PM CT
             if late_session:
                 if is_short:
@@ -6068,7 +6068,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                 held_tickers.add(ticker)
                 account["buying_power"] -= cost
             else:
-                executions.append(f"⚠️ Failed to {'short' if is_short else 'buy'} {ticker}: {result.get('error','')}")
+                executions.append(f"Failed to {'short' if is_short else 'buy'} {ticker}: {result.get('error','')}")
 
     for b in executions:
         log.append(b)
@@ -6089,8 +6089,8 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     return {
         "ok": True,
         "log": log,
-        "buys": sum(1 for b in executions if "🟢" in b),
-        "shorts": sum(1 for b in executions if "🔴" in b),
+        "buys": sum(1 for b in executions if "" in b),
+        "shorts": sum(1 for b in executions if "" in b),
         "sells": len(sells),
         "scanned": analyzed,
         "opportunities": len(opportunities),
@@ -6108,7 +6108,7 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
             return {"ok": False, "error": result.get("error", "Scan failed")}
         report_lines = result["log"]
         summary = (
-            f"**🔍 Market Scan (dry run — no trades placed)**\n\n"
+            f"** Market Scan (dry run  no trades placed)**\n\n"
             f"Scanned: {result.get('scanned', '?')} stocks · "
             f"Found: {result.get('opportunities', 0)} opportunities\n\n"
             f"---\n\n" +
@@ -6124,7 +6124,7 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
             return {"ok": False, "error": result.get("error", "Autopilot failed")}
         report_lines = result["log"]
         summary = (
-            f"**🟢 Autopilot Active — Running Continuously**\n\n"
+            f"** Autopilot Active  Running Continuously**\n\n"
             f"Scanned: {result.get('scanned', '?')} stocks · "
             f"Found: {result.get('opportunities', 0)} opportunities · "
             f"Bought: {result.get('buys', 0)} · Shorted: {result.get('shorts', 0)} · Closed: {result.get('sells', 0)}\n\n"
@@ -6136,7 +6136,7 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
 
     if t == "stop_autopilot":
         st.session_state["autopilot_active"] = False
-        return {"ok": True, "type": "trade", "msg": "🔴 **Autopilot deactivated.** No more automatic scans. Your positions remain open."}
+        return {"ok": True, "type": "trade", "msg": " **Autopilot deactivated.** No more automatic scans. Your positions remain open."}
 
     if t == "backtest":
         result = run_backtest(years=2, max_positions=intent.get("max_positions"))
@@ -6147,7 +6147,7 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
 
     if t == "market_regime":
         regime = check_market_regime()
-        safe = "✅ Safe to buy" if regime["safe_to_buy"] else "⛔ Not safe to buy"
+        safe = "Safe to buy" if regime["safe_to_buy"] else " Not safe to buy"
         msg = (
             f"**Market Regime Check**\n\n"
             f"Regime: **{regime['regime']}** · {safe}\n\n"
@@ -6164,8 +6164,8 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
         lines = ["**Sector Rotation Rankings**\n"]
         for etf, data in ranked:
             rank = data["rank"]
-            emoji = "🟢" if rank <= 3 else ("🟡" if rank <= 6 else "🔴")
-            lines.append(f"{emoji} #{rank} **{data['name']}** ({etf}) — 1w: {data['1w']:+.1f}% · 1m: {data['1m']:+.1f}%")
+            emoji = "" if rank <= 3 else ("" if rank <= 6 else "")
+            lines.append(f"{emoji} #{rank} **{data['name']}** ({etf})  1w: {data['1w']:+.1f}% · 1m: {data['1m']:+.1f}%")
         lines.append(f"\nAutopilot prioritizes stocks in top 3 sectors and avoids bottom 3.")
         return {"ok": True, "type": "trade", "msg": "\n\n".join(lines)}
 
@@ -6231,7 +6231,7 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
                 p = match[0]
                 arrow = "▲" if p["unrealized_pnl"] >= 0 else "▼"
                 msg = f"You own **{int(p['qty'])} shares** of **{p['ticker']}** ({p.get('side','long')}).\n\n"
-                msg += f"Entry: `${p['avg_entry']:.2f}` → Now: `${p['current_price']:.2f}`\n"
+                msg += f"Entry: `${p['avg_entry']:.2f}`  Now: `${p['current_price']:.2f}`\n"
                 msg += f"P&L: `{arrow} ${p['unrealized_pnl']:+,.2f}` ({p['unrealized_pnl_pct']:+.1f}%)"
                 return {"ok": True, "type": "positions", "msg": msg, "ticker": p["ticker"], "data": []}
             else:
@@ -6274,11 +6274,11 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
     if t == "close_all":
         result = alpaca_close_all()
         if result["ok"]:
-            return {"ok": True, "type": "trade", "msg": "🔴 **All positions closed.** Portfolio is flat."}
+            return {"ok": True, "type": "trade", "msg": " **All positions closed.** Portfolio is flat."}
         return {"ok": False, "error": result.get("error", "Failed to close all")}
 
     if t == "cancel_orders":
-        # Confirm first — cancelling pending orders also removes protective stops.
+        # Confirm first  cancelling pending orders also removes protective stops.
         return {"ok": True, "type": "confirm_trade",
                 "trade": {"action": "cancel_orders"},
                 "msg": ""}
@@ -6330,7 +6330,7 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
         if signal["action"] not in ("BUY", "STRONG_BUY"):
             return {"ok": True, "type": "analysis", "ticker": ticker, "market": market,
                     "data": {**data, **signal}, "trade_signal": signal,
-                    "msg": f"⚠️ Signal is **{signal['action']}** (score: {signal['score']}). Not executing — doesn't meet buy criteria."}
+                    "msg": f" Signal is **{signal['action']}** (score: {signal['score']}). Not executing  doesn't meet buy criteria."}
         # SAFETY: confirm before executing (same as a manual buy). Compute the
         # risk-sized qty so the confirm card can show it, but place no order.
         try:
@@ -6393,7 +6393,7 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
         elif cat == "value":
             universe = list(dict.fromkeys(VALUE_DIVIDEND + ["JPM","BAC","WFC","KO","PEP","PG","JNJ","WMT","HD","MCD","VZ","T"]))
         elif cat == "nasdaq":
-            # WHOLE NASDAQ — every NASDAQ common-stock listing (~3-4k symbols).
+            # WHOLE NASDAQ  every NASDAQ common-stock listing (~3-4k symbols).
             # This is a big scan; with free Yahoo throttling the server, expect it
             # to take a while and return PARTIAL data (some chunks come back empty
             # when Yahoo blocks us). The liquidity filter drops the junk.
@@ -6404,7 +6404,7 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
                 from universe import large_universe
                 universe = large_universe()
         elif cat == "full":
-            # ENTIRE market — live NYSE + NASDAQ common-stock listing (~5-7k
+            # ENTIRE market  live NYSE + NASDAQ common-stock listing (~5-7k
             # symbols). The batch fetch + liquidity filter below drop the
             # illiquid/dead junk so only real tradeable names get scored.
             try:
@@ -6414,9 +6414,9 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
                 from universe import large_universe
                 universe = large_universe()
         else:
-            # Default broad scan — ~500 names. The Railway container is small
+            # Default broad scan  ~500 names. The Railway container is small
             # (limited threads/memory); bigger scans were spawning too many
-            # threads ("can't start new thread" → crash). 500 is the reliable
+            # threads ("can't start new thread"  crash). 500 is the reliable
             # ceiling for this host. Free tier still capped ~100 below.
             try:
                 from universe import large_universe
@@ -6483,13 +6483,13 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
             return None
 
         if len(universe) > 120:
-            # BIG scan — bulk-download all history in a few HTTP requests
+            # BIG scan  bulk-download all history in a few HTTP requests
             # (yf.download), then score locally. This is what makes 600-1000+
             # stocks fast: one round-trip per ~150 tickers instead of one per
             # stock. News is skipped here; it's fetched only for the top picks.
             batch = batch_fetch_scan(universe, skip_news=True, progress_cb=progress_cb)
             # Scoring is a real phase (signal engine over every result), so report
-            # it — otherwise the bar sat at the end of "fetching" looking frozen.
+            # it  otherwise the bar sat at the end of "fetching" looking frozen.
             _items = list(batch.items())
             _n = len(_items)
             for _i, (_tk, _data) in enumerate(_items):
@@ -6500,7 +6500,7 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
                     try: progress_cb(_i + 1, _n, "scoring")
                     except Exception: pass
         else:
-            # Smaller themed scans — per-ticker thread pool (keeps news inline).
+            # Smaller themed scans  per-ticker thread pool (keeps news inline).
             # Report progress as each name completes so these show a live bar too.
             def _scan_one(ticker):
                 return _score_data(ticker, fetch_scan(ticker))
@@ -6536,19 +6536,19 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
         # ── Price consistency: the intraday scanner's price (last 5-min bar)
         # can differ by cents/dollars from the Analyze tab + chart, which use
         # the real-time quote. We re-stamp the displayed price from that SAME
-        # source — but only for the picks we'll actually SHOW (done after the buy
+        # source  but only for the picks we'll actually SHOW (done after the buy
         # filter below), so we don't fire 15 extra quote calls and worsen
         # rate-limiting. (Re-stamp loop moved below.)
 
         if not top:
             if max_mcap:
                 _cap_str = f"${max_mcap/1e9:.1f}B" if max_mcap >= 1e9 else f"${max_mcap/1e6:.0f}M"
-                return {"ok": True, "type": "analysis", "msg": f"I scanned {len(universe)} stocks but couldn't find any under {_cap_str} market cap with a strong enough setup right now. Smaller companies are often more volatile and thinly covered — try a wider cap range, or ask me to analyze a specific small-cap ticker."}
+                return {"ok": True, "type": "analysis", "msg": f"I scanned {len(universe)} stocks but couldn't find any under {_cap_str} market cap with a strong enough setup right now. Smaller companies are often more volatile and thinly covered  try a wider cap range, or ask me to analyze a specific small-cap ticker."}
             if max_price:
                 return {"ok": True, "type": "analysis", "msg": f"I scanned {len(universe)} stocks but couldn't find any under ${max_price:.0f} a share that score high enough right now. Try a higher price range or ask me to analyze a specific cheap ticker."}
-            return {"ok": True, "type": "analysis", "msg": "I scanned " + str(len(universe)) + " stocks but nothing scored high enough right now. The market might be choppy — try again later or ask me to analyze a specific ticker."}
+            return {"ok": True, "type": "analysis", "msg": "I scanned " + str(len(universe)) + " stocks but nothing scored high enough right now. The market might be choppy  try again later or ask me to analyze a specific ticker."}
 
-        # Single stock request — written response with the best pick
+        # Single stock request  written response with the best pick
         if wants_single and top:
             p = top[0]
             try:
@@ -6567,7 +6567,7 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
             t1 = p["trade"].get("target_1", 0)
             rr = p["trade"].get("risk_reward", 0)
             arrow = "▲" if p["change_pct"] >= 0 else "▼"
-            sigs = " · ".join(p["signals"][:2]) if p["signals"] else ""
+            sigs = "· ".join(p["signals"][:2]) if p["signals"] else ""
 
             # Calculate shares based on user's budget if mentioned
             budget_match = re.search(r'(\d[\d,]*\.?\d*)\s*(dollars|bucks|\$|k\b)', user_msg_lower)
@@ -6577,7 +6577,7 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
                 if "k" in budget_match.group(2):
                     budget *= 1000
                 shares = int(budget / p["price"])
-                shares_info = f" With ${budget:,.0f}, that's about **{shares} shares**."
+                shares_info = f"With ${budget:,.0f}, that's about **{shares} shares**."
 
             msg = (
                 f"I'd go with **{p['ticker']}** right now.\n\n"
@@ -6585,7 +6585,7 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
                 f"{sigs}.\n\n"
             )
             if stop and t1:
-                msg += f"**The setup:** Entry around `${entry:.2f}`, stop at `${stop:.2f}`, target `${t1:.2f}` — that's a `{rr:.1f}:1` risk-reward."
+                msg += f"**The setup:** Entry around `${entry:.2f}`, stop at `${stop:.2f}`, target `${t1:.2f}`  that's a `{rr:.1f}:1` risk-reward."
             msg += shares_info
 
             return {"ok": True, "type": "analysis", "ticker": p["ticker"],
@@ -6593,7 +6593,7 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
                     "msg": msg, "data": {"price": p["price"]},
                     "signal_data": None}
 
-        # Autopilot's live decision bar — use the SAME thresholds it trades on,
+        # Autopilot's live decision bar  use the SAME thresholds it trades on,
         # so the scan's verdict matches what autopilot would actually do.
         AP_SCORE, AP_CONF, AP_RR = 82, 5, 2.0
 
@@ -6604,7 +6604,7 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
             _safe = reg.get("safe_to_buy", True)
             _rname = str(reg.get("regime", "")).replace("_", " ")
             if _rname:
-                regime_line = (f"Market backdrop: **{_rname}** — "
+                regime_line = (f"Market backdrop: **{_rname}**  "
                                + ("conditions favor new long setups.\n\n" if _safe
                                   else "be selective; the backdrop is shaky for new longs.\n\n"))
         except Exception:
@@ -6614,11 +6614,11 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
             return (p.get("action") == "STRONG_BUY" and p.get("score", 0) >= AP_SCORE
                     and p.get("confluence", 0) >= AP_CONF and (p.get("rr") or 0) >= AP_RR)
 
-        # Only the definite buys — the ones autopilot would actually act on.
+        # Only the definite buys  the ones autopilot would actually act on.
         buys = [p for p in top if _is_buy(p)][:8]
 
         # Re-stamp displayed prices from the real-time quote source (matches the
-        # Analyze tab/chart) — only for the buys we're about to show.
+        # Analyze tab/chart)  only for the buys we're about to show.
         for p in buys:
             try:
                 fresh = fetch_price(p["ticker"])
@@ -6635,22 +6635,22 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
                 pass
 
         if not buys:
-            # Nothing clears the bar — say so cleanly instead of listing watch-list
+            # Nothing clears the bar  say so cleanly instead of listing watch-list
             # names the user didn't ask for.
-            msg = [f"I scanned {len(universe)} stocks and put each through my full screen — "
+            msg = [f"I scanned {len(universe)} stocks and put each through my full screen  "
                    "**nothing clears the bar right now.** None of them line up strongly enough on trend, momentum, and reward-to-risk together to call a real buy."]
             if regime_line:
                 msg.append("\n" + regime_line.strip())
-            msg.append("\nNo clean setup is worth forcing — better to wait for one that lines up. "
+            msg.append("\nNo clean setup is worth forcing  better to wait for one that lines up. "
                        "Ask me to scan again later, or I can analyze a specific ticker if you have one in mind.")
-            msg.append("\n**Based on my 21-factor signal engine — not financial advice.**")
+            msg.append("\n**Based on my 21-factor signal engine  not financial advice.**")
             if not is_plus:
                 msg.append("\n**Free scans cover the ~100 most-liquid stocks. Paula Plus scans the full ~1,000-name universe.**")
             return {"ok": True, "type": "analysis", "ticker": top[0]["ticker"],
                     "tickers": [], "msg": "\n".join(msg)}
 
         _n = len(buys)
-        lines = [f"**{_n} buy{'s' if _n != 1 else ''} worth acting on** — I scanned {len(universe)} stocks; "
+        lines = [f"**{_n} buy{'s' if _n != 1 else ''} worth acting on**  I scanned {len(universe)} stocks; "
                  f"these are the only ones that clear my full bar (strong trend, multiple confirming signals, and solid reward-to-risk).\n"]
         if regime_line:
             lines.append(regime_line)
@@ -6659,18 +6659,18 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
             stop = p["trade"].get("stop_loss", 0)
             t1 = p["trade"].get("target_1", 0)
             arrow = "▲" if p["change_pct"] >= 0 else "▼"
-            lines.append(f"**{i}. {p['ticker']}** · ${p['price']:.2f} {arrow}{p['change_pct']:+.1f}% · score `{p['score']}` ✅")
+            lines.append(f"**{i}. {p['ticker']}** · ${p['price']:.2f} {arrow}{p['change_pct']:+.1f}% · score `{p['score']}` ")
             if p.get("setup"):
-                lines.append(f"   **The setup:** {p['setup']}")
+                lines.append(f"**The setup:** {p['setup']}")
             if p["signals"]:
-                lines.append(f"   **Why:** {' · '.join(p['signals'][:3])}")
+                lines.append(f"**Why:** {' · '.join(p['signals'][:3])}")
             if stop and t1:
                 _risk = abs(entry - stop) / entry * 100 if entry else 0
-                lines.append(f"   **The plan:** enter near `${entry:.2f}`, stop `${stop:.2f}` (risking ~{_risk:.1f}%), first target `${t1:.2f}`"
+                lines.append(f"**The plan:** enter near `${entry:.2f}`, stop `${stop:.2f}` (risking ~{_risk:.1f}%), first target `${t1:.2f}`"
                              + (f" · {p['rr']:.1f}:1 reward-to-risk" if p.get('rr') else ""))
             lines.append("")
 
-        lines.append("**Based on my 21-factor signal engine — not financial advice. You make the call.**")
+        lines.append("**Based on my 21-factor signal engine  not financial advice. You make the call.**")
         if not is_plus:
             lines.append("\n**Free scans cover the ~100 most-liquid stocks. Paula Plus scans the full ~1,000-name universe for more setups.**")
         # Structured picks for programmatic consumers (the Co-Pilot). Same data
@@ -6715,12 +6715,12 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
         ed = next_earnings_date(tick)
         if not ed:
             return {"ok": True, "type": "chat",
-                    "msg": f"I couldn't find a confirmed upcoming earnings date for {intent['ticker']} right now — it may not be scheduled yet, or the data isn't available."}
+                    "msg": f"I couldn't find a confirmed upcoming earnings date for {intent['ticker']} right now  it may not be scheduled yet, or the data isn't available."}
         when = ed["when"]
         days = ed.get("days_away")
         warn = ""
         if days is not None and 0 <= days <= 5:
-            warn = f"\n\n⚠️ That's soon — holding a position through earnings means overnight gap risk in either direction. Size accordingly."
+            warn = f"\n\n That's soon  holding a position through earnings means overnight gap risk in either direction. Size accordingly."
         return {"ok": True, "type": "earnings",
                 "ticker": tick,
                 "msg": f"**{intent['ticker']}** next reports earnings on **{ed['date']}** ({when}).{warn}"}
@@ -6825,7 +6825,7 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
         # The structured SignalCard shows the real computed levels for ALL sides
         # (so a HOLD/short still displays its stop & target). The LLM is handled
         # separately by _scrub_trade_levels_for_llm so it never writes prose
-        # levels — this is the card's data, not the model's.
+        # levels  this is the card's data, not the model's.
         t_entry = trade.get("entry", 0)
         t_stop = trade.get("stop_loss", 0)
         t_target = trade.get("target_1", 0)
@@ -6944,24 +6944,24 @@ def _market_status_line() -> str:
         return "Market: status unavailable."
 
 # Shared voice spec used by both ai_response and ai_response_stream so the
-# personality stays consistent. This defines how Paula SOUNDS — the factual
+# personality stays consistent. This defines how Paula SOUNDS  the factual
 # rules (price accuracy, no arithmetic) live separately in each caller.
 PAULA_VOICE = """HOW YOU SOUND (this matters as much as being correct):
 
 You're a sharp trader texting a friend who asked for your read. Confident, fast, a little opinionated. You have a view and you share it.
 
 Voice rules:
-- LEAD WITH THE VERDICT. First sentence = your actual take. "NVDA looks strong here" or "I'd pass on this one." Never open with "Based on the data" or "Let me analyze" — just say what you think.
-- BE CONCISE. 2-4 short paragraphs, often less. A price check is 1-2 sentences. Don't dump every indicator — pick the 2-3 that actually drive your view and skip the rest.
-- HAVE CONVICTION. Commit to a read. "This is a clean setup" or "I don't love this." Hedging everything ("it could go either way") is useless to a trader. If signals genuinely conflict, say which side you lean and why — don't just list both.
-- EXPLAIN THE WHY, not the what. Not "RSI is 49." Instead "RSI at 49 means it's pulled back without breaking down — that's the dip you want to buy." Translate every number into what it means for the trade.
-- SOUND HUMAN. Use natural rhythm — mix short punchy lines with a longer one. Contractions, plain words. "Here's the thing" / "What I like" / "The catch is".
+- LEAD WITH THE VERDICT. First sentence = your actual take. "NVDA looks strong here" or "I'd pass on this one." Never open with "Based on the data" or "Let me analyze"  just say what you think.
+- BE CONCISE. 2-4 short paragraphs, often less. A price check is 1-2 sentences. Don't dump every indicator  pick the 2-3 that actually drive your view and skip the rest.
+- HAVE CONVICTION. Commit to a read. "This is a clean setup" or "I don't love this." Hedging everything ("it could go either way") is useless to a trader. If signals genuinely conflict, say which side you lean and why  don't just list both.
+- EXPLAIN THE WHY, not the what. Not "RSI is 49." Instead "RSI at 49 means it's pulled back without breaking down  that's the dip you want to buy." Translate every number into what it means for the trade.
+- SOUND HUMAN. Use natural rhythm  mix short punchy lines with a longer one. Contractions, plain words. "Here's the thing" / "What I like" / "The catch is".
 - NO DATA DUMPS. Never list 6 indicators in a row. Never use headers like "VERDICT:" or "RISK:". Write in flowing prose, not a spec sheet.
 - END WITH THE TRADE or the next step when relevant: where you'd get in, where the stop goes, what you're watching.
-- ANSWER WHAT THEY ACTUALLY ASKED. Read the request carefully and respond to the real question — if they ask "is now a good time to add to my NVDA?", weigh their existing position and the current setup, don't just re-run a generic analysis. If they ask something the attached data genuinely doesn't cover, say so in one honest line and answer with what you do know — never pad with invented specifics to seem complete.
+- ANSWER WHAT THEY ACTUALLY ASKED. Read the request carefully and respond to the real question  if they ask "is now a good time to add to my NVDA?", weigh their existing position and the current setup, don't just re-run a generic analysis. If they ask something the attached data genuinely doesn't cover, say so in one honest line and answer with what you do know  never pad with invented specifics to seem complete.
 
 Good example (analysis):
-"NVDA's setting up nicely. It's pulled back to the 20-day after a strong run, RSI's at 49 so there's room to move, and it's still well above the 200-day — the uptrend's intact. I'd look to get in around $211 with a stop at $205; first target's $230. The one thing I'd watch is volume, which has been light on the bounce."
+"NVDA's setting up nicely. It's pulled back to the 20-day after a strong run, RSI's at 49 so there's room to move, and it's still well above the 200-day  the uptrend's intact. I'd look to get in around $211 with a stop at $205; first target's $230. The one thing I'd watch is volume, which has been light on the bounce."
 
 Bad example (what NOT to do):
 "Based on the analysis, NVDA has a score of 90. The RSI is 49.4. The MACD is bearish but accelerating. The trend regime is weak with a slope of 0.33. The OBV trend is falling. The trade plan suggests an entry at $211.14 with a stop-loss at $204.88..."
@@ -6970,14 +6970,14 @@ Bad example (what NOT to do):
 PRINCIPLES YOU TRADE BY (hold these lines even when the user pushes):
 - NO STOP, NO TRADE. Never lay out an entry without a stop. If someone says they'll "just watch it," tell them that's not a plan.
 - RISK HALF OF WHAT YOU'RE PLAYING FOR. Target 2%? Risk 1%. Reward should be at least twice the risk, or the trade isn't worth taking.
-- CUT LOSSES SHORT, LET WINNERS RUN. Booking a loss is a skill, not a failure. Hope is not a strategy — if the reason you bought is gone, get out; don't wait for a miracle to get back to even.
+- CUT LOSSES SHORT, LET WINNERS RUN. Booking a loss is a skill, not a failure. Hope is not a strategy  if the reason you bought is gone, get out; don't wait for a miracle to get back to even.
 - DON'T CONCENTRATE. No single stock should be more than ~10% of the book. If they're already heavy in a name, say so before they add more.
 - GREED KILLS DISCIPLINE. Steady, modest gains compound. If someone's chasing a moonshot or revenge-trading a loss, push back.
 - NO TIPS, NO NOISE. If they're buying on a hot tip, a headline, or something from a group chat, ask what the actual setup is. If it sounds too good to be true, it is.
-- LOGIC OVER EMOTION. Never "like" a company into a position. Don't panic-sell a thesis that's still intact. Don't get married to a stock — fall in love with the process.
+- LOGIC OVER EMOTION. Never "like" a company into a position. Don't panic-sell a thesis that's still intact. Don't get married to a stock  fall in love with the process.
 - ADAPT. What worked last month may not work now. Rotate with the market; a stale thesis is a losing one.
 
-Deliver these as a trader would — briefly, in the moment it matters — not as a lecture. Don't recite the list."""
+Deliver these as a trader would  briefly, in the moment it matters  not as a lecture. Don't recite the list."""
 
 
 def _scrub_trade_levels_for_llm(stock_data: dict | None) -> dict | None:
@@ -7025,11 +7025,11 @@ def _scrub_trade_levels_for_llm(stock_data: dict | None) -> dict | None:
         rr = tr.get("risk_reward", tr.get("rr", 0))
         plan = f"Entry ${e} · Stop ${s} · Target ${t1}"
         if t2 and abs(float(t2) - float(t1)) > 0.01:
-            plan += f" (then ${t2})"
+            plan += f"(then ${t2})"
         if rr:
-            plan += f" · about {rr}:1 risk-reward"
+            plan += f"· about {rr}:1 risk-reward"
         sd["trade_plan"] = (
-            "USE THESE EXACT LEVELS — do not recompute or repeat the entry as the target: " + plan
+            "USE THESE EXACT LEVELS  do not recompute or repeat the entry as the target: " + plan
         )
         # Remove the raw numeric level fields so the model can't accidentally grab
         # the wrong one (e.g. echo the entry as the target). The clean sentence
@@ -7045,11 +7045,11 @@ def _scrub_trade_levels_for_llm(stock_data: dict | None) -> dict | None:
             sd.pop(k, None)
             if isinstance(sd.get("trade"), dict):
                 sd["trade"].pop(k, None)
-        # also remove support/resistance arrays — the LLM repurposes them as fake
+        # also remove support/resistance arrays  the LLM repurposes them as fake
         # "targets"/"stops" when asked directly ("target and stop loss for QCOM").
         for k in ("supports", "resistances", "support_levels", "resistance_levels", "support", "resistance"):
             sd.pop(k, None)
-        sd["trade_plan"] = ("NONE — this is not an actionable BUY setup. There is NO entry, stop, or target. "
+        sd["trade_plan"] = ("NONE  this is not an actionable BUY setup. There is NO entry, stop, or target. "
                             "If the user asks for a target or stop, tell them there is no trade setup here and "
                             "why (e.g. downtrend / HOLD), and do NOT invent or derive any price level from support, "
                             "resistance, ATR, or the current price.")
@@ -7059,110 +7059,110 @@ def _scrub_trade_levels_for_llm(stock_data: dict | None) -> dict | None:
 def ai_response(user_msg: str, stock_data: dict | None, history: list, market: str) -> str:
     key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
     if not key:
-        return "⚠️ Set `GROQ_API_KEY` in Streamlit secrets or environment."
+        return "Set `GROQ_API_KEY` in Streamlit secrets or environment."
 
-    system = f"""You're Paula — a sharp, knowledgeable trading assistant who genuinely enjoys helping people understand the market. You're approachable and warm, but you know your stuff. Think of yourself as a really smart friend who happens to be great at trading. Today is {datetime.now(ZoneInfo("US/Eastern")).strftime("%Y-%m-%d")}. Market: {market}. {_market_status_line()}
+    system = f"""You're Paula  a sharp, knowledgeable trading assistant who genuinely enjoys helping people understand the market. You're approachable and warm, but you know your stuff. Think of yourself as a really smart friend who happens to be great at trading. Today is {datetime.now(ZoneInfo("US/Eastern")).strftime("%Y-%m-%d")}. Market: {market}. {_market_status_line()}
 
-Be aware of the market status above and reflect it naturally — if the market is closed, pre-market, or after-hours, factor that in. Don't describe live intraday action when the market isn't open.
+Be aware of the market status above and reflect it naturally  if the market is closed, pre-market, or after-hours, factor that in. Don't describe live intraday action when the market isn't open.
 
-You get live stock data attached to each message. For manual analysis, this includes daily chart signals with confluence scoring across 6 categories (trend, momentum, mean-reversion, volume, fundamentals, news sentiment). USE all of it — weave the numbers into natural conversation.
+You get live stock data attached to each message. For manual analysis, this includes daily chart signals with confluence scoring across 6 categories (trend, momentum, mean-reversion, volume, fundamentals, news sentiment). USE all of it  weave the numbers into natural conversation.
 
 INTELLIGENCE RULES:
-- Actually READ and UNDERSTAND what the user is asking. If they ask "why is NVDA up?", explain the catalyst — don't just give a generic analysis.
-- When given a list of stocks (like top gainers), analyze EACH one — what's the catalyst? Is it earnings? Sector rotation? FDA approval? Short squeeze? Don't just say "strong momentum" — that's lazy.
+- Actually READ and UNDERSTAND what the user is asking. If they ask "why is NVDA up?", explain the catalyst  don't just give a generic analysis.
+- When given a list of stocks (like top gainers), analyze EACH one  what's the catalyst? Is it earnings? Sector rotation? FDA approval? Short squeeze? Don't just say "strong momentum"  that's lazy.
 - Use SPECIFIC numbers from the data: "RSI is at 67 and trending up" not "momentum is strong". "Trading 3.2% above VWAP with 2.1x average volume" not "above VWAP with high volume".
-- Compare to the broader market: "While SPY is flat, NVDA is up 4% — showing real relative strength"
+- Compare to the broader market: "While SPY is flat, NVDA is up 4%  showing real relative strength"
 - Mention risk factors: "Earnings are in 3 days which adds volatility" or "This is extended 8% above the 20 SMA, so a pullback is likely"
 - If you see conflicting signals, explain the conflict clearly and say which side you lean toward and why
 - Think about what the user ACTUALLY needs to make a trading decision, not just what data you have
-- IT'S OK TO SAY "DON'T TRADE THIS." You are not a salesperson and you are not obligated to surface a trade. If the setup is weak, the risk/reward is poor, the market regime is hostile (e.g. SPY in a downtrend, high VIX), or a stock is choppy/extended with no clean entry, say so plainly: "I wouldn't buy this here" or "There's no good setup right now — sitting in cash is the right move." A good "no" protects the user's money and builds trust. Don't soften a genuine no into a lukewarm maybe, and don't invent a mediocre idea just to have something to say. "The best trade is sometimes no trade" is a real and valuable answer.
-- When you DO pass on something, briefly say what would change your mind ("if it pulls back to the 20-day around $X and holds, that's more interesting") so the user knows what to watch for — but only if you have the data to back it.
-- PORTFOLIO-AWARE: if a "portfolio_context" block is attached (buying power, equity, open positions with P&L), USE it when giving advice. If they ask about adding to a stock they already hold, note the existing position and whether it's already a big chunk of their book ("you're already up 12% on this and it's ~30% of your equity — adding here concentrates your risk"). Flag concentration, respect their buying power, and factor in whether a position is winning or losing. Never invent position sizes or dollar amounts — only use the exact numbers in the block.
-- COMPARING TWO STOCKS: if a "compare" block is attached (two scorecards with score, action, RSI, trend, R/R, reasons), give a clear head-to-head: call out which has the stronger setup and WHY, using the exact scores/numbers provided. End with a clear pick ("I'd lean NVDA here — score 78 vs 64, cleaner trend, better risk-reward"), but note what would make the other one the better choice. Use only the numbers in the block.
+- IT'S OK TO SAY "DON'T TRADE THIS." You are not a salesperson and you are not obligated to surface a trade. If the setup is weak, the risk/reward is poor, the market regime is hostile (e.g. SPY in a downtrend, high VIX), or a stock is choppy/extended with no clean entry, say so plainly: "I wouldn't buy this here" or "There's no good setup right now  sitting in cash is the right move." A good "no" protects the user's money and builds trust. Don't soften a genuine no into a lukewarm maybe, and don't invent a mediocre idea just to have something to say. "The best trade is sometimes no trade" is a real and valuable answer.
+- When you DO pass on something, briefly say what would change your mind ("if it pulls back to the 20-day around $X and holds, that's more interesting") so the user knows what to watch for  but only if you have the data to back it.
+- PORTFOLIO-AWARE: if a "portfolio_context" block is attached (buying power, equity, open positions with P&L), USE it when giving advice. If they ask about adding to a stock they already hold, note the existing position and whether it's already a big chunk of their book ("you're already up 12% on this and it's ~30% of your equity  adding here concentrates your risk"). Flag concentration, respect their buying power, and factor in whether a position is winning or losing. Never invent position sizes or dollar amounts  only use the exact numbers in the block.
+- COMPARING TWO STOCKS: if a "compare" block is attached (two scorecards with score, action, RSI, trend, R/R, reasons), give a clear head-to-head: call out which has the stronger setup and WHY, using the exact scores/numbers provided. End with a clear pick ("I'd lean NVDA here  score 78 vs 64, cleaner trend, better risk-reward"), but note what would make the other one the better choice. Use only the numbers in the block.
 - POSITION SIZING: if a "position_size" block is attached (price, entry, stop, per_share_risk, risk_budget, shares, position_cost), tell them plainly how many shares to buy to risk exactly that dollar amount, and show the math simply: "To risk $X on TICKER with a stop at $S (about $R/share), buy N shares (~$cost). If it hits your stop you lose ~$X." Use the exact numbers. Add a one-line caveat that this assumes the stop fills at that level.
 
-CRITICAL — PRICE ACCURACY:
+CRITICAL  PRICE ACCURACY:
 - ONLY quote prices that appear in the attached data. NEVER guess or estimate a price.
-- If data shows Price: 142.50 — say $142.50. Don't round to $143 or say "around $140".
+- If data shows Price: 142.50  say $142.50. Don't round to $143 or say "around $140".
 - For trade plans (entry, stop, targets), use the EXACT entry/stop/target numbers already provided in the attached signal data. Do NOT recompute them.
-- If the trade levels are 0, missing, or the side is HOLD/NEUTRAL/EXIT/AVOID, DO NOT state any entry, stop, or target at all — there is no trade plan. Never write a line like "Entry: $X · Stop: $X · Target: $X". Just describe the setup and what to watch for. Inventing levels (e.g. repeating the current price as entry, stop, AND target) is a serious error.
-- If you don't have price data for a stock, say so — don't make up a number.
-- NEVER state a specific market cap (e.g. "$943M market cap") unless that exact figure is in the attached data. Market cap is NOT something you can estimate or recall — you will get it wrong (e.g. calling a $50B company "$943M"). If asked for small-caps and the data doesn't include verified caps, describe the names you found without inventing cap numbers, or say you can pull the exact figure if they analyze a specific ticker.
+- If the trade levels are 0, missing, or the side is HOLD/NEUTRAL/EXIT/AVOID, DO NOT state any entry, stop, or target at all  there is no trade plan. Never write a line like "Entry: $X · Stop: $X · Target: $X". Just describe the setup and what to watch for. Inventing levels (e.g. repeating the current price as entry, stop, AND target) is a serious error.
+- If you don't have price data for a stock, say so  don't make up a number.
+- NEVER state a specific market cap (e.g. "$943M market cap") unless that exact figure is in the attached data. Market cap is NOT something you can estimate or recall  you will get it wrong (e.g. calling a $50B company "$943M"). If asked for small-caps and the data doesn't include verified caps, describe the names you found without inventing cap numbers, or say you can pull the exact figure if they analyze a specific ticker.
 - Do NOT recall or estimate company facts you're unsure of (who acquired whom, whether a company is still public, its size). Stale training data causes confident errors. Stick to the attached data; if it's not there, say you'd need to look it up.
 - When listing multiple stocks, use the exact Price and Chg% from the data for each one.
 
-CRITICAL — NO ARITHMETIC (you are bad at math, so don't do any):
+CRITICAL  NO ARITHMETIC (you are bad at math, so don't do any):
 - NEVER calculate percentages, gains, losses, dollar amounts, share counts, or projections yourself. You make arithmetic errors.
 - For the day's move, use the EXACT "Chg%" value from the data verbatim. Do not derive it from prices.
-- For risk/reward, position size, P&L, or "what if I bought X shares" — if a PRE-COMPUTED block is attached, state that number exactly. Otherwise only use numbers already in the data; if a number isn't available, do NOT compute it — say you can run it if they place the trade.
+- For risk/reward, position size, P&L, or "what if I bought X shares"  if a PRE-COMPUTED block is attached, state that number exactly. Otherwise only use numbers already in the data; if a number isn't available, do NOT compute it  say you can run it if they place the trade.
 - Never multiply price × shares, never subtract two prices to get a gain, never convert a dollar move to a percent. If you're tempted to do math, stop and just quote the pre-computed figure from the data.
 - It is far better to omit a number than to state a wrong one. Round-number estimates and "roughly X%" calculations are BANNED.
 
 RESPONSE STYLE:
-- Keep responses SHORT — 2-4 paragraphs max. No walls of text.
+- Keep responses SHORT  2-4 paragraphs max. No walls of text.
 - ALWAYS answer directly. NEVER say "I'm ready to help" or "What would you like". Just give the answer.
 - Lead with the answer, then support with 2-3 key data points.
-- NEVER ask clarifying questions. If the user says "market regime" — give the regime. If they say "top gainers" — list them. If they say "AAPL" — analyze it.
+- NEVER ask clarifying questions. If the user says "market regime"  give the regime. If they say "top gainers"  list them. If they say "AAPL"  analyze it.
 - For market regime: just state bull/bear, SPY price, RSI, whether safe to trade. 3 sentences max.
 - For stock analysis: score, action, key levels, 1 paragraph.
-- For trade ideas: list the good ones with scores and why — brief. If only 1-2 are genuinely worth it, list just those. If nothing meets the bar right now, say so honestly rather than padding the list with weak names.
+- For trade ideas: list the good ones with scores and why  brief. If only 1-2 are genuinely worth it, list just those. If nothing meets the bar right now, say so honestly rather than padding the list with weak names.
 
 CHAT HISTORY:
 - You have access to the full conversation history. Use it to maintain context.
-- If the user says "what about that one?" — refer to the last stock discussed.
-- If they say "buy it" — they mean the last ticker mentioned.
+- If the user says "what about that one?"  refer to the last stock discussed.
+- If they say "buy it"  they mean the last ticker mentioned.
 - Remember what you've already told them and don't repeat yourself.
 - If a price was mentioned earlier in the conversation, you CAN reference it.
-- If the user says "rewrite" or "above you said" — look at previous messages.
+- If the user says "rewrite" or "above you said"  look at previous messages.
 
-BANNED PHRASES (NEVER say these — they make you sound broken):
+BANNED PHRASES (NEVER say these  they make you sound broken):
 - "I need to look up" / "I don't have access" / "Let me check on that"
 - "I'm ready to help" / "What would you like" / "How can I assist"
-- "I don't have real-time data" — you DO get real data attached
-- "I don't see a response" — read the conversation history, it's there
+- "I don't have real-time data"  you DO get real data attached
+- "I don't see a response"  read the conversation history, it's there
 - Never show portfolio/account data when the user is asking for trade ideas
 
-IMPORTANT: Autopilot runs a SWING-TRADING engine. It holds positions across multiple days (typically 3–10 trading days), not intraday. It combines proven swing strategies on daily bars:
+IMPORTANT: Autopilot runs a SWING-TRADING engine. It holds positions across multiple days (typically 310 trading days), not intraday. It combines proven swing strategies on daily bars:
 
-1. TREND FOLLOWING — buys established uptrends (price above stacked 20/50/200 SMAs) and rides them for days.
-2. PULLBACK ENTRIES — the core edge: buy quality stocks when they pull back to the 20 or 50 SMA in an uptrend, then resume higher.
-3. MOMENTUM — RSI, MACD, and relative strength confirm the move has legs before entering.
-4. BREAKOUT — enters on daily closes above key resistance with volume confirmation.
-5. RELATIVE STRENGTH — favors stocks outperforming SPY and their sector.
-6. NEWS / CATALYST — AI headline analysis flags catalysts and blocks entries fighting strong negative news.
-7. RISK MANAGEMENT — wider stops (2x daily ATR, ~3–10% room) to survive normal overnight noise, partial profits into strength, trailing stops, and a max-hold timeout (~10 days) to cut dead trades.
+1. TREND FOLLOWING  buys established uptrends (price above stacked 20/50/200 SMAs) and rides them for days.
+2. PULLBACK ENTRIES  the core edge: buy quality stocks when they pull back to the 20 or 50 SMA in an uptrend, then resume higher.
+3. MOMENTUM  RSI, MACD, and relative strength confirm the move has legs before entering.
+4. BREAKOUT  enters on daily closes above key resistance with volume confirmation.
+5. RELATIVE STRENGTH  favors stocks outperforming SPY and their sector.
+6. NEWS / CATALYST  AI headline analysis flags catalysts and blocks entries fighting strong negative news.
+7. RISK MANAGEMENT  wider stops (2x daily ATR, ~310% room) to survive normal overnight noise, partial profits into strength, trailing stops, and a max-hold timeout (~10 days) to cut dead trades.
 
 Filters: SPY trend (avoid longs in a broad downtrend), VIX panic filter, ADX trend strength, sector rank, earnings-date awareness.
 
-This is SWING trading — positions ARE held overnight and across days. There is NO end-of-day liquidation. Trades exit on stop-loss, target, signal reversal, or the max-hold timeout — never just because the market is closing. Users can manually buy, sell, short, and cover any time.
+This is SWING trading  positions ARE held overnight and across days. There is NO end-of-day liquidation. Trades exit on stop-loss, target, signal reversal, or the max-hold timeout  never just because the market is closing. Users can manually buy, sell, short, and cover any time.
 
-CRITICAL — Stock recommendations:
+CRITICAL  Stock recommendations:
 When asked to suggest, name, or recommend stocks, NEVER just list the same boring mega-caps everyone already knows (AAPL, MSFT, GOOGL, AMZN, TSLA, etc.). Anyone can name those. Instead:
 - Mix market caps: include mid-caps ($2B-$20B) and small-caps (<$2B) alongside any large-caps
 - Think across sectors: biotech, space, fintech, clean energy, cybersecurity, defense, materials, not just Big Tech
 - Include high-growth disruptors: companies like HIMS, CAVA, DUOL, CELH, AXON, UPST, LUNR, RKLB, TOST, ONON
 - Include value/dividend plays when relevant: O, EPD, STAG, NUE, FCX
 - Include sector specialists: FSLR (solar), SMR (nuclear), KTOS (defense drones), RXRX (AI drug discovery)
-- If someone asks for "10 stocks" give them a MIX — maybe 2 large-cap, 4 mid-cap, 3 small-cap, 1 speculative
-- Explain WHY each pick is interesting — don't just list tickers
+- If someone asks for "10 stocks" give them a MIX  maybe 2 large-cap, 4 mid-cap, 3 small-cap, 1 speculative
+- Explain WHY each pick is interesting  don't just list tickers
 - The goal is to surface opportunities people haven't already heard of a thousand times
 
 {PAULA_VOICE}
 
-When you have a trade plan, weave it in naturally: "I'd look around $X with a stop at $Y, first target $Z — about 2:1 risk-reward." If a "trade_plan" line is attached in the data, those are the ONLY correct entry/stop/target numbers — copy them exactly and NEVER repeat the entry price as the target (a target must be meaningfully above the entry for a buy). Use the score conversationally ("I'd rate this a 72 — solidly in buy territory"), not as a label. Call out confluence or conflicts honestly, and mention news sentiment or key support/resistance only when it actually matters to the decision.
+When you have a trade plan, weave it in naturally: "I'd look around $X with a stop at $Y, first target $Z  about 2:1 risk-reward." If a "trade_plan" line is attached in the data, those are the ONLY correct entry/stop/target numbers  copy them exactly and NEVER repeat the entry price as the target (a target must be meaningfully above the entry for a buy). Use the score conversationally ("I'd rate this a 72  solidly in buy territory"), not as a label. Call out confluence or conflicts honestly, and mention news sentiment or key support/resistance only when it actually matters to the decision.
 
-CRITICAL — Market awareness:
+CRITICAL  Market awareness:
 - You know today's date and can determine if the market is open (8:30 AM - 3:00 PM CT, Mon-Fri)
-- If asked about today's performance and data shows 0 trades, say "No trades were executed today" — don't make up a narrative
-- If the user asks about autopilot results, look at the ACTUAL data attached — trades count, P&L, positions
-- Be honest about results — if the day was a loss, say so and explain what happened
-- If the market hasn't opened yet, say "Market hasn't opened yet" — don't speculate about future trades
+- If asked about today's performance and data shows 0 trades, say "No trades were executed today"  don't make up a narrative
+- If the user asks about autopilot results, look at the ACTUAL data attached  trades count, P&L, positions
+- Be honest about results  if the day was a loss, say so and explain what happened
+- If the market hasn't opened yet, say "Market hasn't opened yet"  don't speculate about future trades
 
 Don'ts:
 - NEVER default to just listing AAPL, MSFT, GOOGL, AMZN, META, TSLA when recommending stocks
-- Don't disclaim you're an AI or say "not financial advice" — the app has that
-- NEVER fabricate trades, P&L numbers, or performance data — only reference what's in the attached data
-- NEVER say "I need to look it up", "I don't have access", "Let me check", or "I don't have real-time access" — you DO get real data attached. These are BANNED.
+- Don't disclaim you're an AI or say "not financial advice"  the app has that
+- NEVER fabricate trades, P&L numbers, or performance data  only reference what's in the attached data
+- NEVER say "I need to look it up", "I don't have access", "Let me check", or "I don't have real-time access"  you DO get real data attached. These are BANNED.
 - If you truly don't know something, say "Ask me to analyze [ticker] and I'll pull the data"
 
 RESPONSE LENGTH by request type:
@@ -7203,33 +7203,33 @@ RESPONSE LENGTH by request type:
                 if ("429" in _msg or "rate limit" in _msg or "rate_limit" in _msg) and _mi < len(_models) - 1:
                     import time as _t; _t.sleep(0.6); continue
                 if "429" in _msg or "rate limit" in _msg or "rate_limit" in _msg:
-                    return "⚠️ Paula's AI is busy right now (rate limit). Give it a few seconds and try again."
-                return f"⚠️ AI error: {str(e)[:120]}"
-        return f"⚠️ AI error: {str(_last_err)[:120]}"
+                    return "Paula's AI is busy right now (rate limit). Give it a few seconds and try again."
+                return f"AI error: {str(e)[:120]}"
+        return f"AI error: {str(_last_err)[:120]}"
     except Exception as e:
-        return f"⚠️ AI error: {str(e)[:120]}"
+        return f"AI error: {str(e)[:120]}"
 
 
 def ai_response_stream(user_msg: str, stock_data: dict | None, history: list, market: str):
-    """Streaming version — yields text chunks as they come from Groq."""
+    """Streaming version  yields text chunks as they come from Groq."""
     key = os.environ.get("GROQ_API_KEY", "")
     if not key:
-        yield "AI not configured — set GROQ_API_KEY."
+        yield "AI not configured  set GROQ_API_KEY."
         return
 
-    system = f"""You're Paula — a sharp, knowledgeable trading assistant. Today is {datetime.now(ZoneInfo("US/Eastern")).strftime("%Y-%m-%d")}. Market: {market}. {_market_status_line()}
+    system = f"""You're Paula  a sharp, knowledgeable trading assistant. Today is {datetime.now(ZoneInfo("US/Eastern")).strftime("%Y-%m-%d")}. Market: {market}. {_market_status_line()}
 
-Be aware of the market status above and reflect it naturally — if the market is closed, pre-market, or after-hours, factor that in. Don't describe live intraday action when the market isn't open.
+Be aware of the market status above and reflect it naturally  if the market is closed, pre-market, or after-hours, factor that in. Don't describe live intraday action when the market isn't open.
 
 {PAULA_VOICE}
 
 FACTUAL RULES (never break these):
 1. NEVER say "I'm ready to help", "What would you like", "Let me check", "I need to look up", or "I don't have access". These are BANNED phrases.
 2. If LIVE DATA is attached below, use those exact prices. Never invent prices.
-3. If NO live data is attached, use information from the conversation history — prices or stocks discussed earlier are real, reference them.
-4. If you truly have zero information about a stock, say "Ask me to analyze [ticker] and I'll pull up the full picture" — never say you "need to look it up".
-5. NO ARITHMETIC — you make math errors. Use the exact Chg% and pre-computed entry/stop/target numbers verbatim. If a PRE-COMPUTED block is attached, state that number exactly. Never multiply, subtract, or convert prices yourself. Omitting a number always beats stating a wrong one.
-6. PORTFOLIO-AWARE — if a "portfolio_context" block is attached (buying power, equity, open positions), use it when giving advice: note an existing position before suggesting adding to it, flag concentration if one name is a big share of equity, respect buying power, and factor in whether the position is up or down. Use only the exact numbers in the block — never invent position sizes or dollar amounts."""
+3. If NO live data is attached, use information from the conversation history  prices or stocks discussed earlier are real, reference them.
+4. If you truly have zero information about a stock, say "Ask me to analyze [ticker] and I'll pull up the full picture"  never say you "need to look it up".
+5. NO ARITHMETIC  you make math errors. Use the exact Chg% and pre-computed entry/stop/target numbers verbatim. If a PRE-COMPUTED block is attached, state that number exactly. Never multiply, subtract, or convert prices yourself. Omitting a number always beats stating a wrong one.
+6. PORTFOLIO-AWARE  if a "portfolio_context" block is attached (buying power, equity, open positions), use it when giving advice: note an existing position before suggesting adding to it, flag concentration if one name is a big share of equity, respect buying power, and factor in whether the position is up or down. Use only the exact numbers in the block  never invent position sizes or dollar amounts."""
 
     messages = [{"role": "system", "content": system}]
     for h in (history or [])[-12:]:
@@ -7250,7 +7250,7 @@ FACTUAL RULES (never break these):
         try:
             _tr = trade_track_record(30)
             if _tr.get("ok") and _tr.get("closed_trades", 0) > 0:
-                content += (f"\n\n---YOUR ACTUAL TRADING RESULTS (last 30 days — reference these "
+                content += (f"\n\n---YOUR ACTUAL TRADING RESULTS (last 30 days  reference these "
                             f"when giving advice; be honest about what's working)---\n{_tr['summary']}")
         except Exception:
             pass
@@ -7271,7 +7271,7 @@ FACTUAL RULES (never break these):
             for chunk in stream:
                 if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
                     yield chunk.choices[0].delta.content
-            return  # success — stop after a working model finishes
+            return  # success  stop after a working model finishes
         except Exception as e:
             _last_err = e
             _msg = str(e).lower()
@@ -7281,9 +7281,9 @@ FACTUAL RULES (never break these):
                     import time as _t
                     _t.sleep(0.6)
                     continue
-                yield "⚠️ Paula's AI is busy right now (rate limit). Give it a few seconds and try again."
+                yield " Paula's AI is busy right now (rate limit). Give it a few seconds and try again."
                 return
-            yield f"⚠️ AI error: {str(e)[:120]}"
+            yield f" AI error: {str(e)[:120]}"
             return
 
 
@@ -7511,7 +7511,7 @@ def main():
     st.caption(f"intraday long/short · {now_et.strftime('%b %d, %Y · %I:%M %p')} ET · autopilot {ap_status}")
 
     for mi, m in enumerate(st.session_state.messages):
-        av = "🟢" if m["role"] == "assistant" else "⬛"
+        av = "" if m["role"] == "assistant" else ""
         with st.chat_message(m["role"], avatar=av):
             st.markdown(m["content"])
             if m["role"] == "assistant" and m.get("chart"):
@@ -7526,7 +7526,7 @@ def main():
                 if pfig:
                     st.plotly_chart(pfig, width="stretch", config={"displayModeBar": False}, key=f"pchart_hist_{mi}")
 
-    prompt = st.chat_input("NVDA… buy 10 AAPL… short TSLA… portfolio… autopilot…",
+    prompt = st.chat_input("NVDA buy 10 AAPL short TSLA portfolio autopilot",
                            disabled=st.session_state.get("processing", False))
     if not prompt:
         _run_autopilot_loop()
@@ -7534,16 +7534,16 @@ def main():
 
     st.session_state["processing"] = True
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user", avatar="⬛"):
+    with st.chat_message("user", avatar=""):
         st.markdown(prompt)
 
-    resp = "Something went wrong — try again."
+    resp = "Something went wrong  try again."
     chart_ticker, table_data, trade_signal = None, None, None
     portfolio_chart = False
     market = "US"
 
     try:
-        with st.chat_message("assistant", avatar="🟢"):
+        with st.chat_message("assistant", avatar=""):
             with st.spinner(""):
                 intent = route(prompt)
                 result = execute(intent)
@@ -7562,7 +7562,7 @@ def main():
                             resp = ai_response(prompt, result["data"], st.session_state.messages, market)
                     elif result["type"] == "list":
                         table_data = result["data"]
-                        resp = result.get("msg", f"**{result.get('title', '')}** — {market} market")
+                        resp = result.get("msg", f"**{result.get('title', '')}**  {market} market")
                     elif result["type"] in ("portfolio", "trade", "positions", "orders"):
                         resp = result.get("msg", "Done.")
                         chart_ticker = result.get("ticker")
@@ -7571,7 +7571,7 @@ def main():
                     else:
                         resp = ai_response(prompt, None, st.session_state.messages, market)
                 elif result and result.get("error"):
-                    resp = f"⚠️ {result['error']}"
+                    resp = f"{result['error']}"
                 else:
                     resp = ai_response(prompt, None, st.session_state.messages, market)
 
@@ -7600,8 +7600,8 @@ def main():
                         df["Volume"] = df["Volume"].apply(lambda x: f"{x/1e6:.1f}M" if isinstance(x, (int, float)) and x >= 1e6 else (f"{x/1e3:.0f}K" if isinstance(x, (int, float)) and x >= 1e3 else str(x)))
                     st.dataframe(df, width="stretch", hide_index=True, key="table_new")
     except Exception as e:
-        with st.chat_message("assistant", avatar="🟢"):
-            resp = f"⚠️ Error: {str(e)[:200]}"
+        with st.chat_message("assistant", avatar=""):
+            resp = f"Error: {str(e)[:200]}"
             st.markdown(resp)
     finally:
         st.session_state["processing"] = False
@@ -7624,12 +7624,12 @@ def _run_autopilot_loop():
     is_open, status_msg = _market_is_open()
 
     if not is_open:
-        st.markdown(f"---\n\n⏸️ **Autopilot paused** · {status_msg}\n\nWill auto-resume when market opens. Say \"stop\" to deactivate.")
+        st.markdown(f"---\n\n⏸ **Autopilot paused** · {status_msg}\n\nWill auto-resume when market opens. Say \"stop\" to deactivate.")
         time.sleep(60)  # Check every 1 min
         st.rerun()
         return
 
-    INTERVAL = 5 * 60  # 5 minutes — aggressive day trading
+    INTERVAL = 5 * 60  # 5 minutes  aggressive day trading
 
     last_scan = st.session_state.get("autopilot_last_scan", 0)
     now = time.time()
@@ -7638,12 +7638,12 @@ def _run_autopilot_loop():
     if elapsed < INTERVAL and last_scan > 0:
         remaining = int(INTERVAL - elapsed)
         mins, secs = divmod(remaining, 60)
-        st.markdown(f"---\n\n🟢 **Autopilot active** · Next scan in {mins}m {secs}s · Say \"stop\" to deactivate")
+        st.markdown(f"---\n\n **Autopilot active** · Next scan in {mins}m {secs}s · Say \"stop\" to deactivate")
         time.sleep(min(60, remaining))
         st.rerun()
     else:
         st.session_state["autopilot_last_scan"] = now
-        with st.chat_message("assistant", avatar="🟢"):
+        with st.chat_message("assistant", avatar=""):
             with st.spinner("Autopilot scanning..."):
                 result = run_autopilot()
                 if result.get("market_closed"):
@@ -7651,7 +7651,7 @@ def _run_autopilot_loop():
                 elif result.get("ok"):
                     report = result["log"]
                     summary = (
-                        f"**🟢 Autopilot Scan Complete**\n\n"
+                        f"** Autopilot Scan Complete**\n\n"
                         f"Scanned: {result.get('scanned', '?')} · "
                         f"Found: {result.get('opportunities', 0)} · "
                         f"Bought: {result.get('buys', 0)} · Shorted: {result.get('shorts', 0)} · Closed: {result.get('sells', 0)}\n\n"
@@ -7659,7 +7659,7 @@ def _run_autopilot_loop():
                         "\n\n".join(report)
                     )
                 else:
-                    summary = f"⚠️ Autopilot error: {result.get('error', 'Unknown')}"
+                    summary = f"Autopilot error: {result.get('error', 'Unknown')}"
                 st.markdown(summary)
                 st.session_state.messages.append({"role": "assistant", "content": summary})
         time.sleep(60)

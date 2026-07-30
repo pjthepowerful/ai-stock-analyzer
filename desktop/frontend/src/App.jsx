@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.3.0'
+const VERSION = '4.3.1'
 const VERSION_DATE = 'July 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.3.1', d: 'July 30, 2026', changes: [
+    'Cleaner look: brand elements (avatars, buttons, nav) are now ink black in light mode so green means only gains, and removed the emoji from Paula’s messages.',
+  ]},
   { v: '4.3.0', d: 'July 30, 2026', changes: [
     'New editorial-mono light theme (now the default): warm off-white, ink black, deepened green/red on P/L only — cleaner and less generic. Toggle back to dark anytime in settings.',
   ]},

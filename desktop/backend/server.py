@@ -1,5 +1,5 @@
 """
-Paula Desktop — FastAPI Backend
+Paula Desktop  FastAPI Backend
 Wraps the trading engine as a local API server.
 """
 
@@ -53,7 +53,7 @@ ADMIN_EMAIL = "parjan.d@icloud.com"  # Only this email gets admin (admin panel, 
 AUTOPILOT_EMAILS = {"parjan.d@icloud.com", "pinakin.d@moftmail.com"}  # Emails allowed to run autopilot
 
 # Email-dependent auth features (2FA + signup email verification). OFF until a
-# domain is verified in Resend — the sandbox onboarding@resend.dev can only mail
+# domain is verified in Resend  the sandbox onboarding@resend.dev can only mail
 # the Resend account owner, so codes never reach testers. Flip to "1" (env
 # EMAIL_AUTH_ENABLED=1) once a real sending domain is set up. Password reset is
 # also gated on this since it relies on the same email delivery.
@@ -72,23 +72,23 @@ def _friendly_error(err: str) -> str:
                 "the symbol and try again.")
     if "rate" in e or "too many" in e:
         return ("The market data source is busy right now (rate-limited). Give it "
-                "a few seconds and try again — it usually clears quickly.")
+                "a few seconds and try again  it usually clears quickly.")
     if "alpaca" in e or "connect" in e or "credential" in e or "unauthorized" in e:
         return ("I couldn't reach your brokerage account. Check that your Alpaca "
-                "API keys are set correctly in Settings → Connections.")
+                "API keys are set correctly in Settings  Connections.")
     if "buying power" in e or "insufficient" in e:
         return ("That order needs more buying power than the account has. Try a "
                 "smaller share count.")
     if "timeout" in e or "timed out" in e:
         return ("That took too long and timed out. The data source may be slow "
-                "right now — please try again.")
+                "right now  please try again.")
     # Fallback: show the original but cleaned up.
     return f"Something went wrong: {err}"
 
 
 def _taste_analysis(result: dict) -> dict:
     """Free users get a *taste* of a deep stock analysis: the ticker, current
-    price, the signal (BUY/SELL/etc) and the score — but NOT the full data dict,
+    price, the signal (BUY/SELL/etc) and the score  but NOT the full data dict,
     chart, entry/stop/target levels, or detailed breakdown (those stay Plus).
     Returns a trimmed chat response with a flag so the frontend shows a
     'see the full analysis with Plus' prompt under it."""
@@ -109,10 +109,10 @@ def _taste_analysis(result: dict) -> dict:
         bits.append(f"current signal: **{signal}**")
     if score is not None:
         bits.append(f"score **{score}/100**")
-    teaser = " · ".join(bits)
+    teaser = "· ".join(bits)
     msg = (
-        f"{teaser}\n\nThat's the quick read. The full breakdown — setup scores, "
-        f"entry/stop/target levels, the chart, and Paula's reasoning — is part of "
+        f"{teaser}\n\nThat's the quick read. The full breakdown  setup scores, "
+        f"entry/stop/target levels, the chart, and Paula's reasoning  is part of "
         f"Paula Plus."
     )
     return {
@@ -125,7 +125,7 @@ def _taste_analysis(result: dict) -> dict:
 KNOWN_TICKERS = set(["AAPL","MSFT","NVDA","GOOGL","AMZN","META","TSLA","AMD","NFLX","SPY","QQQ","JPM","V","BA","HD","CRM","AVGO","LLY","COST","WMT","DIS","XOM","CVX","GS","BAC","INTC","PYPL","COIN","PLTR","UBER","SHOP","SOFI","MARA","CELH","NIO","RIVN","F","GM","KO","PEP","NKE","ADBE","CSCO","IBM","QCOM","TXN","MU","MA","SQ","HOOD","MS","C","WFC","UNH","JNJ","MRK","PFE","ABBV","TGT","SBUX","MCD","CMG","DASH","BKNG","ABNB","LULU","SLB","COP","CAT","GE","HON","DE","UPS","FDX","LMT","SNAP","RBLX","DKNG","MSTR","RIOT","NET","DDOG","SNOW","PANW","CRWD","TTD","SMCI","ARM","IONQ","TMDX","DUOL","FCEL","ONON","HIMS","CAVA","TOST","ELF","LCID","DELL","ROKU","NOW","INTU","PINS","CVNA","MRNA","BRK-B","RKLB","AXON"])
 autopilot_task: Optional[asyncio.Task] = None
 connected_clients: list[WebSocket] = []
-# Per-user session isolation — NO global shared state
+# Per-user session isolation  NO global shared state
 _user_sessions: dict[int, list[dict]] = {}  # {user_id: [chat messages]}
 _session_lock = asyncio.Lock()
 autopilot_owner_id: Optional[int] = None  # Only one user can own autopilot
@@ -139,7 +139,7 @@ _active_scans: dict = {}
 # second user asking something simple ("price of AAPL") would sit and wait until
 # the scan finished. We fix that by giving heavy scans their OWN pool, separate
 # from the pool everything else uses. A scan therefore can NEVER block a light
-# request — they run on different threads.
+# request  they run on different threads.
 #
 # Sizes are env-overridable so the container can be tuned without a code change.
 # Defaults are conservative to respect Railway's memory (two concurrent full
@@ -153,7 +153,7 @@ _light_executor = _TPE(max_workers=_LIGHT_WORKERS, thread_name_prefix="light")
 
 def _set_default_executor():
     """Make the light pool the loop's default so every plain run_in_executor(None,
-    …) call (price lookups, single-ticker analysis, AI replies) lands there and
+    ) call (price lookups, single-ticker analysis, AI replies) lands there and
     stays clear of the scan pool."""
     try:
         asyncio.get_event_loop().set_default_executor(_light_executor)
@@ -188,7 +188,7 @@ def _save_autopilot_state(on: bool, owner_id: Optional[int]):
         with open(_AP_STATE_FILE, "w") as f:
             json.dump({"on": bool(on), "owner_id": owner_id}, f)
     except Exception as e:
-        print(f"  ⚠️ Could not save autopilot state: {e}")
+        print(f"   Could not save autopilot state: {e}")
 
 def _load_autopilot_state() -> dict:
     try:
@@ -262,7 +262,7 @@ async def send_phone_notification(title: str, message: str, priority: str = "def
     except Exception:
         pass  # Don't break trading if notification fails
 
-# ── Trade Logger — saves every trade to JSON for performance tracking ──
+# ── Trade Logger  saves every trade to JSON for performance tracking ──
 import pathlib
 TRADE_LOG_PATH = pathlib.Path(__file__).parent / "trade_log.json"
 
@@ -291,12 +291,12 @@ def log_trade(action: str, ticker: str, qty: float = 0, price: float = 0, pnl: f
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup/shutdown."""
-    print("🟢 Paula backend starting...")
+    print(" Paula backend starting...")
 
     # Route all default thread-pool work to the light pool so scans never block
     # simple requests (see the executor definitions up top).
     _set_default_executor()
-    print(f"  ✓ Concurrency lanes: {_LIGHT_WORKERS} light + {_SCAN_WORKERS} scan workers")
+    print(f"   Concurrency lanes: {_LIGHT_WORKERS} light + {_SCAN_WORKERS} scan workers")
 
     # Load saved API keys from DB (first user's keys)
     try:
@@ -306,24 +306,24 @@ async def lifespan(app: FastAPI):
         if row:
             if row["alpaca_key"] and not os.environ.get("ALPACA_KEY_ID"):
                 os.environ["ALPACA_KEY_ID"] = row["alpaca_key"]
-                print(f"  ✓ Loaded Alpaca key from DB")
+                print(f"   Loaded Alpaca key from DB")
             if row["alpaca_secret"] and not os.environ.get("ALPACA_SECRET"):
                 os.environ["ALPACA_SECRET"] = row["alpaca_secret"]
-                print(f"  ✓ Loaded Alpaca secret from DB")
+                print(f"   Loaded Alpaca secret from DB")
             if row["groq_key"] and not os.environ.get("GROQ_API_KEY"):
                 os.environ["GROQ_API_KEY"] = row["groq_key"]
-                print(f"  ✓ Loaded Groq key from DB")
+                print(f"   Loaded Groq key from DB")
             if row["polygon_key"] and not os.environ.get("POLYGON_API_KEY"):
                 os.environ["POLYGON_API_KEY"] = row["polygon_key"]
-                print(f"  ✓ Loaded Polygon key from DB")
+                print(f"   Loaded Polygon key from DB")
     except Exception as e:
-        print(f"  ⚠️ Could not load keys from DB: {e}")
+        print(f"   Could not load keys from DB: {e}")
 
-    # Start the EOD guardian — runs independently of autopilot
+    # Start the EOD guardian  runs independently of autopilot
     eod_task = asyncio.create_task(_eod_guardian())
 
     # Auto-resume autopilot if it was running before a restart (deploy/crash/host
-    # bounce). This is what makes autopilot genuinely unattended — it survives the
+    # bounce). This is what makes autopilot genuinely unattended  it survives the
     # backend going down and comes back trading on its own.
     global autopilot_task, autopilot_owner_id
     try:
@@ -331,12 +331,12 @@ async def lifespan(app: FastAPI):
         if _ap.get("on"):
             autopilot_owner_id = _ap.get("owner_id")
             autopilot_task = _spawn_autopilot()
-            print(f"  ✓ Auto-resumed autopilot (owner {autopilot_owner_id}) after restart")
+            print(f"   Auto-resumed autopilot (owner {autopilot_owner_id}) after restart")
     except Exception as e:
-        print(f"  ⚠️ Could not auto-resume autopilot: {e}")
+        print(f"   Could not auto-resume autopilot: {e}")
 
     yield
-    print("🔴 Paula backend stopping...")
+    print(" Paula backend stopping...")
     eod_task.cancel()
     if autopilot_task and not autopilot_task.done():
         autopilot_task.cancel()
@@ -348,7 +348,7 @@ app = FastAPI(title="Paula", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    # Can't use allow_origins=["*"] together with allow_credentials=True — the
+    # Can't use allow_origins=["*"] together with allow_credentials=True  the
     # browser requires a SPECIFIC origin to be echoed back when credentials are
     # allowed, so "*" results in no Access-Control-Allow-Origin header at all
     # (which is the CORS error). Use a regex that matches our real frontends:
@@ -360,13 +360,13 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-# Global exception handler — ensures CORS headers on 500 errors
+# Global exception handler  ensures CORS headers on 500 errors
 from fastapi.responses import JSONResponse
 from fastapi import Request
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    print(f"⚠️ Unhandled error on {request.url.path}: {exc}")
+    print(f" Unhandled error on {request.url.path}: {exc}")
     # Echo the request origin so a 500 surfaces as the real error, not a
     # misleading CORS failure (the CORS middleware doesn't always wrap responses
     # produced by a custom exception handler).
@@ -416,7 +416,7 @@ async def broadcast(event: str, data: dict):
     """Send event to all connected WebSocket clients."""
     # Tag autopilot/trade events with the account that owns autopilot, so each
     # client can decide whether to play sounds (only the owning ACCOUNT should
-    # hear them — works across all of that account's sessions/devices).
+    # hear them  works across all of that account's sessions/devices).
     if event in ("autopilot", "trade") and isinstance(data, dict) and "ap_owner_id" not in data:
         data = {**data, "ap_owner_id": autopilot_owner_id}
     msg = json.dumps({"event": event, "data": data})
@@ -436,10 +436,10 @@ async def broadcast(event: str, data: dict):
             action = data.get("action", "")
             ticker = data.get("ticker", data.get("symbol", ""))
             ntfy_topic = os.environ.get("NTFY_TOPIC", "paula-trades")
-            emoji = {"buy": "📈", "sell": "📉", "short": "📉", "cover": "📈", "close_all": "🔴"}.get(action, "📊")
+            emoji = {"buy": "", "sell": "", "short": "", "cover": "", "close_all": ""}.get(action, "")
             title = f"{emoji} Paula: {action.upper()} {ticker}"
             if action == "close_all":
-                title = "🔴 Paula: All positions closed"
+                title = "Paula: All positions closed"
             req.post(f"https://ntfy.sh/{ntfy_topic}",
                      data=title.encode(), headers={"Title": "Paula Trade"}, timeout=3)
         except Exception:
@@ -468,14 +468,14 @@ async def broadcast(event: str, data: dict):
             pass
 
 
-# A market scan isn't just "fetch data" — it fetches, then scores every result,
+# A market scan isn't just "fetch data"  it fetches, then scores every result,
 # then pulls news + writes the analysis for the top picks. The old bar only
 # tracked fetching, so it jumped in a couple of big steps to 100% and then sat
 # there (looking frozen/done) while the rest of the scan actually ran. We now map
 # each phase onto its own slice of the overall bar so the percentage reflects the
 # WHOLE scan and climbs smoothly instead of finishing early.
 _SCAN_PHASE_RANGES = {
-    "fetching":   (0, 65),    # bulk price/history download — the long part
+    "fetching":   (0, 65),    # bulk price/history download  the long part
     "scoring":    (65, 90),   # running the signal engine over every result
     "finalizing": (90, 98),   # news + AI write-up for the top picks
 }
@@ -555,7 +555,7 @@ async def websocket_endpoint(websocket: WebSocket):
             if msg.get("type") == "ping":
                 await websocket.send_text(json.dumps({"event": "pong"}))
     except Exception:
-        # Any disconnect/error path — fall through to cleanup.
+        # Any disconnect/error path  fall through to cleanup.
         pass
     finally:
         # ALWAYS remove the socket so connected_clients can't grow unbounded
@@ -650,7 +650,7 @@ async def login(req: AuthRequest):
         return {"ok": False, "error": "Email is required"}
     result = auth.login(identifier.strip(), req.password)
     if result.get("ok") and EMAIL_AUTH_ENABLED:
-        # 2FA: password was correct — but require an emailed code before issuing
+        # 2FA: password was correct  but require an emailed code before issuing
         # the real session token. Withhold the token; send a code instead.
         email = (result.get("user", {}) or {}).get("email", "").strip().lower()
         if email:
@@ -662,9 +662,9 @@ async def login(req: AuthRequest):
                 if sent:
                     return {"ok": True, "needs_2fa": True, "email": email}
                 # SAFETY VALVE: if the code email could NOT be sent (e.g. Resend
-                # misconfigured), do NOT lock the user out — the password was
+                # misconfigured), do NOT lock the user out  the password was
                 # already verified, so issue the session directly and flag it.
-                print(f"[2fa] email NOT sent for {email} — falling back to direct login (password was valid)", flush=True)
+                print(f"[2fa] email NOT sent for {email}  falling back to direct login (password was valid)", flush=True)
                 direct = auth.issue_token_for_email(email)
                 direct["twofa_skipped"] = True
                 return direct
@@ -687,7 +687,7 @@ async def verify_code(req: AuthRequest):
     if not vr.get("ok"):
         return vr
     if purpose == "2fa":
-        # Code good — now issue the real session token.
+        # Code good  now issue the real session token.
         return auth.issue_token_for_email(email)
     return {"ok": True, "verified": True}
 
@@ -722,7 +722,7 @@ def _send_reset_email(to_email: str, token: str) -> bool:
     api_key = os.environ.get("RESEND_API_KEY", "")
     from_addr = os.environ.get("RESET_FROM_EMAIL", "Paula <onboarding@resend.dev>")
     if not api_key:
-        # Dev mode — no email provider configured.
+        # Dev mode  no email provider configured.
         print(f"[password-reset] (no RESEND_API_KEY set) reset link for {to_email}:\n  {reset_link}", flush=True)
         return False
     try:
@@ -823,7 +823,7 @@ async def me(authorization: str = Header(None)):
 
 @app.post("/api/plus/purchase")
 async def plus_purchase(req: dict = None, authorization: str = Header(None)):
-    """Mock checkout — grants Paula Plus. (No real payment is processed.)"""
+    """Mock checkout  grants Paula Plus. (No real payment is processed.)"""
     user = _get_user(authorization)
     if not user:
         return {"ok": False, "error": "Not authenticated"}
@@ -834,7 +834,7 @@ async def plus_purchase(req: dict = None, authorization: str = Header(None)):
 
 @app.post("/api/trade/execute")
 async def execute_confirmed_trade(req: dict, authorization: str = Header(None)):
-    """Actually place a trade — ONLY called after the user explicitly confirms
+    """Actually place a trade  ONLY called after the user explicitly confirms
     in the UI. Chat 'buy/sell/short/cover' intents return a confirm_trade card
     instead of executing, so an order can never be placed from a single
     (possibly misread) message. This endpoint is the only path to a live order
@@ -850,7 +850,7 @@ async def execute_confirmed_trade(req: dict, authorization: str = Header(None)):
             result = engine.alpaca_cancel_all_orders()
             if result.get("ok"):
                 n = result.get("count")
-                return {"ok": True, "message": f"✅ Cancelled {n if n is not None else 'all'} open order{'' if n==1 else 's'}. Your positions are untouched."}
+                return {"ok": True, "message": f" Cancelled {n if n is not None else 'all'} open order{'' if n==1 else 's'}. Your positions are untouched."}
             return {"ok": False, "error": result.get("error", "Cancel failed")}
         except Exception as e:
             return {"ok": False, "error": str(e)[:160]}
@@ -867,26 +867,26 @@ async def execute_confirmed_trade(req: dict, authorization: str = Header(None)):
                 else:
                     result = engine.alpaca_buy(ticker=ticker, qty=qty)
                 if result.get("ok"):
-                    return {"ok": True, "message": f"🟢 Bought {result.get('qty_calculated', qty)} shares of {ticker} (risk-sized) · {result.get('status','submitted')}"}
+                    return {"ok": True, "message": f" Bought {result.get('qty_calculated', qty)} shares of {ticker} (risk-sized) · {result.get('status','submitted')}"}
             else:
                 result = engine.alpaca_buy(ticker=ticker, qty=qty, notional=req.get("notional"))
                 if result.get("ok"):
                     qty_str = f"{result.get('qty', qty)} shares" if (result.get("qty") or qty) else f"${req.get('notional')}"
-                    return {"ok": True, "message": f"🟢 Bought {qty_str} of {ticker} · {result.get('status','submitted')}"}
+                    return {"ok": True, "message": f" Bought {qty_str} of {ticker} · {result.get('status','submitted')}"}
         elif action == "sell":
             result = engine.alpaca_sell(ticker=ticker, qty=qty, sell_all=req.get("sell_all", False))
             if result.get("ok"):
                 act = "Closed position in" if req.get("sell_all") else f"Sold {qty or result.get('qty','')} shares of"
-                return {"ok": True, "message": f"🔴 {act} {ticker} · {result.get('status','submitted')}"}
+                return {"ok": True, "message": f" {act} {ticker} · {result.get('status','submitted')}"}
         elif action == "short":
             result = engine.alpaca_short(ticker=ticker, qty=qty or 1)
             if result.get("ok"):
-                return {"ok": True, "message": f"🔴 Shorted {qty or 1} shares of {ticker} · {result.get('status','submitted')}"}
+                return {"ok": True, "message": f" Shorted {qty or 1} shares of {ticker} · {result.get('status','submitted')}"}
         elif action == "cover":
             result = engine.alpaca_cover(ticker=ticker, qty=qty, cover_all=req.get("cover_all", False))
             if result.get("ok"):
                 act = "Covered all of" if req.get("cover_all") else f"Covered {qty or result.get('qty','')} shares of"
-                return {"ok": True, "message": f"🟢 {act} {ticker} (short closed) · {result.get('status','submitted')}"}
+                return {"ok": True, "message": f" {act} {ticker} (short closed) · {result.get('status','submitted')}"}
         return {"ok": False, "error": result.get("error", "Order failed")}
     except Exception as e:
         return {"ok": False, "error": str(e)[:160]}
@@ -898,7 +898,7 @@ async def save_user_settings(req: SettingsRequest, authorization: str = Header(N
         return {"ok": False, "error": "Not authenticated"}
 
     # Connections (broker/data API keys) are a Plus feature. The UI hides them
-    # behind a LockedCard, but the endpoint must enforce it too — otherwise a
+    # behind a LockedCard, but the endpoint must enforce it too  otherwise a
     # free user could POST keys directly and bypass the paywall. Strip the
     # key fields for non-Plus users; their other settings (theme, font, etc.)
     # still save normally.
@@ -1000,7 +1000,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v4.3.0",  # bump marker — confirms running code
+        "build": "v4.3.1",  # bump marker  confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1215,7 +1215,7 @@ async def generate_title(req: TitleRequest):
             json={
                 "model": "llama-3.3-70b-versatile",
                 "messages": [
-                    {"role": "system", "content": "You are a title generator. Output ONLY a 2-5 word title. Nothing else. No sentences. No punctuation. No quotes. No explanation. Just the title words.\n\nExamples:\nInput: 'market regime' → Market Regime Check\nInput: 'top gainers' → Top Gainers Today\nInput: 'analyze AAPL' → AAPL Analysis\nInput: 'What should I buy?' → Trade Ideas\nInput: 'How did we do today?' → Daily Recap\nInput: 'buy 10 NVDA' → Buy NVDA Order"},
+                    {"role": "system", "content": "You are a title generator. Output ONLY a 2-5 word title. Nothing else. No sentences. No punctuation. No quotes. No explanation. Just the title words.\n\nExamples:\nInput: 'market regime'  Market Regime Check\nInput: 'top gainers'  Top Gainers Today\nInput: 'analyze AAPL'  AAPL Analysis\nInput: 'What should I buy?'  Trade Ideas\nInput: 'How did we do today?'  Daily Recap\nInput: 'buy 10 NVDA'  Buy NVDA Order"},
                     {"role": "user", "content": msg[:100]}
                 ],
                 "max_tokens": 10, "temperature": 0.1
@@ -1235,12 +1235,12 @@ async def generate_title(req: TitleRequest):
 
 @app.post("/api/chat/clear")
 async def clear_chat(authorization: str = Header(None)):
-    """Clear chat history for current user — both in-memory AND the DB, so a
+    """Clear chat history for current user  both in-memory AND the DB, so a
     fresh chat doesn't reload prior context (which caused Paula to say things
     like 'I've mentioned this before' at the start of a new chat)."""
     user = _get_user(authorization)
     user_id = user["id"] if user else 0
-    # Reset in-memory to empty (not pop — pop would trigger a DB reload).
+    # Reset in-memory to empty (not pop  pop would trigger a DB reload).
     _user_sessions[user_id] = []
     try:
         auth.clear_chat(user_id)
@@ -1255,7 +1255,7 @@ async def get_account(authorization: str = Header(None)):
     _get_user(authorization)  # sets this user's Alpaca creds for the request
     acc = engine.alpaca_account()
     if not acc:
-        return {"ok": False, "error": "Couldn't reach your brokerage account. Check your Alpaca keys in Settings → Connections."}
+        return {"ok": False, "error": "Couldn't reach your brokerage account. Check your Alpaca keys in Settings  Connections."}
     return {"ok": True, "data": acc}
 
 
@@ -1280,7 +1280,7 @@ _TAPE_CACHE = {"at": 0, "data": []}
 @app.get("/api/tape")
 def market_tape():
     """Public (no-auth) endpoint: real daily % moves for the login ticker tape.
-    Cached for 60s — the login screen can be hit a lot, and this data barely
+    Cached for 60s  the login screen can be hit a lot, and this data barely
     moves minute-to-minute, so we avoid a 15-ticker yfinance download per visit."""
     import time as _t
     if _TAPE_CACHE["data"] and (_t.time() - _TAPE_CACHE["at"] < 60):
@@ -1312,7 +1312,7 @@ def market_tape():
 @app.post("/api/copilot/scan")
 async def copilot_scan(body: dict = None, authorization: str = Header(None)):
     """Run a market scan and return structured picks for the Co-Pilot (buying
-    power sizing, confirm-each). Same engine as autopilot — the picks carry the
+    power sizing, confirm-each). Same engine as autopilot  the picks carry the
     same unvalidated signal, so the UI tags them accordingly."""
     user = _get_user(authorization)
     body = body or {}
@@ -1330,7 +1330,7 @@ async def copilot_scan(body: dict = None, authorization: str = Header(None)):
             return {"ok": False, "error": (result or {}).get("error", "Scan failed")}
         picks = result.get("picks", [])
         # Respect autopilot's position cap so the Co-Pilot doesn't suggest a wall
-        # of stocks — same MAX_POSITIONS the bot uses (default 4). The frontend
+        # of stocks  same MAX_POSITIONS the bot uses (default 4). The frontend
         # subtracts positions the user already holds to get "slots left".
         max_positions = getattr(engine, "SWING_MAX_POSITIONS", 4)
         try:
@@ -1342,7 +1342,7 @@ async def copilot_scan(body: dict = None, authorization: str = Header(None)):
         return {"ok": True, "picks": picks, "count": len(picks),
                 "max_positions": max_positions}
     except asyncio.TimeoutError:
-        return {"ok": False, "error": "Scan timed out — try again."}
+        return {"ok": False, "error": "Scan timed out  try again."}
     except Exception as e:
         return {"ok": False, "error": str(e)[:200]}
 
@@ -1384,7 +1384,7 @@ async def buy_stock(req: TradeRequest):
     if result.get("ok"):
         await broadcast("trade", {"action": "buy", "ticker": req.ticker, **result})
         log_trade("buy", req.ticker, qty=req.qty or 0, price=result.get("avg_price", 0))
-        await send_phone_notification(f"📈 Bought {req.ticker}", f"Qty: {req.qty or 'notional'} | Entry: ${result.get('price', '?')}")
+        await send_phone_notification(f" Bought {req.ticker}", f"Qty: {req.qty or 'notional'} | Entry: ${result.get('price', '?')}")
     return result
 
 
@@ -1396,7 +1396,7 @@ async def sell_stock(req: TradeRequest):
     if result.get("ok"):
         await broadcast("trade", {"action": "sell", "ticker": req.ticker, **result})
         log_trade("sell", req.ticker, qty=req.qty or 0)
-        await send_phone_notification(f"📉 Sold {req.ticker}", f"Position closed at ${result.get('price', '?')}")
+        await send_phone_notification(f" Sold {req.ticker}", f"Position closed at ${result.get('price', '?')}")
     return result
 
 
@@ -1457,7 +1457,7 @@ async def market_regime():
     except Exception:
         pass
     if _g is None and _l is None:
-        # Polygon gave nothing — Yahoo large-cap fallback.
+        # Polygon gave nothing  Yahoo large-cap fallback.
         try:
             mv = engine.yahoo_top_movers()
             if mv.get("gainer"):
@@ -1477,7 +1477,7 @@ async def market_regime():
 async def run_backtest_endpoint(body: dict = None, authorization: str = Header(None)):
     """Run backtest with current strategy params.
 
-    Pass {"validate": true} to also run the statistical validation suite — real
+    Pass {"validate": true} to also run the statistical validation suite  real
     trading costs, a random-entry null hypothesis, bootstrap confidence interval,
     benchmark comparison, and a PASS/FAIL/INCONCLUSIVE verdict.
     """
@@ -1509,7 +1509,7 @@ async def run_backtest_endpoint(body: dict = None, authorization: str = Header(N
         ))
         return result
     except Exception as e:
-        print(f"⚠️ Backtest error: {e}")
+        print(f" Backtest error: {e}")
         return {"ok": False, "error": str(e)[:200]}
 
 
@@ -1576,16 +1576,16 @@ async def train_ml():
             # Recommendations
             recs = []
             if avg_win_score > avg_loss_score + 5:
-                recs.append(f"Raise MIN_SCORE to {int(insights['recommended_min_score'])} — winning trades average {avg_win_score:.0f}")
+                recs.append(f"Raise MIN_SCORE to {int(insights['recommended_min_score'])}  winning trades average {avg_win_score:.0f}")
             if insights["win_rate"] < 45:
-                recs.append("Win rate below 45% — tighten entry criteria or widen stops")
+                recs.append("Win rate below 45%  tighten entry criteria or widen stops")
             if insights["win_rate"] > 55:
-                recs.append("Win rate above 55% — strategy is working, consider increasing position size")
+                recs.append("Win rate above 55%  strategy is working, consider increasing position size")
             insights["recommendations"] = recs
 
         return {"ok": True, "insights": insights}
     except Exception as e:
-        print(f"⚠️ ML error: {e}")
+        print(f" ML error: {e}")
         return {"ok": False, "error": str(e)[:200]}
 
 
@@ -1604,7 +1604,7 @@ def get_trades():
 
 @app.post("/api/profile")
 async def save_profile(request: Request):
-    """Save trader profile — updates autopilot config."""
+    """Save trader profile  updates autopilot config."""
     try:
         body = await request.json()
         config_path = pathlib.Path(__file__).parent / "autopilot_config.json"
@@ -1678,14 +1678,14 @@ def _company_info(ticker: str) -> dict:
         info_out["sector"] = info.get("sector")
         summary = info.get("longBusinessSummary")
         if summary:
-            # keep it short — first 2 sentences
+            # keep it short  first 2 sentences
             parts = summary.split(". ")
             info_out["summary"] = ". ".join(parts[:2]).strip().rstrip(".") + "."
         officers = info.get("companyOfficers") or []
         for o in officers:
             title = (o.get("title") or "").lower()
             # Only accept a clear CEO title. We deliberately DON'T fall back to
-            # "first officer in the list" — that surfaced wrong names (e.g. a CFO
+            # "first officer in the list"  that surfaced wrong names (e.g. a CFO
             # or a stale/mismatched record) labeled as CEO. Better to show no CEO
             # than a wrong one.
             if ("chief executive" in title or title.strip() in ("ceo", "co-ceo")
@@ -1696,7 +1696,7 @@ def _company_info(ticker: str) -> dict:
                 if name and len(name.split()) >= 2:
                     info_out["ceo"] = name
                     break
-        # No reliable-CEO fallback on purpose — leave it None if unclear.
+        # No reliable-CEO fallback on purpose  leave it None if unclear.
     except Exception:
         pass
     _COMPANY_CACHE[t] = info_out
@@ -1709,7 +1709,7 @@ def _company_info(ticker: str) -> dict:
 
 @app.get("/api/quick/{ticker}")
 def quick_lookup(ticker: str):
-    """Quick ticker lookup — uses the SAME signal engine as chat for consistent scores."""
+    """Quick ticker lookup  uses the SAME signal engine as chat for consistent scores."""
     try:
         data = engine.fetch_full(ticker.upper())
         if not data or not data.get("price"):
@@ -1756,7 +1756,7 @@ def quick_lookup(ticker: str):
 
         # IPO / brand-new-listing guard: the engine relies on history (20/50/200
         # SMAs, RSI, ADX, ATR, volume trend). Too few bars, or flat OHLC with zero
-        # volume, means there's nothing real to score — don't fake a HOLD·0.
+        # volume, means there's nothing real to score  don't fake a HOLD·0.
         tech = data.get("technicals", {}) or {}
         hist_days = data.get("history_days", 999)
         day_high = tech.get("day_high") or tech.get("high")
@@ -1802,7 +1802,7 @@ def quick_lookup(ticker: str):
 
 @app.get("/api/spy-trend")
 def spy_trend():
-    """Get SPY intraday trend — sync, auto-threaded."""
+    """Get SPY intraday trend  sync, auto-threaded."""
     try:
         trend = engine._get_spy_intraday_trend()
         return {"ok": True, "data": trend}
@@ -1866,7 +1866,7 @@ def _polygon_chart_bars(ticker: str, period: str, intraday: bool, interval: str 
 
 @app.get("/api/chart/{ticker}")
 def chart_data(ticker: str, period: str = "1y"):
-    """Get chart OHLCV data — sync endpoint, auto-threaded by FastAPI.
+    """Get chart OHLCV data  sync endpoint, auto-threaded by FastAPI.
     Cached + retries on rate-limit so chart views don't fail when Yahoo is busy
     (e.g. right after a scan)."""
     import yfinance as yf
@@ -1892,10 +1892,10 @@ def chart_data(ticker: str, period: str = "1y"):
                 hist = tk.history(period=period, interval=interval) if intraday else tk.history(period=period)
             if hist is None or hist.empty:
                 last_err = "No data"
-                # Could be a soft rate-limit returning empty — brief retry.
+                # Could be a soft rate-limit returning empty  brief retry.
                 if attempt < 2:
                     _t.sleep(1.2 * (attempt + 1)); continue
-                # Yahoo gave us nothing — try Polygon before giving up.
+                # Yahoo gave us nothing  try Polygon before giving up.
                 _poly = _polygon_chart_bars(ticker, period, intraday, interval)
                 if _poly:
                     _CHART_CACHE[ck] = (_t.time(), _poly)
@@ -1931,7 +1931,7 @@ def chart_data(ticker: str, period: str = "1y"):
                 _t.sleep(2.0 * (attempt + 1))  # 2s, then 4s
                 continue
             break
-    # All Yahoo attempts failed — try Polygon, then stale cache, then the error.
+    # All Yahoo attempts failed  try Polygon, then stale cache, then the error.
     _poly = _polygon_chart_bars(ticker, period, intraday, interval)
     if _poly:
         _CHART_CACHE[ck] = (_t.time(), _poly)
@@ -1955,7 +1955,7 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
 
     user = _get_user(authorization)
     user_id = user["id"] if user else 0
-    # Free-tier daily message limit — MUST match /api/chat. Without this, the
+    # Free-tier daily message limit  MUST match /api/chat. Without this, the
     # stream endpoint was an open bypass: a free user hitting /api/chat/stream
     # directly skipped the cap entirely. Plus/admin/autopilot are exempt.
     if user:
@@ -1972,11 +1972,11 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
     chat_history = _get_user_history(user_id)
     chat_history.append({"role": "user", "content": user_msg})
 
-    # Route the message — history lets referential follow-ups resolve tickers.
+    # Route the message  history lets referential follow-ups resolve tickers.
     intent = engine.route(user_msg, history=chat_history[:-1])
     itype = intent.get("type", "chat")
 
-    # Autopilot start/stop — admin only
+    # Autopilot start/stop  admin only
     if itype == "autopilot":
         if not _can_autopilot(user):
             return {"ok": True, "message": "Autopilot is restricted to authorized accounts.", "stream": False, "type": "chat", "autopilot": False}
@@ -2008,12 +2008,12 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
         _is_plus = bool(user) and (auth.is_plus(user["id"]) or _can_autopilot(user) or (user.get("email", "").lower() == ADMIN_EMAIL))
         result = await loop.run_in_executor(_exec_pool_for(intent), functools.partial(engine.execute, intent, progress_cb=_prog, is_plus=_is_plus))
     except Exception as e:
-        print(f"⚠️ Execute error: {e}")
+        print(f" Execute error: {e}")
 
     # Determine response strategy
     stock_data = None
 
-    # Trade confirmation — a buy/sell/short/cover intent returns a confirm card
+    # Trade confirmation  a buy/sell/short/cover intent returns a confirm card
     # (no order placed). The frontend shows Confirm/Cancel; only Confirm hits
     # /api/trade/execute. This guarantees no order from a single chat message.
     if result and result.get("ok") and result.get("type") == "confirm_trade":
@@ -2023,21 +2023,21 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
             "autopilot": autopilot_task is not None and not autopilot_task.done(),
         }
 
-    # If execute returned a ready message (trades, regime, etc) — return instantly
+    # If execute returned a ready message (trades, regime, etc)  return instantly
     if result and result.get("ok") and result.get("msg"):
         rtype = result.get("type", "")
         # Deep single-stock analysis is Plus-only (see the non-stream path for
-        # the full rationale) — close the chat bypass here as well.
+        # the full rationale)  close the chat bypass here as well.
         _is_deep = rtype == "analysis" and bool(result.get("ticker")) and isinstance(result.get("data"), dict)
         if _is_deep:
             _plus = bool(user) and (auth.is_plus(user["id"]) or _can_autopilot(user) or (user.get("email", "").lower() == ADMIN_EMAIL))
             if not _plus:
                 return _taste_analysis(result)
         if rtype in ("analysis", "list"):
-            # Has data — stream AI analysis
+            # Has data  stream AI analysis
             stock_data = result.get("data") if rtype == "analysis" else {"stocks": result.get("data", [])}
         else:
-            # Complete response — return now
+            # Complete response  return now
             resp = result["msg"]
             chat_history.append({"role": "assistant", "content": resp})
             if user:
@@ -2056,14 +2056,14 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
                 return _taste_analysis(result)
         stock_data = result.get("data")
     elif result and result.get("error"):
-        resp = f"⚠️ {_friendly_error(result.get('error', ''))}"
+        resp = f"{_friendly_error(result.get('error', ''))}"
         chat_history.append({"role": "assistant", "content": resp})
         return {"ok": True, "message": resp, "stream": False, "type": "chat"}
 
     # ── Make the AI portfolio-aware for DECISION questions ──
     # If the user is weighing a move ("should I add to NVDA", "trim my winners",
     # "how's my risk"), attach a lightweight account + positions snapshot so the
-    # AI can reason about buying power, concentration, and existing exposure —
+    # AI can reason about buying power, concentration, and existing exposure 
     # not blind generic advice. Skip for pure idea-discovery ("find me setups"),
     # where mixing in the portfolio is explicitly unwanted.
     try:
@@ -2112,7 +2112,7 @@ async def chat_stream(msg: ChatMessage, authorization: str = Header(None)):
                 for chunk in engine.ai_response_stream(user_msg, stock_data, chat_history, "US"):
                     q.put(chunk)
             except Exception as e:
-                q.put(f"⚠️ {str(e)[:80]}")
+                q.put(f" {str(e)[:80]}")
             q.put(None)
 
         t = threading.Thread(target=_run_stream, daemon=True)
@@ -2148,8 +2148,8 @@ async def cancel_scan(authorization: str = Header(None), token: str = None):
     """Cancel the caller's in-flight market scan (e.g. they switched chats or
     closed the tab). Best-effort: cancelling the asyncio task stops the result
     from being processed/broadcast and frees the slot. (A scan already blocked
-    inside a worker thread will let that thread finish its current chunk — Python
-    can't force-kill a thread — but no further work is queued and nothing is
+    inside a worker thread will let that thread finish its current chunk  Python
+    can't force-kill a thread  but no further work is queued and nothing is
     sent back.)"""
     # Auth may come via header (switchChat fetch) or ?token= (sendBeacon on tab
     # close, which can't set headers).
@@ -2168,7 +2168,7 @@ async def cancel_scan(authorization: str = Header(None), token: str = None):
 @app.post("/api/report-bug")
 async def report_bug(req: dict, authorization: str = Header(None)):
     """Save a bug report (full chat + context) to the backend for the admin to
-    review. Testing feature — any logged-in user can submit; nothing is emailed,
+    review. Testing feature  any logged-in user can submit; nothing is emailed,
     it's just stored server-side and pulled via /api/admin/bug-reports."""
     user = _get_user(authorization)
     reports = _load_bug_reports()
@@ -2186,11 +2186,11 @@ async def report_bug(req: dict, authorization: str = Header(None)):
         "url": str(req.get("url", ""))[:400],
     }
     reports.append(report)
-    # Keep the file from growing without bound — retain the most recent 500.
+    # Keep the file from growing without bound  retain the most recent 500.
     if len(reports) > 500:
         reports = reports[-500:]
     _save_bug_reports(reports)
-    print(f"[bug_report] {report['id']} from {report['user_email']} — {report['note'][:80]}", flush=True)
+    print(f"[bug_report] {report['id']} from {report['user_email']}  {report['note'][:80]}", flush=True)
     return {"ok": True, "id": report["id"]}
 
 
@@ -2272,11 +2272,11 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
         chat_history = _get_user_history(user_id)
     chat_history.append({"role": "user", "content": user_msg})
 
-    # Route the message — pass recent history so referential follow-ups
+    # Route the message  pass recent history so referential follow-ups
     # ("analyze it", "compare them") resolve to the right ticker.
     intent = engine.route(user_msg, history=chat_history[:-1])
 
-    # Autopilot — admin only
+    # Autopilot  admin only
     if intent.get("type") == "autopilot":
         if not user or user.get("email", "").lower() != ADMIN_EMAIL:
             return {"ok": True, "message": "Autopilot is restricted to admin accounts.", "type": "chat", "autopilot": False}
@@ -2333,13 +2333,13 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                     "tickers": tickers_out,
                 })
             except asyncio.CancelledError:
-                # User navigated away / closed the tab — drop it silently, no
+                # User navigated away / closed the tab  drop it silently, no
                 # broadcast (nobody's waiting).
                 raise
             except asyncio.TimeoutError:
                 await broadcast("scan_result", {
                     "ok": False,
-                    "message": "⚠️ The market's data source is slow right now and the scan couldn't finish. Please try again in a moment — or ask me to analyze a specific ticker.",
+                    "message": " The market's data source is slow right now and the scan couldn't finish. Please try again in a moment  or ask me to analyze a specific ticker.",
                 })
             except Exception as _se:
                 await broadcast("scan_result", {"ok": False, "message": _friendly_error(str(_se))})
@@ -2351,9 +2351,9 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
             _active_scans[_uid] = _scan_task
         return {
             "ok": True, "type": "scan_started", "big": _big,
-            "message": ("On it — scanning the entire " + ("NASDAQ" if intent.get("category") == "nasdaq" else "market") +
-                        ". This is a big one and can take several minutes…") if _big
-                       else "On it — scanning the market for the best setups. This takes a moment…",
+            "message": ("On it  scanning the entire " + ("NASDAQ" if intent.get("category") == "nasdaq" else "market") +
+                        ". This is a big one and can take several minutes") if _big
+                       else "On it  scanning the market for the best setups. This takes a moment",
         }
 
     result = await loop.run_in_executor(_exec_pool_for(intent), functools.partial(engine.execute, intent, progress_cb=_prog, is_plus=_is_plus))
@@ -2362,7 +2362,7 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
         resp = result.get("msg", "")
         rtype = result.get("type", "")
 
-        # Trade confirmation — return the confirm card, place no order.
+        # Trade confirmation  return the confirm card, place no order.
         if rtype == "confirm_trade":
             return {
                 "ok": True, "type": "confirm_trade", "trade": result.get("trade"),
@@ -2393,11 +2393,11 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                         _atk = result.get("ticker", "")
                         _anews = engine.fetch_news(_atk, limit=5) if _atk else None
                         if _anews:
-                            _al = "\n".join(f"- ({n['date']}) {n['title']} — {n['publisher']}: {n['summary']}" for n in _anews)
+                            _al = "\n".join(f"- ({n['date']}) {n['title']}  {n['publisher']}: {n['summary']}" for n in _anews)
                             _amsg = user_msg + f"\n\n[LIVE NEWS (use these recent headlines, cite dates):\n{_al}\n]"
                     except Exception:
                         pass
-                # AI generates analysis — but we prepend real data header
+                # AI generates analysis  but we prepend real data header
                 ai_text = await loop.run_in_executor(None, engine.ai_response, _amsg, result.get("data"), chat_history, "US")
                 # Build factual header from data
                 data = result.get("data", {})
@@ -2426,7 +2426,7 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
             ps = result.get("data", {})
             resp = await loop.run_in_executor(None, engine.ai_response, user_msg, {"position_size": ps}, chat_history, "US")
         elif rtype == "compare":
-            # Two structured scorecards → let the AI write a head-to-head verdict.
+            # Two structured scorecards  let the AI write a head-to-head verdict.
             cmp_data = result.get("data", {})
             resp = await loop.run_in_executor(None, engine.ai_response, user_msg, cmp_data, chat_history, "US")
         elif rtype == "list":
@@ -2438,12 +2438,12 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
             _chat_data = {}
             try:
                 import re as _re
-                # Only scan the CURRENT message for tickers — pulling them from
+                # Only scan the CURRENT message for tickers  pulling them from
                 # history attached unrelated data (e.g. AAPL from an earlier turn)
                 # to questions about something else entirely (e.g. "SpaceX IPO?").
                 if not (result and result.get("private_company")):
-                    # Resolve every stock the message names — by company name OR
-                    # ticker — so "Tesla or Google" prices BOTH, not just one.
+                    # Resolve every stock the message names  by company name OR
+                    # ticker  so "Tesla or Google" prices BOTH, not just one.
                     _valid = engine.find_all_tickers(user_msg, limit=5)
                     if _valid:
                         _multi = {}
@@ -2464,7 +2464,7 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                             if _missing:
                                 _note += (". Live data could NOT be retrieved for: "
                                           + ", ".join(_missing)
-                                          + " — say so explicitly rather than guessing their numbers.")
+                                          + "  say so explicitly rather than guessing their numbers.")
                             _chat_data = {"stocks": _multi, "note": _note}
                         elif len(_valid) == 1:
                             _chat_data = engine.fetch_full(_valid[0]) or {}
@@ -2472,7 +2472,7 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                 pass
             _umsg = user_msg
             if result and result.get("private_company"):
-                _umsg = user_msg + "\n\n[Note: this is about a privately-held / pre-IPO company with no public ticker. Answer conversationally from what you know — explain its private status, any IPO/funding context, and how (or whether) someone could get exposure. Do NOT say you lack data or look for a stock price.]"
+                _umsg = user_msg + "\n\n[Note: this is about a privately-held / pre-IPO company with no public ticker. Answer conversationally from what you know  explain its private status, any IPO/funding context, and how (or whether) someone could get exposure. Do NOT say you lack data or look for a stock price.]"
             # ── Live news: if the question is news-oriented, fetch recent
             # headlines (Polygon) and inject them so Paula answers with current
             # info instead of stale training knowledge.
@@ -2491,15 +2491,15 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                             _nt = _w; break
                     _news = engine.fetch_news(_nt, limit=5)
                     if _news:
-                        _lines = "\n".join(f"- ({n['date']}) {n['title']} — {n['publisher']}: {n['summary']}" for n in _news)
+                        _lines = "\n".join(f"- ({n['date']}) {n['title']}  {n['publisher']}: {n['summary']}" for n in _news)
                         _umsg = _umsg + f"\n\n[LIVE NEWS (use these recent headlines in your answer, cite the dates):\n{_lines}\n]"
                 except Exception:
                     pass
             resp = await loop.run_in_executor(None, engine.ai_response, _umsg, _chat_data if _chat_data else None, chat_history, "US")
     elif result and result.get("error"):
-        resp = f"⚠️ {_friendly_error(result.get('error', ''))}"
+        resp = f"{_friendly_error(result.get('error', ''))}"
     else:
-        # Final fallthrough — plain conversational answer.
+        # Final fallthrough  plain conversational answer.
         _fall_data = None
         _fmsg = user_msg
         _is_private = bool(result and result.get("private_company"))
@@ -2511,11 +2511,11 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                 _ws = engine.web_search(user_msg, max_results=5)
                 if _ws:
                     _wl = "\n".join(f"- {w['title']}: {w['content']}" + (f" [source]({w['url']})" if w['url'] else "") for w in _ws)
-                    _fmsg = _fmsg + f"\n\n[LIVE WEB SEARCH — use this current info. Cite sources as markdown links [publisher](url), never bare URLs:\n{_wl}\n]"
+                    _fmsg = _fmsg + f"\n\n[LIVE WEB SEARCH  use this current info. Cite sources as markdown links [publisher](url), never bare URLs:\n{_wl}\n]"
             except Exception:
                 pass
         else:
-            # Only attach a ticker the CURRENT message actually names — never
+            # Only attach a ticker the CURRENT message actually names  never
             # one pulled from earlier in the conversation (that caused unrelated
             # data, e.g. LLY/AAPL, to be stapled onto questions like "SpaceX IPO").
             try:
@@ -2536,7 +2536,7 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                     _ntk = _cur[0] if _cur else None
                     _fnews = engine.fetch_news(_ntk, limit=5)
                     if _fnews:
-                        _fl2 = "\n".join(f"- ({n['date']}) {n['title']} — {n['publisher']}: {n['summary']}" for n in _fnews)
+                        _fl2 = "\n".join(f"- ({n['date']}) {n['title']}  {n['publisher']}: {n['summary']}" for n in _fnews)
                         _fmsg = _fmsg + f"\n\n[LIVE NEWS (use these recent headlines, cite dates):\n{_fl2}\n]"
                 # Fire a web search whenever the user explicitly asks to look it up,
                 # OR for a current-info question with no ticker attached.
@@ -2544,7 +2544,7 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                     _ws = engine.web_search(user_msg, max_results=5)
                     if _ws:
                         _wl = "\n".join(f"- {w['title']}: {w['content']}" + (f" [source]({w['url']})" if w['url'] else "") for w in _ws)
-                        _fmsg = _fmsg + f"\n\n[LIVE WEB SEARCH — use this current info. Cite sources as markdown links [publisher](url), never bare URLs:\n{_wl}\n]"
+                        _fmsg = _fmsg + f"\n\n[LIVE WEB SEARCH  use this current info. Cite sources as markdown links [publisher](url), never bare URLs:\n{_wl}\n]"
             except Exception:
                 pass
         resp = await loop.run_in_executor(None, engine.ai_response, _fmsg, _fall_data, chat_history, "US")
@@ -2621,14 +2621,14 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
 
 async def _eod_guardian():
     """
-    DEDICATED EOD CLOSER — runs independently of autopilot.
+    DEDICATED EOD CLOSER  runs independently of autopilot.
 
     In SWING mode this is a no-op: swing positions are held overnight and must
     NOT be force-closed at the bell. The closer only runs if the engine is in
     legacy intraday mode.
     """
     if getattr(engine, "SWING_MODE", False):
-        print("[eod-guardian] swing mode — EOD liquidation disabled", flush=True)
+        print("[eod-guardian] swing mode  EOD liquidation disabled", flush=True)
         return
 
     import requests as req
@@ -2649,7 +2649,7 @@ async def _eod_guardian():
                     if positions:
                         time_str = now_ct.strftime('%I:%M %p CT')
                         await broadcast("autopilot", {"status": "scanned", "log": [
-                            f"🔔 **EOD GUARDIAN** — {len(positions)} positions open at {time_str}",
+                            f" **EOD GUARDIAN**  {len(positions)} positions open at {time_str}",
                         ]})
 
                         # Step 1: Cancel ALL pending orders
@@ -2676,13 +2676,13 @@ async def _eod_guardian():
 
                         if not remaining:
                             await broadcast("autopilot", {"status": "scanned", "log": [
-                                f"✅ All positions closed — flat for the night"
+                                f" All positions closed  flat for the night"
                             ]})
                             await broadcast("trade", {"action": "close_all"})
                         else:
                             # Step 5: Retry individually
                             await broadcast("autopilot", {"status": "scanned", "log": [
-                                f"⚠️ {len(remaining)} positions survived — retrying individually"
+                                f" {len(remaining)} positions survived  retrying individually"
                             ]})
                             for pos in remaining:
                                 try:
@@ -2702,11 +2702,11 @@ async def _eod_guardian():
                             final = engine.alpaca_positions()
                             if not final:
                                 await broadcast("autopilot", {"status": "scanned", "log": [
-                                    "✅ All positions finally closed"
+                                    " All positions finally closed"
                                 ]})
                             else:
                                 await broadcast("autopilot", {"status": "scanned", "log": [
-                                    f"🔴 **{len(final)} POSITIONS STILL OPEN** — will retry in 30s"
+                                    f" **{len(final)} POSITIONS STILL OPEN**  will retry in 30s"
                                 ]})
                             await broadcast("trade", {"action": "close_all"})
 
@@ -2738,9 +2738,9 @@ def _autopilot_watchdog(task: asyncio.Task):
         exc = task.exception()
     except asyncio.CancelledError:
         return
-    # Loop exited without being cancelled — that's never expected. Restart it.
+    # Loop exited without being cancelled  that's never expected. Restart it.
     reason = repr(exc) if exc else "loop returned unexpectedly"
-    print(f"[autopilot] loop died ({reason}) — restarting in 10s", flush=True)
+    print(f"[autopilot] loop died ({reason})  restarting in 10s", flush=True)
 
     async def _restart():
         global autopilot_task
@@ -2763,7 +2763,7 @@ def _spawn_autopilot() -> asyncio.Task:
 
 
 async def _autopilot_loop():
-    """Background autopilot loop — runs every 5 minutes."""
+    """Background autopilot loop  runs every 5 minutes."""
     last_hourly_update = -1  # track which hour we last sent status
     last_milestone_reset = ""
 
@@ -2784,7 +2784,7 @@ async def _autopilot_loop():
                         pm_result = await loop.run_in_executor(None, engine.premarket_scan)
                         await broadcast("autopilot", {"status": "scanned", "log": pm_result.get("log", [])})
                         await send_phone_notification(
-                            "🌅 Pre-Market Scan",
+                            " Pre-Market Scan",
                             f"Watchlist ready: {len(pm_result.get('watchlist', []))} stocks",
                             priority="low"
                         )
@@ -2813,11 +2813,11 @@ async def _autopilot_loop():
                     pos_summary = ""
                     if positions:
                         pos_names = [p.get("ticker", "?") for p in positions[:4]]
-                        pos_summary = f" | Holding: {', '.join(pos_names)}"
+                        pos_summary = f"| Holding: {', '.join(pos_names)}"
 
                     ct_time = now_et.strftime("%-I:%M %p")
                     await send_phone_notification(
-                        f"📊 Paula Status — {ct_time}",
+                        f" Paula Status  {ct_time}",
                         f"Equity: ${equity:,.0f} | Today: {pnl_sign}${abs(daily_pnl):,.0f} ({pnl_sign}{acc.get('daily_pnl_pct', 0):.2f}%) | {pos_count} positions{pos_summary}",
                         priority="low"
                     )
@@ -2832,9 +2832,9 @@ async def _autopilot_loop():
                         acc = engine.alpaca_account() or {}
                         daily_pnl = acc.get("daily_pnl", 0)
                         pnl_sign = "+" if daily_pnl >= 0 else ""
-                        emoji = "🟢" if daily_pnl >= 0 else "🔴"
+                        emoji = "" if daily_pnl >= 0 else ""
                         await send_phone_notification(
-                            f"{emoji} Market Closed — Daily Recap",
+                            f"{emoji} Market Closed  Daily Recap",
                             f"P&L: {pnl_sign}${abs(daily_pnl):,.0f} ({pnl_sign}{acc.get('daily_pnl_pct', 0):.2f}%) | Equity: ${acc.get('equity', 0):,.0f} | 0 positions",
                             priority="default"
                         )
@@ -2877,7 +2877,7 @@ async def _autopilot_loop():
                 "scanned": result.get("scanned", 0),
             })
 
-            # High-conviction alerts (90+) — fire an in-app alert per ticker, but
+            # High-conviction alerts (90+)  fire an in-app alert per ticker, but
             # only once per day each (dedup) so it doesn't repeat every cycle.
             try:
                 from datetime import date as _date
@@ -2896,7 +2896,7 @@ async def _autopilot_loop():
                         "rr": a.get("rr"),
                     })
             except Exception as _ae:
-                print(f"  ⚠️ alert broadcast error: {_ae}")
+                print(f"   alert broadcast error: {_ae}")
 
             # Send detailed phone notification if trades were made
             if buys > 0 or sells > 0 or shorts > 0:
@@ -2914,9 +2914,9 @@ async def _autopilot_loop():
                                 except Exception: pass
                         log_trade(action_l, ticker_l, price=price_l, extra={"source": "autopilot", "score": result.get("score", 0)})
                 parts = []
-                if buys: parts.append(f"📈 {buys} bought")
-                if shorts: parts.append(f"📉 {shorts} shorted")
-                if sells: parts.append(f"💰 {sells} closed")
+                if buys: parts.append(f"{buys} bought")
+                if shorts: parts.append(f"{shorts} shorted")
+                if sells: parts.append(f"{sells} closed")
                 try:
                     acc = engine.alpaca_account() or {}
                     pnl = acc.get("daily_pnl", 0)
@@ -2924,7 +2924,7 @@ async def _autopilot_loop():
                     pos_count = len(engine.alpaca_positions() or [])
                     detail = f"{' | '.join(parts)} | Day: {pnl_sign}${abs(pnl):,.0f} | {pos_count} open"
                 except Exception:
-                    detail = " | ".join(parts)
+                    detail = "| ".join(parts)
 
                 await send_phone_notification("Paula Trade", detail, priority="default")
 
@@ -2937,7 +2937,7 @@ async def _autopilot_loop():
                     milestone_key = f"_notified_{milestone}"
                     if abs(daily_pnl) >= milestone and not getattr(engine, milestone_key, False):
                         setattr(engine, milestone_key, True)
-                        emoji = "🎉" if daily_pnl > 0 else "⚠️"
+                        emoji = "" if daily_pnl > 0 else ""
                         await send_phone_notification(
                             f"{emoji} P&L Alert: {'+'if daily_pnl>0 else ''}{daily_pnl:.0f}",
                             f"{'Great day!' if daily_pnl > 0 else 'Consider stopping.'} Equity: ${acc.get('equity', 0):,.0f}",
@@ -2952,7 +2952,7 @@ async def _autopilot_loop():
             opportunities = result.get("opportunities", 0)
             if opportunities > 0 and buys == 0 and sells == 0 and shorts == 0:
                 await send_phone_notification(
-                    f"👀 {opportunities} setups found",
+                    f" {opportunities} setups found",
                     f"Scanned {scanned} stocks. Setups didn't meet entry criteria yet.",
                     priority="low"
                 )
@@ -2960,7 +2960,7 @@ async def _autopilot_loop():
         except asyncio.CancelledError:
             break  # Clean exit on stop
         except Exception as e:
-            # The error handler itself must never raise — a failed broadcast or
+            # The error handler itself must never raise  a failed broadcast or
             # notification used to bubble out of the loop and silently kill autopilot.
             err = str(e)[:200]
             print(f"[autopilot] scan error: {err}", flush=True)
@@ -2969,7 +2969,7 @@ async def _autopilot_loop():
             except Exception:
                 pass
             try:
-                await send_phone_notification("⚠️ Paula Error", err[:80], priority="high")
+                await send_phone_notification(" Paula Error", err[:80], priority="high")
             except Exception:
                 pass
 
@@ -3000,7 +3000,7 @@ async def start_autopilot(authorization: str = Header(None)):
     print(f"[autopilot] started by {user.get('email')}", flush=True)
     await broadcast("autopilot", {"status": "started"})
     try:
-        await send_phone_notification("🟢 Autopilot Started", "Paula is now scanning for trades every 5 minutes", priority="default")
+        await send_phone_notification(" Autopilot Started", "Paula is now scanning for trades every 5 minutes", priority="default")
     except Exception:
         pass
     return {"ok": True, "message": "Autopilot started"}
@@ -3023,10 +3023,10 @@ async def stop_autopilot(authorization: str = Header(None)):
         acc = engine.alpaca_account() or {}
         pnl = acc.get("daily_pnl", 0)
         pnl_sign = "+" if pnl >= 0 else ""
-        await send_phone_notification("🔴 Autopilot Stopped", f"Day so far: {pnl_sign}${abs(pnl):,.0f} | Equity: ${acc.get('equity', 0):,.0f}", priority="default")
+        await send_phone_notification(" Autopilot Stopped", f"Day so far: {pnl_sign}${abs(pnl):,.0f} | Equity: ${acc.get('equity', 0):,.0f}", priority="default")
     except Exception:
         try:
-            await send_phone_notification("🔴 Autopilot Stopped", "Paula is no longer trading", priority="default")
+            await send_phone_notification(" Autopilot Stopped", "Paula is no longer trading", priority="default")
         except Exception:
             pass
     print("[autopilot] stopped", flush=True)
@@ -3055,7 +3055,7 @@ if __name__ == "__main__":
 
 @app.get("/api/maintenance")
 async def maintenance_status():
-    """Public — frontend polls this to show the maintenance screen to everyone."""
+    """Public  frontend polls this to show the maintenance screen to everyone."""
     return {"ok": True, **_maint_state()}
 
 
@@ -3083,7 +3083,7 @@ async def admin_set_maintenance(req: dict, authorization: str = Header(None)):
     _set_maint(bool(req.get("on")), req.get("message", ""))
     state = _maint_state()
     # Push to all connected clients so the maintenance screen flips on/off
-    # instantly — no refresh and no waiting for the next poll.
+    # instantly  no refresh and no waiting for the next poll.
     try:
         await broadcast("maintenance", state)
     except Exception:
