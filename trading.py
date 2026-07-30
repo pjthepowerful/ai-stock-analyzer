@@ -2818,27 +2818,35 @@ def fetch_price(ticker: str) -> dict | None:
     polygon_key = os.environ.get("POLYGON_API_KEY", "")
     if polygon_key:
         clean = ticker.replace(".NS", "").replace("-", ".")
+        # Pull the last several DAILY bars and compute the change from two real
+        # closes (latest close vs the prior day's close). The old code used the
+        # single /prev bar and took its OPEN as the baseline, which produced a
+        # wrong "daily change" (really that one bar's open→close move) and made
+        # the header disagree with the chart.
+        from datetime import datetime as _dt, timedelta as _td
+        _to = _dt.now().strftime("%Y-%m-%d")
+        _from = (_dt.now() - _td(days=12)).strftime("%Y-%m-%d")
         for _attempt in range(2):
             try:
-                r = requests.get(f"https://api.polygon.io/v2/aggs/ticker/{clean}/prev",
-                                params={"apiKey": polygon_key}, timeout=10)
+                r = requests.get(
+                    f"https://api.polygon.io/v2/aggs/ticker/{clean}/range/1/day/{_from}/{_to}",
+                    params={"apiKey": polygon_key, "sort": "asc", "limit": 60}, timeout=10)
                 if r.status_code == 429:
                     import time as _t; _t.sleep(1.5); continue
                 if r.status_code == 200:
-                    data = r.json()
-                    results = data.get("results", [])
+                    results = r.json().get("results", [])
                     if results:
-                        bar = results[0]
-                        price = bar.get("c", 0)
-                        prev = bar.get("o", price)
-                        return {
-                            "price": round(price, 2), "prev_close": round(prev, 2),
-                            "change": round(price - prev, 2),
-                            "change_pct": round((price - prev) / prev * 100, 2) if prev else 0,
-                            "name": ticker, "market_cap": None, "pe_ratio": None,
-                            "forward_pe": None, "52w_high": None, "52w_low": None,
-                            "sector": None, "target_price": None, "recommendation": None,
-                        }
+                        price = results[-1].get("c", 0)
+                        prev = results[-2].get("c", price) if len(results) >= 2 else price
+                        if price and price > 0:
+                            return {
+                                "price": round(price, 2), "prev_close": round(prev, 2),
+                                "change": round(price - prev, 2),
+                                "change_pct": round((price - prev) / prev * 100, 2) if prev else 0,
+                                "name": ticker, "market_cap": None, "pe_ratio": None,
+                                "forward_pe": None, "52w_high": None, "52w_low": None,
+                                "sector": None, "target_price": None, "recommendation": None,
+                            }
                 break
             except Exception:
                 break

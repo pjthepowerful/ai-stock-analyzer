@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.2.1'
+const VERSION = '4.2.2'
 const VERSION_DATE = 'July 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.2.2', d: 'July 30, 2026', changes: [
+    'Fixed the daily change % in the stock header sometimes disagreeing with the chart — it now computes the change from the previous close like the chart does, instead of the day’s open.',
+  ]},
   { v: '4.2.1', d: 'July 28, 2026', changes: [
     'High-conviction alert banner now triggers at a slightly higher bar (score 92+ instead of 90+), so it fires only on the strongest setups.',
   ]},
