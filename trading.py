@@ -135,6 +135,14 @@ _US_KW = frozenset([
     "netflix","disney","nike","starbucks","walmart","costco","boeing",
 ])
 _NOISE_WORDS = frozenset([
+    # Trading / chart jargon that isn't a ticker intent (blocks "pattern"→PTRN,
+    # "so much"/"pays"/"falls" false matches). 2-letter words like SO/ON/IT are
+    # handled by the "must be typed in CAPS" rule in _find_ticker, so a caps
+    # "ON" (ON Semiconductor) still resolves while lowercase "on" doesn't.
+    "PATTERN","PATTERNS","DIVIDEND","DIVIDENDS","PAYS","PAYOUT","YIELD",
+    "FALLS","FALL","FELL","RISES","TREND","SETUP","SETUPS","SUPPORT",
+    "ENTRY","STOP","TARGET","SIGNAL","SIGNALS","VOLUME","CANDLE","CANDLES",
+    "SPREAD","RANGE","BREAKOUT","PULLBACK","MOMENTUM","BULLISH","BEARISH",
     "THE","AND","FOR","ARE","BUT","NOT","YOU","ALL","CAN","BUY","SELL",
     "WHAT","WHICH","STOCK","PRICE","MARKET","TODAY","SHOULD","WOULD","COULD",
     "ABOUT","THEIR","WILL","WITH","THIS","THAT","FROM","HAVE","BEEN","MORE",
@@ -255,15 +263,23 @@ def _find_ticker(text: str) -> tuple[str | None, str]:
     for name, tick in COMPANIES.items():
         if name in low:
             return tick, "India" if tick in _INDIA_TICKERS else "US"
-    # 2) Known tickers in our universe
+    # 2) Known tickers in our universe. For short/ambiguous words, require the
+    # user actually typed them in CAPS (so "so much" doesn't match SO, but "SO"
+    # does) — lowercase common words are almost never a ticker reference.
     us_set = ALL_US_TICKERS
-    for word in text.upper().split():
-        clean = re.sub(r"[^A-Z]", "", word)
-        if clean and 2 <= len(clean) <= 5 and clean not in _NOISE_WORDS:
-            if clean in _INDIA_TICKERS:
-                return clean, "India"
-            if clean in us_set:
-                return clean, "US"
+    for word in text.split():
+        up = word.upper()
+        clean = re.sub(r"[^A-Z]", "", up)
+        if not clean or not (2 <= len(clean) <= 5) or clean in _NOISE_WORDS:
+            continue
+        typed_caps = word.isupper()  # original was all-caps
+        # 2-char tickers and lowercase words need explicit caps to count.
+        if len(clean) <= 2 and not typed_caps:
+            continue
+        if clean in _INDIA_TICKERS:
+            return clean, "India"
+        if clean in us_set:
+            return clean, "US"
     # 2.5) Common misspellings, typos, voice recognition, and aliases
     ALIASES = _TICKER_ALIASES
     for word in text.lower().split():
@@ -287,10 +303,12 @@ def _find_ticker(text: str) -> tuple[str | None, str]:
         "check out", "thoughts on", "opinion on", "review", "show me", "pull up", "display",
     ])
     if stock_intent:
-        words = [w for w in text.split() if len(w) > 3 and w.upper() not in _NOISE_WORDS]
-        if words:
-            query = "".join(words[:3])
-            found = polygon_search_ticker(query)
+        # Only search the SINGLE longest distinctive word — never join sentence
+        # fragments (that turned "look at the pattern" into "lookpattern" → PTRN).
+        cands = [w for w in text.split()
+                 if len(w) > 3 and w.upper() not in _NOISE_WORDS and w.isalpha()]
+        if len(cands) == 1:  # exactly one real candidate → safe to look up
+            found = polygon_search_ticker(cands[0])
             if found:
                 return found, "US"
     return None, _detect_market(text)
