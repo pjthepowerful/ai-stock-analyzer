@@ -1000,7 +1000,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v4.3.2",  # bump marker  confirms running code
+        "build": "v4.4.0",  # bump marker  confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1247,6 +1247,55 @@ async def clear_chat(authorization: str = Header(None)):
     except Exception:
         pass
     return {"ok": True}
+
+
+@app.get("/api/portfolio/benchmark")
+async def portfolio_benchmark(period: str = "1M", authorization: str = Header(None)):
+    """Compare the user's portfolio return to the S&P 500 (SPY) over the same
+    window — the honest 'am I beating the index?' scorecard. Returns both return
+    series (normalized to % from the start) plus headline numbers."""
+    _get_user(authorization)
+    hist = engine.alpaca_portfolio_history(period=period)
+    if not hist or not hist.get("equity"):
+        return {"ok": False, "error": "No portfolio history yet. Place some trades first."}
+    ts = hist["timestamps"]
+    eq = [e for e in hist["equity"]]
+    # Portfolio % return series, normalized to the first non-zero equity point.
+    base = next((e for e in eq if e), None)
+    if not base:
+        return {"ok": False, "error": "Portfolio has no value yet."}
+    port_pct = [round((e / base - 1) * 100, 2) if e else 0 for e in eq]
+
+    # SPY over the same calendar window, from the timestamps we have.
+    import datetime as _dt
+    spy_pct = []
+    spy_ret = None
+    try:
+        start = _dt.datetime.fromtimestamp(ts[0])
+        end = _dt.datetime.fromtimestamp(ts[-1])
+        days = max((end - start).days + 2, 3)
+        spy = engine._polygon_daily_hist("SPY", days=days + 5)
+        if spy is not None and len(spy) >= 2:
+            closes = spy["Close"].tolist()
+            sbase = closes[0]
+            # Return over the window (headline) + a coarse normalized series.
+            spy_ret = round((closes[-1] / sbase - 1) * 100, 2)
+            spy_pct = [round((c / sbase - 1) * 100, 2) for c in closes]
+    except Exception:
+        pass
+
+    port_ret = port_pct[-1] if port_pct else 0
+    return {
+        "ok": True,
+        "period": period,
+        "portfolio_return_pct": port_ret,
+        "spy_return_pct": spy_ret,
+        "alpha_pct": round(port_ret - spy_ret, 2) if spy_ret is not None else None,
+        "beating_market": (spy_ret is not None and port_ret > spy_ret),
+        "portfolio_series": port_pct,
+        "spy_series": spy_pct,
+        "timestamps": ts,
+    }
 
 
 @app.get("/api/account")

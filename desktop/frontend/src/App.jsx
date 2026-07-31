@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.3.2'
+const VERSION = '4.4.0'
 const VERSION_DATE = 'July 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.4.0', d: 'July 30, 2026', changes: [
+    'New on the Portfolio page: You vs S&P 500 — see your return next to the index over any period, and whether you’re beating the market or would’ve been better off in an index fund.',
+  ]},
   { v: '4.3.2', d: 'July 30, 2026', changes: [
     'Fixed Paula sometimes analyzing the wrong stock — words like “pattern” or “so” were being mistaken for tickers (PTRN, SO). Vague follow-ups now stay on the stock you’re discussing instead of inventing a new one.',
   ]},
@@ -3406,14 +3409,20 @@ function Typewriter() {
 function DashView({perf}){
   const [period, setPeriod] = useState('1M')
   const [data, setData] = useState(perf)
+  const [bench, setBench] = useState(null)
+  const loadBench = async (p) => {
+    try { const r = await f(API+'/api/portfolio/benchmark?period='+p+'&_t='+Date.now()).then(r=>r.json()); setBench(r&&r.ok?r:null) } catch { setBench(null) }
+  }
   const loadPeriod = async (p) => {
     setPeriod(p)
+    loadBench(p)
     try { const r = await f(API+'/api/performance?period='+p+'&_t='+Date.now()).then(r=>r.json()); if(r.ok)setData(r) } catch{}
   }
   // Always fetch fresh on mount (not just rely on the cached perf prop) so the
   // Auto-Tuner Config panel reflects the live backend config.
   useEffect(()=>{
     (async()=>{ try { const r = await f(API+'/api/performance?period=1M&_t='+Date.now()).then(r=>r.json()); if(r.ok)setData(r) } catch{} })()
+    loadBench('1M')
   },[])
   useEffect(()=>{if(perf)setData(perf)},[perf])
   const d = data || perf
@@ -3431,6 +3440,30 @@ function DashView({perf}){
         <button key={k} className={'per-btn'+(period===k?' per-on':'')} onClick={()=>loadPeriod(k)}>{label}</button>
       ))}
     </div>
+
+    {/* Portfolio vs S&P 500 — the honest "am I beating the index?" scorecard */}
+    {bench && bench.spy_return_pct != null && (
+      <div style={{background:'var(--c1)',border:'1px solid var(--brd)',borderRadius:12,padding:'16px 18px',marginBottom:14}}>
+        <div style={{fontSize:'.62rem',textTransform:'uppercase',letterSpacing:'.1em',color:'var(--dim)',fontWeight:700,marginBottom:12}}>You vs S&amp;P 500 · {period}</div>
+        <div style={{display:'flex',gap:24,flexWrap:'wrap'}}>
+          <div>
+            <div style={{fontSize:'.56rem',color:'var(--dim)',marginBottom:2}}>Your portfolio</div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'1.3rem',fontWeight:800,color:bench.portfolio_return_pct>=0?'var(--grn)':'var(--red)'}}>{bench.portfolio_return_pct>=0?'+':''}{bench.portfolio_return_pct}%</div>
+          </div>
+          <div>
+            <div style={{fontSize:'.56rem',color:'var(--dim)',marginBottom:2}}>S&amp;P 500 (SPY)</div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'1.3rem',fontWeight:800,color:bench.spy_return_pct>=0?'var(--grn)':'var(--red)'}}>{bench.spy_return_pct>=0?'+':''}{bench.spy_return_pct}%</div>
+          </div>
+          <div style={{marginLeft:'auto',textAlign:'right'}}>
+            <div style={{fontSize:'.56rem',color:'var(--dim)',marginBottom:2}}>{bench.beating_market?'Beating market by':'Lagging market by'}</div>
+            <div style={{fontFamily:'var(--mono)',fontSize:'1.3rem',fontWeight:800,color:bench.beating_market?'var(--grn)':'var(--red)'}}>{bench.alpha_pct>=0?'+':''}{bench.alpha_pct}%</div>
+          </div>
+        </div>
+        <div style={{fontSize:'.5rem',color:'var(--dim)',lineHeight:1.5,marginTop:12,fontStyle:'italic'}}>
+          The real benchmark: if the S&amp;P line is higher, a plain index fund beat your trading over this window. Paper results overstate real fills, so treat this as generous.
+        </div>
+      </div>
+    )}
 
     {/* Equity chart card */}
     <div className="eq-card">
