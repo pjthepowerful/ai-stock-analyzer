@@ -257,6 +257,33 @@ _TICKER_ALIASES = {
 }
 
 
+def _validate_ticker(sym):
+    """Confirm an LLM-proposed ticker is REAL before trusting it — the safety net
+    under LLM resolution: the model proposes, reality validates. Returns the
+    canonical symbol or None. Known universe/aliases short-circuit without a
+    network call; anything else must actually return market data."""
+    if not sym:
+        return None
+    s = re.sub(r"[^A-Z.]", "", str(sym).upper())
+    core = s.replace(".", "")
+    if not (1 <= len(core) <= 5):
+        return None
+    if s in ALL_US_TICKERS:
+        return s
+    low = s.lower()
+    if low in _TICKER_ALIASES:
+        return _TICKER_ALIASES[low]
+    # Not local (e.g. many ETFs like SGOV) — authoritative check: does it return
+    # a real quote? fetch_price has yfinance + Polygon fallbacks.
+    try:
+        d = fetch_price(s)
+        if d and d.get("price"):
+            return s
+    except Exception:
+        pass
+    return None
+
+
 def _find_ticker(text: str) -> tuple[str | None, str]:
     low = text.lower()
     # 1) Known company names
@@ -3526,13 +3553,14 @@ def build_chart(ticker: str, period: str = "6mo", trade_signal: dict | None = No
 # ── Intent routing ───────────────────────────────────────────────────────────
 
 @st.cache_data(ttl=900)
-def _llm_classify_intent(msg: str) -> dict | None:
-    """Second-opinion intent classifier for messages the keyword router can't
-    confidently place (it only runs on the chat fallthrough). Restricted to
-    SAFE, non-destructive intents  never trades or autopilot, so a
-    misclassification can't execute an order. Returns an intent dict or None
-    (caller then falls back to plain chat). Cached so repeated identical short
-    queries don't re-hit the LLM (helps with Groq rate limits)."""
+def _llm_classify_intent(msg: str, history: list = None) -> dict | None:
+    """Second-opinion router for messages the keyword router can't confidently
+    place. The LLM proposes BOTH the intent AND which ticker(s) the user means —
+    using conversation context, so a referential follow-up like "look at the
+    pattern" resolves to the stock under discussion instead of a word that merely
+    looks like a ticker. Every proposed ticker is then VALIDATED against reality
+    (must exist / return data) before it's trusted — the model proposes, the
+    market validates. Restricted to SAFE, non-destructive intents."""
     try:
         key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
     except Exception:
@@ -3542,64 +3570,81 @@ def _llm_classify_intent(msg: str) -> dict | None:
     try:
         from groq import Groq
         client = Groq(api_key=key)
+        # Give the model a little recent context for referential resolution.
+        ctx = ""
+        if history:
+            recent = [t for t in history if (t or {}).get("content")][-6:]
+            ctx = "\n".join(f"{(t.get('role') or 'user')}: {t['content'][:200]}" for t in recent)
         sys_prompt = (
-            "You classify a message sent to a stock-trading app into ONE intent. "
-            "Respond with ONLY the intent word, nothing else. Options:\n"
-            "- stock_ideas (wants trade/swing setups, picks, 'what should I buy', scan for opportunities)\n"
-            "- analyze (wants your read on ONE specific named stock  'thoughts on NVDA', 'is AAPL a buy', 'how's tesla looking')\n"
-            "- compare (wants two named stocks compared  'AMD vs NVDA', 'which is better, X or Y')\n"
-            "- price (just wants the current price/quote of a named stock)\n"
-            "- market (asking about the overall market, SPY, conditions, regime)\n"
-            "- backtest (wants to backtest/test the strategy)\n"
-            "- portfolio (asking about their own positions, holdings, P&L)\n"
-            "- gainers (top gainers/movers up)\n"
-            "- losers (top losers/movers down)\n"
-            "- chat (general question, news, explanation, conversation, anything else)\n"
-            "Pick the single best fit. Reply with exactly one word from that list."
+            "You route a message for a stock-trading app. Return ONLY compact JSON: "
+            '{"intent": <one of: stock_ideas, analyze, compare, price, market, '
+            'backtest, portfolio, gainers, losers, chat>, "tickers": [<US ticker '
+            'symbols the user is asking about>]}.\n'
+            "Rules:\n"
+            "- 'tickers' = the actual stock(s) meant, as real US ticker symbols "
+            "(e.g. Tesla->TSLA, Google->GOOGL, SanDisk->SNDK). Resolve company "
+            "names to symbols yourself.\n"
+            "- If the message refers to a previously-discussed stock ('the "
+            "pattern', 'it', 'this one', 'how does it pay dividends'), use the "
+            "ticker from the conversation context. Do NOT treat ordinary words "
+            "like 'so', 'pattern', 'pays', 'falls' as tickers.\n"
+            "- If no specific stock is meant, use an empty list.\n"
+            "- analyze = one stock; compare = two; price = a quote; portfolio = "
+            "their own holdings; market = overall market; chat = anything else.\n"
+            "Reply with JSON only, no prose."
         )
+        user_content = (f"Conversation so far:\n{ctx}\n\nLatest message: {msg[:300]}"
+                        if ctx else msg[:300])
         resp = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "system", "content": sys_prompt},
-                      {"role": "user", "content": msg[:300]}],
-            temperature=0,
-            max_tokens=5,
+                      {"role": "user", "content": user_content}],
+            temperature=0, max_tokens=60,
         )
-        out = (resp.choices[0].message.content or "").strip().lower()
-        valid = {"stock_ideas", "analyze", "compare", "price", "market", "backtest", "portfolio", "gainers", "losers", "chat"}
-        for v in valid:
-            if v in out:
-                if v == "chat":
-                    return None  # let normal chat handling proceed
-                if v == "stock_ideas":
-                    # Even if the LLM says "scan", named tickers win  the user
-                    # asked about specific stocks, not the whole market.
-                    _ov = _named_ticker_override(msg)
-                    if _ov:
-                        return _ov
-                    return {"type": "stock_ideas", "category": "all", "_original_msg": msg}
-                # For stock-specific intents, we need a ticker. Try to extract one;
-                # if none is found, fall back to chat rather than guessing.
-                if v in ("analyze", "price"):
-                    _tk, _mkt = _find_ticker(msg)
-                    if _tk:
-                        return {"type": v, "ticker": _tk, "market": _mkt or _detect_market(msg), "_original_msg": msg}
-                    return None  # no clear ticker  let chat handle it
-                if v == "compare":
-                    import re as _re_c
-                    _CMP_STOP = {"AND", "OR", "VS", "THE", "A", "AN", "IS", "IT", "ON", "AT", "TO",
-                                 "ALL", "ANY", "BE", "BY", "DO", "GO", "HAS", "ME", "MY", "SO",
-                                 "UP", "WHO", "ARE", "FOR", "BUY", "CAN", "GET", "NOW", "ONE", "OUT", "SEE", "TWO"}
-                    _ct = []
-                    for w in _re_c.findall(r"\b([A-Za-z]{1,5})\b", msg):
-                        up = w.upper()
-                        if up in ALL_US_TICKERS and (w.isupper() or up not in _CMP_STOP):
-                            _ct.append(up)
-                    _seen = set(); _ct = [x for x in _ct if not (x in _seen or _seen.add(x))]
-                    if len(_ct) >= 2:
-                        return {"type": "compare", "tickers": _ct[:2], "market": _detect_market(msg), "_original_msg": msg}
-                    return None
-                return {"type": v, "market": _detect_market(msg)}
-        return None
+        raw = (resp.choices[0].message.content or "").strip()
+        raw = re.sub(r"^```(json)?|```$", "", raw).strip()
+        import json as _json
+        try:
+            parsed = _json.loads(raw)
+        except Exception:
+            # Model didn't return clean JSON — treat as no confident route.
+            return None
+        intent = (parsed.get("intent") or "chat").strip().lower()
+        valid = {"stock_ideas", "analyze", "compare", "price", "market",
+                 "backtest", "portfolio", "gainers", "losers", "chat"}
+        if intent not in valid or intent == "chat":
+            return None
+
+        # VALIDATE every proposed ticker against reality before trusting it.
+        proposed = parsed.get("tickers") or []
+        if isinstance(proposed, str):
+            proposed = [proposed]
+        tickers = []
+        for t in proposed[:4]:
+            v = _validate_ticker(t)
+            if v and v not in tickers:
+                tickers.append(v)
+
+        if intent == "stock_ideas":
+            # Named specific stocks beat a generic scan.
+            if tickers:
+                if len(tickers) >= 2:
+                    return {"type": "compare", "tickers": tickers[:2], "market": "US", "_original_msg": msg}
+                return {"type": "analyze", "ticker": tickers[0], "market": "US", "_original_msg": msg}
+            return {"type": "stock_ideas", "category": "all", "_original_msg": msg}
+        if intent in ("analyze", "price"):
+            if tickers:
+                return {"type": intent, "ticker": tickers[0], "market": "US", "_original_msg": msg}
+            # LLM proposed no valid ticker — fall back to the (safe) regex, else chat.
+            _tk, _mkt = _find_ticker(msg)
+            if _tk:
+                return {"type": intent, "ticker": _tk, "market": _mkt or "US", "_original_msg": msg}
+            return None
+        if intent == "compare":
+            if len(tickers) >= 2:
+                return {"type": "compare", "tickers": tickers[:2], "market": "US", "_original_msg": msg}
+            return None
+        return {"type": intent, "market": _detect_market(msg)}
     except Exception:
         return None
 
@@ -4058,7 +4103,7 @@ def route(msg: str, history: list = None) -> dict:
     # and nvidia, which one looks better right now"); longer is usually genuine
     # conversation, left to chat.
     if not _skip_llm and len(m.split()) <= 35:
-        _llm = _llm_classify_intent(msg)
+        _llm = _llm_classify_intent(msg, history)
         if _llm:
             return _llm
     return {"type": "chat", "market": market}
