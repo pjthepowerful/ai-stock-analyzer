@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.6.1'
+const VERSION = '4.6.2'
 const VERSION_DATE = 'July 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.6.2', d: 'July 30, 2026', changes: [
+    'Earnings dates now work by company name and for several at once — “when are Netflix and CrowdStrike earnings?” returns the actual scheduled dates instead of a generic “check a calendar” answer.',
+  ]},
   { v: '4.6.1', d: 'July 30, 2026', changes: [
     'Earnings and news questions (“what stocks will beat earnings?”) now go to the research/chat answer with live news instead of dead-ending in the technical scanner — which can’t predict earnings anyway.',
   ]},

@@ -3855,13 +3855,13 @@ def route(msg: str, history: list = None) -> dict:
     if _mentions_private_company(m):
         return {"type": "chat", "private_company": True, "market": "US"}
 
-    # ── Earnings calendar ── ("when does NVDA report earnings", "AAPL earnings date")
+    # ── Earnings calendar ── ("when does NVDA report earnings", "Netflix earnings date")
     if "earnings" in m and any(w in m for w in ["when", "date", "next", "report", "reporting", "calendar", "upcoming"]):
-        import re as _re_e
-        _et = [t.upper() for t in _re_e.findall(r"\b([A-Za-z]{1,5})\b", msg)
-               if t.upper() in ALL_US_TICKERS and (t.isupper() or t.upper() not in {"A","AN","IS","IT","ON","AT","TO","DO","BE","ME","MY","SO","UP","ALL","ANY","FOR","ARE","WHEN","NEXT","DOES"})]
+        # Resolve by NAME or symbol (so "Netflix and CrowdStrike" works), and
+        # support several at once.
+        _et = find_all_tickers(msg, limit=4)
         if _et:
-            return {"type": "earnings", "ticker": _et[0], "market": "US", "_original_msg": msg}
+            return {"type": "earnings", "tickers": _et, "ticker": _et[0], "market": "US", "_original_msg": msg}
 
     # ── Position sizing ── ("how many shares of NVDA if I risk $200")
     # Must mention RISK specifically  "how many shares can I buy with $5k" is an
@@ -6843,19 +6843,26 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
                 "msg": f"**{data['name']}** ({intent['ticker']})\n\n`{sym}{data['price']:,.2f}` {arrow} {data['change_pct']:+.2f}%"}
 
     if t == "earnings":
-        tick = _ensure_suffix(intent["ticker"], market)
-        ed = next_earnings_date(tick)
-        if not ed:
+        _tickers = intent.get("tickers") or [intent.get("ticker")]
+        _lines = []
+        for _raw in _tickers:
+            if not _raw:
+                continue
+            tick = _ensure_suffix(_raw, market)
+            ed = next_earnings_date(tick)
+            if not ed:
+                _lines.append(f"**{_raw}** — no confirmed upcoming earnings date found (may not be scheduled yet).")
+                continue
+            days = ed.get("days_away")
+            warn = ""
+            if days is not None and 0 <= days <= 5:
+                warn = " — soon, so holding through it carries overnight gap risk either way."
+            _lines.append(f"**{_raw}** next reports on **{ed['date']}** ({ed['when']}).{warn}")
+        if not _lines:
             return {"ok": True, "type": "chat",
-                    "msg": f"I couldn't find a confirmed upcoming earnings date for {intent['ticker']} right now  it may not be scheduled yet, or the data isn't available."}
-        when = ed["when"]
-        days = ed.get("days_away")
-        warn = ""
-        if days is not None and 0 <= days <= 5:
-            warn = f"\n\n That's soon  holding a position through earnings means overnight gap risk in either direction. Size accordingly."
-        return {"ok": True, "type": "earnings",
-                "ticker": tick,
-                "msg": f"**{intent['ticker']}** next reports earnings on **{ed['date']}** ({when}).{warn}"}
+                    "msg": "I couldn't find confirmed upcoming earnings dates for those right now."}
+        return {"ok": True, "type": "earnings", "ticker": _tickers[0],
+                "msg": "\n\n".join(_lines)}
 
     if t == "position_size":
         tick = _ensure_suffix(intent["ticker"], market)
