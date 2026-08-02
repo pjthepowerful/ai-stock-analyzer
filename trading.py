@@ -3940,6 +3940,19 @@ def route(msg: str, history: list = None) -> dict:
     if _named_ticker and shares_math:
         return {"type": "analyze", "ticker": _named_ticker, "market": _named_market, "_original_msg": msg}
 
+    # Earnings / news / fundamental questions are NOT technical-scan requests —
+    # the 21-factor score can't predict who beats earnings. Route these to chat
+    # (LLM + web search), which can actually address them, instead of the scanner
+    # dead-ending on "nothing clears the bar".
+    _fundamental = any(w in m for w in [
+        "earnings", "beat the", "beat earnings", "will beat", "going to beat",
+        "beat it", "q1", "q2", "q3", "q4", "quarter", "guidance", "eps",
+        "revenue", "based on news", "news report", "catalyst", "upcoming report",
+        "report earnings", "before earnings", "after earnings", "ahead of earnings",
+    ])
+    if _fundamental and _named_ticker_override(msg) is None:
+        return {"type": "chat"}
+
     if wants_picks and not any(cmd in m for cmd in [
         "close all", "sell everything", "liquidate",
     ]):
