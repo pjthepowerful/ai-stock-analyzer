@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.5.0'
+const VERSION = '4.6.0'
 const VERSION_DATE = 'July 28, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.6.0', d: 'July 30, 2026', changes: [
+    'Smarter scans: describe a theme in plain language (“AI infrastructure plays”, “recession-proof names”, “green energy”) and Paula now maps it to the right sector instead of only matching fixed keywords.',
+  ]},
   { v: '4.5.0', d: 'July 30, 2026', changes: [
     'Smarter, context-aware stock recognition: Paula now uses the AI (with the conversation) to figure out which stock you mean — so follow-ups like “look at the pattern” stay on the stock you’re discussing — and every ticker it picks is validated as real before use.',
   ]},

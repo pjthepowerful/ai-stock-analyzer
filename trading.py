@@ -3552,6 +3552,53 @@ def build_chart(ticker: str, period: str = "6mo", trade_signal: dict | None = No
 
 # ── Intent routing ───────────────────────────────────────────────────────────
 
+_SCAN_CATEGORIES = {"large", "mid", "small", "tech", "energy", "defense",
+                    "biotech", "crypto", "value", "nasdaq", "full", "all"}
+
+
+def _llm_scan_category(msg: str):
+    """Map a fuzzy scan request to one of the FIXED scan categories when the
+    keyword matcher couldn't. The LLM only PICKS from the known set (it can't
+    invent a category, so it can't break the scan) — e.g. 'AI infrastructure
+    plays' -> tech, 'recession-proof names' -> value, 'green energy' -> energy.
+    Returns a valid category or None (caller keeps 'all')."""
+    try:
+        key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
+    except Exception:
+        key = os.environ.get("GROQ_API_KEY")
+    if not key:
+        return None
+    try:
+        from groq import Groq
+        client = Groq(api_key=key)
+        sys_prompt = (
+            "A user asked a stock-screening app to find stocks. Pick the SINGLE "
+            "best category from this exact list (reply with ONLY that one word):\n"
+            "large (large-cap / blue chip / S&P), mid (mid-cap / growth), "
+            "small (small-cap / penny / cheap), tech (technology, software, AI, "
+            "semiconductors, chips), energy (oil, solar, nuclear, utilities, "
+            "clean energy), defense (military, aerospace, weapons), biotech "
+            "(pharma, healthcare, drugs), crypto (bitcoin, miners, blockchain), "
+            "value (dividend, income, safe, defensive, recession-proof), "
+            "nasdaq (Nasdaq names), full (the entire market / everything), "
+            "all (no clear theme).\n"
+            "Reply with exactly one word from that list."
+        )
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "system", "content": sys_prompt},
+                      {"role": "user", "content": msg[:200]}],
+            temperature=0, max_tokens=4,
+        )
+        out = (resp.choices[0].message.content or "").strip().lower()
+        for c in _SCAN_CATEGORIES:
+            if c in out:
+                return c
+        return None
+    except Exception:
+        return None
+
+
 @st.cache_data(ttl=900)
 def _llm_classify_intent(msg: str, history: list = None) -> dict | None:
     """Second-opinion router for messages the keyword router can't confidently
@@ -3631,7 +3678,10 @@ def _llm_classify_intent(msg: str, history: list = None) -> dict | None:
                 if len(tickers) >= 2:
                     return {"type": "compare", "tickers": tickers[:2], "market": "US", "_original_msg": msg}
                 return {"type": "analyze", "ticker": tickers[0], "market": "US", "_original_msg": msg}
-            return {"type": "stock_ideas", "category": "all", "_original_msg": msg}
+            # No specific tickers — resolve the sector/category (tech, value, …)
+            # so "find me AI infrastructure plays" scans tech, not everything.
+            _cat = _llm_scan_category(msg) or "all"
+            return {"type": "stock_ideas", "category": _cat, "_original_msg": msg}
         if intent in ("analyze", "price"):
             if tickers:
                 return {"type": intent, "ticker": tickers[0], "market": "US", "_original_msg": msg}
@@ -3922,6 +3972,12 @@ def route(msg: str, history: list = None) -> dict:
             cat = "nasdaq"
         elif any(w in m for w in ["all stocks", "every stock", "entire market", "whole market", "nyse", "all nyse", "everything", "full market", "all of nyse", "scan everything"]):
             cat = "full"
+        # Keywords found no theme — let the LLM map a fuzzy request ("AI infra
+        # plays", "recession-proof names") to one of the fixed categories.
+        if cat == "all":
+            _lc = _llm_scan_category(msg)
+            if _lc:
+                cat = _lc
         return {"type": "stock_ideas", "category": cat, "_original_msg": msg}
 
     # ── Position queries  check before is_question short-circuits to analyze ──
