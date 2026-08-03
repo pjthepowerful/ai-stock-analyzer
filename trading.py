@@ -7167,8 +7167,18 @@ def _scrub_trade_levels_for_llm(stock_data: dict | None) -> dict | None:
             plan += f"(then ${t2})"
         if rr:
             plan += f"· about {rr}:1 risk-reward"
+        # Spell out the target relationship explicitly. The model tends to repeat
+        # the entry as the target when entry == current price; naming the target
+        # as the profit exit and its direction relative to entry prevents that.
+        try:
+            _dir = "ABOVE" if float(t1) > float(e) else "BELOW"
+        except Exception:
+            _dir = "away from"
         sd["trade_plan"] = (
-            "USE THESE EXACT LEVELS  do not recompute or repeat the entry as the target: " + plan
+            "USE THESE EXACT LEVELS — do not recompute. " + plan
+            + f". The profit target is ${t1} (the exit for gains, {_dir} the entry ${e}); "
+            + f"the entry is ${e}. These are DIFFERENT numbers — never write the target "
+            + "as equal to the entry or the current price."
         )
         # Remove the raw numeric level fields so the model can't accidentally grab
         # the wrong one (e.g. echo the entry as the target). The clean sentence
