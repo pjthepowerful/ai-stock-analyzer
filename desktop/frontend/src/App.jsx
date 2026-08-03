@@ -21,7 +21,7 @@ const API = BACKEND
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
 const VERSION = '4.6.2'
-const VERSION_DATE = 'July 28, 2026'
+const VERSION_DATE = 'July 30, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
