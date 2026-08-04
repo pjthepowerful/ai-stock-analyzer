@@ -704,6 +704,15 @@
   align-content: start;
 }
 
+.lp-copilot-exchange {
+  display: grid;
+  gap: 14px;
+  padding: 22px 0;
+  border-bottom: 1px solid var(--border-hairline, rgba(255,255,255,0.04));
+}
+.lp-copilot-exchange:first-child { padding-top: 4px; }
+.lp-copilot-exchange:last-child { border-bottom: none; padding-bottom: 4px; }
+
 .lp-copilot-user-row {
   display: flex;
   justify-content: flex-end;

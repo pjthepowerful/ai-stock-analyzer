@@ -157,17 +157,6 @@ export default function LandingPage({ onLaunch }) {
     return () => clearInterval(t)
   }, [chipIndex])
 
-  // Auto-advance through the questions once each answer finishes typing, so the
-  // demo cycles on its own — you watch the different questions instead of having
-  // to click each chip. Clicking a chip still jumps to it and the cycle resumes.
-  useEffect(() => {
-    const full = CHIPS[chipIndex].segs.reduce((a, s) => a + s.t.length, 0)
-    if (chars >= full) {
-      const t = setTimeout(() => setChipIndex((i) => (i + 1) % CHIPS.length), 2600)
-      return () => clearTimeout(t)
-    }
-  }, [chars, chipIndex])
-
   const [statsRevealed, setStatsRevealed] = useState(false)
 
   useEffect(() => {
@@ -381,45 +370,29 @@ export default function LandingPage({ onLaunch }) {
           Every reply cites the signals behind it. You can disagree with the read — because you can see it.
         </Reveal>
 
-        <Reveal delay={100} className="lp-copilot-grid r-split">
-          <div className="lp-copilot-panel lp-stagger-item">
-            <div className="lp-copilot-header">
-              <span className="lp-preview-title">Copilot</span>
-              <span className="lp-preview-sub">/ sample data</span>
-            </div>
-            <div className="lp-copilot-body">
-              <div className="lp-copilot-user-row">
-                <div className="lp-copilot-user-bubble">{CHIPS[chipIndex].q}</div>
-              </div>
-              <div className="lp-copilot-reply-row">
-                <span className="lp-logo lp-logo-sm">P</span>
-                <div className="lp-copilot-reply-text">
-                  {replySegs.map((s, i) => (
-                    <span key={i} className={s.hl ? 'seg-hl' : undefined}>
-                      {s.t}
-                    </span>
-                  ))}
-                  {typing && <span className="lp-caret" />}
-                </div>
-              </div>
-            </div>
+        <div className="lp-copilot-panel">
+          <div className="lp-copilot-header">
+            <span className="lp-preview-title">Copilot</span>
+            <span className="lp-preview-sub">/ sample data</span>
           </div>
-
-          <div className="lp-chip-list">
-            <div className="lp-chip-label">Try a question</div>
-            {CHIPS.map((c, i) => (
-              <button
-                key={c.q}
-                className={`lp-chip lp-stagger-item ${i === chipIndex ? 'lp-chip-active' : 'lp-chip-idle'}`}
-                style={{ transitionDelay: `${80 + i * 70}ms` }}
-                onClick={() => setChipIndex(i)}
-              >
-                <span className="lp-chip-num">0{i + 1}</span>
-                {c.q}
-              </button>
+          <div className="lp-copilot-body">
+            {CHIPS.map((c) => (
+              <Reveal key={c.q} className="lp-copilot-exchange">
+                <div className="lp-copilot-user-row">
+                  <div className="lp-copilot-user-bubble">{c.q}</div>
+                </div>
+                <div className="lp-copilot-reply-row">
+                  <span className="lp-logo lp-logo-sm">P</span>
+                  <div className="lp-copilot-reply-text">
+                    {c.segs.map((s, j) => (
+                      <span key={j} className={s.hl ? 'seg-hl' : undefined}>{s.t}</span>
+                    ))}
+                  </div>
+                </div>
+              </Reveal>
             ))}
           </div>
-        </Reveal>
+        </div>
       </section>
 
       <section id="scanner" className="lp-section r-pad lp-section-tight">
