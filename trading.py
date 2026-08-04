@@ -4035,6 +4035,14 @@ def route(msg: str, history: list = None) -> dict:
     # "stop" alone means stop autopilot, but NOT "stop loss", "stop order", "stop price"
     if m.strip() == "stop" or m.strip() == "pause":
         return {"type": "stop_autopilot"}
+    # "make a trade plan for X" / "trade plan for X" — analyze that specific
+    # stock. Explicit + early so it can't be misrouted to a backtest (or picked
+    # up by the LLM classifier reading a backtest-heavy conversation history).
+    if "trade plan" in m or "tradeplan" in m or "trade setup" in m:
+        _pt, _pm = _find_ticker(msg)
+        if _pt:
+            return {"type": "analyze", "ticker": _pt, "market": _pm or "US", "_original_msg": msg}
+
     if any(w in m for w in ["backtest", "back test", "test strategy", "prove it", "historical test",
                             "how would it have done", "test the strategy"]):
         # Optional position count: "backtest 4" / "backtest with 5 positions"

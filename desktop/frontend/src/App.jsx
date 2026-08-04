@@ -20,11 +20,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.6.3'
+const VERSION = '4.6.4'
 const VERSION_DATE = 'August 3, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.6.4', d: 'August 3, 2026', changes: [
+    'Fixed “make a trade plan for [stock]” sometimes running a full backtest instead of analyzing that stock — it now reliably gives the trade plan for the ticker you named.',
+  ]},
   { v: '4.6.3', d: 'August 3, 2026', changes: [
     'Fixed the written analysis occasionally stating the profit target as the entry price (the trade card was always correct). The target is now stated explicitly and can’t be confused with the entry.',
   ]},
