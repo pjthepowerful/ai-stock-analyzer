@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
+import LandingPage from './LandingPage'
 
 // Stale-deploy recovery (official Vite mechanism): when a hashed chunk fails to
 // load because a newer deploy replaced it, Vite fires 'vite:preloadError'. Do a
@@ -18,8 +19,18 @@ window.addEventListener('load', () => {
   setTimeout(() => sessionStorage.removeItem('paula-reloaded-stale'), 5000)
 })
 
+// Unauthenticated visitors land on the marketing page first; App itself
+// handles login/guest/dashboard once launched.
+function Root() {
+  const [showApp, setShowApp] = React.useState(() => !!localStorage.getItem('paula-token'))
+  if (!showApp) {
+    return <LandingPage onLaunch={() => setShowApp(true)} />
+  }
+  return <App />
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <App />
+    <Root />
   </React.StrictMode>
 )
