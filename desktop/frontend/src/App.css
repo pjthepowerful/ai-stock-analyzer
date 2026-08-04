@@ -794,10 +794,10 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .lg-root { position: fixed; inset: 0; background: #0b0b10; color: #ececf2; overflow: hidden; font-family: 'DM Sans', system-ui, sans-serif; }
 /* Embedded: login appears as a centered modal over the (dimmed) landing page,
    so sign-in happens inline on one page instead of a separate screen. */
-.lg-root.lg-embedded { background: rgba(6,6,10,.72); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 1000; animation: lg-fade .18s ease-out; }
-.lg-root.lg-embedded .lg-grid { display: block; width: auto; max-width: 480px; padding: 20px; }
+.lg-root.lg-embedded { background: rgba(6,6,10,.72); backdrop-filter: blur(6px); display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: max(5vh, 28px) 20px; z-index: 1000; animation: lg-fade .18s ease-out; }
+.lg-root.lg-embedded .lg-grid { display: block; width: 100%; max-width: 620px; margin: auto; padding: 0; }
 .lg-root.lg-embedded .lg-right { display: block; }
-.lg-root.lg-embedded .lg-card { animation: lg-pop .2s cubic-bezier(.16,1,.3,1); }
+.lg-root.lg-embedded .lg-card { max-width: 620px; animation: lg-pop .2s cubic-bezier(.16,1,.3,1); }
 .lg-close { position: absolute; top: 16px; right: 18px; width: 30px; height: 30px; border: none; background: rgba(255,255,255,.06); color: #8a8a9a; border-radius: 8px; font-size: 20px; line-height: 1; cursor: pointer; transition: background .15s, color .15s; }
 .lg-close:hover { background: rgba(255,255,255,.12); color: #ececf2; }
 @keyframes lg-fade { from { opacity: 0 } to { opacity: 1 } }

@@ -21,11 +21,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.7.0'
+const VERSION = '4.7.1'
 const VERSION_DATE = 'August 3, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.7.1', d: 'August 4, 2026', changes: [
+    'Sign-in modal is now wider and scrolls if it’s taller than the screen, so nothing gets cut off on smaller displays.',
+  ]},
   { v: '4.7.0', d: 'August 3, 2026', changes: [
     'Merged sign-in into the landing page — one continuous site. Clicking Sign in / Launch now opens a login modal right over the landing instead of jumping to a separate screen.',
   ]},
