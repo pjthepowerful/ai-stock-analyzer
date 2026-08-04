@@ -3944,6 +3944,17 @@ def route(msg: str, history: list = None) -> dict:
     # the 21-factor score can't predict who beats earnings. Route these to chat
     # (LLM + web search), which can actually address them, instead of the scanner
     # dead-ending on "nothing clears the bar".
+    # "trade plan / setup for X" naming a specific stock → analyze THAT stock.
+    # Placed before the scan and backtest paths so a named ticker with the word
+    # "setup" or "plan" can't be swept into a generic scan or a backtest. Only
+    # fires when a ticker actually resolves (so "just say the setup" with no
+    # ticker, or "find swing setups", still fall through to the right handler).
+    if any(w in m for w in ["trade plan", "tradeplan", "trade setup", "setup for",
+                            "setup on", "the setup", "plan for", "setup?"]):
+        _pt, _pm = _find_ticker(msg)
+        if _pt:
+            return {"type": "analyze", "ticker": _pt, "market": _pm or "US", "_original_msg": msg}
+
     _fundamental = any(w in m for w in [
         "earnings", "beat the", "beat earnings", "will beat", "going to beat",
         "beat it", "q1", "q2", "q3", "q4", "quarter", "guidance", "eps",
@@ -4035,14 +4046,6 @@ def route(msg: str, history: list = None) -> dict:
     # "stop" alone means stop autopilot, but NOT "stop loss", "stop order", "stop price"
     if m.strip() == "stop" or m.strip() == "pause":
         return {"type": "stop_autopilot"}
-    # "make a trade plan for X" / "trade plan for X" — analyze that specific
-    # stock. Explicit + early so it can't be misrouted to a backtest (or picked
-    # up by the LLM classifier reading a backtest-heavy conversation history).
-    if "trade plan" in m or "tradeplan" in m or "trade setup" in m:
-        _pt, _pm = _find_ticker(msg)
-        if _pt:
-            return {"type": "analyze", "ticker": _pt, "market": _pm or "US", "_original_msg": msg}
-
     if any(w in m for w in ["backtest", "back test", "test strategy", "prove it", "historical test",
                             "how would it have done", "test the strategy"]):
         # Optional position count: "backtest 4" / "backtest with 5 positions"
