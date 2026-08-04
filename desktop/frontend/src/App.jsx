@@ -21,11 +21,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.7.4'
+const VERSION = '4.8.0'
 const VERSION_DATE = 'August 3, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.8.0', d: 'August 4, 2026', changes: [
+    'The whole app now matches the dark landing theme by default — chats, tabs, and panels share one look end to end. (You can still switch to light in settings.)',
+    'Added more motion on the landing: cards lift on hover, the preview card breathes, the primary button pulses, and the hero accent shimmers.',
+  ]},
   { v: '4.7.4', d: 'August 4, 2026', changes: [
     'Fixed the landing page not scrolling — you can now scroll down through the hero, copilot demo, scanner, and tracker sections. (The app dashboard still stays fixed as before.)',
   ]},
@@ -609,7 +613,7 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true)
   const [maint, setMaint] = useState({ on: false, message: '' })
   const [showLogin, setShowLogin] = useState(false)
-  const [theme, setTheme] = useState(() => localStorage.getItem('paula-theme') || 'light')
+  const [theme, setTheme] = useState(() => localStorage.getItem('paula-theme') || 'dark')
 
   // The app dashboard locks body scroll (it manages its own), but the logged-out
   // landing page needs the page itself to scroll. Toggle based on auth state.
