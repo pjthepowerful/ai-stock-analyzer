@@ -21,11 +21,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.8.0'
+const VERSION = '4.8.1'
 const VERSION_DATE = 'August 3, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.8.1', d: 'August 4, 2026', changes: [
+    'The landing page top bar now stays pinned at the top while you scroll.',
+  ]},
   { v: '4.8.0', d: 'August 4, 2026', changes: [
     'The whole app now matches the dark landing theme by default — chats, tabs, and panels share one look end to end. (You can still switch to light in settings.)',
     'Added more motion on the landing: cards lift on hover, the preview card breathes, the primary button pulses, and the hero accent shimmers.',

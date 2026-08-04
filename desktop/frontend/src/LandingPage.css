@@ -30,7 +30,9 @@
   font-family: var(--sans);
   color: var(--lt);
   -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
+  /* clip (not hidden) prevents horizontal scroll WITHOUT creating a scroll
+     container, so the sticky top nav actually sticks on scroll. */
+  overflow-x: clip;
 }
 
 .landing-page * {
