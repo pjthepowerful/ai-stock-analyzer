@@ -21,11 +21,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.7.3'
+const VERSION = '4.7.4'
 const VERSION_DATE = 'August 3, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.7.4', d: 'August 4, 2026', changes: [
+    'Fixed the landing page not scrolling — you can now scroll down through the hero, copilot demo, scanner, and tracker sections. (The app dashboard still stays fixed as before.)',
+  ]},
   { v: '4.7.3', d: 'August 4, 2026', changes: [
     'Copilot demo now unfolds as you scroll — each question and answer reveals one after another down the page, instead of clicking or auto-cycling through them.',
   ]},
@@ -607,6 +610,20 @@ function App() {
   const [maint, setMaint] = useState({ on: false, message: '' })
   const [showLogin, setShowLogin] = useState(false)
   const [theme, setTheme] = useState(() => localStorage.getItem('paula-theme') || 'light')
+
+  // The app dashboard locks body scroll (it manages its own), but the logged-out
+  // landing page needs the page itself to scroll. Toggle based on auth state.
+  useEffect(() => {
+    const landing = !user
+    document.body.style.overflow = landing ? 'auto' : 'hidden'
+    document.body.style.height = landing ? 'auto' : '100vh'
+    document.documentElement.style.overflow = landing ? 'auto' : ''
+    return () => {
+      document.body.style.overflow = 'hidden'
+      document.body.style.height = '100vh'
+      document.documentElement.style.overflow = ''
+    }
+  }, [user])
 
   // Apply the theme to the document root and persist it.
   useEffect(() => {
