@@ -157,6 +157,17 @@ export default function LandingPage({ onLaunch }) {
     return () => clearInterval(t)
   }, [chipIndex])
 
+  // Auto-advance through the questions once each answer finishes typing, so the
+  // demo cycles on its own — you watch the different questions instead of having
+  // to click each chip. Clicking a chip still jumps to it and the cycle resumes.
+  useEffect(() => {
+    const full = CHIPS[chipIndex].segs.reduce((a, s) => a + s.t.length, 0)
+    if (chars >= full) {
+      const t = setTimeout(() => setChipIndex((i) => (i + 1) % CHIPS.length), 2600)
+      return () => clearTimeout(t)
+    }
+  }, [chars, chipIndex])
+
   const [statsRevealed, setStatsRevealed] = useState(false)
 
   useEffect(() => {
@@ -252,10 +263,6 @@ export default function LandingPage({ onLaunch }) {
           <span className="lp-logo">P</span>
           <b className="lp-wordmark">Paula</b>
         </div>
-        <div className="lp-live-pill">
-          <span className="lp-live-dot" />
-          <span>Market closed · {clock} CT</span>
-        </div>
         <div className="lp-nav-spacer" />
         <div className="lp-nav-links">
           <a href="#copilot">Product</a>
@@ -279,10 +286,6 @@ export default function LandingPage({ onLaunch }) {
         <div className="lp-hero-glow" />
         <div className="lp-hero-inner r-split r-hero">
           <div>
-            <span className={`lp-hero-badge lp-mount ${heroIn ? 'lp-mount-in' : ''}`}>
-              <span className="lp-badge-dot" />
-              AI intraday trading copilot · sample data
-            </span>
             <h1 className={`lp-hero-title lp-mount ${heroIn ? 'lp-mount-in' : ''}`} style={{ transitionDelay: '90ms' }}>
               Every trade, <span className="lp-hero-accent">reasoned through</span> before it's placed.
             </h1>

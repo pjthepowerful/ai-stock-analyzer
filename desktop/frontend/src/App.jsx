@@ -21,11 +21,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.7.1'
+const VERSION = '4.7.2'
 const VERSION_DATE = 'August 3, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.7.2', d: 'August 4, 2026', changes: [
+    'Landing page: removed the little pill/badge boxes that read as generic, and the copilot demo questions now auto-cycle so you watch them change instead of clicking through.',
+  ]},
   { v: '4.7.1', d: 'August 4, 2026', changes: [
     'Sign-in modal is now wider and scrolls if it’s taller than the screen, so nothing gets cut off on smaller displays.',
   ]},
