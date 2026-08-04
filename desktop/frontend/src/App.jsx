@@ -3,6 +3,7 @@ const Chart = lazy(() => import('./Chart'))
 const ChartFallback = () => <div className="chart-loading"><div className="chart-shimmer"/></div>
 import { playBuy, playSell, playNotify, playAlert, playProfit, playTick } from './sounds'
 import './App.css'
+import LandingPage from './LandingPage'
 
 // Backend URL resolution:
 //  1. VITE_API_URL (set this to your ngrok/Railway URL when hosting) — wins always
@@ -20,11 +21,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.6.5'
+const VERSION = '4.7.0'
 const VERSION_DATE = 'August 3, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.7.0', d: 'August 3, 2026', changes: [
+    'Merged sign-in into the landing page — one continuous site. Clicking Sign in / Launch now opens a login modal right over the landing instead of jumping to a separate screen.',
+  ]},
   { v: '4.6.5', d: 'August 3, 2026', changes: [
     'Fixed “setup for [stock]” running a generic scan instead of analyzing that stock — naming a ticker with “setup” or “plan” now reliably analyzes that ticker.',
   ]},
@@ -592,6 +596,7 @@ function App() {
   const [token, setToken] = useState(localStorage.getItem('paula-token'))
   const [authLoading, setAuthLoading] = useState(true)
   const [maint, setMaint] = useState({ on: false, message: '' })
+  const [showLogin, setShowLogin] = useState(false)
   const [theme, setTheme] = useState(() => localStorage.getItem('paula-theme') || 'light')
 
   // Apply the theme to the document root and persist it.
@@ -727,13 +732,21 @@ function App() {
       </div>
     </div>
   }
-  if (!user) return <LoginPage onAuth={doAuth} onFinishAuth={finishAuth} onGuest={enterGuest} />
+  if (!user) return (
+    <>
+      <LandingPage onLaunch={() => setShowLogin(true)} />
+      {showLogin && (
+        <LoginPage embedded onClose={() => setShowLogin(false)}
+                   onAuth={doAuth} onFinishAuth={finishAuth} onGuest={enterGuest} />
+      )}
+    </>
+  )
 
 
   return <MainApp user={user} token={token} logout={logout} setUser={setUser} theme={theme} setTheme={setTheme} />
 }
 
-function LoginPage({ onAuth, onFinishAuth, onGuest }) {
+function LoginPage({ onAuth, onFinishAuth, onGuest, embedded = false, onClose }) {
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -844,9 +857,11 @@ function LoginPage({ onAuth, onFinishAuth, onGuest }) {
   const tapeIsDown = (t) => t.pct != null && t.pct < 0
 
   return (
-    <div className="lg-root">
-      {/* Living terminal background — tape + breathing equity curve, behind everything */}
-      <div className="lg-bg" aria-hidden="true">
+    <div className={"lg-root" + (embedded ? " lg-embedded" : "")}
+         onClick={embedded ? (e) => { if (e.target === e.currentTarget) onClose?.() } : undefined}>
+      {/* Living terminal background — tape + breathing equity curve, behind
+          everything. Hidden when embedded (the landing page is already behind). */}
+      {!embedded && <div className="lg-bg" aria-hidden="true">
         <div className="lg-tape lg-tape-1">{[...tape, ...tape].map((t, i) => <span key={i} className={'lg-tick' + (tapeIsDown(t) ? ' dn' : ' up')}>{fmtTape(t)}</span>)}</div>
         <div className="lg-tape lg-tape-2">{[...tape, ...tape].map((t, i) => <span key={i} className={'lg-tick' + (tapeIsDown(t) ? ' dn' : ' up')}>{fmtTape(t)}</span>)}</div>
         <svg className="lg-curve" viewBox="0 0 1000 600" preserveAspectRatio="none">
@@ -854,11 +869,11 @@ function LoginPage({ onAuth, onFinishAuth, onGuest }) {
           <polyline points="0,470 100,450 200,460 300,400 400,420 500,340 600,365 700,280 800,305 900,215 1000,185" fill="none" stroke="#10b981" strokeWidth="2" vectorEffect="non-scaling-stroke"/>
           <polygon points="0,470 100,450 200,460 300,400 400,420 500,340 600,365 700,280 800,305 900,215 1000,185 1000,600 0,600" fill="url(#lgGrad)"/>
         </svg>
-      </div>
+      </div>}
 
       <div className="lg-grid">
-        {/* Left — the statement */}
-        <div className="lg-left">
+        {/* Left — the statement. Hidden when embedded (landing provides it). */}
+        {!embedded && <div className="lg-left">
           <div className="lg-brand"><span className="logo-p">P</span><span className="lg-brand-name">Paula</span></div>
           <div className="lg-statement">
             <h1 className="lg-hero">Markets don't<br/>sleep.<br/><span className="lg-hero-grn">Neither does<br/>Paula.</span></h1>
@@ -871,11 +886,12 @@ function LoginPage({ onAuth, onFinishAuth, onGuest }) {
             </div>
           </div>
           <div className="lg-spacer" aria-hidden="true"></div>
-        </div>
+        </div>}
 
         {/* Right — the form, in a frosted card */}
         <div className="lg-right">
           <div className="lg-card">
+            {embedded && <button className="lg-close" onClick={onClose} aria-label="Close">×</button>}
             {view === 'auth' && codeStep && <>
               <h2 className="lg-card-title">{codeStep === '2fa' ? 'Verify it\u2019s you' : 'Verify your email'}</h2>
               <p className="lg-card-sub">We sent a 6-digit code to <b>{codeEmail}</b>. Enter it below{codeStep === '2fa' ? ' to finish signing in.' : ' to verify your account.'}</p>
