@@ -101,6 +101,7 @@ from trading import (
     alpaca_portfolio_history,
     _alpaca_headers,
     ALPACA_BASE,
+    _polygon_daily_hist,
 
     # Autopilot
     run_autopilot,
