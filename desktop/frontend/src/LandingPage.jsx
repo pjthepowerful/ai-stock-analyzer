@@ -253,21 +253,8 @@ export default function LandingPage({ onLaunch }) {
           <b className="lp-wordmark">Paula</b>
         </div>
         <div className="lp-nav-spacer" />
-        <div className="lp-nav-links">
-          <a href="#copilot">Product</a>
-          <a href="#scanner">How it works</a>
-          <a
-            href="#cta"
-            onClick={(e) => {
-              e.preventDefault()
-              onLaunch?.()
-            }}
-          >
-            Sign in
-          </a>
-        </div>
         <button className="lp-btn-primary" onClick={onLaunch}>
-          Launch app →
+          Sign in →
         </button>
       </nav>
 

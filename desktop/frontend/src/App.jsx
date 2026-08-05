@@ -21,11 +21,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.8.1'
+const VERSION = '4.8.2'
 const VERSION_DATE = 'August 3, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.8.2', d: 'August 5, 2026', changes: [
+    'Landing top bar is now fixed to the top of the screen at all times, simplified to just the logo and a Sign in button.',
+  ]},
   { v: '4.8.1', d: 'August 4, 2026', changes: [
     'The landing page top bar now stays pinned at the top while you scroll.',
   ]},

@@ -139,9 +139,11 @@
 /* Nav */
 
 .lp-nav {
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 40;
+  left: 0;
+  right: 0;
+  z-index: 100;
   display: flex;
   align-items: center;
   gap: 28px;
@@ -150,6 +152,8 @@
   backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--brd);
 }
+/* Offset content so the first section isn't hidden under the fixed nav. */
+.landing-page { padding-top: 72px; }
 
 .lp-nav-brand {
   display: flex;
