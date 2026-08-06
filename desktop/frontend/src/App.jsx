@@ -21,11 +21,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.8.3'
+const VERSION = '4.8.4'
 const VERSION_DATE = 'August 3, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.8.4', d: 'August 5, 2026', changes: [
+    'You can now scroll up freely while a reply is still streaming — it won’t yank you back to the bottom. Scroll back down to re-follow the live response.',
+  ]},
   { v: '4.8.3', d: 'August 5, 2026', changes: [
     'Fixed the You vs S&P 500 card never appearing — the S&P benchmark data wasn’t being fetched. Your portfolio return now shows next to the index on the Portfolio page.',
   ]},
@@ -1854,35 +1857,47 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
   // bottom — UNLESS the user scrolls up themselves, which cancels the lock so
   // we stop yanking them down. Sending a fresh message re-engages the lock.
   const scrollLockRef = useRef(true)
+  const progScrollRef = useRef(0)  // timestamp of our last programmatic scroll
   useEffect(() => {
     const el = chatScrollRef.current
     if (!el) return
-    // Detect a user-initiated scroll: if they move away from the bottom, release
-    // the lock; if they return to the bottom, re-engage it.
+    const atBottom = () => (el.scrollHeight - el.scrollTop - el.clientHeight) < 60
+
+    // Wheel/keys signal INTENT: scrolling up releases the lock immediately, even
+    // mid-stream (the old code only checked position, which is ~bottom right
+    // after a forced scroll, so it never released). Back at the bottom re-pins.
+    const onWheel = (e) => {
+      if (e.deltaY < 0) scrollLockRef.current = false
+      else if (atBottom()) scrollLockRef.current = true
+    }
+    const onTouchMove = () => { if (!atBottom()) scrollLockRef.current = false }
+    const onKey = (e) => {
+      if (['ArrowUp', 'PageUp', 'Home'].includes(e.key)) scrollLockRef.current = false
+    }
+    // Plain scroll events update the lock by position — but IGNORE the ones our
+    // own auto-scroll causes (within 150ms), so streaming can't re-lock the user.
     const onScroll = () => {
-      const dist = el.scrollHeight - el.scrollTop - el.clientHeight
-      scrollLockRef.current = dist < 80
+      if (Date.now() - progScrollRef.current < 150) return
+      scrollLockRef.current = atBottom()
     }
+    el.addEventListener('wheel', onWheel, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: true })
     el.addEventListener('scroll', onScroll, { passive: true })
-    // Also treat wheel/touch as an explicit intent to take over scrolling.
-    const release = () => {
-      const dist = el.scrollHeight - el.scrollTop - el.clientHeight
-      if (dist >= 80) scrollLockRef.current = false
-    }
-    el.addEventListener('wheel', release, { passive: true })
-    el.addEventListener('touchmove', release, { passive: true })
+    window.addEventListener('keydown', onKey)
     return () => {
+      el.removeEventListener('wheel', onWheel)
+      el.removeEventListener('touchmove', onTouchMove)
       el.removeEventListener('scroll', onScroll)
-      el.removeEventListener('wheel', release)
-      el.removeEventListener('touchmove', release)
+      window.removeEventListener('keydown', onKey)
     }
   }, [])
   useEffect(() => {
-    // On every message update (including each streamed token), if the lock is
-    // still engaged, keep the bottom in view. The user scrolling up breaks it.
+    // On every message update (including each streamed token), keep the bottom in
+    // view ONLY while the lock is engaged. Mark the scroll as programmatic so the
+    // scroll handler above doesn't misread it as the user returning to the bottom.
     if (scrollLockRef.current) {
       const el = chatScrollRef.current
-      if (el) el.scrollTop = el.scrollHeight
+      if (el) { progScrollRef.current = Date.now(); el.scrollTop = el.scrollHeight }
       else messagesEnd.current?.scrollIntoView()
     }
   }, [messages])
