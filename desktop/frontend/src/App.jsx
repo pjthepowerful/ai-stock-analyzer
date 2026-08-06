@@ -21,11 +21,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.8.4'
+const VERSION = '4.8.5'
 const VERSION_DATE = 'August 3, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.8.5', d: 'August 6, 2026', changes: [
+    'Restyled the “Too new” badge and a stray button hover from purple to match the app’s theme.',
+  ]},
   { v: '4.8.4', d: 'August 5, 2026', changes: [
     'You can now scroll up freely while a reply is still streaming — it won’t yank you back to the bottom. Scroll back down to re-follow the live response.',
   ]},
