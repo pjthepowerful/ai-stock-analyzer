@@ -29,7 +29,7 @@ const CHANGELOG_DATA = [
   { v: '4.8.5', d: 'August 6, 2026', changes: [
     'Restyled the “Too new” badge and a stray button hover from purple to match the app’s theme.',
   ]},
-  { v: '4.8.4', d: 'August 5, 2026', changes: [
+  { v: '4.8.4', d: 'August 6, 2026', changes: [
     'You can now scroll up freely while a reply is still streaming — it won’t yank you back to the bottom. Scroll back down to re-follow the live response.',
   ]},
   { v: '4.8.3', d: 'August 5, 2026', changes: [
@@ -57,7 +57,7 @@ const CHANGELOG_DATA = [
   { v: '4.7.1', d: 'August 4, 2026', changes: [
     'Sign-in modal is now wider and scrolls if it’s taller than the screen, so nothing gets cut off on smaller displays.',
   ]},
-  { v: '4.7.0', d: 'August 3, 2026', changes: [
+  { v: '4.7.0', d: 'August 4, 2026', changes: [
     'Merged sign-in into the landing page — one continuous site. Clicking Sign in / Launch now opens a login modal right over the landing instead of jumping to a separate screen.',
   ]},
   { v: '4.6.5', d: 'August 3, 2026', changes: [
