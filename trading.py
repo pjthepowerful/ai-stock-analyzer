@@ -5742,25 +5742,34 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                 else:
                     sig = generate_intraday_signal(data)
 
-            # For longs: close if signal turned bearish
-            # For shorts: close if signal turned bullish
+            # For longs: close if the setup has broken down (not only on an
+            # extreme signal). Exiting on a plain SELL — or the score slipping
+            # under the profit-taking line — means positions leave on their own
+            # when the thesis weakens, instead of riding to the EOD close.
             should_close = False
-            if not is_short and (sig["score"] <= SELL_BELOW or sig["action"] == "STRONG_SELL"):
-                should_close = True
-            elif is_short and (sig["score"] >= (100 - SELL_BELOW) or sig["action"] == "STRONG_BUY"):
-                should_close = True
+            exit_why = ""
+            if not is_short:
+                if sig["action"] in ("SELL", "STRONG_SELL"):
+                    should_close = True; exit_why = f"signal turned {sig['action']}"
+                elif sig["score"] <= SELL_BELOW:
+                    should_close = True; exit_why = f"score fell to {sig['score']} (≤{SELL_BELOW})"
+            else:
+                if sig["action"] in ("BUY", "STRONG_BUY"):
+                    should_close = True; exit_why = f"signal turned {sig['action']}"
+                elif sig["score"] >= (100 - SELL_BELOW):
+                    should_close = True; exit_why = f"score rose to {sig['score']}"
 
             if should_close:
                 action_word = "Covered" if is_short else "Sold"
                 if dry_run:
-                    sells.append(f"Would close {pos['ticker']} {'(short)' if is_short else ''}  score {sig['score']}, signal: {sig['action']}")
+                    sells.append(f"Would close {pos['ticker']} {'(short)' if is_short else ''} — {exit_why}")
                 else:
                     if is_short:
                         result = alpaca_cover(ticker=pos["ticker"], cover_all=True)
                     else:
                         result = alpaca_sell(ticker=pos["ticker"], sell_all=True)
                     if result.get("ok"):
-                        sells.append(f"{action_word} {pos['ticker']} {'(short)' if is_short else ''}  score {sig['score']}, signal: {sig['action']}")
+                        sells.append(f"{action_word} {pos['ticker']} {'(short)' if is_short else ''} — {exit_why}")
                         # Prevent re-buying this ticker today
                         held_tickers.add(pos["ticker"])
                     else:
@@ -7132,6 +7141,7 @@ Voice rules:
 - SOUND HUMAN. Use natural rhythm  mix short punchy lines with a longer one. Contractions, plain words. "Here's the thing" / "What I like" / "The catch is".
 - NO DATA DUMPS. Never list 6 indicators in a row. Never use headers like "VERDICT:" or "RISK:". Write in flowing prose, not a spec sheet.
 - END WITH THE TRADE or the next step when relevant: where you'd get in, where the stop goes, what you're watching.
+- ALWAYS GIVE THE EXIT, not just the entry. A trade isn't a plan without a way out. When you give a buy, say where the stop is AND what would make you SELL — the specific thing that means the setup is broken (loses VWAP, closes below the 20 EMA, breaks the day's low, momentum rolls over, the reason you bought stops being true). And name the target: where you'd take profit. If a stock looks like a SELL or a stock they hold has broken down, say so plainly and say WHY — "this has lost its trend, I'd get out" — rather than softening it. Exiting a losing setup on time is the whole game.
 - ANSWER WHAT THEY ACTUALLY ASKED. Read the request carefully and respond to the real question  if they ask "is now a good time to add to my NVDA?", weigh their existing position and the current setup, don't just re-run a generic analysis. If they ask something the attached data genuinely doesn't cover, say so in one honest line and answer with what you do know  never pad with invented specifics to seem complete.
 
 Good example (analysis):

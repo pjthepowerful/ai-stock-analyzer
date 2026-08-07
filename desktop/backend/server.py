@@ -50,6 +50,40 @@ except Exception:
 
 # ── State ──
 ADMIN_EMAIL = "parjan.d@icloud.com"  # Only this email gets admin (admin panel, etc.)
+
+
+def _clean_source_url(url):
+    """Return a clean absolute http(s) URL for citation, or '' to drop it.
+    Search providers sometimes return redirect/tracking wrappers (e.g.
+    /goto?url=..., google /url? redirects, opaque base64 tokens) that leak into
+    Paula's replies as ugly links. We only keep real, direct URLs."""
+    import re as _re
+    if not url or not isinstance(url, str):
+        return ""
+    u = url.strip()
+    if not u.lower().startswith(("http://", "https://")):
+        return ""  # relative / redirect stubs like /goto?url=...
+    # Known redirect wrappers → drop (can't safely resolve the real target).
+    if _re.search(r"/goto\?|/url\?|[?&]url=CAES|google\.[^/]+/url", u):
+        return ""
+    return u
+
+
+def _source_domain(url):
+    import re as _re
+    m = _re.search(r"https?://(?:www\.)?([^/]+)", url or "")
+    return m.group(1) if m else ""
+
+
+def _fmt_web_result(w):
+    """One web-search result as a line the LLM can cite cleanly: publisher name +
+    a real link only when we have one (no redirect junk)."""
+    base = f"- {w.get('title','')}: {w.get('content','')}"
+    u = _clean_source_url(w.get("url", ""))
+    if u:
+        return base + f" (source: {_source_domain(u)} — {u})"
+    dom = _source_domain(w.get("url", ""))
+    return base + (f" (source: {dom})" if dom else "")
 AUTOPILOT_EMAILS = {"parjan.d@icloud.com", "pinakin.d@moftmail.com"}  # Emails allowed to run autopilot
 
 # Email-dependent auth features (2FA + signup email verification). OFF until a
@@ -1000,7 +1034,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v4.9.0",  # bump marker  confirms running code
+        "build": "v4.9.1",  # bump marker  confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -2559,8 +2593,8 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
             try:
                 _ws = engine.web_search(user_msg, max_results=5)
                 if _ws:
-                    _wl = "\n".join(f"- {w['title']}: {w['content']}" + (f" [source]({w['url']})" if w['url'] else "") for w in _ws)
-                    _fmsg = _fmsg + f"\n\n[LIVE WEB SEARCH  use this current info. Cite sources as markdown links [publisher](url), never bare URLs:\n{_wl}\n]"
+                    _wl = "\n".join(_fmt_web_result(w) for w in _ws)
+                    _fmsg = _fmsg + f"\n\n[LIVE WEB SEARCH  use this current info. When citing, use the publisher NAME as a markdown link only if a real http(s) URL is given after 'source:'; if only a domain is given, name the publisher in plain text. NEVER output /goto, /url redirect links or opaque tokens as URLs:\n{_wl}\n]"
             except Exception:
                 pass
         else:
@@ -2592,8 +2626,8 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                 if _wants_search or (not _cur and _is_news):
                     _ws = engine.web_search(user_msg, max_results=5)
                     if _ws:
-                        _wl = "\n".join(f"- {w['title']}: {w['content']}" + (f" [source]({w['url']})" if w['url'] else "") for w in _ws)
-                        _fmsg = _fmsg + f"\n\n[LIVE WEB SEARCH  use this current info. Cite sources as markdown links [publisher](url), never bare URLs:\n{_wl}\n]"
+                        _wl = "\n".join(_fmt_web_result(w) for w in _ws)
+                        _fmsg = _fmsg + f"\n\n[LIVE WEB SEARCH  use this current info. When citing, use the publisher NAME as a markdown link only if a real http(s) URL is given after 'source:'; if only a domain is given, name the publisher in plain text. NEVER output /goto, /url redirect links or opaque tokens as URLs:\n{_wl}\n]"
             except Exception:
                 pass
         resp = await loop.run_in_executor(None, engine.ai_response, _fmsg, _fall_data, chat_history, "US")

@@ -21,11 +21,16 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.9.0'
+const VERSION = '4.9.1'
 const VERSION_DATE = 'August 3, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.9.1', d: 'August 6, 2026', changes: [
+    'Cleaner sources: web-search citations no longer show ugly redirect links — just the publisher and a real link.',
+    'Stronger sell/exit logic: Paula now always tells you where to exit and what would make it a sell, not just where to buy.',
+    'Autopilot exits sooner: positions now leave on a plain SELL signal or a broken setup instead of riding to the end-of-day close, with a clear reason logged.',
+  ]},
   { v: '4.9.0', d: 'August 6, 2026', changes: [
     'Scan picks now explain what’s actually distinctive about each one — the “why” leads with the standout signals (volume spike, news, breakout, RSI) instead of the same generic trend bullets every uptrend shares.',
   ]},
