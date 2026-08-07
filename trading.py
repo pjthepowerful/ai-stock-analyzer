@@ -2265,7 +2265,7 @@ def generate_intraday_signal(data: dict) -> dict:
             "rsi": 1 if 35 <= rsi <= 55 else (-1 if rsi > 70 else 0),
             "news": 1 if news_score >= 2 else (-1 if news_score <= -2 else 0),
         },
-        "signals": signals,
+        "signals": _prioritize_signals(signals),
         "warnings": warnings,
         "trade": {
             "entry": round(entry, 2),
@@ -2333,6 +2333,30 @@ def fetch_scan_intraday(ticker: str) -> dict | None:
 #  Action fires only when enough categories agree (confluence).
 #  Risk management: ATR-based entry / stop / targets with R:R.
 # ═══════════════════════════════════════════════════════════════════════════════
+
+def _prioritize_signals(signals):
+    """Order a pick's signals so the DISTINCTIVE ones surface first (volume spike,
+    news, breakout, candle pattern, RSI position) and the generic trend bullets
+    that nearly every uptrend shares (EMA alignment, above VWAP, moderate trend)
+    fall to the back. Callers display only the top 2-3, so this makes each pick's
+    'why' about what's actually different about THIS stock, not boilerplate."""
+    def rank(s):
+        s_low = s.lower()
+        if any(k in s_low for k in ("volume spike", "breakout above", "bullish news",
+                                    "hammer", "engulfing", "volatility contraction", "gap ")):
+            return 0  # most distinctive
+        if any(k in s_low for k in ("rsi ", "pullback to vwap", "higher lows",
+                                    "macd", "adx ", "oversold", "reversal")):
+            return 1
+        if any(k in s_low for k in ("above-average volume", "pullback to 20", "hammer")):
+            return 2
+        if any(k in s_low for k in ("ema", "vwap", "moderate trend", "needs volume",
+                                    "near vwap")):
+            return 4  # generic trend — every uptrend has these
+        return 3
+    # Stable sort keeps original order within the same rank.
+    return sorted(signals, key=rank)
+
 
 def generate_trade_signal(data: dict) -> dict:
     """
@@ -2798,7 +2822,7 @@ def generate_trade_signal(data: dict) -> dict:
         "mean_reversion_score": mr_sub, "mean_reversion_label": mr_lbl,
         "news_score": news_sub, "news_label": news_lbl,
         "earnings_warning": earn_warn,
-        "signals": signals,
+        "signals": _prioritize_signals(signals),
         "warnings": warnings,
         "trade": {
             "entry": round(entry, 2),
