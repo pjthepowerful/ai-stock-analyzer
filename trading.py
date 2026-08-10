@@ -307,6 +307,13 @@ def _find_ticker(text: str) -> tuple[str | None, str]:
             return clean, "India"
         if clean in us_set:
             return clean, "US"
+        # An explicitly-typed 3-5 letter UPPERCASE symbol is authoritative even if
+        # it's missing from our (incomplete) local universe — return it as-is and
+        # let the data layer confirm it's real. We must NEVER silently "correct" a
+        # typed ticker into a different one (e.g. COF→CLF); analyzing the wrong
+        # stock is far worse than saying "no data for COF".
+        if typed_caps and 3 <= len(clean) <= 5:
+            return clean, "US"
     # 2.5) Common misspellings, typos, voice recognition, and aliases
     ALIASES = _TICKER_ALIASES
     for word in text.lower().split():
@@ -314,15 +321,9 @@ def _find_ticker(text: str) -> tuple[str | None, str]:
         if clean in ALIASES:
             tick = ALIASES[clean]
             return tick, "US"
-    # 2.6) Fuzzy match  if a word is 1-2 chars off from a known ticker
-    for word in text.upper().split():
-        clean = re.sub(r"[^A-Z]", "", word)
-        if clean and 3 <= len(clean) <= 5 and clean not in _NOISE_WORDS:
-            for known in list(us_set)[:200]:  # check against top tickers
-                if len(known) == len(clean) and known != clean:
-                    diffs = sum(1 for a, b in zip(known, clean) if a != b)
-                    if diffs == 1:  # only 1 letter off
-                        return known, "US"
+    # (Removed the old 1-letter "fuzzy match to nearest known ticker" step — it
+    # silently swapped valid tickers for wrong ones when a symbol wasn't in our
+    # local list. Aliases above handle real known misspellings safely.)
     # 3) Polygon search  only if the message looks like a specific stock query
     stock_intent = any(w in low for w in [
         "analyze", "analysis", "price", "buy", "sell", "short", "cover", "chart", "graph", "quote",

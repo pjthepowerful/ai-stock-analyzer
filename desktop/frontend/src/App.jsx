@@ -21,11 +21,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.9.1'
+const VERSION = '4.9.2'
 const VERSION_DATE = 'August 3, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.9.2', d: 'August 6, 2026', changes: [
+    'Fixed a serious bug where a typed ticker could be silently swapped for a similar one (e.g. COF analyzed as CLF). A ticker you type is now analyzed as-is — never auto-corrected to a different stock.',
+  ]},
   { v: '4.9.1', d: 'August 6, 2026', changes: [
     'Cleaner sources: web-search citations no longer show ugly redirect links — just the publisher and a real link.',
     'Stronger sell/exit logic: Paula now always tells you where to exit and what would make it a sell, not just where to buy.',
