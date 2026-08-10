@@ -5178,11 +5178,12 @@ def load_autopilot_config() -> dict:
         "MIN_CONFLUENCE": 5, "MIN_RR": 2.0, "STOP_FLOOR": 0.013, "SELL_BELOW": 35,
         "DAILY_LOSS_LIMIT": 0.04 if SWING_MODE else 0.01,
         "PARTIAL_PROFIT_PCT": 0.035 if SWING_MODE else 0.015,
+        "TAKE_PROFIT_PCT": 0.06 if SWING_MODE else 0.03,   # full exit of the runner here
         "TRAIL_ACTIVATE_PCT": 2.5 if SWING_MODE else 1.2,
         "TRAIL_DISTANCE_PCT": 2.0 if SWING_MODE else 1.2,
         "MAX_DAILY_ENTRIES": 4,
         "MAX_HOLD_DAYS": SWING_MAX_HOLD_DAYS if SWING_MODE else 0,
-        "STALE_MINUTES": 0 if SWING_MODE else 120,
+        "STALE_MINUTES": 0 if SWING_MODE else 75,   # free dead money sooner (was 120)
         "TRADING_HOURS_START": "09:45",
         "TRADING_HOURS_END": "15:55" if SWING_MODE else "15:00",
         "AVOID_MIDDAY": False if SWING_MODE else True,
@@ -5616,8 +5617,11 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         entry_time = st.session_state[STALE_KEY].get(ticker, time.time())
         minutes_held = (time.time() - entry_time) / 60
 
-        # If held 90+ min and PnL between -0.5% and +0.5%  it's dead money
-        if minutes_held >= STALE_MINUTES and -0.2 <= pnl_pct <= 0.15:
+        # Dead money: held past the stale window and going nowhere OR mildly
+        # bleeding. Since we can't hold overnight, a position that isn't working
+        # by now should free its capital for a fresh setup rather than drift to
+        # the forced close. (Winners are handled by take-profit/trailing below.)
+        if minutes_held >= STALE_MINUTES and -0.8 <= pnl_pct <= 0.3:
             is_short = pos.get("side") == "short"
             if dry_run:
                 stale_kills.append(f"⏰ Would close {ticker} {'(short)' if is_short else ''}  flat for {minutes_held:.0f}min ({pnl_pct:+.1f}%)")
@@ -5671,6 +5675,54 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         log.append(p)
     if not partials:
         log.append(f"No positions hit +{PARTIAL_PROFIT_PCT*100:.1f}% for partial profit yet")
+
+    # ── 2b2. Full take-profit  bank the runner at target ──
+    # After the half comes off, the rest rode on a trailing stop indefinitely.
+    # For a same-day book that's leaving money on the table — a decisive target
+    # exit locks the full gain instead of waiting to be trailed out or dumped at
+    # the close. Trailing (below) still protects anything that keeps running.
+    TAKE_PROFIT_PCT = params.get("TAKE_PROFIT_PCT", 0.03)
+    take_profits = []
+    for pos in positions:
+        ticker = pos["ticker"]
+        pnl_pct = pos.get("unrealized_pnl_pct", 0)
+        qty = int(abs(pos.get("qty", 0)))
+        is_short = pos.get("side") == "short"
+        if qty >= 1 and pnl_pct >= TAKE_PROFIT_PCT * 100:
+            if dry_run:
+                take_profits.append(f"Would take profit on {ticker} {'(short)' if is_short else ''}  full exit at +{pnl_pct:.1f}% (target +{TAKE_PROFIT_PCT*100:.1f}%)")
+            else:
+                result = alpaca_cover(ticker=ticker, cover_all=True) if is_short else alpaca_sell(ticker=ticker, sell_all=True)
+                if result.get("ok"):
+                    take_profits.append(f"Took profit on {ticker} {'(short)' if is_short else ''}  banked +{pnl_pct:.1f}% (hit target)")
+                    held_tickers.add(ticker)
+                    st.session_state[STALE_KEY].pop(ticker, None)
+    for tp in take_profits:
+        log.append(tp)
+
+    # ── 2b3. EOD wind-down  bank greens before the forced close ──
+    # Intraday closes everything at 2:45 CT regardless of price. From ~40 min
+    # out, proactively take profit on anything green so gains are locked into
+    # strength instead of dumped at whatever the close happens to be. Losers are
+    # left for the final liquidation (no point crystallizing them early).
+    if not SWING_MODE:
+        winddown_start = now_et.replace(hour=15, minute=5, second=0, microsecond=0)
+        eod_dump_time = now_et.replace(hour=15, minute=45, second=0, microsecond=0)
+        if winddown_start <= now_et < eod_dump_time:
+            for pos in positions:
+                ticker = pos["ticker"]
+                if ticker in held_tickers:
+                    continue  # already closed this run
+                pnl_pct = pos.get("unrealized_pnl_pct", 0)
+                if pnl_pct >= 0.3:  # green enough to lock in
+                    is_short = pos.get("side") == "short"
+                    if dry_run:
+                        log.append(f"EOD wind-down: would bank {ticker} at +{pnl_pct:.1f}% before the close")
+                    else:
+                        result = alpaca_cover(ticker=ticker, cover_all=True) if is_short else alpaca_sell(ticker=ticker, sell_all=True)
+                        if result.get("ok"):
+                            log.append(f"EOD wind-down: banked {ticker} at +{pnl_pct:.1f}% ahead of the forced close")
+                            held_tickers.add(ticker)
 
     # ── 2c. Trailing stop (autopilot only) ──
     # Once a long is up enough, ratchet its stop UP to lock in gains: track each
