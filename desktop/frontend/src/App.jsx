@@ -21,11 +21,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.9.3'
+const VERSION = '4.9.4'
 const VERSION_DATE = 'August 3, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.9.4', d: 'August 12, 2026', changes: [
+    'Better answers about who reports earnings today: Paula now knows the exact day of week and searches the real date, so “what reports tonight?” pulls today’s calendar instead of guessing.',
+  ]},
   { v: '4.9.3', d: 'August 6, 2026', changes: [
     'More active autopilot exits for the same-day book: a full take-profit that banks the runner at target (not just half), quicker exits from dead/mildly-losing positions, and an end-of-day wind-down that locks in green positions before the forced close instead of dumping everything at 2:45.',
   ]},

@@ -1034,7 +1034,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v4.9.3",  # bump marker  confirms running code
+        "build": "v4.9.4",  # bump marker  confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -2624,7 +2624,14 @@ async def chat(msg: ChatMessage, authorization: str = Header(None)):
                 # Fire a web search whenever the user explicitly asks to look it up,
                 # OR for a current-info question with no ticker attached.
                 if _wants_search or (not _cur and _is_news):
-                    _ws = engine.web_search(user_msg, max_results=5)
+                    _sq = user_msg
+                    # Earnings-calendar questions ("who reports today/tonight")
+                    # search the actual date so results are date-specific, instead
+                    # of the model guessing which reporters are 'today'.
+                    if "earnings" in _fl and any(w in _fl for w in ["today", "tonight", "this week", "reporting", "calendar", "after hours", "afterhours", "after-hours", "tomorrow"]):
+                        _dstr = datetime.now(ZoneInfo("US/Eastern")).strftime("%B %d %Y")
+                        _sq = f"stocks reporting earnings {_dstr} calendar"
+                    _ws = engine.web_search(_sq, max_results=6)
                     if _ws:
                         _wl = "\n".join(_fmt_web_result(w) for w in _ws)
                         _fmsg = _fmsg + f"\n\n[LIVE WEB SEARCH  use this current info. When citing, use the publisher NAME as a markdown link only if a real http(s) URL is given after 'source:'; if only a domain is given, name the publisher in plain text. NEVER output /goto, /url redirect links or opaque tokens as URLs:\n{_wl}\n]"

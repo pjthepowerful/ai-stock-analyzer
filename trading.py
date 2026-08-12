@@ -7308,7 +7308,7 @@ def ai_response(user_msg: str, stock_data: dict | None, history: list, market: s
     if not key:
         return "Set `GROQ_API_KEY` in Streamlit secrets or environment."
 
-    system = f"""You're Paula  a sharp, knowledgeable trading assistant who genuinely enjoys helping people understand the market. You're approachable and warm, but you know your stuff. Think of yourself as a really smart friend who happens to be great at trading. Today is {datetime.now(ZoneInfo("US/Eastern")).strftime("%Y-%m-%d")}. Market: {market}. {_market_status_line()}
+    system = f"""You're Paula  a sharp, knowledgeable trading assistant who genuinely enjoys helping people understand the market. You're approachable and warm, but you know your stuff. Think of yourself as a really smart friend who happens to be great at trading. Today is {datetime.now(ZoneInfo("US/Eastern")).strftime("%A, %B %d, %Y")}. Market: {market}. {_market_status_line()}
 
 Be aware of the market status above and reflect it naturally  if the market is closed, pre-market, or after-hours, factor that in. Don't describe live intraday action when the market isn't open.
 
@@ -7464,7 +7464,7 @@ def ai_response_stream(user_msg: str, stock_data: dict | None, history: list, ma
         yield "AI not configured  set GROQ_API_KEY."
         return
 
-    system = f"""You're Paula  a sharp, knowledgeable trading assistant. Today is {datetime.now(ZoneInfo("US/Eastern")).strftime("%Y-%m-%d")}. Market: {market}. {_market_status_line()}
+    system = f"""You're Paula  a sharp, knowledgeable trading assistant. Today is {datetime.now(ZoneInfo("US/Eastern")).strftime("%A, %B %d, %Y")}. Market: {market}. {_market_status_line()}
 
 Be aware of the market status above and reflect it naturally  if the market is closed, pre-market, or after-hours, factor that in. Don't describe live intraday action when the market isn't open.
 
