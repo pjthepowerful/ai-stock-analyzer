@@ -4,6 +4,18 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 4.10.1 — August 12, 2026
+- Fixed the strategy picker rendering as unclickable text. The CSS referenced
+  four variables that don't exist in this stylesheet (`--border`, `--accent`,
+  `--warn`, `--sell`; the real names are `--brd`, `--grn`, `--amb`, `--red`), so
+  seven declarations were invalid at computed-value time — taking out the card
+  borders and the radio dots. Clicks were registering; there was just no
+  affordance to click and no visual change afterwards.
+- Selected mode now carries a filled dot, a green border and a "running" badge.
+- The picker distinguishes "still loading" from "backend unreachable" instead of
+  silently rendering an empty card, and rows are properly `disabled` (with a
+  tooltip) while autopilot is running rather than only erroring on click.
+
 ## 4.10.0 — August 12, 2026
 - Autopilot strategy modes. `STRATEGY_MODE` in `autopilot_config.json` selects
   between `core` (the original engine, unchanged), `strict` and `aggro`. The

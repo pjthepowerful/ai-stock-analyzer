@@ -21,11 +21,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.10.0'
+const VERSION = '4.10.1'
 const VERSION_DATE = 'August 12, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.10.1', d: 'August 12, 2026', changes: [
+    'Fixed the Autopilot strategy picker being impossible to use — the mode cards had no visible borders and the selection dots never rendered, so there was nothing to click and no feedback when you did. Modes now show a clear selected state with a “running” badge, and the picker says so plainly when it can’t reach the backend.',
+  ]},
   { v: '4.10.0', d: 'August 12, 2026', changes: [
     'Autopilot now has selectable strategies. Alongside the original engine (“Core”), there are two small-cap gainer modes: “Disciplined” only takes A-grade pullback retests at 0.5% risk with hard stops, and “Aggressive” trades a wider universe at 1% risk and can ladder into a pre-planned support zone. Pick one under Settings → Autopilot strategy.',
     'Both small-cap modes screen for what actually matters in that universe — time-adjusted relative volume, float and market cap bands, real traded dollar volume, recent halts, SEC dilution filings and reverse splits — and skip names where the spike looks like a financing window.',
@@ -4176,11 +4179,13 @@ function StrategyCard({ token, autopilot }) {
   const [current, setCurrent] = useState('core')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const [loadErr, setLoadErr] = useState('')
 
   useEffect(() => {
     f(API + '/api/autopilot/modes').then(r => r.json()).then(d => {
       if (d.ok) { setModes(d.modes || []); setCurrent(d.current || 'core') }
-    }).catch(() => {})
+      else setLoadErr('Backend did not return the strategy list.')
+    }).catch(() => setLoadErr('Could not reach the backend — it may still be deploying.'))
   }, [token])
 
   const pick = async (key) => {
@@ -4208,10 +4213,13 @@ function StrategyCard({ token, autopilot }) {
     <div className="strat-list">
       {modes.map(m => (
         <div key={m.key} className={'strat' + (current === m.key ? ' strat-on' : '') + (autopilot && current !== m.key ? ' strat-locked' : '')}>
-          <button className="strat-head" onClick={() => pick(m.key)} disabled={busy}>
+          <button className="strat-head" onClick={() => pick(m.key)}
+            disabled={busy || (autopilot && current !== m.key)}
+            title={autopilot && current !== m.key ? 'Stop autopilot to switch strategy' : ''}>
             <span className={'strat-dot' + (current === m.key ? ' on' : '')} />
             <span className="strat-name">{m.label}
               {m.scale_in && <span className="strat-tag">ladder</span>}
+              {current === m.key && <span className="strat-cur">running</span>}
             </span>
             <span className="strat-tag-line">{m.tagline}</span>
           </button>
@@ -4228,9 +4236,11 @@ function StrategyCard({ token, autopilot }) {
         </div>
       ))}
     </div>
-    {autopilot && <span className="s-desc strat-warn">Autopilot is running — stop it to change strategy.</span>}
-    {err && <span className="s-desc strat-err">{err}</span>}
-    <span className="s-desc strat-foot">
+    {!modes.length && !loadErr && <span className="strat-msg">Loading strategies…</span>}
+    {loadErr && <span className="strat-msg strat-err">{loadErr}</span>}
+    {autopilot && <span className="strat-msg strat-warn">Autopilot is running — stop it to change strategy.</span>}
+    {err && <span className="strat-msg strat-err">{err}</span>}
+    <span className="strat-foot">
       Both small-cap modes flatten everything before the close and never hold overnight.
       Entries are logged to <code>smallcap_ab_log.json</code> so the two can be compared on real fills.
     </span>
