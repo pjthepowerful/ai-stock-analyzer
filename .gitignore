@@ -35,3 +35,8 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Runtime state (per-day, regenerated)
+desktop/backend/smallcap_state.json
+desktop/backend/smallcap_ab_log.json
+desktop/backend/autopilot_state.json

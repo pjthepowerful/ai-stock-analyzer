@@ -136,4 +136,17 @@ from trading import (
     build_portfolio_chart,
 )
 
+# ── Autopilot strategy modes ──
+# "core" is the engine above. "strict" / "aggro" are the small-cap gainer
+# pullback system, which runs its own scan/size/exit stack.
+from smallcap_pullback import (
+    MODES as SMALLCAP_MODES,
+    get_mode as smallcap_get_mode,
+    mode_summary as smallcap_mode_summary,
+    run as run_smallcap_autopilot,
+)
+
+STRATEGY_MODES = ["core"] + list(SMALLCAP_MODES.keys())
+
 print("✅ Paula engine loaded (Streamlit-free)")
+print(f"   Strategy modes available: {', '.join(STRATEGY_MODES)}")

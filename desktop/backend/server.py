@@ -1034,7 +1034,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v4.9.4",  # bump marker  confirms running code
+        "build": "v4.10.0",  # bump marker  confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -3127,7 +3127,69 @@ async def stop_autopilot(authorization: str = Header(None)):
 async def autopilot_status():
     """Check if autopilot is running."""
     running = autopilot_task is not None and not autopilot_task.done()
-    return {"ok": True, "running": running}
+    mode = "core"
+    try:
+        mode = (engine.load_autopilot_config().get("STRATEGY_MODE") or "core").lower()
+    except Exception:
+        pass
+    return {"ok": True, "running": running, "mode": mode}
+
+
+@app.get("/api/autopilot/modes")
+async def autopilot_modes():
+    """List the selectable autopilot strategies and the currently active one."""
+    current = "core"
+    try:
+        current = (engine.load_autopilot_config().get("STRATEGY_MODE") or "core").lower()
+    except Exception:
+        pass
+    modes = [{
+        "key": "core",
+        "label": "Core",
+        "tagline": "Paula's original engine — liquid large/mid caps, 21-factor score.",
+        "risk_per_trade": None, "max_positions": None, "daily_loss_limit": None,
+        "price_band": None, "float_band": None, "rvol_min": None, "scale_in": False,
+    }]
+    try:
+        modes.extend(engine.smallcap_mode_summary())
+    except Exception:
+        pass
+    return {"ok": True, "current": current, "modes": modes}
+
+
+@app.post("/api/autopilot/mode")
+async def set_autopilot_mode(req: dict = None, authorization: str = Header(None)):
+    """Switch the autopilot strategy.
+
+    Switching while autopilot is running is refused rather than silently
+    applied: the two strategies manage positions differently, and handing an
+    open small-cap book to the core exit logic (or vice versa) is how a
+    position ends up with no owner and no stop. Stop, switch, restart.
+    """
+    user = _get_user(authorization)
+    if not _can_autopilot(user):
+        return {"ok": False, "error": "Autopilot access restricted"}
+
+    mode = str((req or {}).get("mode", "")).lower().strip()
+    valid = getattr(engine, "STRATEGY_MODES", ["core"])
+    if mode not in valid:
+        return {"ok": False, "error": f"Unknown mode {mode!r}. Valid: {', '.join(valid)}"}
+
+    if autopilot_task and not autopilot_task.done():
+        return {"ok": False, "error": "Stop autopilot before switching strategy — "
+                                      "open positions are managed by the mode that opened them."}
+
+    try:
+        cfg_path = pathlib.Path(__file__).parent / "autopilot_config.json"
+        cfg = json.loads(cfg_path.read_text()) if cfg_path.exists() else {}
+        cfg["STRATEGY_MODE"] = mode
+        cfg_path.write_text(json.dumps(cfg, indent=2))
+    except Exception as e:
+        return {"ok": False, "error": f"Could not save mode: {str(e)[:120]}"}
+
+    print(f"[autopilot] strategy mode → {mode}", flush=True)
+    await broadcast("autopilot", {"status": "mode_changed", "mode": mode})
+    return {"ok": True, "mode": mode}
 
 
 # ── Run ──

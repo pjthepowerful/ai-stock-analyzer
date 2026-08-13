@@ -18,5 +18,6 @@
   "MIDDAY_START": "11:30",
   "MIDDAY_END": "13:30",
   "last_tuned": "",
-  "tune_history": []
+  "tune_history": [],
+  "STRATEGY_MODE": "core"
 }

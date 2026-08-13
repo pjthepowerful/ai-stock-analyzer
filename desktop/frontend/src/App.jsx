@@ -21,11 +21,16 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.9.4'
-const VERSION_DATE = 'August 3, 2026'
+const VERSION = '4.10.0'
+const VERSION_DATE = 'August 12, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.10.0', d: 'August 12, 2026', changes: [
+    'Autopilot now has selectable strategies. Alongside the original engine (“Core”), there are two small-cap gainer modes: “Disciplined” only takes A-grade pullback retests at 0.5% risk with hard stops, and “Aggressive” trades a wider universe at 1% risk and can ladder into a pre-planned support zone. Pick one under Settings → Autopilot strategy.',
+    'Both small-cap modes screen for what actually matters in that universe — time-adjusted relative volume, float and market cap bands, real traded dollar volume, recent halts, SEC dilution filings and reverse splits — and skip names where the spike looks like a financing window.',
+    'Small-cap exits scale out into strength instead of dumping at once: a third at target, a third at the next target or into a climax bar, and the rest trailed. Everything flattens before the close, every day.',
+  ]},
   { v: '4.9.4', d: 'August 12, 2026', changes: [
     'Better answers about who reports earnings today: Paula now knows the exact day of week and searches the real date, so “what reports tonight?” pulls today’s calendar instead of guessing.',
   ]},
@@ -4091,6 +4096,10 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
       <button className={'login-btn s-save'+(keySaved?' s-saved':'')} onClick={saveKeys}>{keySaved?'✓ Saved':'Save connections'}</button>
     </div>:<LockedCard title="Connections" sub="Broker and data feeds" onUpgrade={()=>setView&&setView('plus')}/>)}
 
+    {/* Autopilot strategy */}
+    {isPlus?<StrategyCard token={token} autopilot={autopilot}/>
+      :<LockedCard title="Autopilot strategy" sub="Choose how the bot trades" onUpgrade={()=>setView&&setView('plus')}/>}
+
     {/* Appearance */}
     <div className="card wide"><label>Appearance</label>
       <div className="s-row"><span>Theme</span>
@@ -4154,6 +4163,77 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
       {showAdmin && <AdminPanel token={token} onClose={() => setShowAdmin(false)}/>}
       {showPlus && <PlusModal token={token} onClose={() => setShowPlus(false)} onUnlocked={() => setUser && setUser(u => ({ ...u, plus: true }))}/>}
     </div>
+  </div>)
+}
+
+// ── Autopilot strategy picker ──────────────────────────────────────────────
+// Two families of strategy live behind one bot: "core" is the original
+// large/mid-cap engine, and the small-cap gainer pullback system ships as two
+// tuned profiles. Switching is blocked while autopilot runs — the mode that
+// opened a position is the one that knows how to exit it.
+function StrategyCard({ token, autopilot }) {
+  const [modes, setModes] = useState([])
+  const [current, setCurrent] = useState('core')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    f(API + '/api/autopilot/modes').then(r => r.json()).then(d => {
+      if (d.ok) { setModes(d.modes || []); setCurrent(d.current || 'core') }
+    }).catch(() => {})
+  }, [token])
+
+  const pick = async (key) => {
+    if (key === current || busy) return
+    if (autopilot) { setErr('Stop autopilot before switching strategy.'); return }
+    setBusy(true); setErr('')
+    try {
+      const r = await f(API + '/api/autopilot/mode', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: key })
+      }).then(r => r.json())
+      if (r.ok) setCurrent(r.mode); else setErr(r.error || 'Could not switch')
+    } catch { setErr("Can't reach backend") }
+    setBusy(false)
+  }
+
+  const pct = v => v == null ? '—' : (v * 100).toFixed(v < 0.01 ? 1 : 0) + '%'
+  const mm = v => v == null ? '—' : (v / 1e6).toFixed(0) + 'M'
+
+  return (<div className="card wide"><label>Autopilot strategy</label>
+    <span className="s-desc" style={{ display: 'block', marginBottom: 10 }}>
+      Which system the bot runs. Each mode carries its own universe, entry rules,
+      sizing and exits — they don't share settings.
+    </span>
+    <div className="strat-list">
+      {modes.map(m => (
+        <div key={m.key} className={'strat' + (current === m.key ? ' strat-on' : '') + (autopilot && current !== m.key ? ' strat-locked' : '')}>
+          <button className="strat-head" onClick={() => pick(m.key)} disabled={busy}>
+            <span className={'strat-dot' + (current === m.key ? ' on' : '')} />
+            <span className="strat-name">{m.label}
+              {m.scale_in && <span className="strat-tag">ladder</span>}
+            </span>
+            <span className="strat-tag-line">{m.tagline}</span>
+          </button>
+          {m.key !== 'core' && (
+            <div className="strat-meta">
+              <span><b>{pct(m.risk_per_trade)}</b> risk/trade</span>
+              <span><b>{m.max_positions}</b> max positions</span>
+              <span><b>{pct(m.daily_loss_limit)}</b> daily stop</span>
+              <span><b>{m.rvol_min}×</b> min RVOL</span>
+              <span>${m.price_band?.[0]}–${m.price_band?.[1]}</span>
+              <span>float {mm(m.float_band?.[0])}–{mm(m.float_band?.[1])}</span>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+    {autopilot && <span className="s-desc strat-warn">Autopilot is running — stop it to change strategy.</span>}
+    {err && <span className="s-desc strat-err">{err}</span>}
+    <span className="s-desc strat-foot">
+      Both small-cap modes flatten everything before the close and never hold overnight.
+      Entries are logged to <code>smallcap_ab_log.json</code> so the two can be compared on real fills.
+    </span>
   </div>)
 }
 

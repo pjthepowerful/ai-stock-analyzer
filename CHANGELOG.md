@@ -4,6 +4,29 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 4.10.0 — August 12, 2026
+- Autopilot strategy modes. `STRATEGY_MODE` in `autopilot_config.json` selects
+  between `core` (the original engine, unchanged), `strict` and `aggro`. The
+  latter two are the small-cap gainer pullback system in `smallcap_pullback.py`,
+  which owns its own universe scan, setup detection, sizing and exits — none of
+  the core config keys apply to it.
+- `strict`: $1.50–$20, $50–500M cap, 15–75M float, time-adjusted RVOL ≥5,
+  retest-only entries at confluent levels, 0.5% R, 2 positions, −2% daily stop.
+- `aggro`: wider bands, breaks allowed, midday allowed at half size, 1% R,
+  3 positions, and the pre-planned 3-tranche scale-in ladder with a fixed final
+  stop and total risk pinned at 1R.
+- Universe filters that actually matter here: time-of-day-adjusted RVOL, float
+  and cap bands, traded/projected dollar volume, halt-frequency proxy, SEC
+  filings hazard grade (424B5/S-3/S-1, reverse splits, serial splitters) and a
+  Groq catalyst triage (real / fluff / none).
+- Exits scale out — a third at target, a third at the next target or into a
+  climax bar, runner trailed on 9EMA closes with a VWAP floor — plus a time stop
+  on dead money and a hard flatten before the close in both modes.
+- Every entry is journaled to `smallcap_ab_log.json` with its mode and whether a
+  ladder was used, so strict-vs-aggro can be settled on fills rather than vibes.
+- `POST /api/autopilot/mode` refuses to switch while autopilot is running; the
+  mode that opened a position is the one that knows how to exit it.
+
 ## 3.7.1 — June 2026
 - Fixed the AI repeating the entry price as the target (e.g. CSCO showing entry
   $121.10 / target $121.10). Valid buy setups now hand the AI one exact

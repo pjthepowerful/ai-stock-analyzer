@@ -5189,6 +5189,11 @@ def load_autopilot_config() -> dict:
         "AVOID_MIDDAY": False if SWING_MODE else True,
         "MIDDAY_START": "11:30", "MIDDAY_END": "13:30",
         "LONG_ONLY": True, "last_tuned": "", "tune_history": [],
+        # Which strategy the autopilot runs. "core" is Paula's original
+        # large-cap engine (everything below applies to it). "strict" and
+        # "aggro" hand the cycle to smallcap_pullback.py, which carries its own
+        # self-contained parameter set — the keys above do NOT apply to them.
+        "STRATEGY_MODE": "core",
     }
     try:
         params = json.loads(cfg_path.read_text()) if cfg_path.exists() else dict(defaults)
@@ -5283,8 +5288,34 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
     3. Scan universe for high-conviction setups
     4. Execute bracket orders on the best ones
     Returns a report of everything it did.
+
+    STRATEGY MODES
+    --------------
+    This function is the "core" strategy — large/mid-cap, 21-factor score,
+    bracket orders. If the config selects a small-cap mode instead, the whole
+    cycle is handed to smallcap_pullback.py, which implements the gainer
+    pullback system end to end (its own universe, setups, sizing and exits).
+    The two share only the Alpaca layer and the EOD guardian.
     """
     log = []
+
+    # ── Strategy-mode dispatch ──
+    try:
+        _mode = (load_autopilot_config().get("STRATEGY_MODE") or "core").lower()
+    except Exception:
+        _mode = "core"
+    if _mode != "core":
+        try:
+            import smallcap_pullback
+            return smallcap_pullback.run(_mode, dry_run=dry_run,
+                                         skip_market_check=skip_market_check)
+        except Exception as e:
+            # Never silently fall through to a different strategy than the one
+            # selected — trading the wrong system is worse than trading none.
+            return {"ok": False, "buys": 0, "sells": 0, "mode": _mode,
+                    "log": [f"Small-cap engine ({_mode}) failed to run: {str(e)[:200]}",
+                            "Autopilot did NOT fall back to the core strategy — "
+                            "switch modes deliberately or fix the error."]}
 
     # ── Market hours check ──
     is_open, status_msg = _market_is_open()

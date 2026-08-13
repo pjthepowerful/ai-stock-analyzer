@@ -1,0 +1,421 @@
+"""Tests for smallcap_pullback.py — the small-cap gainer pullback autopilot modes.
+
+These cover the parts of the system where a silent bug costs real money: the
+sizing caps, the ladder's total-risk identity, the retest grader's real-vs-fake
+discrimination, and the rails that are supposed to be un-overridable.
+
+No network. Everything that would touch Alpaca/Polygon/EDGAR is stubbed.
+
+Run directly:  python3 desktop/backend/tests/test_smallcap.py
+"""
+import os
+import sys
+import types
+from datetime import datetime, timedelta
+
+_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+
+# Stub trading.py before importing — smallcap_pullback resolves it lazily via
+# _t(), so a module-level stub is enough and keeps the suite offline.
+_fake = types.ModuleType("trading")
+_fake.ALPACA_BASE = "https://stub.invalid"
+_fake._alpaca_headers = lambda: {}
+_fake._market_is_open = lambda: (True, "open")
+_fake._polygon_key = lambda: None
+_fake.alpaca_account = lambda: {"equity": 50_000, "buying_power": 50_000, "daily_pnl": 0}
+_fake.alpaca_positions = lambda: []
+_fake.alpaca_close_all = lambda: {"ok": True}
+_fake.alpaca_cancel_all_orders = lambda: {"ok": True}
+_fake.alpaca_sell = lambda **k: {"ok": True}
+_fake.polygon_gainers = lambda limit=20: []
+_fake.polygon_all_snapshots = lambda: []
+_fake._news_sentiment = lambda t: {}
+_fake._update_stop_order = lambda *a, **k: {"ok": True}
+sys.modules.setdefault("trading", _fake)
+
+import smallcap_pullback as scp  # noqa: E402
+
+ET = scp.ET
+STRICT = scp.get_mode("strict")
+AGGRO = scp.get_mode("aggro")
+
+
+def _bar(minute, o, h, l, c, v, hour=10):
+    return (datetime(2026, 8, 12, hour, minute, tzinfo=ET), o, h, l, c, v)
+
+
+# ── Mode registry ──────────────────────────────────────────────────────────
+
+def test_both_modes_define_every_parameter_the_runner_reads():
+    """A missing key doesn't fail loudly — it KeyErrors mid-cycle with an open
+    position. Both modes must define the same surface."""
+    required = set(STRICT) - {"key", "label", "tagline"}
+    for k in required:
+        assert k in AGGRO, f"aggro is missing {k!r}"
+    for k in ("R_PCT", "MAX_POSITIONS", "DAILY_LOSS_LIMIT", "FLATTEN_AT",
+              "MAX_STOP_PCT", "CATASTROPHE_CAP_PCT", "ENTRY_WINDOWS", "SETUPS"):
+        assert k in STRICT and k in AGGRO
+
+
+def test_aggro_is_actually_riskier_than_strict():
+    assert AGGRO["R_PCT"] > STRICT["R_PCT"]
+    assert AGGRO["MAX_POSITIONS"] > STRICT["MAX_POSITIONS"]
+    assert AGGRO["DAILY_LOSS_LIMIT"] > STRICT["DAILY_LOSS_LIMIT"]
+    assert AGGRO["RVOL_MIN"] < STRICT["RVOL_MIN"]
+    assert AGGRO["FLOAT_MIN"] < STRICT["FLOAT_MIN"]
+    assert AGGRO["SCALE_IN"] and not STRICT["SCALE_IN"]
+
+
+def test_unknown_mode_falls_back_to_strict_not_aggro():
+    """Fail safe, not fail loose."""
+    assert scp.get_mode("nonsense")["key"] == "strict"
+    assert scp.get_mode("")["key"] == "strict"
+    assert scp.get_mode(None)["key"] == "strict"
+
+
+def test_rails_are_not_per_mode():
+    """Attempts cap, no-overnight, and the hard flatten are module constants —
+    if these ever become mode keys, a mode could disable them."""
+    assert scp.MAX_ATTEMPTS_PER_TICKER == 2
+    assert scp.NEVER_HOLD_OVERNIGHT is True
+    assert "MAX_ATTEMPTS_PER_TICKER" not in STRICT and "MAX_ATTEMPTS_PER_TICKER" not in AGGRO
+    for m in (STRICT, AGGRO):
+        h, _ = scp._hm(m["FLATTEN_AT"])
+        assert h < 16, "a mode must flatten before the close"
+        assert m["FLATTEN_AT"] <= scp.HARD_FLATTEN_LATEST
+
+
+def test_mode_summary_shape_for_the_ui():
+    rows = scp.mode_summary()
+    assert {r["key"] for r in rows} == {"strict", "aggro"}
+    for r in rows:
+        assert r["label"] and r["tagline"]
+        assert len(r["price_band"]) == 2 and len(r["float_band"]) == 2
+
+
+# ── Indicator math ─────────────────────────────────────────────────────────
+
+def test_vwap_is_volume_weighted_not_a_plain_average():
+    bars = [_bar(0, 10, 10, 10, 10, 100), _bar(1, 20, 20, 20, 20, 900)]
+    vwap = scp._vwap(bars)
+    assert abs(vwap - 19.0) < 1e-9, vwap  # heavy bar dominates
+
+
+def test_vwap_of_empty_or_zero_volume_is_none_not_a_crash():
+    assert scp._vwap([]) is None
+    assert scp._vwap([_bar(0, 5, 5, 5, 5, 0)]) is None
+
+
+def test_ema_needs_a_full_period():
+    assert scp._ema([1, 2, 3], 9) is None
+    assert scp._ema(list(range(1, 13)), 9) is not None
+
+
+def test_ema_series_aligns_with_input_length():
+    vals = list(range(1, 21))
+    s = scp._ema_series(vals, 9)
+    assert len(s) == len(vals)
+    assert s[7] is None and s[8] is not None
+
+
+def test_atr_on_flat_bars_is_the_bar_range():
+    bars = [_bar(i, 10, 10.5, 9.5, 10.0, 1000) for i in range(20)]
+    assert abs(scp._atr(bars, 14) - 1.0) < 1e-9
+
+
+def test_atr_returns_none_when_too_few_bars():
+    assert scp._atr([_bar(i, 10, 11, 9, 10, 100) for i in range(5)], 14) is None
+
+
+# ── Confluence + retest quality ────────────────────────────────────────────
+
+def test_confluent_level_needs_two_references():
+    ctx = {"vwap": 5.01, "pdh": 4.99, "pmh": 7.20}
+    hits = scp._confluence_levels(5.00, ctx)
+    assert "vwap" in hits and "pdh" in hits and "pmh" not in hits
+    assert len(hits) >= 2
+
+
+def test_isolated_level_is_not_confluent():
+    hits = scp._confluence_levels(6.37, {"vwap": 5.00, "pdh": 4.20, "pmh": 7.90})
+    assert len(hits) < 2, hits
+
+
+def test_round_number_counts_as_a_reference():
+    assert "round" in scp._confluence_levels(5.00, {})
+
+
+def _impulse_then_quiet_pullback():
+    """Pole on heavy volume, then a shallow drift on a fraction of it."""
+    bars = [_bar(i * 5, 4.0 + i * 0.1, 4.1 + i * 0.1, 3.95 + i * 0.1, 4.08 + i * 0.1, 200_000)
+            for i in range(8)]                       # impulse to ~4.78
+    bars += [_bar(40 + i * 5, 4.78 - i * 0.02, 4.80 - i * 0.02, 4.72 - i * 0.02,
+                  4.75 - i * 0.02, 60_000) for i in range(3)]
+    return bars
+
+
+def _impulse_then_distribution():
+    """Same pole, but the pullback prints MORE volume than the leg."""
+    bars = [_bar(i * 5, 4.0 + i * 0.1, 4.1 + i * 0.1, 3.95 + i * 0.1, 4.08 + i * 0.1, 200_000)
+            for i in range(8)]
+    bars += [_bar(40 + i * 5, 4.78 - i * 0.08, 4.80 - i * 0.08, 4.60 - i * 0.08,
+                  4.65 - i * 0.08, 520_000) for i in range(3)]
+    return bars
+
+
+def test_quiet_pullback_grades_higher_than_distribution():
+    """The volume signature is the single best real-vs-fake tell, so the grader
+    must separate these two by a wide margin."""
+    ctx = {"vwap": 4.50, "pdh": 4.70}
+    good = scp._retest_quality(_impulse_then_quiet_pullback(), 4.70, ctx, STRICT)
+    bad = scp._retest_quality(_impulse_then_distribution(), 4.70, ctx, STRICT)
+    assert good["vol_ratio"] < 0.5, good
+    assert bad["vol_ratio"] > 1.0, bad
+    assert good["grade"] > bad["grade"] + 20, (good["grade"], bad["grade"])
+
+
+def test_distribution_pullback_fails_the_strict_grade_bar():
+    ctx = {"vwap": 4.50, "pdh": 4.70}
+    bad = scp._retest_quality(_impulse_then_distribution(), 4.70, ctx, STRICT)
+    assert bad["grade"] < STRICT["MIN_SETUP_GRADE"]
+    assert any("distribution" in n.lower() for n in bad["notes"]), bad["notes"]
+
+
+def test_retest_quality_degrades_gracefully_on_short_history():
+    g = scp._retest_quality([_bar(0, 1, 1, 1, 1, 10)], 1.0, {}, STRICT)
+    assert g["grade"] == 0
+
+
+def test_failed_test_fires_on_expanding_volume_and_lower_highs():
+    """The level breaking on rising volume with lower highs stacking beneath it
+    is the exact bar an averaging-down rule would buy. It must be detectable."""
+    bars = [_bar(i * 5, 5.0, 5.05, 4.95, 5.0, 100_000) for i in range(4)]
+    bars += [_bar(20 + i * 5, 4.9 - i * 0.05, 4.95 - i * 0.06, 4.70 - i * 0.05,
+                  4.75 - i * 0.05, 400_000) for i in range(4)]
+    assert scp._failed_test(bars, 5.00) is True
+
+
+def test_failed_test_does_not_fire_on_a_healthy_hold():
+    bars = _impulse_then_quiet_pullback()
+    assert scp._failed_test(bars, 4.70) is False
+
+
+# ── Sizing (Section 3) ─────────────────────────────────────────────────────
+
+def test_base_size_is_fixed_fractional():
+    r = scp.size_position(50_000, 5.00, 4.75, STRICT, "T", adv=50e6, med1=5e6)
+    # 0.5% of 50k = $250 risk / $0.25 per share = 1000 shares
+    assert r["caps"]["base"] == 1000
+    assert r["qty"] == 1000 and r["binding_cap"] == "base"
+
+
+def test_wide_stop_is_passed_on_not_widened():
+    r = scp.size_position(50_000, 5.00, 4.00, STRICT, "T")
+    assert r["qty"] == 0
+    assert "wider than" in r["reason"]
+
+
+def test_catastrophe_cap_binds_independently_of_stop_math():
+    """A very tight stop implies a huge share count. Notional must still be
+    capped, because stops are a fiction through halts and gaps."""
+    r = scp.size_position(50_000, 5.00, 4.99, STRICT, "T", adv=500e6, med1=50e6)
+    assert r["binding_cap"] == "catastrophe"
+    assert r["qty"] * 5.00 <= 50_000 * STRICT["CATASTROPHE_CAP_PCT"] + 5
+
+
+def test_liquidity_caps_bind_in_a_thin_name():
+    r = scp.size_position(50_000, 5.00, 4.75, STRICT, "T", adv=1e6, med1=10_000)
+    assert r["binding_cap"] in ("adv", "min1")
+    assert r["qty"] < 1000
+
+
+def test_aggro_sizes_larger_than_strict_on_identical_input():
+    a = scp.size_position(50_000, 5.00, 4.75, AGGRO, "T", adv=50e6, med1=5e6)
+    s = scp.size_position(50_000, 5.00, 4.75, STRICT, "T", adv=50e6, med1=5e6)
+    assert a["qty"] > s["qty"]
+
+
+def test_size_multiplier_scales_risk_down():
+    full = scp.size_position(50_000, 5.00, 4.75, STRICT, "T", adv=50e6, med1=5e6)
+    half = scp.size_position(50_000, 5.00, 4.75, STRICT, "T", adv=50e6, med1=5e6,
+                             size_mult=0.5)
+    assert half["qty"] == full["qty"] // 2
+
+
+def test_inverted_stop_is_rejected():
+    assert scp.size_position(50_000, 5.00, 5.50, STRICT, "T")["qty"] == 0
+
+
+# ── The ladder (Section 4.4) ───────────────────────────────────────────────
+
+def test_strict_mode_refuses_to_build_a_ladder():
+    assert scp.plan_ladder(5.00, 4.75, {"vwap": 4.80, "pdh": 4.60}, 50_000, STRICT) is None
+
+
+def test_ladder_total_risk_equals_one_R():
+    """The identity that makes this a scale-in rather than a martingale: full
+    size at the average price down to the final stop is the same 1R any single
+    trade gets."""
+    lad = scp.plan_ladder(5.00, 4.75, {"vwap": 4.80, "pdh": 4.60}, 50_000, AGGRO,
+                          adv=100e6, med1=5e6)
+    assert lad is not None
+    risk = (lad["avg_price_if_full"] - lad["final_stop"]) * lad["total_qty"]
+    one_r = 50_000 * AGGRO["R_PCT"]
+    assert abs(risk - one_r) / one_r < 0.05, (risk, one_r)
+
+
+def test_ladder_levels_are_pre_existing_chart_levels():
+    lad = scp.plan_ladder(5.00, 4.75, {"vwap": 4.80, "pdh": 4.60}, 50_000, AGGRO,
+                          adv=100e6, med1=5e6)
+    names = [t["level_name"] for t in lad["tranches"]]
+    assert set(names) <= set(AGGRO["LADDER_LEVELS"])
+    prices = [t["price"] for t in lad["tranches"]]
+    assert prices == sorted(prices, reverse=True), "tranches must descend"
+
+
+def test_ladder_final_stop_sits_below_every_tranche():
+    lad = scp.plan_ladder(5.00, 4.75, {"vwap": 4.80, "pdh": 4.60}, 50_000, AGGRO,
+                          adv=100e6, med1=5e6)
+    assert lad["final_stop"] < min(t["price"] for t in lad["tranches"])
+
+
+def test_ladder_shrinks_under_a_liquidity_cap_rather_than_moving_the_stop():
+    """When the caps bite, tranche sizes fall. The stop does not move."""
+    wide = scp.plan_ladder(5.00, 4.75, {"vwap": 4.80, "pdh": 4.60}, 50_000, AGGRO,
+                           adv=100e6, med1=5e6)
+    thin = scp.plan_ladder(5.00, 4.75, {"vwap": 4.80, "pdh": 4.60}, 50_000, AGGRO,
+                           adv=3e6, med1=40_000)
+    assert thin is None or thin["total_qty"] < wide["total_qty"]
+    if thin:
+        assert abs(thin["final_stop"] - wide["final_stop"]) < 1e-9
+
+
+def test_ladder_needs_at_least_two_real_levels():
+    """No VWAP and no PDH means there is nothing to ladder into — inventing
+    levels mid-trade is the failure mode this whole section exists to prevent."""
+    assert scp.plan_ladder(5.00, 4.75, {}, 50_000, AGGRO, adv=100e6, med1=5e6) is None
+
+
+def test_ladder_rejects_levels_above_the_entry():
+    """A 'support' level above where you bought is not support."""
+    lad = scp.plan_ladder(5.00, 4.75, {"vwap": 5.40, "pdh": 5.60}, 50_000, AGGRO,
+                          adv=100e6, med1=5e6)
+    assert lad is None
+
+
+def test_ladder_carries_its_time_stop():
+    lad = scp.plan_ladder(5.00, 4.75, {"vwap": 4.80, "pdh": 4.60}, 50_000, AGGRO,
+                          adv=100e6, med1=5e6)
+    assert 60 <= lad["time_stop_min"] <= 90
+
+
+# ── Time-of-day gating ─────────────────────────────────────────────────────
+
+def test_strict_avoids_the_open_and_midday():
+    w = STRICT["ENTRY_WINDOWS"]
+    assert not scp._in_window(datetime(2026, 8, 12, 9, 35, tzinfo=ET), w)
+    assert scp._in_window(datetime(2026, 8, 12, 10, 15, tzinfo=ET), w)
+    assert not scp._in_window(datetime(2026, 8, 12, 12, 15, tzinfo=ET), w)
+    assert scp._in_window(datetime(2026, 8, 12, 14, 0, tzinfo=ET), w)
+
+
+def test_aggro_trades_midday_strict_does_not():
+    noon = datetime(2026, 8, 12, 12, 15, tzinfo=ET)
+    assert scp._in_window(noon, AGGRO["ENTRY_WINDOWS"])
+    assert not scp._in_window(noon, STRICT["ENTRY_WINDOWS"])
+
+
+def test_no_mode_opens_new_trades_into_the_close():
+    late = datetime(2026, 8, 12, 15, 40, tzinfo=ET)
+    for m in (STRICT, AGGRO):
+        assert not scp._in_window(late, m["ENTRY_WINDOWS"])
+
+
+# ── Daily state ────────────────────────────────────────────────────────────
+
+def test_state_resets_on_a_new_day():
+    scp.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    stale = {"date": (datetime.now(ET) - timedelta(days=1)).strftime("%Y-%m-%d"),
+             "attempts": {"AAAA": 2}, "positions": {}, "stopped_out": [],
+             "rescued": [], "halted_for_day": True}
+    import json
+    scp.STATE_FILE.write_text(json.dumps(stale))
+    st = scp._load_state()
+    assert st["attempts"] == {}
+    assert st["halted_for_day"] is False
+    scp.STATE_FILE.unlink(missing_ok=True)
+
+
+def test_corrupt_state_file_does_not_crash_the_cycle():
+    scp.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    scp.STATE_FILE.write_text("{ not json")
+    st = scp._load_state()
+    assert st["attempts"] == {} and "date" in st
+    scp.STATE_FILE.unlink(missing_ok=True)
+
+
+# ── Runner gating (offline, stubbed account) ───────────────────────────────
+
+def _run_with_pnl(mode_key, daily_pnl):
+    scp.STATE_FILE.unlink(missing_ok=True)
+    _fake.alpaca_account = lambda: {"equity": 50_000, "buying_power": 50_000,
+                                    "daily_pnl": daily_pnl}
+    out = scp.run(mode_key, skip_market_check=True)
+    scp.STATE_FILE.unlink(missing_ok=True)
+    return out
+
+
+def test_daily_loss_limit_halts_the_day():
+    out = _run_with_pnl("strict", -1200)      # -2.4% vs a 2% limit
+    assert out.get("halted") is True
+    assert any("Daily loss limit" in l for l in out["log"])
+
+
+def test_aggro_tolerates_a_loss_that_stops_strict():
+    """Same drawdown, different modes — this is the difference showing up."""
+    strict_out = _run_with_pnl("strict", -1200)
+    aggro_out = _run_with_pnl("aggro", -1200)   # -2.4% vs a 3% limit
+    assert strict_out.get("halted") is True
+    assert aggro_out.get("halted") is not True
+
+
+def test_runner_always_reports_its_mode():
+    for k in ("strict", "aggro"):
+        out = _run_with_pnl(k, 0)
+        assert out["mode"] == k
+        assert out["log"] and "Mode:" in out["log"][0]
+
+
+def test_runner_survives_a_dead_account_connection():
+    scp.STATE_FILE.unlink(missing_ok=True)
+    _fake.alpaca_account = lambda: None
+    out = scp.run("strict", skip_market_check=True)
+    assert out["ok"] is False
+    _fake.alpaca_account = lambda: {"equity": 50_000, "buying_power": 50_000, "daily_pnl": 0}
+
+
+# ── Runner ─────────────────────────────────────────────────────────────────
+
+def main():
+    tests = [(n, o) for n, o in sorted(globals().items())
+             if n.startswith("test_") and callable(o)]
+    print("small-cap pullback tests")
+    failed = 0
+    for name, fn in tests:
+        try:
+            fn()
+            print(f"  PASS  {name}")
+        except AssertionError as e:
+            failed += 1
+            print(f"  FAIL  {name}: {e}")
+        except Exception as e:
+            failed += 1
+            print(f"  ERROR {name}: {type(e).__name__}: {e}")
+    print(f"\n{len(tests) - failed}/{len(tests)} passed")
+    sys.exit(1 if failed else 0)
+
+
+if __name__ == "__main__":
+    main()
