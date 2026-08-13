@@ -40,3 +40,5 @@ Thumbs.db
 desktop/backend/smallcap_state.json
 desktop/backend/smallcap_ab_log.json
 desktop/backend/autopilot_state.json
+autopilot_config.json
+desktop/backend/autopilot_config.json
