@@ -1034,7 +1034,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v4.10.1",  # bump marker  confirms running code
+        "build": "v4.10.2",  # bump marker  confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1049,7 +1049,7 @@ async def performance(period: str = "1M"):
     import requests as req
 
     log_path = pathlib.Path(__file__).parent / "trade_log.json"
-    config_path = pathlib.Path(__file__).parent / "autopilot_config.json"
+    config_path = engine.autopilot_cfg_path()
 
     trades = []
     if log_path.exists():
@@ -1417,7 +1417,7 @@ async def copilot_scan(body: dict = None, authorization: str = Header(None)):
         # subtracts positions the user already holds to get "slots left".
         max_positions = getattr(engine, "SWING_MAX_POSITIONS", 4)
         try:
-            cfg_path = pathlib.Path(__file__).parent / "autopilot_config.json"
+            cfg_path = engine.autopilot_cfg_path()
             if cfg_path.exists():
                 max_positions = int(json.loads(cfg_path.read_text()).get("MAX_POSITIONS", max_positions))
         except Exception:
@@ -1569,7 +1569,7 @@ async def run_backtest_endpoint(body: dict = None, authorization: str = Header(N
     try:
         # Load current auto-tuner params
         config = {}
-        config_path = pathlib.Path(__file__).parent / "autopilot_config.json"
+        config_path = engine.autopilot_cfg_path()
         if config_path.exists():
             config = json.loads(config_path.read_text())
 
@@ -1690,7 +1690,7 @@ async def save_profile(request: Request):
     """Save trader profile  updates autopilot config."""
     try:
         body = await request.json()
-        config_path = pathlib.Path(__file__).parent / "autopilot_config.json"
+        config_path = engine.autopilot_cfg_path()
         config = {}
         if config_path.exists():
             config = json.loads(config_path.read_text())
@@ -1730,7 +1730,7 @@ async def save_profile(request: Request):
 def get_profile():
     """Get current trader profile from config."""
     try:
-        config_path = pathlib.Path(__file__).parent / "autopilot_config.json"
+        config_path = engine.autopilot_cfg_path()
         if not config_path.exists():
             return {"ok": True, "profile": {"tradingStyle": "Day", "marketBias": "Bull", "riskPct": "1.0%"}}
         config = json.loads(config_path.read_text())
@@ -3180,10 +3180,12 @@ async def set_autopilot_mode(req: dict = None, authorization: str = Header(None)
                                       "open positions are managed by the mode that opened them."}
 
     try:
-        cfg_path = pathlib.Path(__file__).parent / "autopilot_config.json"
-        cfg = json.loads(cfg_path.read_text()) if cfg_path.exists() else {}
-        cfg["STRATEGY_MODE"] = mode
-        cfg_path.write_text(json.dumps(cfg, indent=2))
+        engine.save_autopilot_config({"STRATEGY_MODE": mode})
+        # Read back through the engine's own loader: if this doesn't echo the
+        # new mode, the write didn't reach the file the autopilot reads.
+        confirmed = (engine.load_autopilot_config().get("STRATEGY_MODE") or "").lower()
+        if confirmed != mode:
+            return {"ok": False, "error": f"Mode did not persist (engine still reports {confirmed!r})."}
     except Exception as e:
         return {"ok": False, "error": f"Could not save mode: {str(e)[:120]}"}
 

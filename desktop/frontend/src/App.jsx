@@ -21,11 +21,16 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.10.1'
+const VERSION = '4.10.2'
 const VERSION_DATE = 'August 12, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.10.2', d: 'August 13, 2026', changes: [
+    'Fixed autopilot settings not actually reaching the bot. The API saved changes to a different file than the trading engine reads, so strategy mode, trader profile and auto-tuner results were all being written somewhere nothing looked at. Both now use one file.',
+    'Autopilot settings now live on the persistent volume when one is mounted, so they survive a redeploy instead of resetting to defaults on every push.',
+    'Switching strategy now verifies the change actually landed and reports an error if it did not, rather than reporting success either way.',
+  ]},
   { v: '4.10.1', d: 'August 12, 2026', changes: [
     'Fixed the Autopilot strategy picker being impossible to use — the mode cards had no visible borders and the selection dots never rendered, so there was nothing to click and no feedback when you did. Modes now show a clear selected state with a “running” badge, and the picker says so plainly when it can’t reach the backend.',
   ]},

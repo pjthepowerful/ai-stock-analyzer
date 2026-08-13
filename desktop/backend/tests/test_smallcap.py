@@ -9,6 +9,8 @@ No network. Everything that would touch Alpaca/Polygon/EDGAR is stubbed.
 Run directly:  python3 desktop/backend/tests/test_smallcap.py
 """
 import os
+import pathlib
+import re
 import sys
 import types
 from datetime import datetime, timedelta
@@ -394,6 +396,61 @@ def test_runner_survives_a_dead_account_connection():
     out = scp.run("strict", skip_market_check=True)
     assert out["ok"] is False
     _fake.alpaca_account = lambda: {"equity": 50_000, "buying_power": 50_000, "daily_pnl": 0}
+
+
+# ── Config plumbing ────────────────────────────────────────────────────────
+# These need the REAL trading module, but this file stubs `trading` in
+# sys.modules so the strategy tests stay offline. Run them in a subprocess.
+
+def _in_subprocess(body: str, env_extra=None):
+    import subprocess, os
+    env = dict(os.environ)
+    env["PYTHONPATH"] = _ROOT
+    env.update(env_extra or {})
+    r = subprocess.run([sys.executable, "-c", body], capture_output=True,
+                       text=True, timeout=300, env=env,
+                       cwd=os.path.join(_ROOT, "desktop", "backend"))
+    assert r.returncode == 0, (r.stdout + r.stderr)[-600:]
+    return r.stdout.strip().splitlines()[-1].strip()
+
+
+def test_mode_write_is_read_back_by_the_engine():
+    """The bug this guards: server.py resolved autopilot_config.json relative to
+    itself while trading.py resolved it relative to the repo root, so every mode
+    switch was written to a file the autopilot never read."""
+    out = _in_subprocess("""
+import engine as trading
+before = trading.load_autopilot_config().get("STRATEGY_MODE")
+try:
+    trading.save_autopilot_config({"STRATEGY_MODE": "aggro"})
+    assert trading.load_autopilot_config().get("STRATEGY_MODE") == "aggro"
+    trading.save_autopilot_config({"STRATEGY_MODE": "strict"})
+    assert trading.load_autopilot_config().get("STRATEGY_MODE") == "strict"
+    print("ROUNDTRIP_OK")
+finally:
+    trading.save_autopilot_config({"STRATEGY_MODE": before or "core"})
+""")
+    assert "ROUNDTRIP_OK" in out
+
+
+def test_no_server_site_bypasses_the_shared_config_path():
+    src = (pathlib.Path(_ROOT) / "desktop" / "backend" / "server.py").read_text()
+    stray = re.findall(r'pathlib\.Path\(__file__\)\.parent / "autopilot_config\.json"', src)
+    assert not stray, f"{len(stray)} server.py site(s) still bypass engine.autopilot_cfg_path()"
+
+
+def test_config_follows_the_persistent_volume_when_one_is_mounted():
+    """On Railway the container filesystem is wiped every deploy — a mode saved
+    outside DB_DIR silently reverts to the git contents on the next push."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        out = _in_subprocess(
+            "import engine; print(engine.autopilot_cfg_path())",
+            {"DB_DIR": d})
+        assert out.startswith(d), out
+    out = _in_subprocess("import engine; print(engine.autopilot_cfg_path())",
+                         {"DB_DIR": ""})
+    assert out.endswith("autopilot_config.json") and "/tmp/" not in out
 
 
 # ── Runner ─────────────────────────────────────────────────────────────────

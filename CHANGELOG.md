@@ -4,6 +4,23 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 4.10.2 — August 13, 2026
+- **Autopilot config writes never reached the engine.** `server.py` resolved
+  `autopilot_config.json` relative to itself (`desktop/backend/`) while
+  `trading.py` resolved it relative to the repo root. Six call sites — the
+  strategy-mode switch, `save_profile`, the auto-tuner, and the scan slot count
+  — read and wrote a file the autopilot never opened. Every one now goes through
+  `engine.autopilot_cfg_path()`. This predates 4.10.0; the mode switch inherited
+  it.
+- Config now resolves to `$DB_DIR` when a persistent volume is mounted, with a
+  one-time migration from either legacy location. Previously any saved setting
+  reverted to the git contents on the next Railway deploy.
+- `POST /api/autopilot/mode` reads the value back through the engine's own
+  loader and returns an error if it didn't persist, instead of reporting
+  success regardless.
+- Three regression tests, including a static check that no `server.py` site
+  bypasses the shared path again.
+
 ## 4.10.1 — August 12, 2026
 - Fixed the strategy picker rendering as unclickable text. The CSS referenced
   four variables that don't exist in this stylesheet (`--border`, `--accent`,

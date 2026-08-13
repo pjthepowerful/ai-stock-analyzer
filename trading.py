@@ -5166,12 +5166,62 @@ def _check_sector_correlation(ticker: str, positions: list, max_per_sector: int 
     return sector_count >= max_per_sector
 
 
+def autopilot_cfg_path():
+    """The ONE file the autopilot config lives in.
+
+    Two bugs used to live here. First, server.py resolved this path relative to
+    itself (desktop/backend/) while this module resolves it relative to the repo
+    root — so every config write from the API landed in a file the engine never
+    read. Anything saved through the UI silently had no effect. Second, on
+    Railway the container filesystem is wiped on each deploy, so even a correct
+    write reverted to the git contents on the next push.
+
+    Both are fixed by resolving once, here, preferring the persistent volume
+    (DB_DIR) when one is mounted, and migrating any existing file into it.
+    """
+    import pathlib as _pl, os as _os
+    local = _pl.Path(__file__).parent / "autopilot_config.json"
+    base = _os.environ.get("DB_DIR")
+    if not base:
+        return local
+    try:
+        target = _pl.Path(base) / "autopilot_config.json"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if not target.exists():
+            # One-time migration, newest-intent first: the root copy the engine
+            # read, then the desktop/backend copy the API had been writing to.
+            for src in (local, _pl.Path(__file__).parent / "desktop" / "backend" / "autopilot_config.json"):
+                if src.exists():
+                    target.write_text(src.read_text())
+                    break
+        return target
+    except Exception:
+        return local
+
+
+def save_autopilot_config(updates: dict) -> dict:
+    """Merge `updates` into the autopilot config and persist it.
+
+    Always writes through autopilot_cfg_path(), so a caller cannot accidentally
+    save to a file nothing reads. Returns the config as it now sits on disk.
+    """
+    import pathlib as _pl
+    cfg_path = autopilot_cfg_path()
+    try:
+        current = json.loads(cfg_path.read_text()) if cfg_path.exists() else {}
+    except Exception:
+        current = {}
+    current.update(updates or {})
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)
+    cfg_path.write_text(json.dumps(current, indent=2))
+    return current
+
+
 def load_autopilot_config() -> dict:
     """Load autopilot config from disk, apply the SWING override, and persist.
     Single source of truth used by both the autopilot loop and the dashboard so
     the displayed config can never drift back to stale day-trade values."""
-    import pathlib as _pl
-    cfg_path = _pl.Path(__file__).parent / "autopilot_config.json"
+    cfg_path = autopilot_cfg_path()
     defaults = {
         "MAX_POSITIONS": SWING_MAX_POSITIONS if SWING_MODE else 1,
         "RISK_PER_TRADE": 0.01, "MAX_POS_PCT": 0.10, "MIN_SCORE": 82,
