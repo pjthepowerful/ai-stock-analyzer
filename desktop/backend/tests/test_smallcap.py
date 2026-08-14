@@ -398,6 +398,63 @@ def test_runner_survives_a_dead_account_connection():
     _fake.alpaca_account = lambda: {"equity": 50_000, "buying_power": 50_000, "daily_pnl": 0}
 
 
+# ── Cross-strategy safety ──────────────────────────────────────────────────
+
+def _flatten_time_run(state_positions):
+    """Drive manage_positions at flatten time and record what got sold."""
+    sold = []
+    _fake.alpaca_positions = lambda: [
+        {"ticker": "AAPL", "qty": 10, "current_price": 220.0, "avg_entry": 210.0,
+         "unrealized_pnl_pct": 4.8},
+        {"ticker": "ABCD", "qty": 100, "current_price": 5.10, "avg_entry": 5.00,
+         "unrealized_pnl_pct": 2.0},
+    ]
+    _fake.alpaca_sell = lambda **k: (sold.append(k.get("ticker")), {"ok": True})[1]
+    state = {"date": "x", "attempts": {}, "positions": dict(state_positions),
+             "stopped_out": [], "rescued": [], "halted_for_day": False}
+    log = []
+    real_now = scp._now_et
+    scp._now_et = lambda: datetime(2026, 8, 14, 15, 50, tzinfo=ET)  # past FLATTEN_AT
+    try:
+        scp.manage_positions(STRICT, state, log)
+    finally:
+        scp._now_et = real_now
+        _fake.alpaca_positions = lambda: []
+        _fake.alpaca_sell = lambda **k: {"ok": True}
+    return sold, log
+
+
+def test_flatten_does_not_liquidate_another_strategys_positions():
+    """Switching to a small-cap mode while Core holds swing positions must not
+    dump Core's book at 15:45. This is the trap: the rail is absolute for
+    positions this engine opened, and silent overreach for ones it didn't."""
+    sold, log = _flatten_time_run({
+        "ABCD": {"entry": 5.00, "initial_stop": 4.75, "qty": 100,
+                 "opened_at": datetime(2026, 8, 14, 10, 0, tzinfo=ET).isoformat(),
+                 "mode": "strict", "scaled1": False, "scaled2": False, "ladder": None},
+    })
+    assert "ABCD" in sold, "its own position must still be flattened"
+    assert "AAPL" not in sold, "another strategy's position must be left alone"
+
+
+def test_foreign_position_is_flagged_rather_than_ignored_silently():
+    _, log = _flatten_time_run({})
+    joined = " ".join(log)
+    assert "AAPL" in joined and "another strategy" in joined
+
+
+def test_flatten_rail_still_applies_to_every_position_it_opened():
+    sold, _ = _flatten_time_run({
+        "ABCD": {"entry": 5.00, "initial_stop": 4.75, "qty": 100,
+                 "opened_at": datetime(2026, 8, 14, 10, 0, tzinfo=ET).isoformat(),
+                 "mode": "strict", "scaled1": False, "scaled2": False, "ladder": None},
+        "AAPL": {"entry": 210.0, "initial_stop": 205.0, "qty": 10,
+                 "opened_at": datetime(2026, 8, 14, 10, 0, tzinfo=ET).isoformat(),
+                 "mode": "strict", "scaled1": False, "scaled2": False, "ladder": None},
+    })
+    assert set(sold) == {"ABCD", "AAPL"}
+
+
 # ── Config plumbing ────────────────────────────────────────────────────────
 # These need the REAL trading module, but this file stubs `trading` in
 # sys.modules so the strategy tests stay offline. Run them in a subprocess.

@@ -4,6 +4,16 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 4.11.1 — August 14, 2026
+- The end-of-day flatten rail in `smallcap_pullback.manage_positions` ran before
+  the ownership check, so it closed **every** open position — including ones the
+  Core engine opened and intends to hold overnight. Switching modes with a Core
+  book open would have liquidated it at 15:45 on the first afternoon, and
+  `alpaca_cancel_all_orders()` would have taken Core's brackets with it.
+- Each mode now flattens only positions recorded in its own state, and logs a
+  warning naming any foreign position it finds rather than acting on it.
+- 3 regression tests covering own / foreign / mixed books at flatten time.
+
 ## 4.11.0 — August 13, 2026
 - Class-schedule alerts (`bell_alerts.py`). Pushes a watchlist via ntfy a
   configurable number of minutes before each class period ends. Advisory only:

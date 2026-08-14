@@ -1153,6 +1153,17 @@ def manage_positions(mode: dict, state: dict, log: list) -> int:
             continue
         px = p["current_price"]
 
+        # ── Positions this engine didn't open are not its to close ─────────
+        # The flatten rail below is absolute for small-cap trades, but applying
+        # it to a book another strategy owns would silently liquidate Core's
+        # swing positions the first afternoon after a mode switch. Warn instead.
+        if not meta:
+            if mode_flatten or hard_flatten:
+                log.append(f"⚠️ **{tkr}** is held by another strategy (not opened in "
+                           f"{mode['key']} mode) — left alone. Close it yourself if you "
+                           f"don't want it overnight.")
+            continue
+
         # ── Rail: flat by the close, every day, no exceptions ──────────────
         if mode_flatten or hard_flatten:
             t.alpaca_cancel_all_orders()
@@ -1165,9 +1176,6 @@ def manage_positions(mode: dict, state: dict, log: list) -> int:
                           "pnl_pct": p.get("unrealized_pnl_pct")})
             state["positions"].pop(tkr, None)
             continue
-
-        if not meta:
-            continue  # not ours (manual position) — leave it alone
 
         entry = meta.get("entry", p["avg_entry"])
         stop0 = meta.get("initial_stop")

@@ -21,11 +21,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.11.0'
+const VERSION = '4.11.1'
 const VERSION_DATE = 'August 13, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.11.1', d: 'August 14, 2026', changes: [
+    'Fixed a small-cap mode being able to liquidate positions it did not open. Switching to Disciplined or Aggressive while the Core engine held swing positions would have closed all of them at the end-of-day flatten. Each mode now only closes what it opened, and flags anything else it finds so you can decide.',
+  ]},
   { v: '4.11.0', d: 'August 13, 2026', changes: [
     'Class-schedule alerts. Paula can now push a watchlist to your phone a couple of minutes before each period ends, so there is something waiting when you check between classes. Set it up under Settings → Class-schedule alerts.',
     'The schedule is in school time and the card shows the market-time equivalent next to each period, so it is obvious which bells land while the market is actually open. Last period ends after the close, so it is greyed out rather than silently never arriving.',
