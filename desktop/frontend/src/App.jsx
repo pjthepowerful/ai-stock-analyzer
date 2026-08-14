@@ -21,11 +21,16 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.10.2'
-const VERSION_DATE = 'August 12, 2026'
+const VERSION = '4.11.0'
+const VERSION_DATE = 'August 13, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.11.0', d: 'August 13, 2026', changes: [
+    'Class-schedule alerts. Paula can now push a watchlist to your phone a couple of minutes before each period ends, so there is something waiting when you check between classes. Set it up under Settings → Class-schedule alerts.',
+    'The schedule is in school time and the card shows the market-time equivalent next to each period, so it is obvious which bells land while the market is actually open. Last period ends after the close, so it is greyed out rather than silently never arriving.',
+    'Alerts are advisory only — they never place, size or cancel an order. Whichever strategy mode is selected is the one the alert scan uses.',
+  ]},
   { v: '4.10.2', d: 'August 13, 2026', changes: [
     'Fixed autopilot settings not actually reaching the bot. The API saved changes to a different file than the trading engine reads, so strategy mode, trader profile and auto-tuner results were all being written somewhere nothing looked at. Both now use one file.',
     'Autopilot settings now live on the persistent volume when one is mounted, so they survive a redeploy instead of resetting to defaults on every push.',
@@ -4105,6 +4110,7 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
     </div>:<LockedCard title="Connections" sub="Broker and data feeds" onUpgrade={()=>setView&&setView('plus')}/>)}
 
     {/* Autopilot strategy */}
+    {isPlus && <BellCard token={token}/>}
     {isPlus?<StrategyCard token={token} autopilot={autopilot}/>
       :<LockedCard title="Autopilot strategy" sub="Choose how the bot trades" onUpgrade={()=>setView&&setView('plus')}/>}
 
@@ -4248,6 +4254,85 @@ function StrategyCard({ token, autopilot }) {
     <span className="strat-foot">
       Both small-cap modes flatten everything before the close and never hold overnight.
       Entries are logged to <code>smallcap_ab_log.json</code> so the two can be compared on real fills.
+    </span>
+  </div>)
+}
+
+
+// ── Class-schedule alerts ──────────────────────────────────────────────────
+// Push a watchlist to the phone a couple of minutes before each period ends.
+// The schedule is in school-local time; the card shows the ET equivalent so a
+// timezone mistake is visible rather than silent.
+function BellCard({ token }) {
+  const [d, setD] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  const load = () => f(API + '/api/bell-alerts').then(r => r.json())
+    .then(r => { if (r.ok) setD(r) }).catch(() => {})
+  useEffect(() => { load() }, [token])
+
+  const save = async (patch) => {
+    setBusy(true); setMsg('')
+    try {
+      const r = await f(API + '/api/bell-alerts', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch)
+      }).then(r => r.json())
+      if (r.ok) setD(r); else setMsg(r.error || 'Could not save')
+    } catch { setMsg("Can't reach backend") }
+    setBusy(false)
+  }
+
+  const test = async () => {
+    setBusy(true); setMsg('Scanning…')
+    try {
+      const r = await f(API + '/api/bell-alerts/test', { method: 'POST' }).then(r => r.json())
+      setMsg(r.ok ? 'Sent — check your phone.' : (r.error || 'Failed'))
+    } catch { setMsg("Can't reach backend") }
+    setBusy(false)
+  }
+
+  if (!d) return null
+  const c = d.config
+
+  return (<div className="card wide"><label>Class-schedule alerts</label>
+    <span className="s-desc" style={{ display: 'block', marginBottom: 10 }}>
+      Sends a watchlist to your phone shortly before each period ends. Alerts only —
+      nothing is bought or sold.
+    </span>
+
+    <div className="bell-row">
+      <button className={'bell-tog' + (c.enabled ? ' on' : '')} disabled={busy}
+        onClick={() => save({ enabled: !c.enabled })}>
+        <span className="bell-dot" />{c.enabled ? 'On' : 'Off'}
+      </button>
+      <span className="bell-lead">Alert
+        <select value={c.lead_minutes} disabled={busy}
+          onChange={e => save({ lead_minutes: +e.target.value })}>
+          {[1, 2, 3, 5].map(n => <option key={n} value={n}>{n}</option>)}
+        </select>
+        min before the bell
+      </span>
+      <button className="bell-test" onClick={test} disabled={busy}>Send test</button>
+    </div>
+
+    {d.next && c.enabled && <span className="bell-next">
+      Next: <b>{d.next.period}</b> at {d.next.fires_local} — {d.next.fires_et} ET
+    </span>}
+    {msg && <span className="bell-msg">{msg}</span>}
+
+    <div className="bell-grid">
+      {d.will_fire.map(a => <div key={a.period} className="bell-p">
+        <b>{a.period}</b><span>{a.fires_local}</span><em>{a.fires_et} ET</em>
+      </div>)}
+      {d.never_fires.map(a => <div key={a.period} className="bell-p bell-dead">
+        <b>{a.period}</b><span>{a.fires_local}</span><em>market closed</em>
+      </div>)}
+    </div>
+    <span className="bell-foot">
+      Times are {c.timezone.split('/')[1].replace('_', ' ')} school time. Periods landing
+      outside 9:30–4:00 ET can't fire — the market is shut.
     </span>
   </div>)
 }

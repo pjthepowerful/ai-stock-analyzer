@@ -369,6 +369,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"   Could not auto-resume autopilot: {e}")
 
+    # Bell alerts survive a restart the same way, since a redeploy mid-school-day
+    # would otherwise silently stop the notifications.
+    global bell_task
+    try:
+        import bell_alerts as _ba
+        if _ba.load_config().get("enabled"):
+            bell_task = _spawn_bell_alerts()
+            print("   Bell-schedule alerts resumed")
+    except Exception as e:
+        print(f"   Could not start bell alerts: {e}")
+
     yield
     print(" Paula backend stopping...")
     eod_task.cancel()
@@ -1034,7 +1045,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v4.10.2",  # bump marker  confirms running code
+        "build": "v4.11.0",  # bump marker  confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -3192,6 +3203,141 @@ async def set_autopilot_mode(req: dict = None, authorization: str = Header(None)
     print(f"[autopilot] strategy mode → {mode}", flush=True)
     await broadcast("autopilot", {"status": "mode_changed", "mode": mode})
     return {"ok": True, "mode": mode}
+
+
+
+# ── Bell-schedule alerts ───────────────────────────────────────────────────
+# Push a watchlist to the phone a couple of minutes before each class period
+# ends. Advisory only: this path never places, sizes or cancels an order.
+
+import bell_alerts
+
+bell_task = None
+
+
+def _spawn_bell_alerts() -> asyncio.Task:
+    t = asyncio.create_task(_bell_alert_loop())
+    t.add_done_callback(_bell_watchdog)
+    return t
+
+
+def _bell_watchdog(task: asyncio.Task):
+    global bell_task
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc:
+        print(f"[bells] loop died: {exc!r} — restarting in 60s", flush=True)
+
+        async def _restart():
+            await asyncio.sleep(60)
+            global bell_task
+            if bell_alerts.load_config().get("enabled"):
+                bell_task = _spawn_bell_alerts()
+        asyncio.create_task(_restart())
+
+
+async def _run_alert_scan(period: str) -> tuple[str, str]:
+    """Run the scan the CURRENT strategy mode would run, read-only."""
+    loop = asyncio.get_event_loop()
+    cfg = bell_alerts.load_config()
+    mode = "core"
+    try:
+        mode = (engine.load_autopilot_config().get("STRATEGY_MODE") or "core").lower()
+    except Exception:
+        pass
+
+    if mode != "core":
+        import smallcap_pullback
+        res = await loop.run_in_executor(
+            _scan_executor,
+            lambda: smallcap_pullback.run(mode, candidates_only=True, skip_market_check=True))
+        return bell_alerts.format_smallcap(period, res or {}, cfg["max_picks"])
+
+    intent = {"type": "stock_ideas", "category": "all", "_original_msg": "bell alert"}
+    res = await loop.run_in_executor(_scan_executor, lambda: engine.execute(intent, is_plus=True))
+    return bell_alerts.format_core(period, (res or {}).get("picks", []), cfg["max_picks"])
+
+
+async def _bell_alert_loop():
+    """Sleep until the next bell, scan, push. Recomputed each pass so a config
+    change (or a DST shift) takes effect without a restart."""
+    while True:
+        cfg = bell_alerts.load_config()
+        if not cfg.get("enabled"):
+            await asyncio.sleep(60)
+            continue
+
+        now_et = datetime.now(ZoneInfo("US/Eastern"))
+        nxt = bell_alerts.next_alert(cfg, now_et)
+        if not nxt:
+            await asyncio.sleep(300)
+            continue
+
+        wait = (nxt["fire_et"] - now_et).total_seconds()
+        # Wake at least hourly so config edits are picked up promptly.
+        if wait > 3600:
+            await asyncio.sleep(3600)
+            continue
+        if wait > 0:
+            await asyncio.sleep(wait)
+
+        try:
+            is_open, status = engine._market_is_open()
+            if not is_open:
+                print(f"[bells] {nxt['period']}: market closed ({status}) — skipped", flush=True)
+            else:
+                title, body = await _run_alert_scan(nxt["period"])
+                await send_phone_notification(f"🔔 {title}", body, priority="default")
+                await broadcast("bells", {"period": nxt["period"], "title": title})
+                print(f"[bells] sent {nxt['period']}", flush=True)
+        except Exception as e:
+            print(f"[bells] {nxt['period']} failed: {e!r}", flush=True)
+
+        # Clear the fired slot before recomputing.
+        await asyncio.sleep(75)
+
+
+@app.get("/api/bell-alerts")
+async def get_bell_alerts():
+    cfg = bell_alerts.load_config()
+    now_et = datetime.now(ZoneInfo("US/Eastern"))
+    live, dead = bell_alerts.usable_periods(cfg, now_et)
+    nxt = bell_alerts.next_alert(cfg, now_et)
+    fmt = lambda a: {"period": a["period"], "ends_local": a["ends_local"],
+                     "fires_local": a["fire_local"], "fires_et": a["fire_et"].strftime("%H:%M")}
+    return {"ok": True, "config": cfg,
+            "running": bool(bell_task and not bell_task.done()),
+            "will_fire": [fmt(a) for a in live],
+            "never_fires": [fmt(a) for a in dead],
+            "next": fmt(nxt) if nxt else None}
+
+
+@app.post("/api/bell-alerts")
+async def set_bell_alerts(req: dict = None, authorization: str = Header(None)):
+    global bell_task
+    user = _get_user(authorization)
+    if not _can_autopilot(user):
+        return {"ok": False, "error": "Restricted"}
+    cfg = bell_alerts.save_config(req or {})
+    if cfg.get("enabled") and not (bell_task and not bell_task.done()):
+        bell_task = _spawn_bell_alerts()
+    print(f"[bells] config updated (enabled={cfg.get('enabled')})", flush=True)
+    return await get_bell_alerts()
+
+
+@app.post("/api/bell-alerts/test")
+async def test_bell_alert(authorization: str = Header(None)):
+    """Fire one alert right now, so you can confirm the phone actually buzzes."""
+    user = _get_user(authorization)
+    if not _can_autopilot(user):
+        return {"ok": False, "error": "Restricted"}
+    try:
+        title, body = await _run_alert_scan("Test")
+        await send_phone_notification(f"🔔 {title}", body, priority="default")
+        return {"ok": True, "title": title, "body": body}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
 
 
 # ── Run ──

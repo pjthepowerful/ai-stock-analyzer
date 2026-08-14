@@ -1314,8 +1314,15 @@ def _work_ladder(tkr, meta, ladder, px, mode, state, log, now) -> int:
 #  THE RUNNER
 # ═══════════════════════════════════════════════════════════════════════════
 
-def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool = False) -> dict:
-    """One full cycle of the small-cap gainer pullback autopilot."""
+def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool = False,
+        candidates_only: bool = False) -> dict:
+    """One full cycle of the small-cap gainer pullback autopilot.
+
+    candidates_only=True makes this a read-only scan: no position management, no
+    orders, no state writes, and the time-of-day and slot gates are skipped so a
+    watchlist can still be produced. It returns the graded candidates instead of
+    trading them. Alerts run through this path rather than a parallel scanner, so
+    an alert can never describe a setup the autopilot wouldn't itself take."""
     t = _t()
     mode = get_mode(mode_key)
     log = [f"**Mode: {mode['label']}** — {mode['tagline']}"]
@@ -1332,7 +1339,7 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
     equity = account["equity"]
 
     # ── Manage what's open first ───────────────────────────────────────────
-    sells = manage_positions(mode, state, log)
+    sells = 0 if candidates_only else manage_positions(mode, state, log)
 
     # ── Daily loss limit, enforced in software rather than willpower ───────
     day_pnl_pct = (account.get("daily_pnl", 0) or 0) / equity if equity else 0
@@ -1354,23 +1361,23 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
     open_slots = mode["MAX_POSITIONS"] - len(positions)
     entries_today = len(state.get("attempts", {}))
 
-    if now < _at(now, mode["OPEN_BLACKOUT_UNTIL"]) and not dry_run:
+    if now < _at(now, mode["OPEN_BLACKOUT_UNTIL"]) and not dry_run and not candidates_only:
         log.append(f"⏸ Before {mode['OPEN_BLACKOUT_UNTIL']} — widest spreads, most halts, most traps. Observing.")
         _save_state(state)
         return {"ok": True, "log": log, "buys": 0, "sells": sells, "mode": mode_key}
 
-    if not _in_window(now, mode["ENTRY_WINDOWS"]) and not dry_run:
+    if not _in_window(now, mode["ENTRY_WINDOWS"]) and not dry_run and not candidates_only:
         log.append("⏸ Outside this mode's entry windows — managing existing positions only.")
         _save_state(state)
         return {"ok": True, "log": log, "buys": 0, "sells": sells, "mode": mode_key}
 
-    if open_slots <= 0 and not dry_run:
+    if open_slots <= 0 and not dry_run and not candidates_only:
         log.append(f"Max positions ({mode['MAX_POSITIONS']}) held — these names are one trade "
                    f"wearing different tickers. No scan.")
         _save_state(state)
         return {"ok": True, "log": log, "buys": 0, "sells": sells, "mode": mode_key}
 
-    if entries_today >= mode["MAX_DAILY_ENTRIES"] and not dry_run:
+    if entries_today >= mode["MAX_DAILY_ENTRIES"] and not dry_run and not candidates_only:
         log.append(f"Daily entry cap reached ({entries_today}/{mode['MAX_DAILY_ENTRIES']}).")
         _save_state(state)
         return {"ok": True, "log": log, "buys": 0, "sells": sells, "mode": mode_key}
@@ -1441,7 +1448,7 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
     if not survivors:
         _save_state(state)
         return {"ok": True, "log": log, "buys": 0, "sells": sells, "scanned": len(ranked),
-                "mode": mode_key}
+                "mode": mode_key, "candidates": []}
 
     # ── Section 2 + 5: setups and hazards on the survivors ─────────────────
     log.append("")
@@ -1495,9 +1502,22 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
     if not candidates:
         _save_state(state)
         return {"ok": True, "log": log, "buys": 0, "sells": sells, "scanned": len(ranked),
-                "mode": mode_key}
+                "mode": mode_key, "candidates": []}
 
     candidates.sort(key=lambda c: -c["setup"]["grade"])
+
+    if candidates_only:
+        return {"ok": True, "mode": mode_key, "scanned": len(ranked), "log": log,
+                "candidates": [{
+                    "ticker": c["ticker"], "price": c["price"], "chg": c["chg"],
+                    "rvol": c["rvol"], "float": c["float"],
+                    "setup": c["setup"]["setup"], "grade": c["setup"]["grade"],
+                    "entry": c["setup"]["entry"], "stop": c["setup"]["stop"],
+                    "notes": c["setup"]["notes"][:3],
+                    "catalyst": c["catalyst"]["grade"],
+                    "hazards": c["hazard"].get("flags", []),
+                    "size_mult": round(c["size_mult"], 2),
+                } for c in candidates]}
 
     # ── Section 3 + execution ──────────────────────────────────────────────
     log.append("")

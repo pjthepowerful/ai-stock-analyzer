@@ -4,6 +4,22 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 4.11.0 — August 13, 2026
+- Class-schedule alerts (`bell_alerts.py`). Pushes a watchlist via ntfy a
+  configurable number of minutes before each class period ends. Advisory only:
+  the path never places, sizes or cancels an order.
+- Schedule is stored in school-local time (default `America/Chicago`) and
+  converted to ET for every market check. `GET /api/bell-alerts` reports each
+  period's fire time in both zones and separates periods that can fire from ones
+  that can't — 7th ends 15:15 CT = 16:15 ET, after the close, so it is surfaced
+  as dead rather than silently never arriving.
+- Alert scans respect the active `STRATEGY_MODE`. Small-cap modes route through
+  a new `smallcap_pullback.run(candidates_only=True)` read-only path that reuses
+  the live scan, so an alert can't describe a setup autopilot wouldn't take.
+- Loop auto-resumes on boot and has a restart watchdog; `POST /api/bell-alerts/test`
+  fires one immediately to confirm the phone actually buzzes.
+- 16 tests, including the school-time-vs-ET conversion and DST.
+
 ## 4.10.2 — August 13, 2026
 - **Autopilot config writes never reached the engine.** `server.py` resolved
   `autopilot_config.json` relative to itself (`desktop/backend/`) while
