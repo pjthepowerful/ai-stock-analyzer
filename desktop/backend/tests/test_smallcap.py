@@ -41,7 +41,8 @@ import smallcap_pullback as scp  # noqa: E402
 
 ET = scp.ET
 STRICT = scp.get_mode("strict")
-AGGRO = scp.get_mode("aggro")
+INTENSE = scp.get_mode("intense")
+AGGRO = INTENSE   # legacy alias: "aggro" now resolves to "intense"
 
 
 def _bar(minute, o, h, l, c, v, hour=10):
@@ -61,11 +62,142 @@ def test_both_modes_define_every_parameter_the_runner_reads():
         assert k in STRICT and k in AGGRO
 
 
-def test_aggro_is_actually_riskier_than_strict():
+def test_intense_concentrates_rather_than_diversifies():
+    """10-20% of capital in one name is the design. Guard the ceiling so a later
+    edit can't turn a concentrated mode into a leveraged one."""
+    assert INTENSE["CATASTROPHE_CAP_PCT"] <= 0.20
+    assert INTENSE["LADDER_TARGET_EQUITY_PCT"] <= INTENSE["CATASTROPHE_CAP_PCT"]
+    assert INTENSE["MAX_POSITIONS"] * INTENSE["CATASTROPHE_CAP_PCT"] <= 0.40
+
+
+def test_ladder_full_extension_respects_the_equity_target():
+    """The adds must carry the position TO the target, not start there."""
+    # Levels close together => tiny risk-per-share => the fixed-fractional size
+    # alone would be enormous. The equity target has to be what clamps it.
+    lad = scp.plan_ladder(5.00, 4.96, {"vwap": 4.98, "pdh": 4.965}, 50_000, INTENSE,
+                          adv=900e6, med1=90e6)
+    assert lad is not None
+    unclamped = (50_000 * INTENSE["R_PCT"]) / (lad["avg_price_if_full"] - lad["final_stop"])
+    assert unclamped > lad["total_qty"] * 1.2, "fixture must actually exercise the clamp"
+    full_notional = lad["total_qty"] * lad["avg_price_if_full"]
+    assert full_notional <= 50_000 * INTENSE["LADDER_TARGET_EQUITY_PCT"] * 1.05
+    first = lad["tranches"][0]
+    assert first["qty"] * first["price"] < full_notional * 0.5, "first tranche is a starter"
+
+
+def test_volatility_gate_rejects_a_name_that_gapped_then_died():
+    """Big day range from the morning gap, but flat ever since. This must be
+    caught by the ATR check specifically — the range check would pass it."""
+    bars = [(datetime(2026, 8, 17, 9, 31, tzinfo=ET), 5.0, 5.60, 4.98, 5.55, 800_000)]
+    bars += [(datetime(2026, 8, 17, 10, i, tzinfo=ET), 5.55, 5.557, 5.545, 5.55, 3_000)
+             for i in range(40)]
+    ctx = {"bars1": bars, "bars5": bars, "price": 5.55, "atr5": 0.006}
+    prof = scp.volatility_profile(ctx, INTENSE)
+    assert prof["range_pct"] > INTENSE["MIN_DAY_RANGE_PCT"], "range alone would pass it"
+    assert prof["ok"] is False
+    assert "ATR" in prof["reason"]
+
+
+def test_volatility_gate_rejects_a_name_too_wide_to_scalp():
+    # Must clear ATR and day-range first, so the spread check is what rejects it:
+    # a thin book where even quiet minutes print a wide bar.
+    bars = [(datetime(2026, 8, 17, 9, 31, tzinfo=ET), 5.0, 5.90, 4.90, 5.60, 300_000)]
+    bars += [(datetime(2026, 8, 17, 10, i, tzinfo=ET), 5.5, 5.62, 5.38, 5.5, 4_000)
+             for i in range(20)]
+    ctx = {"bars1": bars, "bars5": bars, "price": 5.5, "atr5": 0.12}
+    prof = scp.volatility_profile(ctx, INTENSE)
+    assert prof["atr_pct"] >= INTENSE["MIN_ATR_PCT"], "ATR alone would pass it"
+    assert prof["range_pct"] >= INTENSE["MIN_DAY_RANGE_PCT"], "range alone would pass it"
+    assert prof["ok"] is False and "spread" in prof["reason"]
+
+
+def test_volatility_gate_passes_a_name_that_is_actually_moving():
+    # Real tape mixes travelling minutes with quiet ones; a fixture where every
+    # bar has an identical range makes every percentile the same and tells you
+    # nothing about whether spread and movement are being separated.
+    live = []
+    for i in range(40):
+        base = 5.0 + (i % 7) * 0.12
+        wide = i % 3 == 0                      # a third of minutes are active
+        hi = base + (0.09 if wide else 0.012)
+        lo = base - (0.08 if wide else 0.010)
+        live.append((datetime(2026, 8, 17, 10, i, tzinfo=ET), base, hi, lo,
+                     base + 0.02, 140_000 if wide else 40_000))
+    ctx = {"bars1": live, "bars5": live, "price": 5.4, "atr5": 0.11}
+    assert scp.volatility_profile(ctx, INTENSE)["ok"] is True
+
+
+def test_volatility_gate_rejects_a_name_with_no_day_range():
+    """Ticks along with respectable per-bar ATR but has gone nowhere all day —
+    caught by the range check specifically, not by ATR or spread."""
+    bars = []
+    for i in range(30):
+        wide = i % 4 == 0                      # occasional active minute
+        bars.append((datetime(2026, 8, 17, 10, i, tzinfo=ET), 5.0,
+                     5.0 + (0.055 if wide else 0.008),
+                     5.0 - (0.050 if wide else 0.007), 5.0,
+                     120_000 if wide else 30_000))
+    ctx = {"bars1": bars, "bars5": bars, "price": 5.0, "atr5": 0.09}
+    prof = scp.volatility_profile(ctx, INTENSE)
+    assert prof["atr_pct"] >= INTENSE["MIN_ATR_PCT"], "ATR alone would pass it"
+    assert prof["spread_pct"] <= INTENSE["MAX_SPREAD_PCT"], "spread alone would pass it"
+    assert prof["ok"] is False and "range" in prof["reason"]
+
+
+def test_market_cap_is_a_prior_not_a_gate():
+    """A volatile name outside the sweet spot trades smaller, not never."""
+    ok_ideal, mult_ideal, _ = scp.cap_fit(100e6, INTENSE)
+    ok_off, mult_off, note = scp.cap_fit(300e6, INTENSE)
+    ok_out, _, _ = scp.cap_fit(2e9, INTENSE)
+    assert ok_ideal and mult_ideal == 1.0
+    assert ok_off and 0 < mult_off < 1.0 and "sweet spot" in note
+    assert not ok_out
+
+
+def test_unknown_cap_is_not_disqualifying():
+    ok, mult, _ = scp.cap_fit(None, INTENSE)
+    assert ok and mult == 1.0
+
+
+def test_stall_fires_when_highs_stop_coming_on_fading_volume():
+    bars = [(datetime(2026, 8, 17, 10, i * 5, tzinfo=ET), 5, 5.2 + i * 0.05,
+             4.9, 5.1 + i * 0.05, 200_000) for i in range(4)]
+    bars += [(datetime(2026, 8, 17, 10, 20 + i * 5, tzinfo=ET), 5.3, 5.32, 5.2, 5.25, 90_000)
+             for i in range(3)]
+    assert scp.momentum_stalled(bars, 3) is True
+
+
+def test_stall_does_not_fire_while_new_highs_keep_printing():
+    bars = [(datetime(2026, 8, 17, 10, i * 5, tzinfo=ET), 5, 5.2 + i * 0.08,
+             4.9, 5.15 + i * 0.08, 200_000) for i in range(8)]
+    assert scp.momentum_stalled(bars, 3) is False
+
+
+def test_atr_stop_widens_for_a_wild_name_and_respects_structure():
+    wild = scp.atr_stop(10.0, {"atr5": 0.30}, INTENSE, structural_stop=9.90)
+    calm = scp.atr_stop(10.0, {"atr5": 0.03}, INTENSE, structural_stop=9.90)
+    assert wild < calm, "a more volatile name needs a wider stop"
+    assert wild >= 10.0 * (1 - INTENSE["MAX_STOP_PCT"]), "never past the max-stop rail"
+
+
+def test_legacy_aggro_config_still_resolves():
+    """An existing autopilot_config.json saying 'aggro' must not fall back to a
+    different strategy than the one that was running."""
+    assert scp.get_mode("aggro")["key"] == "intense"
+
+
+def test_only_two_modes_are_offered():
+    assert {m["key"] for m in scp.mode_summary()} == {"strict", "intense"}
+
+
+def test_original_intense_risk_ordering():
     assert AGGRO["R_PCT"] > STRICT["R_PCT"]
-    assert AGGRO["MAX_POSITIONS"] > STRICT["MAX_POSITIONS"]
+    # Intense does NOT hold more names — it holds fewer, larger ones. Risk shows
+    # up as concentration and per-trade R, not as position count.
+    assert AGGRO["MAX_POSITIONS"] <= STRICT["MAX_POSITIONS"]
     assert AGGRO["DAILY_LOSS_LIMIT"] > STRICT["DAILY_LOSS_LIMIT"]
     assert AGGRO["RVOL_MIN"] < STRICT["RVOL_MIN"]
+    assert AGGRO["CATASTROPHE_CAP_PCT"] > STRICT["CATASTROPHE_CAP_PCT"]
     assert AGGRO["FLOAT_MIN"] < STRICT["FLOAT_MIN"]
     assert AGGRO["SCALE_IN"] and not STRICT["SCALE_IN"]
 
@@ -91,7 +223,7 @@ def test_rails_are_not_per_mode():
 
 def test_mode_summary_shape_for_the_ui():
     rows = scp.mode_summary()
-    assert {r["key"] for r in rows} == {"strict", "aggro"}
+    assert {r["key"] for r in rows} == {"strict", "intense"}
     for r in rows:
         assert r["label"] and r["tagline"]
         assert len(r["price_band"]) == 2 and len(r["float_band"]) == 2
@@ -310,7 +442,7 @@ def test_ladder_rejects_levels_above_the_entry():
 def test_ladder_carries_its_time_stop():
     lad = scp.plan_ladder(5.00, 4.75, {"vwap": 4.80, "pdh": 4.60}, 50_000, AGGRO,
                           adv=100e6, med1=5e6)
-    assert 60 <= lad["time_stop_min"] <= 90
+    assert 30 <= lad["time_stop_min"] <= 90
 
 
 # ── Time-of-day gating ─────────────────────────────────────────────────────
@@ -375,16 +507,16 @@ def test_daily_loss_limit_halts_the_day():
     assert any("Daily loss limit" in l for l in out["log"])
 
 
-def test_aggro_tolerates_a_loss_that_stops_strict():
+def test_intense_tolerates_a_loss_that_stops_strict():
     """Same drawdown, different modes — this is the difference showing up."""
     strict_out = _run_with_pnl("strict", -1200)
-    aggro_out = _run_with_pnl("aggro", -1200)   # -2.4% vs a 3% limit
+    aggro_out = _run_with_pnl("intense", -1200)   # -2.4% vs a 3% limit
     assert strict_out.get("halted") is True
     assert aggro_out.get("halted") is not True
 
 
 def test_runner_always_reports_its_mode():
-    for k in ("strict", "aggro"):
+    for k in ("strict", "intense"):
         out = _run_with_pnl(k, 0)
         assert out["mode"] == k
         assert out["log"] and "Mode:" in out["log"][0]
@@ -480,26 +612,26 @@ def _run_with_positions(mode_key, tickers, state_positions):
 def test_another_strategys_positions_do_not_consume_this_modes_slots():
     """The bug: a Core book of 4 swing names against aggro's 3-position cap left
     the small-cap engine permanently at capacity, so it never scanned all day."""
-    out = _run_with_positions("aggro", ["AAPL", "LLY", "MNST", "WSO"], {})
+    out = _run_with_positions("intense", ["AAPL", "LLY", "MNST", "WSO"], {})
     joined = " ".join(out["log"])
     assert "Max positions" not in joined, joined[-300:]
     assert "another strategy" in joined
 
 
 def test_this_modes_own_positions_still_consume_slots():
-    own = {t: {"entry": 5.0, "initial_stop": 4.8, "qty": 10, "mode": "aggro",
+    own = {t: {"entry": 5.0, "initial_stop": 4.8, "qty": 10, "mode": "intense",
                "opened_at": datetime(2026, 8, 17, 10, 30, tzinfo=ET).isoformat(),
                "scaled1": False, "scaled2": False, "ladder": None}
            for t in ("AAA", "BBB", "CCC")}
-    out = _run_with_positions("aggro", ["AAA", "BBB", "CCC"], own)
+    out = _run_with_positions("intense", ["AAA", "BBB", "CCC"], own)
     assert "Max positions" in " ".join(out["log"])
 
 
 def test_a_mixed_book_counts_only_its_own():
-    own = {"AAA": {"entry": 5.0, "initial_stop": 4.8, "qty": 10, "mode": "aggro",
+    own = {"AAA": {"entry": 5.0, "initial_stop": 4.8, "qty": 10, "mode": "intense",
                    "opened_at": datetime(2026, 8, 17, 10, 30, tzinfo=ET).isoformat(),
                    "scaled1": False, "scaled2": False, "ladder": None}}
-    out = _run_with_positions("aggro", ["AAA", "AAPL", "LLY", "WSO"], own)
+    out = _run_with_positions("intense", ["AAA", "AAPL", "LLY", "WSO"], own)
     assert "Max positions" not in " ".join(out["log"])
 
 
@@ -561,7 +693,7 @@ def test_config_follows_the_persistent_volume_when_one_is_mounted():
 def test_every_run_result_reports_a_scanned_count():
     """0 must be reported as 0. The UI renders `data.scanned || '?'`, so a
     missing key and a genuine zero both surfaced as '? stocks scanned'."""
-    for key in ("strict", "aggro"):
+    for key in ("strict", "intense"):
         out = _run_with_pnl(key, 0)
         assert "scanned" in out, f"{key} run returned no scanned count"
         assert isinstance(out["scanned"], int)

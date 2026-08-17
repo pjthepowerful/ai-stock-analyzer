@@ -132,82 +132,110 @@ _STRICT = {
     # attempts rail (see module docstring) is not overridable
 }
 
-_AGGRO = {
-    "key": "aggro",
-    "label": "Aggressive",
-    "tagline": "Wider universe, breaks allowed, 1R, pre-planned scale-in ladder.",
+_INTENSE = {
+    "key": "intense",
+    "label": "Intense",
+    "tagline": "Volatility-first. Buys the dips in a holding range, sells the stall for cents.",
 
+    # ── Universe: volatility IS the filter ─────────────────────────────────
+    # Market cap is a PROXY for how much a name moves, not a target in itself.
+    # ~$100M is the sweet spot, so it's scored rather than gated: closer to
+    # $100M scores higher, but a genuinely volatile $300M name still qualifies.
+    "MCAP_IDEAL": 100e6,
+    "MCAP_MIN": 25e6,
+    "MCAP_MAX": 600e6,
+    "MCAP_SOFT_LO": 75e6,
+    "MCAP_SOFT_HI": 125e6,
+    "OFF_IDEAL_SIZE_MULT": 0.75,     # outside the sweet spot, smaller — not banned
+
+    # The volatility gates the old modes were missing entirely.
+    "MIN_ATR_PCT": 0.012,            # 5-min ATR ≥1.2% of price
+    "MIN_DAY_RANGE_PCT": 0.08,       # high-to-low ≥8% today
+    "MAX_SPREAD_PCT": 0.015,         # wider than this and cents-scalping is a fee
     "MIN_DAY_CHANGE": 7.0,
     "PRICE_MIN": 1.00,
     "PRICE_MAX": 30.00,
-    "MCAP_MIN": 30e6,
-    "MCAP_MAX": 1.5e9,
-    "FLOAT_MIN": 5e6,                # low-float regime allowed, at quarter size
+    "FLOAT_MIN": 5e6,
     "FLOAT_MAX": 150e6,
-    "LOW_FLOAT_CUTOFF": 15e6,
-    "LOW_FLOAT_SIZE_MULT": 0.25,
     "RVOL_MIN": 3.0,
-    "RVOL_MIN_AFTERNOON": 2.0,
+    "RVOL_MIN_AFTERNOON": 2.5,
     "DOLLAR_VOL_MIN": 5e6,
     "PROJ_DOLLAR_VOL_MIN": 15e6,
     "TOP_N_GAINERS": 30,
 
+    # ── Setups: dips inside a range that is still holding ──────────────────
     "SETUPS": ["vwap_reclaim", "ema_pullback", "pdh_retest", "orb_retest",
                "hod_break", "flag"],
-    "REQUIRE_RETEST": False,         # breaks tradable on ORB/HOD
+    "REQUIRE_RETEST": False,
     "MIN_CONFLUENCE_LEVELS": 1,
     "MAX_RETEST_DEPTH": 0.66,
-    "MAX_PULLBACK_VOL_RATIO": 0.75,
+    "MAX_PULLBACK_VOL_RATIO": 0.80,
     "MAX_RECLAIM_BARS": 5,
     "REQUIRE_ABOVE_VWAP": False,
-    "MIN_SETUP_GRADE": 55,
+    "MIN_SETUP_GRADE": 50,
 
-    "ENTRY_WINDOWS": [("09:40", "15:15")],
-    "OPEN_BLACKOUT_UNTIL": "09:40",
-    "OPEN_SIZE_MULT": 0.25,          # first 15min → quarter size, not zero
+    "ENTRY_WINDOWS": [("09:35", "15:20")],
+    "OPEN_BLACKOUT_UNTIL": "09:35",
+    "OPEN_SIZE_MULT": 0.4,
     "ALLOW_MIDDAY": True,
     "MIDDAY": ("11:30", "13:30"),
-    "MIDDAY_SIZE_MULT": 0.5,
+    "MIDDAY_SIZE_MULT": 0.7,
 
+    # ── Sizing: 10–20% of capital is the FULL extended position ────────────
+    # Reached by the adds, not by the first entry. Starting at 15% and adding
+    # twice lands at ~38% of the account in one sub-$150M name; a single
+    # halt-reopen at -35% takes ~13% off the account to chase a 2% gain.
     "R_PCT": 0.01,
-    "MAX_POSITIONS": 3,
+    "MAX_POSITIONS": 2,              # fewer names, because each one is large
     "LIQ_CAP_ADV_PCT": 0.02,
     "LIQ_CAP_MIN1_PCT": 0.15,
-    "CATASTROPHE_CAP_PCT": 0.20,
+    "CATASTROPHE_CAP_PCT": 0.20,     # hard ceiling on ONE name, adds included
     "MAX_STOP_PCT": 0.10,
     "DAILY_LOSS_LIMIT": 0.03,
+    "MAX_DAILY_ENTRIES": 8,
     "WEEKLY_CIRCUIT": 0.06,
-    "MAX_DAILY_ENTRIES": 6,
+    "ATR_STOP_MULT": 1.8,            # stop = 1.8x this name's own 5-min ATR
 
-    # Section 4.4 ladder — the ONLY sanctioned form of adding to a loser.
+    # ── Adding to the position on dips ─────────────────────────────────────
     "SCALE_IN": True,
-    "LADDER_TRANCHES": [0.40, 0.30, 0.30],
-    "LADDER_LEVELS": ["trigger", "vwap", "pdh"],   # pre-defined, never invented
-    "LADDER_MAX_TOTAL_R": 1.0,       # full size @ avg price → final stop = 1R
-    "LADDER_TIME_STOP_MIN": 75,      # reclaim trigger in 60–90min or out
-    "LADDER_ONE_RESCUE_PER_TICKER": True,
+    "LADDER_TRANCHES": [0.38, 0.32, 0.30],
+    "LADDER_LEVELS": ["trigger", "vwap", "pdh"],
+    "LADDER_TARGET_EQUITY_PCT": 0.18,   # full extension ≈18% of equity
+    "LADDER_MAX_TOTAL_R": 1.0,
+    "LADDER_TIME_STOP_MIN": 45,
+    "LADDER_ONE_RESCUE_PER_TICKER": False,   # this mode's whole point is the adds
+    "LADDER_MAX_ADDS_PER_TICKER": 2,
 
     "REQUIRE_CATALYST": False,
-    "FLUFF_SIZE_MULT": 0.75,
+    "FLUFF_SIZE_MULT": 0.85,
     "HAZARD_BLOCK_424B5_DAYS": 2,
     "HAZARD_ATM_SIZE_MULT": 0.75,
     "BLOCK_REVERSE_SPLIT_MONTHS": 3,
     "BLOCK_SERIAL_SPLITTER": True,
     "MAX_HALTS_20MIN": 2,
 
-    "SCALE1_R": 1.5, "SCALE1_FRAC": 0.34,
-    "SCALE2_R": 3.0, "SCALE2_FRAC": 0.33,
+    # ── Exits: cents, taken quickly ────────────────────────────────────────
+    # You cannot sell the peak, only the moment momentum stops confirming. The
+    # stall detector is that moment: a bar that fails to make a new high while
+    # volume is already falling away.
+    "SCALE1_R": 0.5, "SCALE1_FRAC": 0.50,
+    "SCALE2_R": 1.2, "SCALE2_FRAC": 0.25,
     "BREAKEVEN_AFTER_SCALE1": True,
-    "CLIMAX_ATR_MULT": 2.5,
+    "STALL_EXIT": True,
+    "STALL_LOOKBACK": 3,
+    "CLIMAX_ATR_MULT": 2.0,
     "TRAIL_ON": "ema9_close",
     "HARD_TRAIL_FLOOR": "vwap",
-    "TIME_STOP_MIN": 75,
-    "TIME_STOP_MAX_R": 0.25,
+    "TIME_STOP_MIN": 30,
+    "TIME_STOP_MAX_R": 0.20,
     "MIDDAY_CUT_TIME": "14:00",
     "FLATTEN_AT": "15:50",
 }
 
-MODES = {"strict": _STRICT, "aggro": _AGGRO}
+MODES = {"strict": _STRICT, "intense": _INTENSE}
+# "aggro" was folded into "intense"; "core" remains a valid config value
+# for the legacy engine but is no longer offered as a strategy choice.
+LEGACY_MODE_ALIASES = {"aggro": "intense"}
 
 # Rails — identical in every mode, deliberately not configurable.
 MAX_ATTEMPTS_PER_TICKER = 2
@@ -217,7 +245,9 @@ HARD_FLATTEN_LATEST = "15:55"
 
 def get_mode(key: str) -> dict:
     """Resolve a mode key to its parameter dict. Unknown keys fall back to strict."""
-    return MODES.get((key or "strict").lower(), _STRICT)
+    k = (key or "strict").lower()
+    k = LEGACY_MODE_ALIASES.get(k, k)
+    return MODES.get(k, _STRICT)
 
 
 def mode_summary() -> list[dict]:
@@ -235,6 +265,7 @@ def mode_summary() -> list[dict]:
             "float_band": [m["FLOAT_MIN"], m["FLOAT_MAX"]],
             "rvol_min": m["RVOL_MIN"],
             "scale_in": m["SCALE_IN"],
+            "concentration": m.get("LADDER_TARGET_EQUITY_PCT") or m["CATASTROPHE_CAP_PCT"],
         })
     return out
 
@@ -700,6 +731,117 @@ def halt_count_recent(ticker: str, minutes: int = 20) -> int:
     return holes
 
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  VOLATILITY PROFILE  —  the thing the system implicitly assumed but never checked
+# ═══════════════════════════════════════════════════════════════════════════
+
+def volatility_profile(ctx: dict, mode: dict) -> dict:
+    """Is this name moving enough to be worth trading today?
+
+    Every setup here is a bet on continued movement. A name that gapped and then
+    went quiet produces textbook-looking retests that go nowhere, and no price
+    filter catches it — the chart looks identical to a live one until you're in.
+    """
+    out = {"ok": True, "atr_pct": None, "range_pct": None, "spread_pct": None,
+           "notes": [], "reason": ""}
+    b1, b5, px = ctx.get("bars1") or [], ctx.get("bars5") or [], ctx.get("price") or 0
+    if not b1 or not px:
+        out["ok"] = False
+        out["reason"] = "no intraday data"
+        return out
+
+    atr = ctx.get("atr5")
+    if atr:
+        out["atr_pct"] = round(atr / px, 4)
+    hi = max(b[2] for b in b1)
+    lo = min(b[3] for b in b1)
+    out["range_pct"] = round((hi - lo) / px, 4) if px else None
+
+    # Spread proxy: the QUIET minutes, not the median one. A real quote spread
+    # isn't on most plans. Using the median bar range conflates spread with
+    # movement — a fast name prints wide bars because it's travelling, which is
+    # the reason to trade it, not a reason to skip it. The low percentile of the
+    # last 20 bars isolates the minutes where little happened, and in those the
+    # bar range is mostly the spread.
+    recent = b1[-20:]
+    if recent:
+        ranges = sorted((b[2] - b[3]) / px for b in recent if px)
+        out["spread_pct"] = round(ranges[max(0, int(len(ranges) * 0.25) - 1)], 4)
+
+    if mode.get("MIN_ATR_PCT") and (out["atr_pct"] or 0) < mode["MIN_ATR_PCT"]:
+        out["ok"] = False
+        out["reason"] = (f"ATR {(out['atr_pct'] or 0):.1%} of price — under "
+                         f"{mode['MIN_ATR_PCT']:.1%}, not moving enough to pay for the risk")
+        return out
+    if mode.get("MIN_DAY_RANGE_PCT") and (out["range_pct"] or 0) < mode["MIN_DAY_RANGE_PCT"]:
+        out["ok"] = False
+        out["reason"] = f"day range {(out['range_pct'] or 0):.1%} — gapped then went quiet"
+        return out
+    if mode.get("MAX_SPREAD_PCT") and (out["spread_pct"] or 0) > mode["MAX_SPREAD_PCT"]:
+        out["ok"] = False
+        out["reason"] = (f"~{(out['spread_pct'] or 0):.1%} spread — a few cents of edge "
+                         f"is smaller than the round trip")
+        return out
+
+    out["notes"].append(f"ATR {(out['atr_pct'] or 0):.1%}/bar, {(out['range_pct'] or 0):.0%} day range")
+    return out
+
+
+def cap_fit(cap, mode: dict) -> tuple[bool, float, str]:
+    """Market cap as a volatility PRIOR, not a hard target.
+
+    ~$100M is where the movement tends to live, so names in the sweet spot trade
+    at full size and names outside it trade smaller rather than not at all. A
+    genuinely volatile $300M name is a better trade than a dead $100M one.
+    """
+    lo, hi = mode.get("MCAP_MIN"), mode.get("MCAP_MAX")
+    if not cap:
+        return True, 1.0, ""                    # unknown cap isn't disqualifying
+    if lo and cap < lo:
+        return False, 0.0, f"cap ${cap/1e6:.0f}M below ${lo/1e6:.0f}M floor"
+    if hi and cap > hi:
+        return False, 0.0, f"cap ${cap/1e6:.0f}M above ${hi/1e6:.0f}M ceiling"
+    slo, shi = mode.get("MCAP_SOFT_LO"), mode.get("MCAP_SOFT_HI")
+    if slo and shi and not (slo <= cap <= shi):
+        return True, mode.get("OFF_IDEAL_SIZE_MULT", 0.75), \
+            f"cap ${cap/1e6:.0f}M outside the ${slo/1e6:.0f}–{shi/1e6:.0f}M sweet spot"
+    return True, 1.0, ""
+
+
+def momentum_stalled(bars5, lookback: int = 3) -> bool:
+    """The sell signal for a cents-scalp.
+
+    You can't sell the peak — the peak is only identifiable afterwards. What is
+    identifiable live is the moment momentum stops confirming: consecutive bars
+    that fail to take out the prior high while volume is already receding. That
+    is the exit, and taking it means routinely selling before the actual top.
+    """
+    if len(bars5) < lookback + 3:
+        return False
+    recent = bars5[-lookback:]
+    prior_high = max(b[2] for b in bars5[-(lookback + 3):-lookback])
+    no_new_high = all(b[2] <= prior_high for b in recent)
+    prior_vol = sum(b[5] for b in bars5[-(lookback + 3):-lookback]) / 3
+    recent_vol = sum(b[5] for b in recent) / len(recent)
+    fading = recent_vol < prior_vol * 0.85 if prior_vol else False
+    return bool(no_new_high and fading)
+
+
+def atr_stop(entry: float, ctx: dict, mode: dict, structural_stop: float) -> float:
+    """Stop distance scaled to THIS name's volatility, floored by structure.
+
+    A flat percentage judges a 12%-ATR name and a 3%-ATR name identically, so the
+    quiet one gets stopped by noise and the wild one gets a stop that means
+    nothing. Structure still wins when it's tighter than the ATR band.
+    """
+    mult = mode.get("ATR_STOP_MULT")
+    atr = ctx.get("atr5")
+    if not mult or not atr:
+        return structural_stop
+    return max(min(structural_stop, entry - mult * atr), entry * (1 - mode["MAX_STOP_PCT"]))
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 #  SECTION 2 — SETUP DETECTION
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1064,6 +1206,15 @@ def plan_ladder(entry, stop, ctx, equity, mode, adv=None, med1=None) -> dict | N
 
     r_dollars = equity * mode["R_PCT"]
     total_qty = math.floor(r_dollars / risk_per_share_full)
+
+    # When the mode targets a concentration (10–20% of capital in one name), that
+    # is the size at FULL EXTENSION — first tranche ~7%, adds carrying it to ~18%.
+    # Starting at 15% and adding twice instead lands near 38% of the account in a
+    # single sub-$150M name, which is a bet the exits cannot rescue.
+    tgt = mode.get("LADDER_TARGET_EQUITY_PCT")
+    if tgt:
+        total_qty = min(total_qty, math.floor((equity * tgt) / avg_price))
+
     cap = math.floor((equity * mode["CATASTROPHE_CAP_PCT"]) / entry)
     if adv:
         cap = min(cap, math.floor((adv * mode["LIQ_CAP_ADV_PCT"]) / entry))
@@ -1229,8 +1380,24 @@ def manage_positions(mode: dict, state: dict, log: list) -> int:
                     log.append(f"💰 **{tkr}** — scaled {q} into strength ({why}).")
                     acted += 1
 
+        # ── Stall exit: sell when momentum stops confirming ────────────────
+        if (mode.get("STALL_EXIT") and ctx and meta.get("scaled1")
+                and not meta.get("stalled") and open_r > 0):
+            if momentum_stalled(ctx["bars5"],
+                                mode.get("STALL_LOOKBACK", 3)):
+                if sell_marketable_limit(tkr, qty, px).get("ok"):
+                    meta["stalled"] = True
+                    log.append(f"⚡ **{tkr} closed on the stall** — no new high in "
+                               f"{mode.get('STALL_LOOKBACK', 3)} bars on fading volume, "
+                               f"out at {open_r:+.2f}R. This sells before the top by design.")
+                    _journal({"event": "stall_exit", "ticker": tkr, "mode": mode["key"],
+                              "r": round(open_r, 2)})
+                    state["positions"].pop(tkr, None)
+                    acted += 1
+                    continue
+
         # ── Runner trail: 9EMA closes, hard floor at VWAP ──────────────────
-        elif meta.get("scaled2") and ctx:
+        if meta.get("scaled2") and ctx:
             ema9, vwap = ctx.get("ema9"), ctx.get("vwap")
             if ema9:
                 new_stop = max(ema9 * 0.995, vwap or 0, meta.get("stop") or 0)
@@ -1441,8 +1608,9 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
         if flt and not (mode["FLOAT_MIN"] <= flt <= mode["FLOAT_MAX"]):
             rejected.append((tkr, f"float {flt/1e6:.0f}M outside band"))
             continue
-        if cap and not (mode["MCAP_MIN"] <= cap <= mode["MCAP_MAX"]):
-            rejected.append((tkr, f"cap ${cap/1e6:.0f}M outside band"))
+        cap_ok, cap_mult, cap_note = cap_fit(cap, mode)
+        if not cap_ok:
+            rejected.append((tkr, cap_note))
             continue
 
         traded, projected = dollar_volume_today(tkr, now)
@@ -1460,7 +1628,8 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
 
         survivors.append({"ticker": tkr, "price": price, "chg": chg, "rvol": rvol,
                           "float": flt, "cap": cap, "traded": traded,
-                          "projected": projected, "halts": halts})
+                          "projected": projected, "halts": halts,
+                          "cap_mult": cap_mult, "cap_note": cap_note})
 
     log.append(f"{len(ranked)} ranked → **{len(survivors)} cleared the universe filters**")
     for tkr, why in rejected[:8]:
@@ -1478,6 +1647,10 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
         tkr = s["ticker"]
         ctx = build_context(tkr, now)
         if not ctx:
+            continue
+        vol = volatility_profile(ctx, mode)
+        if not vol["ok"]:
+            log.append(f"  ⏭ {tkr} — {vol['reason']}")
             continue
         setups = detect_setups(ctx, mode)
         if not setups:
@@ -1514,10 +1687,12 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
         if mode.get("OPEN_SIZE_MULT") and now < _at(now, "09:45"):
             size_mult *= mode["OPEN_SIZE_MULT"]
 
+        size_mult *= s.get("cap_mult", 1.0)
+        best["stop"] = round(atr_stop(best["entry"], ctx, mode, best["stop"]), 2)
         candidates.append({**s, "ctx": ctx, "setup": best, "hazard": hz,
-                           "catalyst": cat, "size_mult": size_mult})
+                           "catalyst": cat, "size_mult": size_mult, "vol": vol})
         log.append(f"  ✅ **{tkr}** {best['setup']} · grade {best['grade']} · RVOL {s['rvol']} · "
-                   f"catalyst {cat['grade']}" + (f" · ⚠ {', '.join(hz['flags'][:2])}" if hz.get("flags") else ""))
+                   f"catalyst {cat['grade']} · {vol['notes'][0] if vol['notes'] else ''}" + (f" · ⚠ {', '.join(hz['flags'][:2])}" if hz.get("flags") else ""))
 
     if not candidates:
         _save_state(state)

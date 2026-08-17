@@ -1045,7 +1045,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v4.11.3",  # bump marker  confirms running code
+        "build": "v4.12.0",  # bump marker  confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -3154,15 +3154,12 @@ async def autopilot_modes():
         current = (engine.load_autopilot_config().get("STRATEGY_MODE") or "core").lower()
     except Exception:
         pass
-    modes = [{
-        "key": "core",
-        "label": "Core",
-        "tagline": "Paula's original engine — liquid large/mid caps, 21-factor score.",
-        "risk_per_trade": None, "max_positions": None, "daily_loss_limit": None,
-        "price_band": None, "float_band": None, "rvol_min": None, "scale_in": False,
-    }]
+    # Two strategies, no middle ground. "core" stays a valid stored value so an
+    # existing config (or an open Core book) doesn't break, but it is no longer
+    # offered as a choice.
+    modes = []
     try:
-        modes.extend(engine.smallcap_mode_summary())
+        modes = engine.smallcap_mode_summary()
     except Exception:
         pass
     return {"ok": True, "current": current, "modes": modes}

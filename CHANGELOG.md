@@ -4,6 +4,29 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 4.12.0 — August 17, 2026
+- Modes reduced to two: `strict` (Disciplined) and `intense` (Intense).
+  `aggro` is aliased to `intense` so a stored config keeps working; `core`
+  remains a valid stored value but is no longer offered in the picker.
+- **Volatility is now measured, not assumed.** `volatility_profile()` gates on
+  5-min ATR as a % of price, day range, and a spread proxy taken from the *low
+  percentile* of recent bar ranges (the median conflates spread with movement —
+  a fast name prints wide bars for the right reason).
+- `atr_stop()` scales stop distance to each name's own ATR, floored by structure
+  and capped by `MAX_STOP_PCT`. A flat percentage judged a 12%-ATR name and a
+  3%-ATR name identically.
+- `cap_fit()` treats ~$100M as a volatility prior: full size in the $75–125M
+  sweet spot, 0.75x outside it, hard bounds only at $25M/$600M. Unknown cap is
+  not disqualifying.
+- `momentum_stalled()` is the cents-scalp exit: consecutive bars failing to take
+  the prior high while volume recedes. You cannot sell the peak; this sells the
+  moment momentum stops confirming, which means routinely selling before the top.
+- `LADDER_TARGET_EQUITY_PCT` makes 10–20% of capital the size at FULL extension
+  (~7% first tranche laddering to ~18%), not the starting size. Starting at 15%
+  and adding twice lands near 38% of the account in one sub-$150M name, where a
+  single halt-reopen at -35% costs ~13% of the account to chase a 2% gain.
+- 13 new tests. All five new mechanisms verified by mutation.
+
 ## 4.11.3 — August 17, 2026
 - **Small-cap modes never scanned while a foreign book was open.** `open_slots`
   was `MAX_POSITIONS - len(all account positions)`, so four Core swing positions
