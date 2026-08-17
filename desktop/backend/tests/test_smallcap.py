@@ -492,25 +492,32 @@ def test_corrupt_state_file_does_not_crash_the_cycle():
 
 # ── Runner gating (offline, stubbed account) ───────────────────────────────
 
-def _run_with_pnl(mode_key, daily_pnl):
+def _run_with_pnl(mode_key, daily_pnl, equity=250_000):
+    """Default equity is deliberately large so the PDT floor stays out of the
+    way of tests that aren't about it."""
     scp.STATE_FILE.unlink(missing_ok=True)
-    _fake.alpaca_account = lambda: {"equity": 50_000, "buying_power": 50_000,
+    prev = _fake.alpaca_account
+    _fake.alpaca_account = lambda: {"equity": equity, "buying_power": equity,
                                     "daily_pnl": daily_pnl}
-    out = scp.run(mode_key, skip_market_check=True)
-    scp.STATE_FILE.unlink(missing_ok=True)
-    return out
+    try:
+        return scp.run(mode_key, skip_market_check=True)
+    finally:
+        # Restore, or the next test inherits this equity — a $26k leak makes an
+        # unrelated test return early at the PDT floor and fail for the wrong reason.
+        _fake.alpaca_account = prev
+        scp.STATE_FILE.unlink(missing_ok=True)
 
 
 def test_daily_loss_limit_halts_the_day():
-    out = _run_with_pnl("strict", -1200)      # -2.4% vs a 2% limit
+    out = _run_with_pnl("strict", -1200, equity=50_000)   # -2.4% vs a 2% limit
     assert out.get("halted") is True
     assert any("Daily loss limit" in l for l in out["log"])
 
 
 def test_intense_tolerates_a_loss_that_stops_strict():
     """Same drawdown, different modes — this is the difference showing up."""
-    strict_out = _run_with_pnl("strict", -1200)
-    aggro_out = _run_with_pnl("intense", -1200)   # -2.4% vs a 3% limit
+    strict_out = _run_with_pnl("strict", -1200, equity=50_000)
+    aggro_out = _run_with_pnl("intense", -1200, equity=50_000)   # -2.4% vs a 3% limit
     assert strict_out.get("halted") is True
     assert aggro_out.get("halted") is not True
 
@@ -650,7 +657,7 @@ def test_removing_the_count_cap_leaves_the_loss_limit_intact():
     """The daily stop is what actually protects the account, so it has to still
     halt the day with the count cap gone."""
     assert INTENSE["DAILY_LOSS_LIMIT"] > 0
-    out = _run_with_pnl("intense", -0.031 * 50_000)
+    out = _run_with_pnl("intense", -0.031 * 50_000, equity=50_000)
     assert out.get("halted") is True
 
 
@@ -673,6 +680,52 @@ def test_uncapped_mode_does_not_trip_the_cap_gate_after_many_entries():
     finally:
         scp._now_et = real_now
         scp.STATE_FILE.unlink(missing_ok=True)
+
+
+# ── PDT floor ──────────────────────────────────────────────────────────────
+
+def test_pdt_headroom_math():
+    h = scp.pdt_headroom(26_000)
+    assert h["floor"] == scp.PDT_MIN_EQUITY + scp.PDT_BUFFER
+    assert h["room"] == 26_000 - h["floor"]
+    assert not h["blocked"]
+    assert abs(h["max_loss_pct"] - h["room"] / 26_000) < 1e-9
+
+
+def test_daily_stop_tightens_when_close_to_the_pdt_floor():
+    """At $26k the cushion is smaller than a 3% mode stop, so the floor wins."""
+    out = _run_with_pnl("intense", 0, equity=26_000)
+    joined = " ".join(out["log"])
+    assert "tightened" in joined, joined[:400]
+    h = scp.pdt_headroom(26_000)
+    assert h["max_loss_pct"] < INTENSE["DAILY_LOSS_LIMIT"]
+
+
+def test_no_new_entries_once_the_account_is_at_the_floor():
+    out = _run_with_pnl("intense", 0, equity=25_200)
+    assert out.get("pdt_blocked") is True
+    assert out["buys"] == 0
+    assert "PDT floor" in " ".join(out["log"])
+
+
+def test_a_loss_that_would_breach_the_floor_halts_the_day_early():
+    """-2% is well inside the mode's 3% limit but past the ~1.5% of headroom the
+    account actually has above the PDT floor."""
+    out = _run_with_pnl("intense", -0.02 * 26_000, equity=26_000)
+    assert out.get("halted") is True
+
+
+def test_large_accounts_are_unaffected_by_the_pdt_logic():
+    out = _run_with_pnl("intense", 0, equity=250_000)
+    joined = " ".join(out["log"])
+    assert "tightened" not in joined and "PDT" not in joined
+    assert scp.pdt_headroom(250_000)["applies"] is False
+
+
+def test_pdt_floor_applies_to_both_modes():
+    for k in ("strict", "intense"):
+        out = _run_with_pnl(k, 0, equity=25_100)
+        assert out.get("pdt_blocked") is True, k
 
 
 # ── Config plumbing ────────────────────────────────────────────────────────

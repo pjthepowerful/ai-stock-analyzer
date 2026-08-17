@@ -4,6 +4,21 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 4.12.2 — August 17, 2026
+- **PDT floor guard** (`pdt_headroom()`), a rail across both modes. Below
+  $25,000 a margin account can't day trade at all, which ends the strategy until
+  it's refunded — strictly worse than any single losing day.
+- The day's stop becomes the tighter of the mode's own limit and the distance to
+  the floor. At $26,000 the cushion is ~$400 after the buffer (~1.5%), well
+  inside Intense's 3%, so the floor governs.
+- New entries stop once equity reaches the floor; open positions are still
+  managed, since being unable to exit would be worse.
+- `PDT_MIN_EQUITY` / `PDT_BUFFER` are env-overridable; the whole mechanism
+  disables itself above 4x the floor.
+- 6 tests, all four mechanisms mutation-verified. Also fixed a test-hygiene bug:
+  `_run_with_pnl` mutated the shared account stub without restoring it, so a
+  $26k equity leaked into a later unrelated test and failed it for the wrong reason.
+
 ## 4.12.1 — August 17, 2026
 - `MAX_DAILY_ENTRIES` removed for `intense` (now `None` = uncapped). The gate
   treats a falsy cap as no cap; `strict` keeps its limit of 4.

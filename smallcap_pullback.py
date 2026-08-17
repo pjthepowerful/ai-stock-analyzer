@@ -242,6 +242,32 @@ LEGACY_MODE_ALIASES = {"aggro": "intense"}
 
 # Rails — identical in every mode, deliberately not configurable.
 MAX_ATTEMPTS_PER_TICKER = 2
+
+# Pattern Day Trader floor. Below $25,000 equity a margin account is blocked
+# from day trading entirely, which is worse than any single losing day: the
+# strategy stops existing until the account is funded back up. This is broker
+# rule, not strategy preference, so it applies to every mode.
+PDT_MIN_EQUITY = float(os.environ.get("PDT_MIN_EQUITY", 25_000))
+PDT_BUFFER = float(os.environ.get("PDT_BUFFER", 600))
+
+
+def pdt_headroom(equity: float) -> dict:
+    """How much the account can lose today before day trading is switched off.
+
+    Returns the effective daily loss limit, which is the tighter of the mode's
+    own limit and the distance to the PDT floor. An account at $26,000 has a
+    $1,000 cushion; a 3% mode stop is $780, so two ordinary bad days would end
+    the strategy. The floor takes precedence.
+    """
+    floor = PDT_MIN_EQUITY + PDT_BUFFER
+    room = equity - floor
+    return {
+        "floor": floor,
+        "room": room,
+        "blocked": room <= 0,
+        "max_loss_pct": max(room / equity, 0.0) if equity else 0.0,
+        "applies": equity < PDT_MIN_EQUITY * 4,   # irrelevant on a large account
+    }
 NEVER_HOLD_OVERNIGHT = True
 HARD_FLATTEN_LATEST = "15:55"
 
@@ -1521,13 +1547,32 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
     # ── Manage what's open first ───────────────────────────────────────────
     sells = 0 if candidates_only else manage_positions(mode, state, log)
 
+    # ── PDT floor: the account must stay able to day trade at all ──────────
+    pdt = pdt_headroom(equity)
+    effective_limit = mode["DAILY_LOSS_LIMIT"]
+    if pdt["applies"]:
+        if pdt["blocked"]:
+            state["halted_for_day"] = True
+            _save_state(state)
+            log.append(f"🛑 **Equity ${equity:,.0f} is at the PDT floor** "
+                       f"(${pdt['floor']:,.0f} incl. buffer). No new entries — another "
+                       f"day trade risks locking the account out entirely. Existing "
+                       f"positions are still managed.")
+            return {"ok": True, "log": log, "buys": 0, "sells": sells, "mode": mode_key,
+                    "scanned": 0, "halted": True, "pdt_blocked": True}
+        if pdt["max_loss_pct"] < effective_limit:
+            effective_limit = pdt["max_loss_pct"]
+            log.append(f"⚠️ Daily stop tightened to {effective_limit:.2%} "
+                       f"(${pdt['room']:,.0f} of room above the PDT floor) — "
+                       f"below the mode's {mode['DAILY_LOSS_LIMIT']:.0%}.")
+
     # ── Daily loss limit, enforced in software rather than willpower ───────
     day_pnl_pct = (account.get("daily_pnl", 0) or 0) / equity if equity else 0
-    if day_pnl_pct <= -mode["DAILY_LOSS_LIMIT"]:
+    if day_pnl_pct <= -effective_limit:
         state["halted_for_day"] = True
         _save_state(state)
         t.alpaca_close_all()
-        log.append(f"🛑 **Daily loss limit hit** ({day_pnl_pct:.2%} ≤ -{mode['DAILY_LOSS_LIMIT']:.0%}). "
+        log.append(f"🛑 **Daily loss limit hit** ({day_pnl_pct:.2%} ≤ -{effective_limit:.2%}). "
                    f"Flat and done for the day.")
         return {"ok": True, "log": log, "buys": 0, "sells": sells, "mode": mode_key, "halted": True}
     if state.get("halted_for_day"):

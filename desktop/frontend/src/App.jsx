@@ -21,11 +21,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.12.1'
+const VERSION = '4.12.2'
 const VERSION_DATE = 'August 17, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.12.2', d: 'August 17, 2026', changes: [
+    'Added a pattern-day-trader floor guard. Below $25,000 equity a margin account is barred from day trading entirely, so the strategy would simply stop existing. The daily stop now automatically tightens to whatever room the account actually has above that line, and new entries stop before it is crossed. Existing positions are still managed either way.',
+    'Applies to both modes and switches itself off on accounts large enough for it to be irrelevant.',
+  ]},
   { v: '4.12.1', d: 'August 17, 2026', changes: [
     'Intense no longer caps how many trades it can take in a day. The daily loss limit is what stops the session now — it halts on losses rather than on trade count, which is the number that actually matters. Disciplined keeps its cap.',
   ]},
