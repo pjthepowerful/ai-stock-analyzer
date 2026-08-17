@@ -635,6 +635,46 @@ def test_a_mixed_book_counts_only_its_own():
     assert "Max positions" not in " ".join(out["log"])
 
 
+def test_intense_has_no_daily_entry_cap():
+    """High-intensity means trade count is not the limiter."""
+    assert INTENSE.get("MAX_DAILY_ENTRIES") is None
+
+
+def test_disciplined_keeps_its_entry_cap():
+    """The two modes are meant to be opposites; removing this from both would
+    collapse the distinction."""
+    assert isinstance(STRICT.get("MAX_DAILY_ENTRIES"), int)
+
+
+def test_removing_the_count_cap_leaves_the_loss_limit_intact():
+    """The daily stop is what actually protects the account, so it has to still
+    halt the day with the count cap gone."""
+    assert INTENSE["DAILY_LOSS_LIMIT"] > 0
+    out = _run_with_pnl("intense", -0.031 * 50_000)
+    assert out.get("halted") is True
+
+
+def test_uncapped_mode_does_not_trip_the_cap_gate_after_many_entries():
+    import json
+    scp.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    scp.STATE_FILE.write_text(json.dumps({
+        "date": datetime(2026, 8, 17, 11, 0, tzinfo=ET).strftime("%Y-%m-%d"),
+        "attempts": {f"T{i}": 1 for i in range(40)},
+        "positions": {}, "stopped_out": [], "rescued": [], "halted_for_day": False}))
+    # Must be inside the entry window, or run() returns at the time gate before
+    # the entry-count gate is ever evaluated and the test proves nothing.
+    real_now = scp._now_et
+    scp._now_et = lambda: datetime(2026, 8, 17, 11, 0, tzinfo=ET)
+    try:
+        out = scp.run("intense", skip_market_check=True)
+        joined = " ".join(out["log"]).lower()
+        assert "outside" not in joined, "fixture fell out at the time gate"
+        assert "entry cap" not in joined
+    finally:
+        scp._now_et = real_now
+        scp.STATE_FILE.unlink(missing_ok=True)
+
+
 # ── Config plumbing ────────────────────────────────────────────────────────
 # These need the REAL trading module, but this file stubs `trading` in
 # sys.modules so the strategy tests stay offline. Run them in a subprocess.

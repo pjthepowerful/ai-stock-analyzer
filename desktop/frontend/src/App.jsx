@@ -21,11 +21,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.12.0'
+const VERSION = '4.12.1'
 const VERSION_DATE = 'August 17, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.12.1', d: 'August 17, 2026', changes: [
+    'Intense no longer caps how many trades it can take in a day. The daily loss limit is what stops the session now — it halts on losses rather than on trade count, which is the number that actually matters. Disciplined keeps its cap.',
+  ]},
   { v: '4.12.0', d: 'August 17, 2026', changes: [
     'Two strategies now, no middle option: Disciplined and Intense. Intense replaces Aggressive — it leads with volatility rather than market cap, buys dips inside a range that is still holding, and sells quickly when momentum stops confirming rather than waiting for a target.',
     'Volatility is now an actual filter. A name that gapped in the morning and went quiet gets skipped, as does one whose spread is wider than the few cents you are trying to capture. Stops scale to each name’s own ATR instead of a flat percentage.',
@@ -4257,6 +4260,7 @@ function StrategyCard({ token, autopilot }) {
               <span><b>{pct(m.daily_loss_limit)}</b> daily stop</span>
               <span><b>{m.rvol_min}×</b> min RVOL</span>
               {m.concentration && <span><b>{pct(m.concentration)}</b> max in one name</span>}
+              <span><b>{m.max_daily_entries ?? '∞'}</b> entries/day</span>
               <span>${m.price_band?.[0]}–${m.price_band?.[1]}</span>
               <span>float {mm(m.float_band?.[0])}–{mm(m.float_band?.[1])}</span>
             </div>

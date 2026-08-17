@@ -4,6 +4,16 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 4.12.1 — August 17, 2026
+- `MAX_DAILY_ENTRIES` removed for `intense` (now `None` = uncapped). The gate
+  treats a falsy cap as no cap; `strict` keeps its limit of 4.
+- The -3% daily loss limit is the remaining backstop, which is the better one:
+  it halts on losses rather than on trade count, and doesn't stop a session
+  that's going well.
+- 4 tests, including one asserting the loss limit still halts the day with the
+  count cap gone. Note the entry-count gate sits after the entry-window gate, so
+  the test freezes the clock mid-session — otherwise it passes vacuously.
+
 ## 4.12.0 — August 17, 2026
 - Modes reduced to two: `strict` (Disciplined) and `intense` (Intense).
   `aggro` is aliased to `intense` so a stored config keeps working; `core`

@@ -192,7 +192,10 @@ _INTENSE = {
     "CATASTROPHE_CAP_PCT": 0.20,     # hard ceiling on ONE name, adds included
     "MAX_STOP_PCT": 0.10,
     "DAILY_LOSS_LIMIT": 0.03,
-    "MAX_DAILY_ENTRIES": 8,
+    # No cap on entries. The -3% daily loss limit is the real backstop: it stops
+    # the day on losses rather than on trade count, which is the number that
+    # actually matters. A count cap would also halt a session that is going well.
+    "MAX_DAILY_ENTRIES": None,
     "WEEKLY_CIRCUIT": 0.06,
     "ATR_STOP_MULT": 1.8,            # stop = 1.8x this name's own 5-min ATR
 
@@ -265,6 +268,7 @@ def mode_summary() -> list[dict]:
             "float_band": [m["FLOAT_MIN"], m["FLOAT_MAX"]],
             "rvol_min": m["RVOL_MIN"],
             "scale_in": m["SCALE_IN"],
+            "max_daily_entries": m.get("MAX_DAILY_ENTRIES"),
             "concentration": m.get("LADDER_TARGET_EQUITY_PCT") or m["CATASTROPHE_CAP_PCT"],
         })
     return out
@@ -1564,8 +1568,9 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
         _save_state(state)
         return {"ok": True, "log": log, "buys": 0, "sells": sells, "mode": mode_key, "scanned": 0}
 
-    if entries_today >= mode["MAX_DAILY_ENTRIES"] and not dry_run and not candidates_only:
-        log.append(f"Daily entry cap reached ({entries_today}/{mode['MAX_DAILY_ENTRIES']}).")
+    cap = mode.get("MAX_DAILY_ENTRIES")
+    if cap and entries_today >= cap and not dry_run and not candidates_only:
+        log.append(f"Daily entry cap reached ({entries_today}/{cap}).")
         _save_state(state)
         return {"ok": True, "log": log, "buys": 0, "sells": sells, "mode": mode_key, "scanned": 0}
 
