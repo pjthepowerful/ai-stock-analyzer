@@ -510,6 +510,15 @@ def test_config_follows_the_persistent_volume_when_one_is_mounted():
     assert out.endswith("autopilot_config.json") and "/tmp/" not in out
 
 
+def test_every_run_result_reports_a_scanned_count():
+    """0 must be reported as 0. The UI renders `data.scanned || '?'`, so a
+    missing key and a genuine zero both surfaced as '? stocks scanned'."""
+    for key in ("strict", "aggro"):
+        out = _run_with_pnl(key, 0)
+        assert "scanned" in out, f"{key} run returned no scanned count"
+        assert isinstance(out["scanned"], int)
+
+
 # ── Runner ─────────────────────────────────────────────────────────────────
 
 def main():

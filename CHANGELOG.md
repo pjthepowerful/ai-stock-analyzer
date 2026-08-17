@@ -4,6 +4,13 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 4.11.2 — August 17, 2026
+- `0 stocks scanned` rendered as `? stocks scanned`: the frontend used
+  `data.scanned || '?'`, so a genuine zero fell through to the fallback. Now
+  `?? '?'`, which only fires on a missing key.
+- Every early return in `smallcap_pullback.run()` (market closed, no survivors,
+  gates not met) now carries `scanned`, so the count is real rather than absent.
+
 ## 4.11.1 — August 14, 2026
 - The end-of-day flatten rail in `smallcap_pullback.manage_positions` ran before
   the ownership check, so it closed **every** open position — including ones the

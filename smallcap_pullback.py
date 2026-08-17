@@ -1339,7 +1339,8 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
 
     is_open, status = t._market_is_open()
     if not is_open and not skip_market_check and not dry_run:
-        return {"ok": True, "log": log + [status], "buys": 0, "sells": 0, "mode": mode_key}
+        return {"ok": True, "log": log + [status], "buys": 0, "sells": 0,
+                "mode": mode_key, "scanned": 0}
 
     account = t.alpaca_account()
     if not account:
@@ -1372,23 +1373,23 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
     if now < _at(now, mode["OPEN_BLACKOUT_UNTIL"]) and not dry_run and not candidates_only:
         log.append(f"⏸ Before {mode['OPEN_BLACKOUT_UNTIL']} — widest spreads, most halts, most traps. Observing.")
         _save_state(state)
-        return {"ok": True, "log": log, "buys": 0, "sells": sells, "mode": mode_key}
+        return {"ok": True, "log": log, "buys": 0, "sells": sells, "mode": mode_key, "scanned": 0}
 
     if not _in_window(now, mode["ENTRY_WINDOWS"]) and not dry_run and not candidates_only:
         log.append("⏸ Outside this mode's entry windows — managing existing positions only.")
         _save_state(state)
-        return {"ok": True, "log": log, "buys": 0, "sells": sells, "mode": mode_key}
+        return {"ok": True, "log": log, "buys": 0, "sells": sells, "mode": mode_key, "scanned": 0}
 
     if open_slots <= 0 and not dry_run and not candidates_only:
         log.append(f"Max positions ({mode['MAX_POSITIONS']}) held — these names are one trade "
                    f"wearing different tickers. No scan.")
         _save_state(state)
-        return {"ok": True, "log": log, "buys": 0, "sells": sells, "mode": mode_key}
+        return {"ok": True, "log": log, "buys": 0, "sells": sells, "mode": mode_key, "scanned": 0}
 
     if entries_today >= mode["MAX_DAILY_ENTRIES"] and not dry_run and not candidates_only:
         log.append(f"Daily entry cap reached ({entries_today}/{mode['MAX_DAILY_ENTRIES']}).")
         _save_state(state)
-        return {"ok": True, "log": log, "buys": 0, "sells": sells, "mode": mode_key}
+        return {"ok": True, "log": log, "buys": 0, "sells": sells, "mode": mode_key, "scanned": 0}
 
     # ── Section 1: scan ────────────────────────────────────────────────────
     log.append("")

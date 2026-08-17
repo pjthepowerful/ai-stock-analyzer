@@ -21,11 +21,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.11.1'
-const VERSION_DATE = 'August 13, 2026'
+const VERSION = '4.11.2'
+const VERSION_DATE = 'August 17, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.11.2', d: 'August 17, 2026', changes: [
+    'Scan results now say “0 stocks scanned” instead of “? stocks scanned” when a scan legitimately finds nothing — a real zero was being displayed as an unknown.',
+  ]},
   { v: '4.11.1', d: 'August 14, 2026', changes: [
     'Fixed a small-cap mode being able to liquidate positions it did not open. Switching to Disciplined or Aggressive while the Core engine held swing positions would have closed all of them at the end-of-day flatten. Each mode now only closes what it opened, and flags anything else it finds so you can decide.',
   ]},
@@ -1805,7 +1808,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
                 ? `\n\n**Trades:** ${data.buys||0} bought, ${data.sells||0} sold, ${data.shorts||0} shorted`
                 : ''
               const scanTime = data.log[0]?.match(/\d+:\d+ [AP]M/)?.[0] || ''
-              apMsg = { role: 'assistant', content: `📡 **Scan Complete** — ${data.scanned||'?'} stocks scanned\n\n${summary}${extra}`, type: 'autopilot', scanTime }
+              apMsg = { role: 'assistant', content: `📡 **Scan Complete** — ${data.scanned ?? '?'} stocks scanned\n\n${summary}${extra}`, type: 'autopilot', scanTime }
             }
             if (data.status === 'paused' && data.reason) {
               apMsg = { role: 'assistant', content: `⏸ **Autopilot paused** — ${data.reason}`, type: 'autopilot' }
