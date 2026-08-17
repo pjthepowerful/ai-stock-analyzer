@@ -4,6 +4,17 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 4.11.3 — August 17, 2026
+- **Small-cap modes never scanned while a foreign book was open.** `open_slots`
+  was `MAX_POSITIONS - len(all account positions)`, so four Core swing positions
+  against Aggressive's 3-position cap left `open_slots = -1` and the runner
+  returned "Max positions held — no scan" every cycle for an entire session.
+  4.11.1 stopped these modes from *managing* foreign positions but left them
+  *counting*, which is what produced a full day of zero trades.
+- `MAX_POSITIONS` now counts only positions recorded in the mode's own state.
+  Foreign positions are named in the log and excluded from the count.
+- 3 regression tests: foreign-only, own-only, and mixed books.
+
 ## 4.11.2 — August 17, 2026
 - `0 stocks scanned` rendered as `? stocks scanned`: the frontend used
   `data.scanned || '?'`, so a genuine zero fell through to the fallback. Now

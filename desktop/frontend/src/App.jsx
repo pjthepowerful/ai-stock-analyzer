@@ -21,11 +21,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.11.2'
+const VERSION = '4.11.3'
 const VERSION_DATE = 'August 17, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.11.3', d: 'August 17, 2026', changes: [
+    'Fixed the small-cap modes never scanning while positions from another strategy were open. A leftover Core book of four names counted against Aggressive’s three-position limit, so the bot considered itself full and skipped the scan every cycle — all day, without ever saying anything more specific than “max positions held”.',
+    'Each mode now counts only the positions it opened against its own limit, and names any it finds from another strategy.',
+  ]},
   { v: '4.11.2', d: 'August 17, 2026', changes: [
     'Scan results now say “0 stocks scanned” instead of “? stocks scanned” when a scan legitimately finds nothing — a real zero was being displayed as an unknown.',
   ]},

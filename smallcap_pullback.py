@@ -1367,7 +1367,18 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
     # ── Entry gates ────────────────────────────────────────────────────────
     positions = t.alpaca_positions() or []
     held = {p["ticker"] for p in positions}
-    open_slots = mode["MAX_POSITIONS"] - len(positions)
+
+    # MAX_POSITIONS is a limit on THIS strategy's concurrent risk, so only count
+    # positions this mode opened. Counting the whole account meant a Core book
+    # left open (4 swing names vs a 3-position cap) put the small-cap engine
+    # permanently at capacity, and it never scanned at all.
+    mine = [p for p in positions if p["ticker"] in state.get("positions", {})]
+    foreign = [p["ticker"] for p in positions if p["ticker"] not in state.get("positions", {})]
+    open_slots = mode["MAX_POSITIONS"] - len(mine)
+    if foreign:
+        log.append(f"ℹ️ {len(foreign)} position(s) held by another strategy "
+                   f"({', '.join(foreign[:4])}) — not counted against this mode's "
+                   f"{mode['MAX_POSITIONS']} slots, and not managed here.")
     entries_today = len(state.get("attempts", {}))
 
     if now < _at(now, mode["OPEN_BLACKOUT_UNTIL"]) and not dry_run and not candidates_only:

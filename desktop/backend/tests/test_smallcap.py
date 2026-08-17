@@ -455,6 +455,54 @@ def test_flatten_rail_still_applies_to_every_position_it_opened():
     assert set(sold) == {"ABCD", "AAPL"}
 
 
+def _run_with_positions(mode_key, tickers, state_positions):
+    scp.STATE_FILE.unlink(missing_ok=True)
+    import json
+    if state_positions:
+        st = {"date": datetime(2026, 8, 17, 11, 0, tzinfo=ET).strftime("%Y-%m-%d"), "attempts": {},
+              "positions": state_positions, "stopped_out": [], "rescued": [],
+              "halted_for_day": False}
+        scp.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        scp.STATE_FILE.write_text(json.dumps(st))
+    _fake.alpaca_positions = lambda: [
+        {"ticker": t, "qty": 5, "current_price": 100.0, "avg_entry": 100.0,
+         "unrealized_pnl_pct": 0.0} for t in tickers]
+    real_now = scp._now_et
+    scp._now_et = lambda: datetime(2026, 8, 17, 11, 0, tzinfo=ET)
+    try:
+        return scp.run(mode_key, skip_market_check=True)
+    finally:
+        scp._now_et = real_now
+        _fake.alpaca_positions = lambda: []
+        scp.STATE_FILE.unlink(missing_ok=True)
+
+
+def test_another_strategys_positions_do_not_consume_this_modes_slots():
+    """The bug: a Core book of 4 swing names against aggro's 3-position cap left
+    the small-cap engine permanently at capacity, so it never scanned all day."""
+    out = _run_with_positions("aggro", ["AAPL", "LLY", "MNST", "WSO"], {})
+    joined = " ".join(out["log"])
+    assert "Max positions" not in joined, joined[-300:]
+    assert "another strategy" in joined
+
+
+def test_this_modes_own_positions_still_consume_slots():
+    own = {t: {"entry": 5.0, "initial_stop": 4.8, "qty": 10, "mode": "aggro",
+               "opened_at": datetime(2026, 8, 17, 10, 30, tzinfo=ET).isoformat(),
+               "scaled1": False, "scaled2": False, "ladder": None}
+           for t in ("AAA", "BBB", "CCC")}
+    out = _run_with_positions("aggro", ["AAA", "BBB", "CCC"], own)
+    assert "Max positions" in " ".join(out["log"])
+
+
+def test_a_mixed_book_counts_only_its_own():
+    own = {"AAA": {"entry": 5.0, "initial_stop": 4.8, "qty": 10, "mode": "aggro",
+                   "opened_at": datetime(2026, 8, 17, 10, 30, tzinfo=ET).isoformat(),
+                   "scaled1": False, "scaled2": False, "ladder": None}}
+    out = _run_with_positions("aggro", ["AAA", "AAPL", "LLY", "WSO"], own)
+    assert "Max positions" not in " ".join(out["log"])
+
+
 # ── Config plumbing ────────────────────────────────────────────────────────
 # These need the REAL trading module, but this file stubs `trading` in
 # sys.modules so the strategy tests stay offline. Run them in a subprocess.
