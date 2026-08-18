@@ -728,6 +728,53 @@ def test_pdt_floor_applies_to_both_modes():
         assert out.get("pdt_blocked") is True, k
 
 
+# ── Feed diagnostics ───────────────────────────────────────────────────────
+
+class _Resp:
+    def __init__(self, status, tickers=0, text=""):
+        self.status_code = status
+        self._t = tickers
+        self.text = text
+    def json(self):
+        return {"tickers": [{"ticker": f"T{i}"} for i in range(self._t)]}
+
+
+def _with_feed(status, tickers=0, text="", key="k"):
+    import types
+    real_get, real_key = scp.requests.get, scp._pkey
+    scp.requests = types.SimpleNamespace(get=lambda *a, **k: _Resp(status, tickers, text))
+    scp._pkey = lambda: key
+    try:
+        return scp.feed_diagnostics()
+    finally:
+        scp.requests = __import__("requests")
+        scp._pkey = real_key
+
+
+def test_missing_api_key_is_named_explicitly():
+    d = _with_feed(200, key=None)
+    assert d["key_present"] is False
+    assert "POLYGON_API_KEY" in d["verdict"]
+
+
+def test_plan_rejection_is_distinguished_from_a_quiet_market():
+    """403 and 'no movers today' both surfaced as '0 ranked'. They must not."""
+    denied = _with_feed(403, text="not entitled")
+    quiet = _with_feed(200, tickers=0)
+    assert "plan" in denied["verdict"] or "rejected" in denied["verdict"]
+    assert denied["verdict"] != quiet["verdict"]
+    assert "closed" in quiet["verdict"] or "empty" in quiet["verdict"]
+
+
+def test_rate_limit_is_called_out():
+    assert "429" in _with_feed(429)["verdict"]
+
+
+def test_healthy_feed_says_an_empty_pool_is_a_filter_result():
+    d = _with_feed(200, tickers=40)
+    assert "Feed OK" in d["verdict"] and "filter result" in d["verdict"]
+
+
 # ── Config plumbing ────────────────────────────────────────────────────────
 # These need the REAL trading module, but this file stubs `trading` in
 # sys.modules so the strategy tests stay offline. Run them in a subprocess.

@@ -395,6 +395,52 @@ def _aggs(ticker: str, mult: int, span: str, frm: str, to: str, limit: int = 500
         return None
 
 
+
+def feed_diagnostics() -> dict:
+    """Probe the two market-wide endpoints and report what actually came back.
+
+    polygon_gainers() and polygon_all_snapshots() both swallow every failure and
+    return None, so an expired key, a plan that doesn't include snapshots, and a
+    genuinely quiet market are indistinguishable — all three surface as
+    "0 ranked". This says which one it was.
+    """
+    out = {"key_present": False, "gainers": {}, "snapshots": {}, "verdict": ""}
+    key = _pkey()
+    out["key_present"] = bool(key)
+    if not key:
+        out["verdict"] = "No Polygon API key on the backend — POLYGON_API_KEY is unset."
+        return out
+
+    base = "https://api.polygon.io/v2/snapshot/locale/us/markets/stocks"
+    for name, url in (("gainers", f"{base}/gainers"), ("snapshots", f"{base}/tickers")):
+        info = {"status": None, "count": 0, "error": ""}
+        try:
+            r = requests.get(url, params={"apiKey": key, "include_otc": "false"}, timeout=15)
+            info["status"] = r.status_code
+            if r.status_code == 200:
+                info["count"] = len(r.json().get("tickers", []))
+            else:
+                body = (r.text or "")[:160]
+                info["error"] = body
+        except Exception as e:
+            info["error"] = str(e)[:160]
+        out[name] = info
+
+    g, sn = out["gainers"], out["snapshots"]
+    if g.get("status") in (401, 403) or sn.get("status") in (401, 403):
+        out["verdict"] = ("Polygon rejected the request (401/403). The snapshot endpoints "
+                          "aren't on the current plan, or the key is invalid. This scan "
+                          "cannot see the market until that's resolved.")
+    elif g.get("status") == 429 or sn.get("status") == 429:
+        out["verdict"] = "Polygon rate-limited the request (429) — too many calls per minute."
+    elif (g.get("count") or 0) == 0 and (sn.get("count") or 0) == 0:
+        out["verdict"] = "Endpoints answered 200 but returned no tickers — market closed or feed empty."
+    else:
+        out["verdict"] = (f"Feed OK — gainers {g.get('count')}, snapshots {sn.get('count')}. "
+                          f"An empty pool after this is a filter result, not a data failure.")
+    return out
+
+
 def _bars_today(ticker: str, mult: int = 1, span: str = "minute", back_days: int = 0):
     """Today's bars (including premarket), oldest first, as (dt_et, o,h,l,c,v)."""
     now = _now_et()
@@ -1622,8 +1668,12 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
     # ── Section 1: scan ────────────────────────────────────────────────────
     log.append("")
     log.append("**Scanning gainers**")
-    gainers = t.polygon_gainers(limit=mode["TOP_N_GAINERS"]) or []
-    snaps = t.polygon_all_snapshots() or []
+    raw_gainers = t.polygon_gainers(limit=mode["TOP_N_GAINERS"])
+    raw_snaps = t.polygon_all_snapshots()
+    gainers = raw_gainers or []
+    snaps = raw_snaps or []
+    log.append(f"feed: gainers {len(gainers) if raw_gainers is not None else 'NONE'} · "
+               f"snapshots {len(snaps) if raw_snaps is not None else 'NONE'}")
     pool = {}
     for g in gainers:
         pool[g.get("Ticker")] = g
@@ -1680,6 +1730,21 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
                           "float": flt, "cap": cap, "traded": traded,
                           "projected": projected, "halts": halts,
                           "cap_mult": cap_mult, "cap_note": cap_note})
+
+    if not ranked:
+        # Empty pool is either a dead feed or a market with no movers. Say which,
+        # rather than printing "0 ranked" and leaving it ambiguous for a week.
+        diag = feed_diagnostics()
+        log.append(f"⚠️ **No candidates in the pool.** {diag['verdict']}")
+        if diag.get("gainers", {}).get("status") not in (200, None):
+            log.append(f"   gainers endpoint → HTTP {diag['gainers']['status']} "
+                       f"{diag['gainers'].get('error', '')[:120]}")
+        if diag.get("snapshots", {}).get("status") not in (200, None):
+            log.append(f"   snapshots endpoint → HTTP {diag['snapshots']['status']} "
+                       f"{diag['snapshots'].get('error', '')[:120]}")
+        _save_state(state)
+        return {"ok": True, "log": log, "buys": 0, "sells": sells, "scanned": 0,
+                "mode": mode_key, "candidates": [], "feed": diag}
 
     log.append(f"{len(ranked)} ranked → **{len(survivors)} cleared the universe filters**")
     for tkr, why in rejected[:8]:

@@ -4,6 +4,17 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 4.12.3 — August 17, 2026
+- `feed_diagnostics()`: when the candidate pool comes back empty, probe the two
+  market-wide Polygon endpoints and report the HTTP status and ticker count.
+  `polygon_gainers()` and `polygon_all_snapshots()` both catch every exception
+  and return `None`, so a missing key, a 401/403 from a plan that doesn't include
+  snapshots, a 429, and a market with no movers were indistinguishable — all four
+  printed `0 ranked`.
+- Each scan now logs the raw feed counts (`feed: gainers N · snapshots N`), with
+  `NONE` distinguished from `0`.
+- 4 tests covering missing key, plan rejection, rate limit, and healthy feed.
+
 ## 4.12.2 — August 17, 2026
 - **PDT floor guard** (`pdt_headroom()`), a rail across both modes. Below
   $25,000 a margin account can't day trade at all, which ends the strategy until
