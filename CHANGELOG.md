@@ -4,6 +4,22 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 4.13.0 — August 17, 2026
+- **Groq decommissioned `llama-3.3-70b-versatile` and `llama-3.1-8b-instant` on
+  2026-08-16.** Every AI path in Paula was pointing at them: chat, news
+  sentiment, ticker resolution, routing, and the small-cap catalyst grader —
+  7 call sites across 3 files. These sit inside `try/except`, so the failure mode
+  was silent degradation rather than a crash.
+- Now `openai/gpt-oss-120b` primary, `openai/gpt-oss-20b` fallback, defined once
+  in `trading.py` as `GROQ_MODEL_PRIMARY` / `GROQ_MODEL_FAST` / `GROQ_MODELS`
+  and overridable via env.
+- The fallback chain keeps two *distinct* models on purpose: a 429 on the large
+  one drops to a separate rate bucket.
+- `_groq_text()` strips any `<think>` block that leaks into `content`. GPT-OSS
+  returns reasoning in a separate field, so this is belt-and-braces.
+- New `test_groq_models.py`: static guard that no decommissioned ID reaches a
+  `model=` argument, plus env-override and sanitizer coverage. Mutation-verified.
+
 ## 4.12.3 — August 17, 2026
 - `feed_diagnostics()`: when the candidate pool comes back empty, probe the two
   market-wide Polygon endpoints and report the HTTP status and ticker count.

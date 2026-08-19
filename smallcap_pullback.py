@@ -762,7 +762,7 @@ def catalyst_grade(ticker: str) -> dict:
         client = Groq(api_key=key)
         text = "\n".join(f"- {h.get('title','')} ({h.get('publisher','')})" for h in heads)
         resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=_t().GROQ_MODEL_PRIMARY,
             max_tokens=120,
             temperature=0,
             messages=[{"role": "user", "content": f"""Classify today's catalyst for the small-cap stock {ticker}. Answer in EXACTLY this format:

@@ -13,6 +13,8 @@ from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from groq import Groq
+
+
 from dotenv import load_dotenv
 import logging as _logging
 _log = _logging.getLogger("paula")
@@ -27,6 +29,33 @@ import re
 import random
 import time
 import requests
+
+# ── Groq models ────────────────────────────────────────────────────────────
+# llama-3.3-70b-versatile and llama-3.1-8b-instant were decommissioned by Groq
+# on 2026-08-16; requests to them are no longer served. Replacements are the
+# GPT-OSS pair. Defined once here so a future retirement is a one-line change
+# instead of a hunt through seven call sites.
+#
+# Note: GPT-OSS models return chain-of-thought in a separate `reasoning` field,
+# so `.content` stays clean. _groq_text() strips any that leaks through anyway.
+GROQ_MODEL_PRIMARY = os.environ.get("GROQ_MODEL_PRIMARY", "openai/gpt-oss-120b")
+GROQ_MODEL_FAST = os.environ.get("GROQ_MODEL_FAST", "openai/gpt-oss-20b")
+# Ordered fallback: a 429 on the big model drops to the small one, which has its
+# own rate bucket, then retries the big one once more.
+GROQ_MODELS = [GROQ_MODEL_PRIMARY, GROQ_MODEL_FAST, GROQ_MODEL_PRIMARY]
+
+_THINK_RE = re.compile(r"<think>.*?</think>\s*", re.DOTALL | re.IGNORECASE)
+
+
+def _groq_text(resp) -> str:
+    """Final answer from a Groq completion, with any leaked reasoning removed."""
+    try:
+        txt = resp.choices[0].message.content or ""
+    except Exception:
+        return ""
+    return _THINK_RE.sub("", txt).strip()
+
+
 import warnings
 from signal_logic import classify_analysis_side, compute_price_math
 
@@ -3150,7 +3179,7 @@ def _ai_news_analysis(ticker: str) -> dict:
         headline_text = "\n".join([f"- {h['title']} ({h.get('publisher', '')})" for h in headlines])
 
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=GROQ_MODEL_PRIMARY,
             messages=[{
                 "role": "user",
                 "content": f"""Analyze these news headlines for {ticker}. Respond in EXACTLY this format, nothing else:
@@ -3610,7 +3639,7 @@ def _llm_scan_category(msg: str):
             "Reply with exactly one word from that list."
         )
         resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=GROQ_MODEL_PRIMARY,
             messages=[{"role": "system", "content": sys_prompt},
                       {"role": "user", "content": msg[:200]}],
             temperature=0, max_tokens=4,
@@ -3668,7 +3697,7 @@ def _llm_classify_intent(msg: str, history: list = None) -> dict | None:
         user_content = (f"Conversation so far:\n{ctx}\n\nLatest message: {msg[:300]}"
                         if ctx else msg[:300])
         resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=GROQ_MODEL_PRIMARY,
             messages=[{"role": "system", "content": sys_prompt},
                       {"role": "user", "content": user_content}],
             temperature=0, max_tokens=60,
@@ -7519,7 +7548,7 @@ RESPONSE LENGTH by request type:
 
     try:
         client = Groq(api_key=key)
-        _models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+        _models = GROQ_MODELS[:2]
         _last_err = None
         for _mi, _model in enumerate(_models):
             try:
@@ -7587,7 +7616,7 @@ FACTUAL RULES (never break these):
     # Model fallback chain: if the primary is rate-limited (429), drop to the
     # next model automatically. Each Groq model has its own rate bucket, so a
     # smaller model is usually still available when the big one is capped.
-    _models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama-3.3-70b-versatile"]
+    _models = GROQ_MODELS
     client = Groq(api_key=key)
     _last_err = None
     for _mi, _model in enumerate(_models):

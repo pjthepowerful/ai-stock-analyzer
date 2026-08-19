@@ -1045,7 +1045,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v4.12.3",  # bump marker  confirms running code
+        "build": "v4.13.0",  # bump marker  confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1258,7 +1258,7 @@ async def generate_title(req: TitleRequest):
         resp = r.post("https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
             json={
-                "model": "llama-3.3-70b-versatile",
+                "model": engine.GROQ_MODEL_PRIMARY,
                 "messages": [
                     {"role": "system", "content": "You are a title generator. Output ONLY a 2-5 word title. Nothing else. No sentences. No punctuation. No quotes. No explanation. Just the title words.\n\nExamples:\nInput: 'market regime'  Market Regime Check\nInput: 'top gainers'  Top Gainers Today\nInput: 'analyze AAPL'  AAPL Analysis\nInput: 'What should I buy?'  Trade Ideas\nInput: 'How did we do today?'  Daily Recap\nInput: 'buy 10 NVDA'  Buy NVDA Order"},
                     {"role": "user", "content": msg[:100]}

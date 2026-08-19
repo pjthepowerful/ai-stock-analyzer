@@ -21,11 +21,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.12.3'
+const VERSION = '4.13.0'
 const VERSION_DATE = 'August 17, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.13.0', d: 'August 17, 2026', changes: [
+    'Migrated off the Llama models Groq retired on August 16 — every AI feature (chat, news analysis, ticker resolution, catalyst grading) was calling a model that no longer answers. Now on GPT-OSS 120B with a 20B fallback for rate limits.',
+    'Model names are set in one place and can be overridden with an environment variable, so the next retirement is a config change rather than a code change.',
+  ]},
   { v: '4.12.3', d: 'August 17, 2026', changes: [
     'When a scan finds nothing, it now says why. “0 ranked” previously covered three completely different situations — no API key, a data plan that does not include the endpoints being called, and a genuinely quiet market — and gave no way to tell them apart. The log now names which one it was, with the HTTP status when the feed refused.',
   ]},

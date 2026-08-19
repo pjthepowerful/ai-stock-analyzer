@@ -105,6 +105,9 @@ from trading import (
 
     # Autopilot
     run_autopilot,
+    GROQ_MODEL_PRIMARY,
+    GROQ_MODEL_FAST,
+    GROQ_MODELS,
     load_autopilot_config,
     save_autopilot_config,
     autopilot_cfg_path,
