@@ -1045,7 +1045,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v4.13.0",  # bump marker  confirms running code
+        "build": "v4.13.1",  # bump marker  confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1914,7 +1914,7 @@ def _polygon_chart_bars(ticker: str, period: str, intraday: bool, interval: str 
     the same payload shape as the Yahoo path, or None on failure."""
     import requests as _rq, time as _t
     from datetime import datetime as _dt, timedelta as _td
-    key = os.environ.get("POLYGON_API_KEY", "") or "wzJ5v31KgEA_rwFQxViseXokW5TLoSrG"
+    key = os.environ.get("POLYGON_API_KEY", "")
     if not key:
         return None
     # Map our periods to a Polygon (multiplier, timespan, lookback-days).
@@ -3336,6 +3336,66 @@ async def test_bell_alert(authorization: str = Header(None)):
     except Exception as e:
         return {"ok": False, "error": str(e)[:200]}
 
+
+
+@app.get("/api/diagnostics/scan")
+async def diagnose_scan(authorization: str = Header(None)):
+    """Answer 'why did it place no trades?' in one call.
+
+    Runs a read-only scan of the active mode and reports where names died: the
+    data feed, then each universe filter, then setups and hazards. No orders,
+    no state writes, works with the market closed.
+    """
+    user = _get_user(authorization)
+    if not _can_autopilot(user):
+        return {"ok": False, "error": "Restricted"}
+
+    mode = "core"
+    try:
+        mode = (engine.load_autopilot_config().get("STRATEGY_MODE") or "core").lower()
+    except Exception:
+        pass
+
+    out = {"ok": True, "mode": mode,
+           "keys": {"polygon": bool(os.environ.get("POLYGON_API_KEY")),
+                    "groq": bool(os.environ.get("GROQ_API_KEY")),
+                    "alpaca": bool(os.environ.get("ALPACA_KEY_ID"))}}
+
+    if not out["keys"]["polygon"]:
+        out["verdict"] = ("POLYGON_API_KEY is not set on the backend. The scan cannot "
+                          "see the market at all — this alone explains zero trades.")
+        return out
+
+    if mode == "core":
+        out["verdict"] = "Core mode — this diagnostic covers the small-cap modes only."
+        return out
+
+    import smallcap_pullback
+    loop = asyncio.get_event_loop()
+    res = await loop.run_in_executor(
+        _scan_executor,
+        lambda: smallcap_pullback.run(mode, candidates_only=True, skip_market_check=True))
+    res = res or {}
+
+    out["feed"] = res.get("feed") or smallcap_pullback.feed_diagnostics()
+    out["funnel"] = res.get("funnel", {})
+    out["candidates"] = len(res.get("candidates") or [])
+    out["log"] = res.get("log", [])
+
+    pool = out["funnel"].get("pool", 0)
+    if pool == 0:
+        out["verdict"] = out["feed"].get("verdict", "Empty pool — see feed status.")
+    elif out["candidates"] == 0:
+        biggest = max(((k, v) for k, v in out["funnel"].items()
+                       if k not in ("pool", "cleared_universe")),
+                      key=lambda kv: kv[1], default=(None, 0))
+        out["verdict"] = (f"Feed is fine ({pool} names in the pool). Nothing qualified — "
+                          f"most dropped at: {biggest[0]} ({biggest[1]}). That's the filter "
+                          f"to loosen if you want more trades.")
+    else:
+        out["verdict"] = (f"{out['candidates']} candidate(s) right now. Entries also require "
+                          f"the time window, an open slot, and the daily/PDT limits to allow it.")
+    return out
 
 # ── Run ──
 

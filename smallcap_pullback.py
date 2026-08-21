@@ -1682,48 +1682,50 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
             pool[s["Ticker"]] = s
     ranked = sorted(pool.values(), key=lambda x: -(x.get("Chg%") or 0))[:mode["TOP_N_GAINERS"] + 15]
 
+    from collections import Counter
+    funnel = Counter()
     survivors, rejected = [], []
     for row in ranked:
         tkr = row.get("Ticker")
         if not tkr or tkr in held:
             continue
         if state.get("attempts", {}).get(tkr, 0) >= MAX_ATTEMPTS_PER_TICKER:
-            rejected.append((tkr, "2 attempts already — a third is revenge, not analysis"))
+            rejected.append((tkr, "2 attempts already — a third is revenge, not analysis")); funnel["attempts"] += 1
             continue
         price, chg = row.get("Price", 0), row.get("Chg%", 0)
         if not (mode["PRICE_MIN"] <= price <= mode["PRICE_MAX"]):
-            rejected.append((tkr, f"${price:.2f} outside price band"))
+            rejected.append((tkr, f"${price:.2f} outside price band")); funnel["price"] += 1
             continue
         if chg < mode["MIN_DAY_CHANGE"]:
-            rejected.append((tkr, f"{chg:+.1f}% under threshold"))
+            rejected.append((tkr, f"{chg:+.1f}% under threshold")); funnel["day_change"] += 1
             continue
 
         rvol = time_adjusted_rvol(tkr, now)
         rv_min = mode["RVOL_MIN"] if now.hour < 12 else mode["RVOL_MIN_AFTERNOON"]
         if rvol is None or rvol < rv_min:
-            rejected.append((tkr, f"RVOL {rvol if rvol is not None else '?'} < {rv_min} — thin tape drifting"))
+            rejected.append((tkr, f"RVOL {rvol if rvol is not None else '?'} < {rv_min} — thin tape drifting")); funnel["rvol"] += 1
             continue
 
         flt, cap = float_and_cap(tkr)
         if flt and not (mode["FLOAT_MIN"] <= flt <= mode["FLOAT_MAX"]):
-            rejected.append((tkr, f"float {flt/1e6:.0f}M outside band"))
+            rejected.append((tkr, f"float {flt/1e6:.0f}M outside band")); funnel["float"] += 1
             continue
         cap_ok, cap_mult, cap_note = cap_fit(cap, mode)
         if not cap_ok:
-            rejected.append((tkr, cap_note))
+            rejected.append((tkr, cap_note)); funnel["market_cap"] += 1
             continue
 
         traded, projected = dollar_volume_today(tkr, now)
         if not traded or traded < mode["DOLLAR_VOL_MIN"]:
-            rejected.append((tkr, f"${(traded or 0)/1e6:.1f}M traded — exit liquidity too thin"))
+            rejected.append((tkr, f"${(traded or 0)/1e6:.1f}M traded — exit liquidity too thin")); funnel["dollar_volume"] += 1
             continue
         if projected and projected < mode["PROJ_DOLLAR_VOL_MIN"]:
-            rejected.append((tkr, f"projected ${projected/1e6:.0f}M full day — under bar"))
+            rejected.append((tkr, f"projected ${projected/1e6:.0f}M full day — under bar")); funnel["projected_volume"] += 1
             continue
 
         halts = halt_count_recent(tkr, 20)
         if halts > mode["MAX_HALTS_20MIN"]:
-            rejected.append((tkr, f"{halts} halts in 20min — entry is a coin flip between a fill and a lockup"))
+            rejected.append((tkr, f"{halts} halts in 20min — entry is a coin flip between a fill and a lockup")); funnel["halts"] += 1
             continue
 
         survivors.append({"ticker": tkr, "price": price, "chg": chg, "rvol": rvol,
@@ -1746,13 +1748,20 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
         return {"ok": True, "log": log, "buys": 0, "sells": sells, "scanned": 0,
                 "mode": mode_key, "candidates": [], "feed": diag}
 
+    funnel["pool"] = len(ranked)
+    funnel["cleared_universe"] = len(survivors)
     log.append(f"{len(ranked)} ranked → **{len(survivors)} cleared the universe filters**")
+    if funnel:
+        top = ", ".join(f"{k} {v}" for k, v in funnel.most_common(4)
+                        if k not in ("pool", "cleared_universe"))
+        if top:
+            log.append(f"   died at: {top}")
     for tkr, why in rejected[:8]:
         log.append(f"  ⏭ {tkr} — {why}")
     if not survivors:
         _save_state(state)
         return {"ok": True, "log": log, "buys": 0, "sells": sells, "scanned": len(ranked),
-                "mode": mode_key, "candidates": []}
+                "mode": mode_key, "candidates": [], "funnel": dict(funnel)}
 
     # ── Section 2 + 5: setups and hazards on the survivors ─────────────────
     log.append("")
@@ -1765,10 +1774,12 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
             continue
         vol = volatility_profile(ctx, mode)
         if not vol["ok"]:
+            funnel["volatility"] += 1
             log.append(f"  ⏭ {tkr} — {vol['reason']}")
             continue
         setups = detect_setups(ctx, mode)
         if not setups:
+            funnel["no_setup"] += 1
             log.append(f"  · {tkr} — no valid retest right now")
             continue
         best = setups[0]
@@ -1788,6 +1799,7 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
             skip = "no identifiable catalyst — if you can't name it, you are it"
 
         if skip:
+            funnel["hazard_or_catalyst"] += 1
             log.append(f"  ⏭ {tkr} — {skip}")
             continue
 
@@ -1812,12 +1824,13 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
     if not candidates:
         _save_state(state)
         return {"ok": True, "log": log, "buys": 0, "sells": sells, "scanned": len(ranked),
-                "mode": mode_key, "candidates": []}
+                "mode": mode_key, "candidates": [], "funnel": dict(funnel)}
 
     candidates.sort(key=lambda c: -c["setup"]["grade"])
 
     if candidates_only:
         return {"ok": True, "mode": mode_key, "scanned": len(ranked), "log": log,
+                "funnel": dict(funnel),
                 "candidates": [{
                     "ticker": c["ticker"], "price": c["price"], "chg": c["chg"],
                     "rvol": c["rvol"], "float": c["float"],

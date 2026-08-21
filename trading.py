@@ -442,9 +442,9 @@ def _safe(val, fallback=None):
 def _polygon_key() -> str | None:
     """Get Polygon API key from secrets or env."""
     try:
-        return st.secrets.get("POLYGON_API_KEY") or os.environ.get("POLYGON_API_KEY") or "wzJ5v31KgEA_rwFQxViseXokW5TLoSrG"
+        return st.secrets.get("POLYGON_API_KEY") or os.environ.get("POLYGON_API_KEY")
     except Exception:
-        return os.environ.get("POLYGON_API_KEY") or "wzJ5v31KgEA_rwFQxViseXokW5TLoSrG"
+        return os.environ.get("POLYGON_API_KEY")
 
 POLYGON_BASE = "https://api.polygon.io"
 

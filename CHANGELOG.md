@@ -4,6 +4,18 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 4.13.1 — August 17, 2026
+- `GET /api/diagnostics/scan` + a "Why no trades?" button. Runs the active mode
+  read-only and reports key presence, feed status, and a per-stage funnel
+  (`pool → price → day_change → rvol → float → market_cap → dollar_volume →
+  halts → volatility → no_setup → hazard_or_catalyst`), then states which stage
+  killed the most names. Works with the market closed.
+- **Removed the hardcoded Polygon key** used as a fallback in `trading.py` (x2)
+  and `server.py`. Besides being a live credential in a public repo, it meant a
+  missing or misspelled `POLYGON_API_KEY` silently fell back to an old key's data
+  plan instead of failing — a plausible contributor to the empty scans.
+- Scan logs now print `died at: <stage> <n>` after the universe filters.
+
 ## 4.13.0 — August 17, 2026
 - **Groq decommissioned `llama-3.3-70b-versatile` and `llama-3.1-8b-instant` on
   2026-08-16.** Every AI path in Paula was pointing at them: chat, news

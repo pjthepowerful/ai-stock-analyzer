@@ -21,11 +21,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.13.0'
+const VERSION = '4.13.1'
 const VERSION_DATE = 'August 17, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.13.1', d: 'August 17, 2026', changes: [
+    'Added a “Why no trades?” button under Autopilot strategy. It runs a read-only scan and tells you exactly where candidates are being lost — missing API key, data feed refusing the request, or a specific filter rejecting everything — instead of leaving you to infer it from “0 ranked”.',
+    'Removed a hardcoded Polygon API key that was used as a silent fallback. A missing or misspelled key now fails visibly rather than quietly running on an old key’s data plan.',
+  ]},
   { v: '4.13.0', d: 'August 17, 2026', changes: [
     'Migrated off the Llama models Groq retired on August 16 — every AI feature (chat, news analysis, ticker resolution, catalyst grading) was calling a model that no longer answers. Now on GPT-OSS 120B with a 20B fallback for rate limits.',
     'Model names are set in one place and can be overridden with an environment variable, so the next retirement is a config change rather than a code change.',
@@ -4221,6 +4225,8 @@ function StrategyCard({ token, autopilot }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [loadErr, setLoadErr] = useState('')
+  const [diag, setDiag] = useState(null)
+  const [diagBusy, setDiagBusy] = useState(false)
 
   useEffect(() => {
     f(API + '/api/autopilot/modes').then(r => r.json()).then(d => {
@@ -4279,6 +4285,25 @@ function StrategyCard({ token, autopilot }) {
         </div>
       ))}
     </div>
+    <button className="bell-test strat-diag" disabled={diagBusy} onClick={async () => {
+      setDiagBusy(true); setDiag(null)
+      try {
+        const r = await f(API + '/api/diagnostics/scan').then(r => r.json())
+        setDiag(r.ok ? r : { verdict: r.error || 'Diagnostic failed' })
+      } catch { setDiag({ verdict: "Can't reach backend" }) }
+      setDiagBusy(false)
+    }}>{diagBusy ? 'Checking…' : 'Why no trades?'}</button>
+    {diag && <div className="strat-diag-out">
+      <span className="strat-diag-verdict">{diag.verdict}</span>
+      {diag.keys && <span className="strat-diag-keys">
+        {Object.entries(diag.keys).map(([k, v]) => (
+          <em key={k} className={v ? 'ok' : 'bad'}>{k} {v ? '✓' : '✗'}</em>
+        ))}
+      </span>}
+      {diag.funnel && Object.keys(diag.funnel).length > 0 && <span className="strat-diag-funnel">
+        {Object.entries(diag.funnel).map(([k, v]) => <em key={k}>{k.replace(/_/g, ' ')} <b>{v}</b></em>)}
+      </span>}
+    </div>}
     {!modes.length && !loadErr && <span className="strat-msg">Loading strategies…</span>}
     {loadErr && <span className="strat-msg strat-err">{loadErr}</span>}
     {autopilot && <span className="strat-msg strat-warn">Autopilot is running — stop it to change strategy.</span>}
