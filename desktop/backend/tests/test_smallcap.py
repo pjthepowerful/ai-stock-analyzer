@@ -1026,6 +1026,145 @@ def test_aggs_falls_through_to_alpaca_on_a_plan_rejection():
     assert calls["alpaca"] == 1 and got == [{"t": 1}]
 
 
+def test_alpaca_bars_paginates_instead_of_truncating():
+    """A 20-session minute lookback needs ~11k bars; Alpaca caps a page at 10k.
+    Unpaginated with sort=asc, the OLDEST bars are kept and the recent sessions
+    the RVOL baseline depends on are silently dropped."""
+    import types
+    pages = [
+        {"bars": [{"t": "2026-08-01T13:31:00Z", "o": 1, "h": 1, "l": 1, "c": 1, "v": 10}],
+         "next_page_token": "tok1"},
+        {"bars": [{"t": "2026-08-02T13:31:00Z", "o": 2, "h": 2, "l": 2, "c": 2, "v": 20}],
+         "next_page_token": None},
+    ]
+    seen = []
+
+    class _R:
+        status_code = 200
+        def __init__(self, i): self._i = i
+        def json(self): return pages[self._i]
+
+    def _get(url, headers=None, params=None, timeout=None):
+        seen.append(params.get("page_token"))
+        return _R(min(len(seen) - 1, len(pages) - 1))
+
+    real = scp.requests
+    scp.requests = types.SimpleNamespace(get=_get)
+    os.environ["ALPACA_KEY_ID"] = "x"
+    try:
+        bars = scp.alpaca_bars("ABCD", "1Min", start="2026-08-01T00:00:00Z")
+    finally:
+        scp.requests = real
+    assert len(bars) == 2, f"pagination did not follow the token: {bars}"
+    assert seen == [None, "tok1"], seen
+
+
+def test_alpaca_bars_stops_paginating_on_an_error_page():
+    """A mid-pagination failure must return what it has, not loop or crash."""
+    import types
+    calls = {"n": 0}
+
+    class _Ok:
+        status_code = 200
+        def json(self):
+            return {"bars": [{"t": "2026-08-01T13:31:00Z", "o": 1, "h": 1, "l": 1,
+                              "c": 1, "v": 10}], "next_page_token": "tok"}
+
+    class _Bad:
+        status_code = 500
+        def json(self): return {}
+
+    def _get(url, headers=None, params=None, timeout=None):
+        calls["n"] += 1
+        return _Ok() if calls["n"] == 1 else _Bad()
+
+    real = scp.requests
+    scp.requests = types.SimpleNamespace(get=_get)
+    os.environ["ALPACA_KEY_ID"] = "x"
+    try:
+        bars = scp.alpaca_bars("ABCD", "1Min")
+    finally:
+        scp.requests = real
+    assert bars and len(bars) == 1, "must return the page it did get"
+    # And must stop: without the early return it keeps requesting the bad page
+    # until the loop bound, wasting the rate limit on every scan.
+    assert calls["n"] == 2, f"kept requesting after an error: {calls['n']} calls"
+
+
+def test_pagination_is_bounded():
+    """A server that always returns a token must not hang the scan."""
+    import types
+    calls = {"n": 0}
+
+    class _R:
+        status_code = 200
+        def json(self):
+            return {"bars": [{"t": "2026-08-01T13:31:00Z", "o": 1, "h": 1, "l": 1,
+                              "c": 1, "v": 1}], "next_page_token": "always"}
+
+    def _get(url, headers=None, params=None, timeout=None):
+        calls["n"] += 1
+        return _R()
+
+    real = scp.requests
+    scp.requests = types.SimpleNamespace(get=_get)
+    os.environ["ALPACA_KEY_ID"] = "x"
+    try:
+        scp.alpaca_bars("ABCD", "1Min")
+    finally:
+        scp.requests = real
+    assert calls["n"] <= 6, f"unbounded pagination: {calls['n']} requests"
+
+
+def test_snapshots_are_fetched_in_bulk_not_per_ticker():
+    """Per-ticker quotes would burn the rate limit; one call covers 100 symbols."""
+    import types
+    calls = {"n": 0}
+
+    class _R:
+        status_code = 200
+        def json(self):
+            return {"snapshots": {
+                "ABCD": {"latestTrade": {"p": 5.0}, "dailyBar": {"c": 5.0, "v": 900000},
+                         "prevDailyBar": {"c": 4.0}},
+                "WXYZ": {"latestTrade": {"p": 12.0}, "dailyBar": {"c": 12.0, "v": 500000},
+                         "prevDailyBar": {"c": 11.0}}}}
+
+    def _get(url, headers=None, params=None, timeout=None):
+        calls["n"] += 1
+        assert "," in params["symbols"], "symbols must be batched"
+        return _R()
+
+    real = scp.requests
+    scp.requests = types.SimpleNamespace(get=_get)
+    os.environ["ALPACA_KEY_ID"] = "x"
+    try:
+        got = scp.alpaca_snapshots(["ABCD", "WXYZ"])
+    finally:
+        scp.requests = real
+    assert calls["n"] == 1
+    assert got["ABCD"]["Chg%"] == 25.0, got["ABCD"]
+    assert got["WXYZ"]["Price"] == 12.0
+
+
+def test_snapshot_without_a_previous_close_is_skipped():
+    """No prior close means no computable % change — better dropped than zero."""
+    import types
+
+    class _R:
+        status_code = 200
+        def json(self):
+            return {"snapshots": {"NEWL": {"latestTrade": {"p": 8.0},
+                                           "dailyBar": {"c": 8.0}, "prevDailyBar": {}}}}
+    real = scp.requests
+    scp.requests = types.SimpleNamespace(get=lambda *a, **k: _R())
+    os.environ["ALPACA_KEY_ID"] = "x"
+    try:
+        assert scp.alpaca_snapshots(["NEWL"]) == {}
+    finally:
+        scp.requests = real
+
+
 # ── Config plumbing ────────────────────────────────────────────────────────
 # These need the REAL trading module, but this file stubs `trading` in
 # sys.modules so the strategy tests stay offline. Run them in a subprocess.

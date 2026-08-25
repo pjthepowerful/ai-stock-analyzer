@@ -525,24 +525,104 @@ def alpaca_bars(ticker: str, timeframe: str = "1Min", start=None, end=None,
         params["start"] = start
     if end:
         params["end"] = end
+    # Alpaca caps a page at 10,000 bars. A 20-session minute-bar lookback needs
+    # ~11,000, and with sort=asc an unpaginated request silently keeps the OLDEST
+    # bars — dropping exactly the recent sessions the RVOL baseline depends on.
+    # Follow next_page_token, with a hard cap so a bad request can't loop.
+    out = []
+    token = None
     try:
-        r = requests.get(f"{ALPACA_DATA_BASE}/v2/stocks/{ticker.upper()}/bars",
-                         headers=_alpaca_data_headers(), params=params, timeout=20)
-        if r.status_code != 200:
-            return None
-        out = []
-        for b in (r.json().get("bars") or []):
-            try:
-                ts = datetime.fromisoformat(b["t"].replace("Z", "+00:00"))
-            except Exception:
-                continue
-            out.append({"t": int(ts.timestamp() * 1000), "o": b.get("o", 0),
-                        "h": b.get("h", 0), "l": b.get("l", 0),
-                        "c": b.get("c", 0), "v": b.get("v", 0),
-                        "vw": b.get("vw", b.get("c", 0))})
+        for _ in range(6):
+            page = dict(params)
+            page["limit"] = min(limit, 10000)
+            if token:
+                page["page_token"] = token
+            r = requests.get(f"{ALPACA_DATA_BASE}/v2/stocks/{ticker.upper()}/bars",
+                             headers=_alpaca_data_headers(), params=page, timeout=20)
+            if r.status_code != 200:
+                return out or None
+            body = r.json()
+            for b in (body.get("bars") or []):
+                try:
+                    ts = datetime.fromisoformat(b["t"].replace("Z", "+00:00"))
+                except Exception:
+                    continue
+                out.append({"t": int(ts.timestamp() * 1000), "o": b.get("o", 0),
+                            "h": b.get("h", 0), "l": b.get("l", 0),
+                            "c": b.get("c", 0), "v": b.get("v", 0),
+                            "vw": b.get("vw", b.get("c", 0))})
+            token = body.get("next_page_token")
+            if not token or len(out) >= limit:
+                break
         return out or None
     except Exception:
+        return out or None
+
+
+def alpaca_most_actives(top: int = 50) -> list[dict] | None:
+    """Most-active names, as a second source of candidates.
+
+    The movers list is the top N by percentage, which skews to sub-$1 names and
+    large caps — on the first live run, 16 of 30 died on the price band alone.
+    Most-actives surfaces names moving on volume inside the tradable band.
+    """
+    if not os.environ.get("ALPACA_KEY_ID"):
         return None
+    try:
+        r = requests.get(f"{ALPACA_DATA_BASE}/v1beta1/screener/stocks/most-actives",
+                         headers=_alpaca_data_headers(),
+                         params={"by": "volume", "top": min(max(top, 1), 100)}, timeout=15)
+        if r.status_code != 200:
+            return None
+        rows = []
+        for a in (r.json().get("most_actives") or []):
+            sym = a.get("symbol")
+            if sym:
+                rows.append({"Ticker": sym, "Price": 0, "Chg%": 0,
+                             "Volume": a.get("volume", 0), "_needs_quote": True})
+        return rows or None
+    except Exception:
+        return None
+
+
+def alpaca_snapshots(symbols: list[str]) -> dict:
+    """Bulk latest/daily/prev-daily bars for many symbols in ONE request.
+
+    Most-actives returns symbols without prices, and the price band is checked
+    before any per-ticker bars are fetched. Quoting them individually would burn
+    the rate limit; the bulk snapshot endpoint answers for all of them at once.
+    """
+    if not symbols or not os.environ.get("ALPACA_KEY_ID"):
+        return {}
+    out = {}
+    try:
+        for i in range(0, len(symbols), 100):
+            chunk = symbols[i:i + 100]
+            r = requests.get(f"{ALPACA_DATA_BASE}/v2/stocks/snapshots",
+                             headers=_alpaca_data_headers(),
+                             params={"symbols": ",".join(chunk),
+                                     "feed": os.environ.get("ALPACA_DATA_FEED", "iex")},
+                             timeout=20)
+            if r.status_code != 200:
+                break
+            body = r.json()
+            rows = body.get("snapshots", body)
+            for sym, snap in (rows or {}).items():
+                if not isinstance(snap, dict):
+                    continue
+                day = snap.get("dailyBar") or {}
+                prev = snap.get("prevDailyBar") or {}
+                last = (snap.get("latestTrade") or {}).get("p")
+                price = last or day.get("c") or 0
+                pc = prev.get("c") or 0
+                if not price or not pc:
+                    continue
+                out[sym] = {"Ticker": sym, "Price": round(float(price), 2),
+                            "Chg%": round((price - pc) / pc * 100, 2),
+                            "Volume": day.get("v", 0)}
+    except Exception:
+        pass
+    return out
 
 
 def active_feed() -> dict:
@@ -1795,7 +1875,18 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
     raw_snaps = t.polygon_all_snapshots()
     feed_src = "polygon"
     if not raw_gainers and not raw_snaps:
-        raw_gainers = alpaca_movers(top=max(mode["TOP_N_GAINERS"], 20))
+        raw_gainers = alpaca_movers(top=50) or []
+        # Movers is top-N by percentage, which skews to sub-$1 names and large
+        # caps — on the first live run 16 of 30 died on the price band alone.
+        # Most-actives adds names moving on volume inside the tradable band.
+        actives = alpaca_most_actives(top=100) or []
+        if actives:
+            have = {g["Ticker"] for g in raw_gainers}
+            need = [a["Ticker"] for a in actives if a["Ticker"] not in have][:100]
+            quoted = alpaca_snapshots(need)
+            raw_gainers += [q for q in quoted.values()
+                            if mode["PRICE_MIN"] <= q["Price"] <= mode["PRICE_MAX"]]
+        raw_gainers = raw_gainers or None
         if raw_gainers:
             feed_src = "alpaca"
             _ACTIVE_FEED.update(source="alpaca", note="Polygon unavailable; using Alpaca.")

@@ -21,11 +21,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.15.0'
+const VERSION = '4.15.1'
 const VERSION_DATE = 'August 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.15.1', d: 'August 18, 2026', changes: [
+    'Fixed relative-volume being calculated against an incomplete history. The 20-day baseline needs more bars than one request returns, and the missing pages were the most recent days — so every RVOL reading was measured against a stale average.',
+    'Widened the candidate pool. The gainer list is top movers by percentage, which skews to penny stocks and large caps — on the first live run, 16 of 30 names were outside the tradable price range before anything else was checked. It now also pulls the most-active names and prices them in a single request.',
+  ]},
   { v: '4.15.0', d: 'August 18, 2026', changes: [
     'The scanner can now run without a paid Polygon plan. Polygon’s free tier does not include the endpoints used to find gainers, which is why scans were coming back empty. It now falls back to Alpaca’s screener, which is free on the account you already have.',
     'Because that fallback’s volume data covers only part of the market, volume thresholds scale down automatically and the log says plainly which data source it is using.',

@@ -4,6 +4,24 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 4.15.1 — August 18, 2026
+First live run on the Alpaca feed produced a real funnel — `30 ranked → 0
+cleared, died at: price 16, rvol 8, float 6` — which exposed two problems.
+- **`alpaca_bars()` never paginated.** Alpaca caps a page at 10,000 bars and a
+  20-session minute lookback needs ~11,000. With `sort=asc` the unpaginated
+  request kept the OLDEST bars and silently dropped the recent sessions, so
+  `time_adjusted_rvol()` was comparing today against a stale baseline. Now
+  follows `next_page_token`, bounded to 6 pages, returning partial data on an
+  error page rather than looping.
+- **Pool too narrow.** Movers is top-N by percentage, which skews to sub-$1
+  names and large caps; over half died on the price band before any real filter
+  ran. Added `alpaca_most_actives()` plus `alpaca_snapshots()`, which prices up
+  to 100 symbols in a single request (per-ticker quotes would exhaust the rate
+  limit), pre-filtered to the mode's price band before merging.
+- 5 tests. Pagination and bound mutation-verified; the error-page early return
+  is an equivalent mutant (a 500 returning valid JSON behaves the same either
+  way) and is documented as such rather than tested around.
+
 ## 4.15.0 — August 18, 2026
 - **Root cause of the empty scans:** Polygon's free Basic plan is end-of-day +
   15-min delayed at 5 calls/min and does **not** include the snapshot endpoints
