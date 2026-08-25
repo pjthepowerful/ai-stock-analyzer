@@ -21,11 +21,17 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.13.1'
-const VERSION_DATE = 'August 17, 2026'
+const VERSION = '4.14.0'
+const VERSION_DATE = 'August 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.14.0', d: 'August 18, 2026', changes: [
+    'Trade notifications now name what was bought — ticker, share count, entry and stop — instead of just “2 bought”.',
+    'Every scan cycle now explains itself. If nothing was bought, the log says which stage rejected the candidates rather than going quiet, and each scan reports how many names died at each filter.',
+    'Added a startup self-test that reports on boot whether the market feed, API keys, notification topic and persistent storage are all working, so a broken setup announces itself instead of producing silent empty days.',
+    'Setup quality is now re-checked immediately before ordering, not only during detection.',
+  ]},
   { v: '4.13.1', d: 'August 17, 2026', changes: [
     'Added a “Why no trades?” button under Autopilot strategy. It runs a read-only scan and tells you exactly where candidates are being lost — missing API key, data feed refusing the request, or a specific filter rejecting everything — instead of leaving you to infer it from “0 ranked”.',
     'Removed a hardcoded Polygon API key that was used as a silent fallback. A missing or misspelled key now fails visibly rather than quietly running on an old key’s data plan.',

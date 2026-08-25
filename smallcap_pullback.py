@@ -1783,6 +1783,14 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
             log.append(f"  · {tkr} — no valid retest right now")
             continue
         best = setups[0]
+        # Re-check the grade here as well as inside detect_setups. The gate
+        # currently exists in exactly one place; if a future detector forgets it,
+        # nothing downstream would notice and low-grade setups would be traded.
+        if best.get("grade", 0) < mode["MIN_SETUP_GRADE"]:
+            funnel["low_grade"] += 1
+            log.append(f"  ⏭ {tkr} — setup grade {best.get('grade', 0)} "
+                       f"below this mode's {mode['MIN_SETUP_GRADE']}")
+            continue
 
         hz = filings_hazard(tkr)
         cat = catalyst_grade(tkr)
@@ -1822,9 +1830,13 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
                    f"catalyst {cat['grade']} · {vol['notes'][0] if vol['notes'] else ''}" + (f" · ⚠ {', '.join(hz['flags'][:2])}" if hz.get("flags") else ""))
 
     if not candidates:
+        top = ", ".join(f"{k} {v}" for k, v in funnel.most_common(3)
+                        if k not in ("pool", "cleared_universe"))
+        log.append(f"No entry: {len(survivors)} name(s) cleared the universe filters but "
+                   f"none produced a tradable setup" + (f" — died at: {top}." if top else "."))
         _save_state(state)
         return {"ok": True, "log": log, "buys": 0, "sells": sells, "scanned": len(ranked),
-                "mode": mode_key, "candidates": [], "funnel": dict(funnel)}
+                "mode": mode_key, "candidates": [], "funnel": dict(funnel), "entries": []}
 
     candidates.sort(key=lambda c: -c["setup"]["grade"])
 
@@ -1846,6 +1858,7 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
     log.append("")
     log.append("**Executing**")
     buys = 0
+    entries = []
     for c in candidates[:max(open_slots, 1)]:
         tkr = c["ticker"]
         setup = c["setup"]
@@ -1907,7 +1920,20 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
         for n in setup["notes"][:3]:
             log.append(f"     · {n}")
         buys += 1
+        entries.append({"ticker": tkr, "qty": qty, "entry": entry, "stop": final_stop,
+                        "setup": setup["setup"], "grade": setup["grade"],
+                        "notional": round(notional, 2), "ladder": bool(ladder)})
+
+    # A cycle that does nothing must still say why — silence is what made the
+    # last week of "no trades" impossible to diagnose from the outside.
+    if not buys:
+        if candidates:
+            log.append(f"No entry: {len(candidates)} candidate(s) graded but none sized "
+                       f"or ordered successfully — see the lines above.")
+        else:
+            log.append("No entry: nothing cleared the setup and hazard screens this cycle.")
 
     _save_state(state)
     return {"ok": True, "log": log, "buys": buys, "sells": sells,
-            "scanned": len(ranked), "opportunities": len(candidates), "mode": mode_key}
+            "scanned": len(ranked), "opportunities": len(candidates), "mode": mode_key,
+            "entries": entries, "funnel": dict(funnel)}

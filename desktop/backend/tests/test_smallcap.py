@@ -775,6 +775,187 @@ def test_healthy_feed_says_an_empty_pool_is_a_filter_result():
     assert "Feed OK" in d["verdict"] and "filter result" in d["verdict"]
 
 
+# ── Reporting: a cycle must never be silent ────────────────────────────────
+
+def test_a_cycle_that_buys_nothing_still_explains_itself():
+    """Weeks of 'no trades' were undiagnosable because a quiet cycle logged
+    nothing about why it was quiet."""
+    out = _run_with_pnl("intense", 0, equity=50_000)
+    joined = " ".join(out["log"]).lower()
+    assert any(k in joined for k in ("no entry", "no candidates", "outside", "max positions",
+                                     "pdt", "cap reached", "before")), joined[-300:]
+
+
+def test_run_reports_structured_entries_not_just_a_count():
+    """The phone notification names tickers, which needs structure, not a tally."""
+    out = _run_with_pnl("intense", 0, equity=50_000)
+    assert "entries" in out or out.get("buys", 0) == 0
+    if out.get("entries"):
+        e = out["entries"][0]
+        for k in ("ticker", "qty", "entry", "stop", "setup"):
+            assert k in e
+
+
+def test_funnel_is_returned_for_diagnosis():
+    out = _run_with_pnl("intense", 0, equity=50_000)
+    assert isinstance(out.get("funnel", {}), dict)
+
+
+def test_notification_text_names_tickers():
+    """Mirrors the server's builder: '2 bought' is not actionable from a phone."""
+    entries = [{"ticker": "ABCD", "qty": 300, "entry": 5.00, "stop": 4.75},
+               {"ticker": "WXYZ", "qty": 120, "entry": 12.40, "stop": 11.90}]
+    text = " · ".join(f"{e['ticker']} {e['qty']}@${e['entry']:.2f} stop ${e['stop']:.2f}"
+                      for e in entries[:4])
+    assert "ABCD" in text and "$5.00" in text and "$4.75" in text
+    title = "Bought " + ", ".join(e["ticker"] for e in entries[:3])
+    assert title == "Bought ABCD, WXYZ"
+
+
+# ── End-to-end: a synthetic market that actually reaches the order path ────
+# Every earlier test stopped at an empty feed, so nothing covered scanning,
+# grading, sizing or ordering. Three mutations to the execution block passed
+# unnoticed because of it. This drives the full pipeline.
+
+import contextlib
+
+
+@contextlib.contextmanager
+def fake_market(tickers=("ABCD", "WXYZ"), setup_grade=80, buy_ok=True):
+    orders = []
+    stops = []
+    saved = {}
+
+    def _stub(name, fn):
+        saved[name] = getattr(scp, name)
+        setattr(scp, name, fn)
+
+    _fake.polygon_gainers = lambda limit=20: [
+        {"Ticker": t, "Price": 5.00, "Chg%": 24.0, "Volume": 9_000_000} for t in tickers]
+    _fake.polygon_all_snapshots = lambda: []
+    _fake.alpaca_positions = lambda: []
+
+    # A real gapper: opens near 4.55, works up past 5.10 (>12% day range), with a
+    # mix of active and quiet minutes so the spread proxy has something to read.
+    bars = []
+    for i in range(40):
+        base = 4.55 + i * 0.015
+        active = i % 3 == 0
+        bars.append((datetime(2026, 8, 18, 10, i, tzinfo=ET), base,
+                     base + (0.07 if active else 0.012),
+                     base - (0.06 if active else 0.010),
+                     base + 0.02, 120_000 if active else 40_000))
+    ctx = {"ticker": "X", "price": 5.00, "bars1": bars, "bars5": bars, "vwap": 4.90,
+           "ema9": 4.95, "ema20": 4.92, "ema9_series": [4.9] * 40, "ema20_series": [4.9] * 40,
+           "atr5": 0.09, "pdh": 4.85, "pdl": 4.2, "prev_close": 4.03, "pmh": 4.95,
+           "orh": 4.98, "orl": 4.6, "hod": 5.10, "hvn": 4.97, "now": None}
+
+    _stub("time_adjusted_rvol", lambda t, now=None: 6.5)
+    _stub("float_and_cap", lambda t: (30e6, 100e6))
+    _stub("dollar_volume_today", lambda t, now=None: (20e6, 60e6))
+    _stub("median_1min_dollar_volume", lambda t, minutes=30: 400_000)
+    _stub("halt_count_recent", lambda t, minutes=20: 0)
+    _stub("_avg_dollar_volume_20d", lambda t: 80e6)
+    _stub("build_context", lambda t, now=None: dict(ctx, ticker=t))
+    _stub("filings_hazard", lambda t: {"ok": True, "flags": [], "days_since_424b5": None,
+                                       "s3_shelf": False, "serial_splitter": False,
+                                       "reverse_split_months": None})
+    _stub("catalyst_grade", lambda t: {"grade": "real", "reason": "contract award", "headline": ""})
+    _stub("detect_setups", lambda c, m: [{
+        "setup": "VWAP reclaim", "level": 4.90, "entry": 5.00, "stop": 4.78,
+        "grade": setup_grade, "quality": {}, "why": "held the retest",
+        "notes": ["volume dried up", "structure above VWAP"]}])
+    _stub("buy_marketable_limit", lambda t, q, px, slip=0.004:
+          (orders.append((t, q, px)), {"ok": True} if buy_ok else {"ok": False, "error": "rejected"})[1])
+    _stub("place_stop", lambda t, q, stop: (stops.append((t, q, stop)), {"ok": True})[1])
+    _stub("sell_marketable_limit", lambda t, q, px, slip=0.006: {"ok": True})
+    _stub("_now_et", lambda: datetime(2026, 8, 18, 11, 0, tzinfo=ET))
+    scp.STATE_FILE.unlink(missing_ok=True)
+    try:
+        yield orders, stops
+    finally:
+        for k, v in saved.items():
+            setattr(scp, k, v)
+        _fake.polygon_gainers = lambda limit=20: []
+        _fake.polygon_all_snapshots = lambda: []
+        _fake.alpaca_positions = lambda: []
+        scp.STATE_FILE.unlink(missing_ok=True)
+
+
+def test_end_to_end_scan_places_orders_and_names_them():
+    with fake_market() as (orders, stops):
+        out = scp.run("intense", skip_market_check=True)
+    assert out["scanned"] >= 2, out["log"]
+    assert out["buys"] >= 1, out["log"]
+    assert orders, "no order was ever sent"
+    assert out["entries"], "entries must be reported so the alert can name them"
+    e = out["entries"][0]
+    assert e["ticker"] in ("ABCD", "WXYZ")
+    assert e["entry"] == 5.00 and e["stop"] < e["entry"] and e["qty"] > 0
+    joined = " ".join(out["log"])
+    assert e["ticker"] in joined, "the log must name what it bought"
+    assert "VWAP reclaim" in joined
+
+
+def test_end_to_end_places_a_protective_stop_with_every_entry():
+    with fake_market() as (orders, stops):
+        scp.run("intense", skip_market_check=True)
+    assert len(stops) == len(orders), "every filled entry needs a working stop"
+    for _, _, stop in stops:
+        assert stop < 5.00
+
+
+def test_end_to_end_respects_the_concentration_ceiling():
+    with fake_market() as (orders, _):
+        out = scp.run("intense", skip_market_check=True)
+    # fake_market leaves the module-default $50k account in place.
+    equity = _fake.alpaca_account()["equity"]
+    for e in out["entries"]:
+        assert e["notional"] <= equity * INTENSE["CATASTROPHE_CAP_PCT"] + 1
+
+
+def test_end_to_end_low_grade_setups_are_rejected():
+    with fake_market(setup_grade=20) as (orders, _):
+        out = scp.run("intense", skip_market_check=True)
+    assert out["buys"] == 0
+    assert not orders
+    joined = " ".join(out["log"]).lower()
+    assert "below this mode" in joined and "no entry" in joined
+
+
+def test_end_to_end_a_rejected_order_is_reported_not_silent():
+    with fake_market(buy_ok=False) as (orders, _):
+        out = scp.run("intense", skip_market_check=True)
+    assert out["buys"] == 0
+    joined = " ".join(out["log"]).lower()
+    assert "rejected" in joined
+
+
+def test_end_to_end_funnel_counts_the_pool():
+    with fake_market() as _:
+        out = scp.run("intense", skip_market_check=True)
+    assert out["funnel"].get("pool", 0) >= 2
+
+
+def test_end_to_end_disciplined_is_stricter_on_the_same_tape():
+    """Same synthetic market, both modes — Disciplined must not take more."""
+    with fake_market() as (o1, _):
+        intense = scp.run("intense", skip_market_check=True)
+    with fake_market() as (o2, _):
+        strict = scp.run("strict", skip_market_check=True)
+    assert strict["buys"] <= intense["buys"]
+
+
+def test_a_scan_that_grades_candidates_but_buys_none_still_says_why():
+    """The final no-buy branch: candidates existed, sizing or ordering stopped
+    them. Without this the cycle logs the candidates and then goes quiet."""
+    with fake_market(buy_ok=False) as (orders, _):
+        out = scp.run("intense", skip_market_check=True)
+    assert out["buys"] == 0 and out["opportunities"] > 0
+    joined = " ".join(out["log"]).lower()
+    assert "no entry" in joined, joined[-300:]
+
+
 # ── Config plumbing ────────────────────────────────────────────────────────
 # These need the REAL trading module, but this file stubs `trading` in
 # sys.modules so the strategy tests stay offline. Run them in a subprocess.

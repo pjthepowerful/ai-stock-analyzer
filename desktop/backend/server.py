@@ -369,6 +369,47 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"   Could not auto-resume autopilot: {e}")
 
+    # Startup self-test. Ten deploys went out before anyone noticed the scan
+    # couldn't see the market, because every failure in this stack degrades to
+    # silence. This makes the boot state observable in the Railway logs.
+    async def _selftest():
+        await asyncio.sleep(8)
+        try:
+            keys = {"POLYGON_API_KEY": bool(os.environ.get("POLYGON_API_KEY")),
+                    "GROQ_API_KEY": bool(os.environ.get("GROQ_API_KEY")),
+                    "ALPACA_KEY_ID": bool(os.environ.get("ALPACA_KEY_ID")),
+                    "NTFY_TOPIC": bool(os.environ.get("NTFY_TOPIC")),
+                    "DB_DIR": bool(os.environ.get("DB_DIR"))}
+            print("[selftest] env: " + ", ".join(
+                f"{k}={'set' if v else 'MISSING'}" for k, v in keys.items()), flush=True)
+            try:
+                import smallcap_pullback
+                diag = await asyncio.get_event_loop().run_in_executor(
+                    _scan_executor, smallcap_pullback.feed_diagnostics)
+                print(f"[selftest] market feed: {diag.get('verdict')}", flush=True)
+            except Exception as e:
+                print(f"[selftest] market feed probe failed: {e!r}", flush=True)
+            try:
+                mode = (engine.load_autopilot_config().get("STRATEGY_MODE") or "core")
+                cfg_path = engine.autopilot_cfg_path()
+                print(f"[selftest] strategy={mode} config={cfg_path} "
+                      f"persistent={'yes' if os.environ.get('DB_DIR') else 'NO (resets on deploy)'}",
+                      flush=True)
+            except Exception as e:
+                print(f"[selftest] config check failed: {e!r}", flush=True)
+            try:
+                import bell_alerts as _b
+                bc = _b.load_config()
+                nxt = _b.next_alert(bc, datetime.now(ZoneInfo("US/Eastern")))
+                print(f"[selftest] bells enabled={bc.get('enabled')} "
+                      f"next={nxt['period'] + ' ' + nxt['fire_et'].strftime('%a %H:%M ET') if nxt else 'none'}",
+                      flush=True)
+            except Exception as e:
+                print(f"[selftest] bell check failed: {e!r}", flush=True)
+        except Exception as e:
+            print(f"[selftest] failed: {e!r}", flush=True)
+    asyncio.create_task(_selftest())
+
     # Bell alerts survive a restart the same way, since a redeploy mid-school-day
     # would otherwise silently stop the notifications.
     global bell_task
@@ -1045,7 +1086,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v4.13.1",  # bump marker  confirms running code
+        "build": "v4.14.0",  # bump marker  confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -3014,8 +3055,16 @@ async def _autopilot_loop():
                                 try: price_l = float(p.replace("$","").replace(",",""))
                                 except Exception: pass
                         log_trade(action_l, ticker_l, price=price_l, extra={"source": "autopilot", "score": result.get("score", 0)})
+                # Name what was actually traded. "2 bought" tells you nothing you
+                # can act on from a phone; the ticker, entry and stop do.
+                entries = result.get("entries") or []
                 parts = []
-                if buys: parts.append(f"{buys} bought")
+                if entries:
+                    parts.append(" · ".join(
+                        f"{e['ticker']} {e.get('qty','')}@${e.get('entry',0):.2f} "
+                        f"stop ${e.get('stop',0):.2f}" for e in entries[:4]))
+                elif buys:
+                    parts.append(f"{buys} bought")
                 if shorts: parts.append(f"{shorts} shorted")
                 if sells: parts.append(f"{sells} closed")
                 try:
@@ -3027,7 +3076,9 @@ async def _autopilot_loop():
                 except Exception:
                     detail = "| ".join(parts)
 
-                await send_phone_notification("Paula Trade", detail, priority="default")
+                _title = ("Bought " + ", ".join(e["ticker"] for e in entries[:3])
+                          if entries else "Paula Trade")
+                await send_phone_notification(_title, detail, priority="default")
 
             # P&L milestone alerts
             try:

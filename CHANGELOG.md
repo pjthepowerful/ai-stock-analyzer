@@ -4,6 +4,35 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 4.14.0 — August 18, 2026
+Audit pass over the whole autopilot path.
+
+- **Trade notifications name tickers.** The loop built `"2 bought"` from a count
+  and never had the tickers. `run()` now returns structured `entries`
+  (ticker/qty/entry/stop/setup/grade/notional) and the push reads
+  `Bought ABCD, WXYZ` with levels.
+- **No cycle is silent.** Every no-buy path appends a `No entry: …` line naming
+  the stage that rejected the candidates. Previously three separate early
+  returns exited without explanation, which is why weeks of empty days were
+  undiagnosable from the outside.
+- **Funnel counters** on every universe filter (`price`, `day_change`, `rvol`,
+  `float`, `market_cap`, `dollar_volume`, `halts`, `volatility`, `no_setup`,
+  `low_grade`, `hazard_or_catalyst`), returned in the result and logged as
+  `died at: …`.
+- **Startup self-test** prints env-key presence, live market-feed verdict,
+  strategy mode, config path + whether it persists across deploys, and the next
+  bell alert. Ten deploys shipped before anyone noticed the scan couldn't see the
+  market; this makes boot state observable.
+- **Setup grade re-checked before ordering.** The gate existed only inside
+  `detect_setups()`; a future detector forgetting it would have traded low-grade
+  setups silently.
+- **New end-to-end tests** drive a synthetic market all the way to the order
+  path — scanning, grading, sizing, ordering, stop placement, concentration
+  ceiling, rejected orders. Every prior test stopped at an empty feed, which is
+  why three mutations to the execution block previously passed unnoticed.
+- Suite: 92 small-cap tests (from 84), 128 total. All six execution-path
+  mutations verified caught.
+
 ## 4.13.1 — August 17, 2026
 - `GET /api/diagnostics/scan` + a "Why no trades?" button. Runs the active mode
   read-only and reports key presence, feed status, and a per-stage funnel
