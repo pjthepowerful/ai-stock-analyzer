@@ -1086,7 +1086,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v4.14.0",  # bump marker  confirms running code
+        "build": "v4.15.0",  # bump marker  confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -3429,12 +3429,21 @@ async def diagnose_scan(authorization: str = Header(None)):
     res = res or {}
 
     out["feed"] = res.get("feed") or smallcap_pullback.feed_diagnostics()
+    try:
+        out["active_feed"] = smallcap_pullback.active_feed()
+    except Exception:
+        out["active_feed"] = {}
     out["funnel"] = res.get("funnel", {})
     out["candidates"] = len(res.get("candidates") or [])
     out["log"] = res.get("log", [])
 
     pool = out["funnel"].get("pool", 0)
-    if pool == 0:
+    src = (out.get("active_feed") or {}).get("source")
+    if pool == 0 and src == "alpaca":
+        out["verdict"] = ("Polygon's plan doesn't cover the snapshot endpoints, so the "
+                          "scan is on Alpaca's screener instead. Pool was still empty — "
+                          "check the log for the Alpaca response.")
+    elif pool == 0:
         out["verdict"] = out["feed"].get("verdict", "Empty pool — see feed status.")
     elif out["candidates"] == 0:
         biggest = max(((k, v) for k, v in out["funnel"].items()

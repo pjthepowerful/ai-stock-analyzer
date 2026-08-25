@@ -956,6 +956,76 @@ def test_a_scan_that_grades_candidates_but_buys_none_still_says_why():
     assert "no entry" in joined, joined[-300:]
 
 
+# ── Data-source fallback ───────────────────────────────────────────────────
+
+def test_alpaca_movers_shape_matches_polygon_gainers():
+    """The fallback has to be a drop-in or the scanner reads the wrong keys."""
+    import types
+    real = scp.requests
+    class _R:
+        status_code = 200
+        def json(self):
+            return {"gainers": [{"symbol": "ABCD", "percent_change": 23.4, "price": 5.12},
+                                {"symbol": "WXYZ", "percent_change": 11.0, "price": 2.30}]}
+    scp.requests = types.SimpleNamespace(get=lambda *a, **k: _R())
+    os.environ["ALPACA_KEY_ID"] = "x"
+    try:
+        rows = scp.alpaca_movers(20)
+    finally:
+        scp.requests = real
+    assert rows and set(rows[0]) >= {"Ticker", "Price", "Chg%"}
+    assert rows[0]["Ticker"] == "ABCD" and rows[0]["Chg%"] == 23.4
+
+
+def test_scan_falls_back_to_alpaca_when_polygon_returns_nothing():
+    _fake.polygon_gainers = lambda limit=20: None
+    _fake.polygon_all_snapshots = lambda: None
+    real = scp.alpaca_movers
+    real_now = scp._now_et
+    scp.alpaca_movers = lambda top=50: [
+        {"Ticker": "ABCD", "Price": 5.0, "Chg%": 22.0, "Volume": 0}]
+    scp._now_et = lambda: datetime(2026, 8, 18, 11, 0, tzinfo=ET)  # inside the window
+    try:
+        out = scp.run("intense", skip_market_check=True)
+    finally:
+        scp.alpaca_movers = real
+        scp._now_et = real_now
+        _fake.polygon_gainers = lambda limit=20: []
+        _fake.polygon_all_snapshots = lambda: []
+        scp._ACTIVE_FEED.update(source=None, note="")
+        scp.STATE_FILE.unlink(missing_ok=True)
+    joined = " ".join(out["log"])
+    assert "feed: alpaca" in joined, joined[:300]
+    assert "IEX" in joined, "the volume caveat must be stated, not hidden"
+
+
+def test_iex_volume_factor_relaxes_the_dollar_volume_bar():
+    """IEX is a small slice of consolidated volume; applying the SIP threshold
+    to it would reject every name for the wrong reason."""
+    assert 0 < scp.VOLUME_FEED_FACTOR < 1
+    assert INTENSE["DOLLAR_VOL_MIN"] * scp.VOLUME_FEED_FACTOR < INTENSE["DOLLAR_VOL_MIN"]
+
+
+def test_aggs_falls_through_to_alpaca_on_a_plan_rejection():
+    import types
+    calls = {"alpaca": 0}
+    real_req, real_alp = scp.requests, scp._aggs_alpaca
+    class _R:
+        status_code = 403
+        text = "NOT_AUTHORIZED"
+        def json(self): return {}
+    scp.requests = types.SimpleNamespace(get=lambda *a, **k: _R())
+    scp._aggs_alpaca = lambda *a, **k: (calls.__setitem__("alpaca", calls["alpaca"] + 1), [{"t": 1}])[1]
+    scp._ACTIVE_FEED.update(source=None)
+    real_key = scp._pkey
+    scp._pkey = lambda: "k"
+    try:
+        got = scp._aggs("ABCD", 1, "minute", "2026-08-01", "2026-08-18")
+    finally:
+        scp.requests, scp._aggs_alpaca, scp._pkey = real_req, real_alp, real_key
+    assert calls["alpaca"] == 1 and got == [{"t": 1}]
+
+
 # ── Config plumbing ────────────────────────────────────────────────────────
 # These need the REAL trading module, but this file stubs `trading` in
 # sys.modules so the strategy tests stay offline. Run them in a subprocess.

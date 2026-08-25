@@ -377,11 +377,21 @@ def _pkey():
     return _t()._polygon_key()
 
 
+def _aggs_alpaca(ticker: str, mult: int, span: str, frm: str, to: str, limit: int = 50000):
+    tf = {"minute": f"{mult}Min", "hour": f"{mult}Hour", "day": f"{mult}Day"}.get(span)
+    if not tf:
+        return None
+    return alpaca_bars(ticker, tf, start=f"{frm}T00:00:00Z", end=f"{to}T23:59:59Z",
+                       limit=min(limit, 10000))
+
+
 def _aggs(ticker: str, mult: int, span: str, frm: str, to: str, limit: int = 50000):
-    """Raw Polygon aggregate bars. Returns list of dicts with t/o/h/l/c/v."""
+    """Aggregate bars. Polygon first; Alpaca when Polygon isn't serving them."""
+    if _ACTIVE_FEED.get("source") == "alpaca":
+        return _aggs_alpaca(ticker, mult, span, frm, to, limit)
     key = _pkey()
     if not key:
-        return None
+        return _aggs_alpaca(ticker, mult, span, frm, to, limit)
     try:
         r = requests.get(
             f"https://api.polygon.io/v2/aggs/ticker/{ticker.upper()}/range/{mult}/{span}/{frm}/{to}",
@@ -389,6 +399,9 @@ def _aggs(ticker: str, mult: int, span: str, frm: str, to: str, limit: int = 500
             timeout=15,
         )
         if r.status_code != 200:
+            # A plan rejection must not look like a quiet market.
+            if r.status_code in (401, 403, 429):
+                return _aggs_alpaca(ticker, mult, span, frm, to, limit)
             return None
         return r.json().get("results") or None
     except Exception:
@@ -439,6 +452,116 @@ def feed_diagnostics() -> dict:
         out["verdict"] = (f"Feed OK — gainers {g.get('count')}, snapshots {sn.get('count')}. "
                           f"An empty pool after this is a filter result, not a data failure.")
     return out
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  DATA SOURCES  —  Polygon primary, Alpaca fallback
+# ═══════════════════════════════════════════════════════════════════════════
+# Polygon's free Basic plan is end-of-day + 15-minute-delayed at 5 calls/minute
+# and does NOT include the snapshot endpoints, which is what this scanner used
+# to find gainers. Alpaca's screener is available on the free Basic plan and its
+# movers list is computed from SIP (full-market) data, so the gainer list is
+# sound even though Basic's *bars* are IEX-only.
+#
+# IEX is a small share of consolidated volume, so any volume-derived number
+# (RVOL, dollar volume) read from Alpaca bars is understated. When running on
+# the Alpaca feed the scanner says so and relaxes the volume thresholds by
+# VOLUME_FEED_FACTOR rather than pretending the numbers are comparable.
+
+ALPACA_DATA_BASE = "https://data.alpaca.markets"
+VOLUME_FEED_FACTOR = float(os.environ.get("IEX_VOLUME_FACTOR", 0.05))
+
+_ACTIVE_FEED = {"source": None, "note": ""}
+
+
+def _alpaca_data_headers() -> dict:
+    return {
+        "APCA-API-KEY-ID": os.environ.get("ALPACA_KEY_ID", ""),
+        "APCA-API-SECRET-KEY": os.environ.get("ALPACA_SECRET", ""),
+    }
+
+
+def alpaca_movers(top: int = 50) -> list[dict] | None:
+    """Top gainers from Alpaca's screener, shaped like polygon_gainers() output.
+
+    Free on the Basic plan and computed from SIP, so this is a real market-wide
+    gainer list rather than an IEX-only sample.
+    """
+    if not os.environ.get("ALPACA_KEY_ID"):
+        return None
+    try:
+        r = requests.get(f"{ALPACA_DATA_BASE}/v1beta1/screener/stocks/movers",
+                         headers=_alpaca_data_headers(),
+                         params={"top": min(max(top, 1), 50)}, timeout=15)
+        if r.status_code != 200:
+            return None
+        rows = []
+        for g in (r.json().get("gainers") or []):
+            price = g.get("price") or 0
+            if not price:
+                continue
+            rows.append({
+                "Ticker": g.get("symbol"),
+                "Price": round(float(price), 2),
+                "Chg%": round(float(g.get("percent_change") or 0), 2),
+                "Volume": 0,          # not supplied here; filled from bars later
+            })
+        return rows or None
+    except Exception:
+        return None
+
+
+def alpaca_bars(ticker: str, timeframe: str = "1Min", start=None, end=None,
+                limit: int = 10000, feed: str | None = None):
+    """Minute/5-minute bars from Alpaca, shaped like the Polygon agg rows this
+    module already consumes (t in ms, o/h/l/c/v)."""
+    if not os.environ.get("ALPACA_KEY_ID"):
+        return None
+    params = {"timeframe": timeframe, "limit": limit,
+              "feed": feed or os.environ.get("ALPACA_DATA_FEED", "iex"),
+              "adjustment": "split", "sort": "asc"}
+    if start:
+        params["start"] = start
+    if end:
+        params["end"] = end
+    try:
+        r = requests.get(f"{ALPACA_DATA_BASE}/v2/stocks/{ticker.upper()}/bars",
+                         headers=_alpaca_data_headers(), params=params, timeout=20)
+        if r.status_code != 200:
+            return None
+        out = []
+        for b in (r.json().get("bars") or []):
+            try:
+                ts = datetime.fromisoformat(b["t"].replace("Z", "+00:00"))
+            except Exception:
+                continue
+            out.append({"t": int(ts.timestamp() * 1000), "o": b.get("o", 0),
+                        "h": b.get("h", 0), "l": b.get("l", 0),
+                        "c": b.get("c", 0), "v": b.get("v", 0),
+                        "vw": b.get("vw", b.get("c", 0))})
+        return out or None
+    except Exception:
+        return None
+
+
+def active_feed() -> dict:
+    """Which data source the scanner is currently able to use."""
+    if _ACTIVE_FEED["source"]:
+        return dict(_ACTIVE_FEED)
+    diag = feed_diagnostics()
+    g = diag.get("gainers", {}) or {}
+    if diag.get("key_present") and g.get("status") == 200:
+        _ACTIVE_FEED.update(source="polygon", note="Polygon snapshots available.")
+    elif alpaca_movers(5):
+        _ACTIVE_FEED.update(
+            source="alpaca",
+            note=("Polygon snapshots unavailable on this plan — using Alpaca's "
+                  "screener. Volume figures come from the IEX feed and are "
+                  "understated, so volume thresholds are scaled accordingly."))
+    else:
+        _ACTIVE_FEED.update(source=None, note="No usable market-data source.")
+    return dict(_ACTIVE_FEED)
 
 
 def _bars_today(ticker: str, mult: int = 1, span: str = "minute", back_days: int = 0):
@@ -1670,10 +1793,19 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
     log.append("**Scanning gainers**")
     raw_gainers = t.polygon_gainers(limit=mode["TOP_N_GAINERS"])
     raw_snaps = t.polygon_all_snapshots()
+    feed_src = "polygon"
+    if not raw_gainers and not raw_snaps:
+        raw_gainers = alpaca_movers(top=max(mode["TOP_N_GAINERS"], 20))
+        if raw_gainers:
+            feed_src = "alpaca"
+            _ACTIVE_FEED.update(source="alpaca", note="Polygon unavailable; using Alpaca.")
     gainers = raw_gainers or []
     snaps = raw_snaps or []
-    log.append(f"feed: gainers {len(gainers) if raw_gainers is not None else 'NONE'} · "
+    log.append(f"feed: {feed_src} · gainers {len(gainers) if raw_gainers is not None else 'NONE'} · "
                f"snapshots {len(snaps) if raw_snaps is not None else 'NONE'}")
+    if feed_src == "alpaca":
+        log.append("   ⚠️ Alpaca IEX bars — volume is a fraction of consolidated "
+                   "volume, so volume thresholds are scaled down accordingly.")
     pool = {}
     for g in gainers:
         pool[g.get("Ticker")] = g
@@ -1716,10 +1848,11 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
             continue
 
         traded, projected = dollar_volume_today(tkr, now)
-        if not traded or traded < mode["DOLLAR_VOL_MIN"]:
+        _vf = VOLUME_FEED_FACTOR if feed_src == "alpaca" else 1.0
+        if not traded or traded < mode["DOLLAR_VOL_MIN"] * _vf:
             rejected.append((tkr, f"${(traded or 0)/1e6:.1f}M traded — exit liquidity too thin")); funnel["dollar_volume"] += 1
             continue
-        if projected and projected < mode["PROJ_DOLLAR_VOL_MIN"]:
+        if projected and projected < mode["PROJ_DOLLAR_VOL_MIN"] * _vf:
             rejected.append((tkr, f"projected ${projected/1e6:.0f}M full day — under bar")); funnel["projected_volume"] += 1
             continue
 

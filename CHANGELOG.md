@@ -4,6 +4,20 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 4.15.0 — August 18, 2026
+- **Root cause of the empty scans:** Polygon's free Basic plan is end-of-day +
+  15-min delayed at 5 calls/min and does **not** include the snapshot endpoints
+  `polygon_gainers()` / `polygon_all_snapshots()` depend on. Every scan since the
+  small-cap engine shipped had a pool of zero for this reason.
+- Added an Alpaca fallback: `alpaca_movers()` (free on Basic, computed from SIP,
+  so the gainer list itself is market-wide) and `alpaca_bars()`, shaped as
+  drop-in replacements. `_aggs()` falls through to Alpaca on 401/403/429.
+- Alpaca Basic bars are IEX-only, so volume-derived figures are understated.
+  Rather than pretend otherwise, the scan states the active feed in its log and
+  scales `DOLLAR_VOL_MIN` / `PROJ_DOLLAR_VOL_MIN` by `IEX_VOLUME_FACTOR` (0.05).
+- "Why no trades?" now reports which source is live.
+- 4 tests; suite at 96 small-cap / 132 total.
+
 ## 4.14.0 — August 18, 2026
 Audit pass over the whole autopilot path.
 
