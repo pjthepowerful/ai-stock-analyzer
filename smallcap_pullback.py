@@ -58,6 +58,19 @@ SEC_UA = os.environ.get("SEC_USER_AGENT", "Paula Trading Research paula@example.
 #  MODE DEFINITIONS
 # ═══════════════════════════════════════════════════════════════════════════
 
+
+def _env_num(key: str, default):
+    """Per-gate override: INTENSE_RVOL_MIN=1.5 etc. Lets thresholds be tuned from
+    Railway without a deploy, so a bad guess costs a variable change, not a day."""
+    raw = os.environ.get(f"INTENSE_{key}")
+    if raw is None:
+        return default
+    try:
+        return type(default)(raw)
+    except Exception:
+        return default
+
+
 _STRICT = {
     "key": "strict",
     "label": "Disciplined",
@@ -143,25 +156,29 @@ _INTENSE = {
     # $100M scores higher, but a genuinely volatile $300M name still qualifies.
     "MCAP_IDEAL": 100e6,
     "MCAP_MIN": 25e6,
-    "MCAP_MAX": 600e6,
+    "MCAP_MAX": _env_num("MCAP_MAX", 1.2e9),
     "MCAP_SOFT_LO": 75e6,
     "MCAP_SOFT_HI": 125e6,
     "OFF_IDEAL_SIZE_MULT": 0.75,     # outside the sweet spot, smaller — not banned
 
     # The volatility gates the old modes were missing entirely.
-    "MIN_ATR_PCT": 0.012,            # 5-min ATR ≥1.2% of price
-    "MIN_DAY_RANGE_PCT": 0.08,       # high-to-low ≥8% today
-    "MAX_SPREAD_PCT": 0.015,         # wider than this and cents-scalping is a fee
-    "MIN_DAY_CHANGE": 7.0,
-    "PRICE_MIN": 1.00,
-    "PRICE_MAX": 30.00,
+    "MIN_ATR_PCT": _env_num("MIN_ATR_PCT", 0.008),            # 5-min ATR ≥1.2% of price
+    "MIN_DAY_RANGE_PCT": _env_num("MIN_DAY_RANGE_PCT", 0.05),       # high-to-low ≥8% today
+    "MAX_SPREAD_PCT": _env_num("MAX_SPREAD_PCT", 0.025),         # wider than this and cents-scalping is a fee
+    "MIN_DAY_CHANGE": _env_num("MIN_DAY_CHANGE", 4.0),
+    "PRICE_MIN": _env_num("PRICE_MIN", 1.00),
+    # Movers skews to sub-$1 and larger names; $60 keeps more of the list in
+    # range while the market-cap band still does the real size limiting.
+    "PRICE_MAX": _env_num("PRICE_MAX", 60.00),
     "FLOAT_MIN": 5e6,
-    "FLOAT_MAX": 150e6,
-    "RVOL_MIN": 3.0,
-    "RVOL_MIN_AFTERNOON": 2.5,
-    "DOLLAR_VOL_MIN": 5e6,
-    "PROJ_DOLLAR_VOL_MIN": 15e6,
-    "TOP_N_GAINERS": 30,
+    "FLOAT_MAX": _env_num("FLOAT_MAX", 300e6),
+    # An IEX-derived ratio is noisier than a SIP one, and RVOL was rejecting
+    # a quarter of the pool on a baseline that was itself broken until 4.15.1.
+    "RVOL_MIN": _env_num("RVOL_MIN", 1.8),
+    "RVOL_MIN_AFTERNOON": _env_num("RVOL_MIN_AFTERNOON", 1.4),
+    "DOLLAR_VOL_MIN": _env_num("DOLLAR_VOL_MIN", 2e6),
+    "PROJ_DOLLAR_VOL_MIN": _env_num("PROJ_DOLLAR_VOL_MIN", 6e6),
+    "TOP_N_GAINERS": 50,
 
     # ── Setups: dips inside a range that is still holding ──────────────────
     "SETUPS": ["vwap_reclaim", "ema_pullback", "pdh_retest", "orb_retest",
@@ -172,7 +189,7 @@ _INTENSE = {
     "MAX_PULLBACK_VOL_RATIO": 0.80,
     "MAX_RECLAIM_BARS": 5,
     "REQUIRE_ABOVE_VWAP": False,
-    "MIN_SETUP_GRADE": 50,
+    "MIN_SETUP_GRADE": _env_num("MIN_SETUP_GRADE", 42),
 
     "ENTRY_WINDOWS": [("09:35", "15:20")],
     "OPEN_BLACKOUT_UNTIL": "09:35",
@@ -1908,6 +1925,9 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
     from collections import Counter
     funnel = Counter()
     survivors, rejected = [], []
+    # Names failing exactly one gate. When nothing clears, these say which
+    # threshold to move and by how much, instead of loosening everything.
+    near_miss = []
     for row in ranked:
         tkr = row.get("Ticker")
         if not tkr or tkr in held:
@@ -1916,6 +1936,8 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
             rejected.append((tkr, "2 attempts already — a third is revenge, not analysis")); funnel["attempts"] += 1
             continue
         price, chg = row.get("Price", 0), row.get("Chg%", 0)
+        if price > mode["PRICE_MAX"] and price <= mode["PRICE_MAX"] * 1.5:
+            near_miss.append((tkr, f"${price:.2f} vs ${mode['PRICE_MAX']:.0f} max"))
         if not (mode["PRICE_MIN"] <= price <= mode["PRICE_MAX"]):
             rejected.append((tkr, f"${price:.2f} outside price band")); funnel["price"] += 1
             continue
@@ -1925,11 +1947,15 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
 
         rvol = time_adjusted_rvol(tkr, now)
         rv_min = mode["RVOL_MIN"] if now.hour < 12 else mode["RVOL_MIN_AFTERNOON"]
+        if rvol is not None and rv_min * 0.6 <= rvol < rv_min:
+            near_miss.append((tkr, f"RVOL {rvol} vs {rv_min} needed"))
         if rvol is None or rvol < rv_min:
             rejected.append((tkr, f"RVOL {rvol if rvol is not None else '?'} < {rv_min} — thin tape drifting")); funnel["rvol"] += 1
             continue
 
         flt, cap = float_and_cap(tkr)
+        if flt and mode["FLOAT_MAX"] < flt <= mode["FLOAT_MAX"] * 2:
+            near_miss.append((tkr, f"float {flt/1e6:.0f}M vs {mode['FLOAT_MAX']/1e6:.0f}M max"))
         if flt and not (mode["FLOAT_MIN"] <= flt <= mode["FLOAT_MAX"]):
             rejected.append((tkr, f"float {flt/1e6:.0f}M outside band")); funnel["float"] += 1
             continue
@@ -1974,13 +2000,18 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
 
     funnel["pool"] = len(ranked)
     funnel["cleared_universe"] = len(survivors)
+    funnel["near_miss"] = len(near_miss)
     log.append(f"{len(ranked)} ranked → **{len(survivors)} cleared the universe filters**")
+    if not survivors and near_miss:
+        log.append("   closest misses (one gate away):")
+        for tkr, why in near_miss[:5]:
+            log.append(f"     {tkr} — {why}")
     if funnel:
         top = ", ".join(f"{k} {v}" for k, v in funnel.most_common(4)
                         if k not in ("pool", "cleared_universe"))
         if top:
             log.append(f"   died at: {top}")
-    for tkr, why in rejected[:8]:
+    for tkr, why in rejected[:12]:
         log.append(f"  ⏭ {tkr} — {why}")
     if not survivors:
         _save_state(state)

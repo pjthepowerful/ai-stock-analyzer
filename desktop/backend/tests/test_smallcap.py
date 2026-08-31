@@ -1165,6 +1165,77 @@ def test_snapshot_without_a_previous_close_is_skipped():
         scp.requests = real
 
 
+# ── Tunability ─────────────────────────────────────────────────────────────
+
+def test_intense_gates_are_env_tunable():
+    """A bad threshold should cost a Railway variable change, not a deploy."""
+    import importlib
+    os.environ["INTENSE_RVOL_MIN"] = "0.9"
+    os.environ["INTENSE_PRICE_MAX"] = "12"
+    try:
+        importlib.reload(scp)
+        m = scp.get_mode("intense")
+        assert m["RVOL_MIN"] == 0.9
+        assert m["PRICE_MAX"] == 12.0
+    finally:
+        os.environ.pop("INTENSE_RVOL_MIN", None)
+        os.environ.pop("INTENSE_PRICE_MAX", None)
+        importlib.reload(scp)
+    assert scp.get_mode("intense")["RVOL_MIN"] == 1.8
+
+
+def test_a_malformed_override_falls_back_to_the_default():
+    import importlib
+    os.environ["INTENSE_RVOL_MIN"] = "not-a-number"
+    try:
+        importlib.reload(scp)
+        assert scp.get_mode("intense")["RVOL_MIN"] == 1.8
+    finally:
+        os.environ.pop("INTENSE_RVOL_MIN", None)
+        importlib.reload(scp)
+
+
+def test_intense_is_looser_than_disciplined_on_every_universe_gate():
+    I, S = scp.get_mode("intense"), scp.get_mode("strict")
+    assert I["RVOL_MIN"] < S["RVOL_MIN"]
+    assert I["PRICE_MAX"] > S["PRICE_MAX"]
+    assert I["FLOAT_MAX"] > S["FLOAT_MAX"]
+    assert I["MIN_DAY_CHANGE"] < S["MIN_DAY_CHANGE"]
+    assert I["MIN_SETUP_GRADE"] < S["MIN_SETUP_GRADE"]
+
+
+def test_loosening_did_not_touch_the_risk_rails():
+    """Frequency was the goal; per-trade risk and the safety limits were not."""
+    I = scp.get_mode("intense")
+    assert I["CATASTROPHE_CAP_PCT"] <= 0.20
+    assert I["LADDER_TARGET_EQUITY_PCT"] <= 0.18
+    assert I["DAILY_LOSS_LIMIT"] <= 0.03
+    assert I["MAX_POSITIONS"] <= 2
+    assert I["R_PCT"] <= 0.01
+    assert scp.MAX_ATTEMPTS_PER_TICKER == 2
+
+
+def test_near_misses_are_reported_when_nothing_clears():
+    """The point of near-miss reporting is to name the ONE threshold to move.
+    Without it, an empty scan invites loosening everything at once."""
+    _fake.polygon_gainers = lambda limit=20: [
+        {"Ticker": "TOOBIG", "Price": 75.0, "Chg%": 30.0, "Volume": 5_000_000}]
+    _fake.polygon_all_snapshots = lambda: []
+    real_now, real_alp = scp._now_et, scp.alpaca_movers
+    scp._now_et = lambda: datetime(2026, 8, 18, 11, 0, tzinfo=ET)
+    scp.alpaca_movers = lambda top=50: None
+    try:
+        out = scp.run("intense", skip_market_check=True)
+    finally:
+        scp._now_et, scp.alpaca_movers = real_now, real_alp
+        _fake.polygon_gainers = lambda limit=20: []
+        scp.STATE_FILE.unlink(missing_ok=True)
+    joined = " ".join(out["log"])
+    assert "closest misses" in joined, joined[:400]
+    assert "TOOBIG" in joined
+    assert "near_miss" in out.get("funnel", {})
+
+
 # ── Config plumbing ────────────────────────────────────────────────────────
 # These need the REAL trading module, but this file stubs `trading` in
 # sys.modules so the strategy tests stay offline. Run them in a subprocess.

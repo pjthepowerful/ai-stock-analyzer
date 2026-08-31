@@ -4,6 +4,33 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 4.16.0 — August 18, 2026
+Intense was calibrated for a Polygon SIP feed and a wide pool; on Alpaca's
+movers list it rejected everything. Recalibrated for the feed it actually has.
+
+| gate | was | now |
+|---|---|---|
+| `MIN_DAY_CHANGE` | 7% | 4% |
+| `PRICE_MAX` | $30 | $60 |
+| `MCAP_MAX` | 600M | 1.2B |
+| `FLOAT_MAX` | 150M | 300M |
+| `RVOL_MIN` (am/pm) | 3.0 / 2.5 | 1.8 / 1.4 |
+| `MIN_ATR_PCT` | 1.2% | 0.8% |
+| `MIN_DAY_RANGE_PCT` | 8% | 5% |
+| `MAX_SPREAD_PCT` | 1.5% | 2.5% |
+| `MIN_SETUP_GRADE` | 50 | 42 |
+| `DOLLAR_VOL_MIN` | $5M | $2M |
+
+- **Risk rails untouched**: `R_PCT` 1%, `MAX_POSITIONS` 2, `CATASTROPHE_CAP_PCT`
+  20%, `LADDER_TARGET_EQUITY_PCT` 18%, `DAILY_LOSS_LIMIT` 3%, attempts cap 2,
+  PDT floor. A test asserts all of these, so a future loosening pass can't
+  quietly turn frequency into leverage.
+- Every gate is overridable via `INTENSE_<KEY>` env vars; a malformed value falls
+  back to the default rather than crashing the scan.
+- **Near-miss reporting**: names failing exactly one gate are listed with the
+  margin, so the next adjustment moves one threshold for a reason.
+- 5 tests; suite at 106 small-cap / 142 total.
+
 ## 4.15.1 — August 18, 2026
 First live run on the Alpaca feed produced a real funnel — `30 ranked → 0
 cleared, died at: price 16, rvol 8, float 6` — which exposed two problems.
