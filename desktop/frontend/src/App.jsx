@@ -21,11 +21,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.16.0'
+const VERSION = '4.16.1'
 const VERSION_DATE = 'August 18, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.16.1', d: 'August 31, 2026', changes: [
+    'Fixed positions coming out roughly a twentieth of their intended size. The limits that keep a position small relative to available liquidity were measuring only the sliver of volume visible on the free data feed, so a trade meant to risk 1% of the account risked about 0.12% instead.',
+    'A protective stop is no longer placed until the buy actually fills. An unfilled entry previously left a live sell-stop against a position that did not exist; partial fills now get a stop sized to what filled.',
+  ]},
   { v: '4.16.0', d: 'August 18, 2026', changes: [
     'Loosened Intense so it can actually find trades: wider price range, higher float and market-cap ceilings, and lower relative-volume, volatility and setup-quality bars. Risk per trade, position size, the daily stop and the PDT guard are all unchanged — this buys frequency, not leverage.',
     'When a scan finds nothing, it now lists the names that missed by a single filter and by how much, so a threshold can be moved for a reason rather than guessed at.',

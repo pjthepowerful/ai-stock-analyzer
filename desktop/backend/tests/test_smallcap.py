@@ -866,7 +866,13 @@ def fake_market(tickers=("ABCD", "WXYZ"), setup_grade=80, buy_ok=True):
         "grade": setup_grade, "quality": {}, "why": "held the retest",
         "notes": ["volume dried up", "structure above VWAP"]}])
     _stub("buy_marketable_limit", lambda t, q, px, slip=0.004:
-          (orders.append((t, q, px)), {"ok": True} if buy_ok else {"ok": False, "error": "rejected"})[1])
+          (orders.append((t, q, px)),
+           {"ok": True, "id": f"ord-{t}"} if buy_ok else {"ok": False, "error": "rejected"})[1])
+    # Default: the order fills in full. Individual tests override for the
+    # unfilled / partial cases.
+    _stub("_order_fill", lambda oid, wait_s=3.0:
+          (next((q for (tk, q, _) in orders if f"ord-{tk}" == oid), 0), 5.00))
+    _stub("cancel_order", lambda oid: True)
     _stub("place_stop", lambda t, q, stop: (stops.append((t, q, stop)), {"ok": True})[1])
     _stub("sell_marketable_limit", lambda t, q, px, slip=0.006: {"ok": True})
     _stub("_now_et", lambda: datetime(2026, 8, 18, 11, 0, tzinfo=ET))
@@ -1234,6 +1240,117 @@ def test_near_misses_are_reported_when_nothing_clears():
     assert "closest misses" in joined, joined[:400]
     assert "TOOBIG" in joined
     assert "near_miss" in out.get("funnel", {})
+
+
+# ── Sizing on an IEX-measured book ─────────────────────────────────────────
+
+def test_liquidity_scale_only_applies_on_the_alpaca_feed():
+    scp._ACTIVE_FEED.update(source="polygon")
+    assert scp.liquidity_scale() == 1.0
+    scp._ACTIVE_FEED.update(source="alpaca")
+    try:
+        assert scp.liquidity_scale() > 1.0
+        assert scp.liquidity_scale() <= 40.0, "scaling must stay bounded"
+    finally:
+        scp._ACTIVE_FEED.update(source=None)
+
+
+def test_iex_liquidity_caps_no_longer_dominate_the_size():
+    """The live failure: DPRO sized 40 shares where 1% risk called for 324,
+    because the 1-minute cap was measured on IEX volume."""
+    entry, stop = 5.25, 4.85          # 7.6% stop, inside MAX_STOP_PCT
+    iex_med1, iex_adv = 1_400, 4_000_000        # what IEX actually showed
+    unscaled = scp.size_position(25_926, entry, stop, INTENSE, "DPRO",
+                                 adv=iex_adv, med1=iex_med1)
+    scp._ACTIVE_FEED.update(source="alpaca")
+    try:
+        k = scp.liquidity_scale()
+        scaled = scp.size_position(25_926, entry, stop, INTENSE, "DPRO",
+                                   adv=iex_adv * k, med1=iex_med1 * k)
+    finally:
+        scp._ACTIVE_FEED.update(source=None)
+    assert unscaled["binding_cap"] == "min1"
+    assert scaled["qty"] > unscaled["qty"] * 5
+    # ...but never past the risk-based size, which is the real limit.
+    assert scaled["qty"] <= scaled["caps"]["base"]
+
+
+def test_scaling_never_breaches_the_concentration_ceiling():
+    scp._ACTIVE_FEED.update(source="alpaca")
+    try:
+        r = scp.size_position(25_926, 5.25, 5.20, INTENSE, "X",
+                              adv=9e9, med1=9e8)
+    finally:
+        scp._ACTIVE_FEED.update(source=None)
+    assert r["qty"] * 5.25 <= 25_926 * INTENSE["CATASTROPHE_CAP_PCT"] + 6
+
+
+# ── Fill verification ──────────────────────────────────────────────────────
+
+def _fill_stub(status, filled_qty, avg=5.0):
+    import types
+    class _R:
+        status_code = 200
+        def json(self):
+            return {"status": status, "filled_qty": str(filled_qty),
+                    "filled_avg_price": str(avg)}
+    return types.SimpleNamespace(get=lambda *a, **k: _R(),
+                                 delete=lambda *a, **k: types.SimpleNamespace(status_code=204))
+
+
+def test_unfilled_entry_places_no_stop_and_is_cancelled():
+    """NEOV left a live stop for 32 shares whose buy was cancelled unfilled."""
+    with fake_market() as (orders, stops):
+        scp._order_fill = lambda oid, wait_s=3.0: (0, 0.0)
+        out = scp.run("intense", skip_market_check=True)
+    assert not stops, "a stop must never exist without a filled position"
+    assert out["buys"] == 0
+    assert "didn't fill" in " ".join(out["log"])
+
+
+def test_partial_fill_sizes_the_stop_to_what_actually_filled():
+    with fake_market() as (orders, stops):
+        scp._order_fill = lambda oid, wait_s=3.0: (7, 5.01)
+        out = scp.run("intense", skip_market_check=True)
+    assert stops, "a partial fill still needs a stop"
+    for _, q, _ in stops:
+        assert q == 7, f"stop sized to {q}, should match the 7 filled"
+    assert out["entries"][0]["qty"] == 7
+
+
+def test_scan_applies_the_liquidity_scale_to_real_sizing():
+    """Exercises the scan's own use of the scale, not a pre-scaled call. This is
+    the path that produced 40 shares instead of 324."""
+    def _run(feed):
+        with fake_market() as (orders, _):
+            scp._avg_dollar_volume_20d = lambda t: 4_000_000
+            scp.median_1min_dollar_volume = lambda t, minutes=30: 1_400
+            scp._ACTIVE_FEED.update(source=feed)
+            try:
+                out = scp.run("intense", skip_market_check=True)
+            finally:
+                scp._ACTIVE_FEED.update(source=None)
+        return out["entries"][0]["qty"] if out.get("entries") else 0
+
+    thin_iex = _run("alpaca")
+    as_measured = _run("polygon")
+    assert as_measured > 0 and thin_iex > 0
+    assert thin_iex > as_measured * 3, (
+        f"IEX-measured book still dominates sizing: {thin_iex} vs {as_measured}")
+
+
+def test_liquidity_scale_stays_bounded_for_a_tiny_factor():
+    """A near-zero factor would otherwise imply a near-infinite book."""
+    import importlib
+    os.environ["IEX_VOLUME_FACTOR"] = "0.0001"
+    try:
+        importlib.reload(scp)
+        scp._ACTIVE_FEED.update(source="alpaca")
+        assert scp.liquidity_scale() <= 40.0
+    finally:
+        scp._ACTIVE_FEED.update(source=None)
+        os.environ.pop("IEX_VOLUME_FACTOR", None)
+        importlib.reload(scp)
 
 
 # ── Config plumbing ────────────────────────────────────────────────────────

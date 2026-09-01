@@ -1579,6 +1579,66 @@ def place_stop(ticker: str, qty: int, stop: float) -> dict:
 #  SECTION 6 — POSITION MANAGEMENT
 # ═══════════════════════════════════════════════════════════════════════════
 
+
+def liquidity_scale() -> float:
+    """Convert IEX-measured volume into an estimate of consolidated volume.
+
+    The two liquidity caps (≤1-2% of 20-day average dollar volume, ≤10-15% of
+    recent 1-minute dollar volume) exist to stop the position being large
+    relative to the real book. Measured on Alpaca's IEX feed they see a small
+    slice of that book, so they were shrinking positions by roughly the same
+    factor: a trade sized for 1% of equity came out at 0.12%.
+
+    Scaling the measured volume back up is an estimate, not a measurement. It is
+    deliberately conservative (IEX is typically 2-4% of consolidated; the default
+    factor of 0.05 assumes more IEX share than is usual, so the estimate of the
+    real book is on the low side).
+    """
+    if _ACTIVE_FEED.get("source") != "alpaca":
+        return 1.0
+    f = max(VOLUME_FEED_FACTOR, 0.01)
+    return min(1.0 / f, 40.0)
+
+
+def _order_fill(order_id: str, wait_s: float = 3.0) -> tuple[int, float]:
+    """(filled_qty, avg_price) for a submitted order.
+
+    A stop must never be placed for shares that were not bought. A marketable
+    limit can sit unfilled or fill partially, and placing the stop blind leaves a
+    live sell order against a position that doesn't exist — which is exactly what
+    happened to NEOV: a stop for 32 shares whose entry was cancelled unfilled.
+    """
+    t = _t()
+    deadline = time.time() + wait_s
+    last = (0, 0.0)
+    while time.time() < deadline:
+        try:
+            r = requests.get(f"{t.ALPACA_BASE}/v2/orders/{order_id}",
+                             headers=t._alpaca_headers(), timeout=8)
+            if r.status_code != 200:
+                break
+            d = r.json()
+            qty = int(float(d.get("filled_qty") or 0))
+            avg = float(d.get("filled_avg_price") or 0)
+            last = (qty, avg)
+            if d.get("status") in ("filled", "canceled", "expired", "rejected"):
+                break
+        except Exception:
+            break
+        time.sleep(0.6)
+    return last
+
+
+def cancel_order(order_id: str) -> bool:
+    t = _t()
+    try:
+        r = requests.delete(f"{t.ALPACA_BASE}/v2/orders/{order_id}",
+                            headers=t._alpaca_headers(), timeout=8)
+        return r.status_code in (200, 204)
+    except Exception:
+        return False
+
+
 def manage_positions(mode: dict, state: dict, log: list) -> int:
     """The scale-out ladder, thesis-invalidation exits, time stops, and the
     non-negotiable flatten. Runs before any new entries are considered."""
@@ -2118,8 +2178,12 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
         tkr = c["ticker"]
         setup = c["setup"]
         entry, stop = setup["entry"], setup["stop"]
+        _ls = liquidity_scale()
         adv = _avg_dollar_volume_20d(tkr)
         med1 = median_1min_dollar_volume(tkr, 30)
+        if _ls > 1.0:
+            adv = (adv or 0) * _ls or None
+            med1 = (med1 or 0) * _ls or None
 
         ladder = None
         if mode.get("SCALE_IN"):
@@ -2156,7 +2220,17 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
         if not r.get("ok"):
             log.append(f"  ❌ {tkr} — order rejected: {r.get('error')}")
             continue
-        time.sleep(1.2)
+
+        filled_qty, avg_fill = _order_fill(r.get("id"), wait_s=4.0)
+        if filled_qty < 1:
+            cancel_order(r.get("id"))
+            log.append(f"  ⏭ {tkr} — entry didn't fill at ${entry:.2f}; order cancelled, "
+                       f"no stop placed.")
+            continue
+        if filled_qty < qty:
+            log.append(f"  ⚠️ {tkr} — partial fill {filled_qty}/{qty}; stop sized to fill.")
+        qty = filled_qty
+        entry = avg_fill or entry
         place_stop(tkr, qty, final_stop)
 
         state.setdefault("attempts", {})[tkr] = state.get("attempts", {}).get(tkr, 0) + 1

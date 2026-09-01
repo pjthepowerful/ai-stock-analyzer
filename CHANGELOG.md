@@ -4,6 +4,22 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 4.16.1 — August 31, 2026
+First profitable session (+$1.44 over 4 round trips) exposed two bugs.
+
+- **Positions sized ~1/20th of intent.** The liquidity caps (≤2% of 20-day
+  average dollar volume, ≤15% of recent 1-minute dollar volume) were computed
+  from IEX-measured volume. DPRO: 1% risk called for 324 shares, the ladder
+  target for 888, and the `min1` cap bound it at **40** — $210 notional on a
+  $25,926 account, risking 0.12% instead of 1%. `liquidity_scale()` now converts
+  IEX volume into a consolidated estimate on the Alpaca feed, bounded at 40x.
+  4.15.0 scaled the dollar-volume *screens* for this feed but not the *caps*.
+- **Stop placed without confirming the fill.** NEOV left a live stop for 32
+  shares whose buy was cancelled unfilled. `_order_fill()` now polls the order;
+  an unfilled entry is cancelled and gets no stop, a partial fill gets a stop
+  sized to what filled, and the recorded entry price is the actual average fill.
+- 7 tests; all four mechanisms mutation-verified. Suite at 113 small-cap.
+
 ## 4.16.0 — August 18, 2026
 Intense was calibrated for a Polygon SIP feed and a wide pool; on Alpaca's
 movers list it rejected everything. Recalibrated for the feed it actually has.
