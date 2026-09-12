@@ -4,6 +4,29 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 4.17.0 — August 31, 2026 — SECURITY
+Pre-publication audit of a repo that was **already public**.
+
+- **CRITICAL — unauthenticated trading.** `/api/buy`, `/api/sell`, `/api/short`,
+  `/api/cover` and `/api/close-all` took no `authorization` at all. Any POST from
+  anyone who knew the Railway URL executed on the connected Alpaca account. All
+  now go through `_require_trader()`, which checks both identity and trade
+  permission.
+- **HIGH — CORS accepted any `*.vercel.app` origin** with `allow_credentials=True`.
+  An attacker deployment is a 30-second setup. Pinned to this app's own
+  deployments; override with `FRONTEND_ORIGIN_REGEX`.
+- **MEDIUM — `/api/chat/title` was open and calls Groq**, i.e. anyone's free use
+  of the account's LLM quota. Now requires a login.
+- 7 credentials exist in git history (5 Alpaca key IDs, 1 Alpaca secret, 1 Groq
+  key, 1 Polygon key). History rewriting does not undo exposure on a public repo
+  — **all must be rotated.**
+- New `test_security.py`: static guards for unauthenticated state-changing
+  endpoints, trading-endpoint permission checks, the CORS policy, hardcoded
+  credentials, and a hardcoded JWT secret. Mutation-verified.
+- Reviewed and found sound: PBKDF2-SHA256 at 100k iterations, JWT from env with
+  no hardcoded default, API secrets Fernet-encrypted at rest, `.env` gitignored
+  and only `.env.example` committed.
+
 ## 4.16.1 — August 31, 2026
 First profitable session (+$1.44 over 4 round trips) exposed two bugs.
 

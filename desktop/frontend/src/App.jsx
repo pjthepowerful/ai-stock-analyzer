@@ -21,11 +21,16 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.16.1'
-const VERSION_DATE = 'August 18, 2026'
+const VERSION = '4.17.0'
+const VERSION_DATE = 'August 31, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.17.0', d: 'August 31, 2026', changes: [
+    'Security: the trading endpoints now require a logged-in, trade-authorised account. Previously anyone who knew the backend address could place or close orders on the connected account without logging in.',
+    'Security: browser access is now restricted to this app’s own deployments. The old rule accepted any site hosted on vercel.app.',
+    'Security: chat-title generation now requires a login, so the AI quota cannot be used by strangers.',
+  ]},
   { v: '4.16.1', d: 'August 31, 2026', changes: [
     'Fixed positions coming out roughly a twentieth of their intended size. The limits that keep a position small relative to available liquidity were measuring only the sliver of volume visible on the free data feed, so a trade meant to risk 1% of the account risked about 0.12% instead.',
     'A protective stop is no longer placed until the buy actually fills. An unfilled entry previously left a live sell-stop against a position that did not exist; partial fills now get a stop sized to what filled.',

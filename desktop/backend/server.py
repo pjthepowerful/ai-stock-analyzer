@@ -439,7 +439,15 @@ app.add_middleware(
     # allowed, so "*" results in no Access-Control-Allow-Origin header at all
     # (which is the CORS error). Use a regex that matches our real frontends:
     # any *.vercel.app deployment + localhost for dev.
-    allow_origin_regex=r"https://([a-z0-9-]+\.)*vercel\.app|http://localhost(:\d+)?|https://localhost(:\d+)?",
+    # Was r"https://([a-z0-9-]+\.)*vercel\.app|..." — that matches EVERY
+    # vercel.app deployment, including one an attacker creates in 30 seconds,
+    # and it was paired with allow_credentials=True. Pin to this app's own
+    # deployments: set FRONTEND_ORIGINS (comma-separated) in the host env.
+    allow_origin_regex=os.environ.get(
+        "FRONTEND_ORIGIN_REGEX",
+        r"https://ai-stock-analyzer[a-z0-9-]*\.vercel\.app"
+        r"|https://([a-z0-9-]+-)?pjthepowerful[a-z0-9-]*\.vercel\.app"
+        r"|http://localhost(:\d+)?|https://localhost(:\d+)?"),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1086,7 +1094,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v4.16.1",  # bump marker  confirms running code
+        "build": "v4.17.0",  # bump marker  confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -1285,8 +1293,11 @@ class TitleRequest(BaseModel):
     message: str
 
 @app.post("/api/chat/title")
-async def generate_title(req: TitleRequest):
+async def generate_title(req: TitleRequest, authorization: str = Header(None)):
     """Generate a short chat title from the first message."""
+    # Calls Groq, so an open endpoint is someone else's free LLM quota.
+    if not _get_user(authorization):
+        return {"ok": False, "error": "Authentication required"}
     msg = req.message.strip()
     # Simple fallback: capitalize and shorten
     fallback = msg[:30].strip().title() if len(msg) <= 30 else msg[:28].strip() + '...'
@@ -1511,9 +1522,29 @@ async def analyze_intraday(ticker: str):
     return {"ok": True, "data": {**data, "signal": signal}}
 
 
+
+def _require_trader(authorization: str):
+    """Auth gate for anything that can move real positions.
+
+    These endpoints previously took no authorization at all: any POST to
+    /api/buy, /api/sell, /api/short, /api/cover or /api/close-all from anyone who
+    knew the backend URL executed on the live Alpaca account. Returns None when
+    allowed, or an error dict to return straight to the caller.
+    """
+    user = _get_user(authorization)
+    if not user:
+        return {"ok": False, "error": "Authentication required"}
+    if not _can_autopilot(user):
+        return {"ok": False, "error": "This account is not authorised to trade"}
+    return None
+
+
 @app.post("/api/buy")
-async def buy_stock(req: TradeRequest):
+async def buy_stock(req: TradeRequest, authorization: str = Header(None)):
     """Buy a stock."""
+    _denied = _require_trader(authorization)
+    if _denied:
+        return _denied
     result = engine.alpaca_buy(ticker=req.ticker, qty=req.qty, notional=req.notional)
     result = _sanitize_trade_error(result)
     if result.get("ok"):
@@ -1524,8 +1555,11 @@ async def buy_stock(req: TradeRequest):
 
 
 @app.post("/api/sell")
-async def sell_stock(req: TradeRequest):
+async def sell_stock(req: TradeRequest, authorization: str = Header(None)):
     """Sell a stock."""
+    _denied = _require_trader(authorization)
+    if _denied:
+        return _denied
     result = engine.alpaca_sell(ticker=req.ticker, qty=req.qty, sell_all=req.qty is None)
     result = _sanitize_trade_error(result)
     if result.get("ok"):
@@ -1536,8 +1570,11 @@ async def sell_stock(req: TradeRequest):
 
 
 @app.post("/api/short")
-async def short_stock(req: ShortRequest):
+async def short_stock(req: ShortRequest, authorization: str = Header(None)):
     """Short a stock."""
+    _denied = _require_trader(authorization)
+    if _denied:
+        return _denied
     result = engine.alpaca_short(ticker=req.ticker, qty=req.qty)
     result = _sanitize_trade_error(result)
     if result.get("ok"):
@@ -1548,8 +1585,11 @@ async def short_stock(req: ShortRequest):
 
 
 @app.post("/api/cover")
-async def cover_stock(req: CoverRequest):
+async def cover_stock(req: CoverRequest, authorization: str = Header(None)):
     """Cover a short position."""
+    _denied = _require_trader(authorization)
+    if _denied:
+        return _denied
     result = engine.alpaca_cover(ticker=req.ticker, qty=req.qty, cover_all=req.cover_all)
     result = _sanitize_trade_error(result)
     if result.get("ok"):
@@ -1560,8 +1600,11 @@ async def cover_stock(req: CoverRequest):
 
 
 @app.post("/api/close-all")
-async def close_all():
+async def close_all(authorization: str = Header(None)):
     """Close all positions."""
+    _denied = _require_trader(authorization)
+    if _denied:
+        return _denied
     result = engine.alpaca_close_all()
     result = _sanitize_trade_error(result)
     if result.get("ok"):
@@ -1649,8 +1692,10 @@ async def run_backtest_endpoint(body: dict = None, authorization: str = Header(N
 
 
 @app.post("/api/ml/train")
-async def train_ml():
+async def train_ml(authorization: str = Header(None)):
     """Train ML model on trade history."""
+    if not _get_user(authorization):
+        return {"ok": False, "error": "Authentication required"}
     try:
         log_path = pathlib.Path(__file__).parent / "trade_log.json"
         if not log_path.exists():
@@ -1738,8 +1783,10 @@ def get_trades():
 
 
 @app.post("/api/profile")
-async def save_profile(request: Request):
+async def save_profile(request: Request, authorization: str = Header(None)):
     """Save trader profile  updates autopilot config."""
+    if not _get_user(authorization):
+        return {"ok": False, "error": "Authentication required"}
     try:
         body = await request.json()
         config_path = engine.autopilot_cfg_path()
