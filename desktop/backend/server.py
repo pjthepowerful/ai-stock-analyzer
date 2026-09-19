@@ -1094,7 +1094,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v4.19.1",  # bump marker  confirms running code
+        "build": "v4.20.0",  # bump marker  confirms running code
         # Does THIS process actually serve the earnings calendar? The frontend
         # 404s against an older backend, which is indistinguishable from a bug
         # unless the running build says which routes it has.
@@ -3592,19 +3592,22 @@ async def earnings_refresh(authorization: str = Header(None)):
     async def _build():
         try:
             import earnings as _earn
-            tickers = []
+            held = []
             try:
-                tickers += [p["ticker"] for p in (engine.alpaca_positions() or []) if p.get("ticker")]
+                held = [p["ticker"] for p in (engine.alpaca_positions() or []) if p.get("ticker")]
             except Exception:
                 pass
+            tickers = list(held)
             try:
                 from universe import liquid_universe
                 tickers += liquid_universe()
             except Exception:
                 pass
             loop = asyncio.get_event_loop()
+            # `held` bypasses the cap filter; `tickers` is only used if the
+            # Nasdaq source is unavailable and the per-ticker scan runs.
             data = await loop.run_in_executor(
-                _scan_executor, lambda: _earn.build_calendar(tickers))
+                _scan_executor, lambda: _earn.build_calendar(tickers, keep=set(held)))
             print(f"[earnings] calendar built: {data['count']} tickers, "
                   f"{len(data['dates'])} dates, {data['errors']} errors", flush=True)
             await broadcast("earnings", {"status": "calendar_built",

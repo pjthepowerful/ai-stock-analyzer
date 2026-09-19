@@ -430,12 +430,175 @@ def cache_is_stale() -> bool:
     return age is None or age > CALENDAR_TTL_HOURS
 
 
-def build_calendar(tickers: list[str], progress=None) -> dict:
+# ── Source A: Nasdaq's earnings calendar (date-first) ──────────────────────
+# Yahoo can only answer "when does TICKER report", so a calendar built from it
+# is only ever as complete as the ticker list fed in — a company outside the
+# universe file is invisible no matter how well it fits the strategy. Nasdaq
+# answers the question the calendar actually asks ("who reports on DATE"), in
+# one request per day, and hands back market cap for free, which is exactly the
+# filter a small-cap strategy needs.
+#
+# This is Nasdaq's undocumented public JSON endpoint. It is not a contract:
+# it requires a browser User-Agent, it rate-limits, and it can change shape
+# without notice. So it is a preferred source, not a required one — every
+# failure path falls back to the Yahoo ticker scan below.
+
+NASDAQ_CALENDAR_URL = "https://api.nasdaq.com/api/calendar/earnings"
+NASDAQ_TIMEOUT = float(os.environ.get("EARNINGS_NASDAQ_TIMEOUT", 12))
+NASDAQ_PAUSE = float(os.environ.get("EARNINGS_NASDAQ_PAUSE", 0.25))
+CALENDAR_DAYS_AHEAD = int(os.environ.get("EARNINGS_CALENDAR_DAYS_AHEAD", 45))
+CALENDAR_DAYS_BACK = int(os.environ.get("EARNINGS_CALENDAR_DAYS_BACK", 7))
+# Cap band kept in the calendar. Wider than any trading mode's band on purpose:
+# the calendar is for looking at, and the per-date verdict applies the mode's
+# real limits. This only throws out the mega caps that could never be setups.
+CALENDAR_CAP_MAX = float(os.environ.get("EARNINGS_CALENDAR_CAP_MAX", 5e9))
+CALENDAR_CAP_MIN = float(os.environ.get("EARNINGS_CALENDAR_CAP_MIN", 5e6))
+
+_NASDAQ_HOUR = {"time-pre-market": "BMO", "time-after-hours": "AMC"}
+
+
+def _nasdaq_num(val):
+    """Parse Nasdaq's money strings.
+
+    They arrive as display text, not numbers: '$1,234,567', '(0.12)' for a
+    negative EPS in accounting parentheses, '$1.2B', 'N/A'. Anything that
+    doesn't parse becomes None rather than raising or guessing zero — zero is
+    a real EPS value and must not be invented.
+    """
+    if val is None:
+        return None
+    s = str(val).strip()
+    if not s or s.upper() in ("N/A", "NA", "--", "-", "$", "NONE"):
+        return None
+    neg = s.startswith("(") and s.endswith(")")
+    s = s.strip("()").replace("$", "").replace(",", "").strip()
+    mult = 1.0
+    if s and s[-1].upper() in ("K", "M", "B", "T"):
+        mult = {"K": 1e3, "M": 1e6, "B": 1e9, "T": 1e12}[s[-1].upper()]
+        s = s[:-1].strip()
+    try:
+        n = float(s) * mult
+    except ValueError:
+        return None
+    return -n if neg else n
+
+
+def nasdaq_day(date_str: str) -> list[dict]:
+    """Every company Nasdaq lists as reporting on one date.
+
+    Returns [] for a day with no reports (weekends, holidays) — Nasdaq sends
+    a null rows list for those, which is data, not an error.
+    """
+    import requests
+    hdrs = {
+        "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/125.0.0.0 Safari/537.36"),
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    r = requests.get(NASDAQ_CALENDAR_URL, params={"date": date_str},
+                     headers=hdrs, timeout=NASDAQ_TIMEOUT)
+    r.raise_for_status()
+    rows = (((r.json() or {}).get("data") or {}).get("rows")) or []
+    out = []
+    for row in rows:
+        sym = str(row.get("symbol") or "").upper().strip()
+        if not sym:
+            continue
+        out.append({
+            "ticker": sym,
+            "company": (str(row.get("name") or "").strip() or None),
+            "eps_estimate": _nasdaq_num(row.get("epsForecast")),
+            "market_cap": _nasdaq_num(row.get("marketCap")),
+            "hour": _NASDAQ_HOUR.get(str(row.get("time") or "").strip()),
+            "confirmed": True,
+        })
+    return out
+
+
+def _in_calendar_band(cap) -> bool:
+    """Keep a name in the calendar on market cap.
+
+    An unknown cap is KEPT. Nasdaq routinely omits cap for the smallest names,
+    and those are the ones this strategy trades — dropping on unknown would
+    systematically delete the targets.
+    """
+    if cap is None:
+        return True
+    return CALENDAR_CAP_MIN <= cap <= CALENDAR_CAP_MAX
+
+
+def build_calendar_from_nasdaq(days_ahead: int | None = None,
+                               days_back: int | None = None,
+                               keep: set | None = None,
+                               progress=None,
+                               fetch=None) -> dict:
+    """Walk a date range against Nasdaq and cache date -> [companies].
+
+    Raises if Nasdaq is unreachable on EVERY day tried, so the caller can fall
+    back. A partial result — most days fetched, a few failed — is kept, since
+    a calendar missing three days beats no calendar.
+    """
+    import time
+    ahead = CALENDAR_DAYS_AHEAD if days_ahead is None else days_ahead
+    back = CALENDAR_DAYS_BACK if days_back is None else days_back
+    getter = fetch or nasdaq_day
+    keep = {str(k).upper() for k in (keep or set())}
+
+    today = _now_et().date()
+    days = [today + timedelta(days=d) for d in range(-back, ahead + 1)]
+    days = [d for d in days if d.weekday() < 5]   # Nasdaq is empty on weekends
+
+    dates: dict = {}
+    errors = 0
+    tickers_seen: set = set()
+    for i, d in enumerate(days):
+        key = d.strftime("%Y-%m-%d")
+        try:
+            rows = getter(key)
+        except Exception:
+            errors += 1
+            continue
+        kept = [r for r in rows
+                if r.get("ticker") in keep or _in_calendar_band(r.get("market_cap"))]
+        if kept:
+            kept.sort(key=lambda r: r["ticker"])
+            dates[key] = kept
+            tickers_seen.update(r["ticker"] for r in kept)
+        if progress and i % 5 == 0:
+            try:
+                progress(i + 1, len(days))
+            except Exception:
+                pass
+        if NASDAQ_PAUSE:
+            time.sleep(NASDAQ_PAUSE)
+
+    # Distinguish "nothing was asked" from "everything failed". Without the
+    # first guard an all-weekend range reports total failure and sends the
+    # caller to the fallback for no reason.
+    if not days:
+        raise RuntimeError("no trading days in the requested range")
+    if errors and errors == len(days):
+        raise RuntimeError(f"Nasdaq unreachable on all {errors} days tried")
+
+    data = {"built_at": _now_et().isoformat(), "dates": dates,
+            "count": len(tickers_seen), "errors": errors, "source": "nasdaq"}
+    _save_cache(data)
+    return data
+
+
+# ── Source B: Yahoo, one call per ticker (fallback) ────────────────────────
+
+def build_calendar_from_tickers(tickers: list[str], progress=None) -> dict:
     """Scan tickers for their next report date and cache date -> [tickers].
 
     Slow and rate-limit sensitive, so it is capped and meant to run off the
     request path. Partial results are still cached: a calendar covering 200 of
     250 names is far more useful than none.
+
+    Only as complete as the list handed in — which is why Nasdaq is tried
+    first. This exists so the calendar still works when Nasdaq does not.
     """
     seen, ordered = set(), []
     for t in tickers or []:
@@ -469,9 +632,30 @@ def build_calendar(tickers: list[str], progress=None) -> dict:
     for k in dates:
         dates[k].sort(key=lambda r: r["ticker"])
     data = {"built_at": _now_et().isoformat(), "dates": dates,
-            "count": len(ordered), "errors": errors}
+            "count": len(ordered), "errors": errors, "source": "yahoo"}
     _save_cache(data)
     return data
+
+
+def build_calendar(tickers: list[str] | None = None, keep: set | None = None,
+                   progress=None) -> dict:
+    """Build the calendar from the best source available.
+
+    Nasdaq first — it is date-first, so it sees every reporting company rather
+    than only the ones on our list. Yahoo second, scanning `tickers`, for when
+    Nasdaq is blocked or has changed shape.
+
+    `keep` is the short list that bypasses the cap filter — held positions,
+    which you need reporting dates for whatever their size. It deliberately
+    defaults to nothing rather than to `tickers`: the universe list is mostly
+    names the filter is there to remove.
+    """
+    try:
+        return build_calendar_from_nasdaq(keep=set(keep or ()), progress=progress)
+    except Exception as e:
+        print(f"[earnings] Nasdaq calendar unavailable ({e!r}); "
+              f"falling back to per-ticker scan", flush=True)
+    return build_calendar_from_tickers(tickers or [], progress=progress)
 
 
 def calendar_month(year: int, month: int) -> dict:
@@ -481,7 +665,7 @@ def calendar_month(year: int, month: int) -> dict:
     out = {k: v for k, v in (c.get("dates") or {}).items() if k.startswith(prefix)}
     return {"dates": out, "built_at": c.get("built_at"),
             "count": c.get("count", 0), "errors": c.get("errors", 0),
-            "stale": cache_is_stale()}
+            "source": c.get("source"), "stale": cache_is_stale()}
 
 
 # ── Per-stock verdict ──────────────────────────────────────────────────────

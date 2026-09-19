@@ -376,7 +376,7 @@ def test_calendar_groups_tickers_by_date():
     E.next_report = lambda t: {"ticker": t, "date": _days(dates[t]),
                                "eps_estimate": 1.0, "confirmed": True}
     try:
-        data = E.build_calendar(["AAA", "BBB", "CCC"])
+        data = E.build_calendar_from_tickers(["AAA", "BBB", "CCC"])
         assert len(data["dates"]) == 2, data["dates"]
         same = [v for v in data["dates"].values() if len(v) == 2][0]
         assert {r["ticker"] for r in same} == {"AAA", "BBB"}
@@ -394,7 +394,7 @@ def test_calendar_survives_individual_lookup_failures():
         return {"ticker": t, "date": _days(4), "eps_estimate": None, "confirmed": True}
     E.next_report = _flaky
     try:
-        data = E.build_calendar(["AAA", "BAD", "CCC"])
+        data = E.build_calendar_from_tickers(["AAA", "BAD", "CCC"])
         assert data["errors"] == 1
         tickers = [r["ticker"] for v in data["dates"].values() for r in v]
         assert set(tickers) == {"AAA", "CCC"}
@@ -408,7 +408,7 @@ def test_calendar_respects_the_ticker_cap():
     E.next_report = lambda t: {"ticker": t, "date": _days(2),
                                "eps_estimate": None, "confirmed": True}
     try:
-        data = E.build_calendar([f"T{i}" for i in range(50)])
+        data = E.build_calendar_from_tickers([f"T{i}" for i in range(50)])
         assert data["count"] == 5
     finally:
         _restore()
@@ -419,7 +419,7 @@ def test_calendar_deduplicates_tickers():
     E.next_report = lambda t: {"ticker": t, "date": _days(2),
                                "eps_estimate": None, "confirmed": True}
     try:
-        data = E.build_calendar(["AAA", "aaa", "AAA", "BBB"])
+        data = E.build_calendar_from_tickers(["AAA", "aaa", "AAA", "BBB"])
         assert data["count"] == 2
     finally:
         _restore()
@@ -551,6 +551,267 @@ def test_no_mode_means_no_universe_filtering():
     """Core mode has no small-cap bands, so nothing should be marked out of range."""
     ok, why = E._universe_fit("AAA", None)
     assert ok is True and why == ""
+
+
+# ── Nasdaq calendar source ─────────────────────────────────────────────────
+
+def test_nasdaq_money_parsing():
+    """Nasdaq sends display text, not numbers. Every shape it uses must land
+    on the right value, and anything unparseable must become None rather than
+    zero — zero is a real EPS and must never be invented."""
+    n = E._nasdaq_num
+    assert n("$1,234,567") == 1234567
+    assert n("$0.34") == 0.34
+    assert n("(0.12)") == -0.12          # accounting parentheses = negative
+    assert n("($1.50)") == -1.5
+    assert n("$1.2B") == 1.2e9
+    assert n("450M") == 450e6
+    assert n("N/A") is None
+    assert n("") is None
+    assert n(None) is None
+    assert n("--") is None
+    assert n("garbage") is None
+    assert n("0.00") == 0.0              # a real zero survives
+
+
+def test_nasdaq_day_maps_rows_and_report_time():
+    import types, sys as _s
+    captured = {}
+
+    class _Resp:
+        def raise_for_status(self): pass
+        def json(self):
+            return {"data": {"rows": [
+                {"symbol": "aaa", "name": "Alpha Inc",
+                 "epsForecast": "$0.20", "marketCap": "$120,000,000",
+                 "time": "time-pre-market"},
+                {"symbol": "BBB", "name": "Beta Co",
+                 "epsForecast": "(0.05)", "marketCap": "N/A",
+                 "time": "time-after-hours"},
+                {"symbol": "", "name": "no ticker", "time": "time-not-supplied"},
+            ]}}
+
+    fake = types.ModuleType("requests")
+    def _get(url, params=None, headers=None, timeout=None):
+        captured.update(url=url, params=params, headers=headers)
+        return _Resp()
+    fake.get = _get
+    old = _s.modules.get("requests")
+    _s.modules["requests"] = fake
+    try:
+        rows = E.nasdaq_day("2026-09-22")
+        assert [r["ticker"] for r in rows] == ["AAA", "BBB"], rows  # blank dropped, upcased
+        assert rows[0]["hour"] == "BMO" and rows[1]["hour"] == "AMC"
+        assert rows[0]["eps_estimate"] == 0.20
+        assert rows[1]["eps_estimate"] == -0.05
+        assert rows[0]["market_cap"] == 120e6
+        assert rows[1]["market_cap"] is None
+        assert captured["params"]["date"] == "2026-09-22"
+        assert "Mozilla" in captured["headers"]["User-Agent"]  # Nasdaq 403s without one
+    finally:
+        if old is not None:
+            _s.modules["requests"] = old
+        else:
+            _s.modules.pop("requests", None)
+        _restore()
+
+
+def test_nasdaq_day_handles_a_null_rows_list():
+    """Weekends and holidays come back with rows: null. That is an empty day,
+    not a failure, and must not count as an error."""
+    import types, sys as _s
+    class _Resp:
+        def raise_for_status(self): pass
+        def json(self): return {"data": {"rows": None}}
+    fake = types.ModuleType("requests")
+    fake.get = lambda *a, **k: _Resp()
+    old = _s.modules.get("requests")
+    _s.modules["requests"] = fake
+    try:
+        assert E.nasdaq_day("2026-09-20") == []
+    finally:
+        if old is not None: _s.modules["requests"] = old
+        else: _s.modules.pop("requests", None)
+        _restore()
+
+
+def test_nasdaq_build_skips_weekends_and_groups_by_date():
+    _tmp_cache()
+    E.NASDAQ_PAUSE = 0
+    asked = []
+    def _fetch(day):
+        asked.append(day)
+        return [{"ticker": "AAA", "market_cap": 100e6, "eps_estimate": 0.1,
+                 "hour": "BMO", "confirmed": True, "company": "Alpha"}]
+    try:
+        data = E.build_calendar_from_nasdaq(days_ahead=9, days_back=0, fetch=_fetch)
+        from datetime import datetime as _dt
+        for d in asked:
+            assert _dt.strptime(d, "%Y-%m-%d").weekday() < 5, f"weekend fetched: {d}"
+        assert data["source"] == "nasdaq"
+        assert data["count"] == 1
+        assert len(data["dates"]) == len(asked)
+    finally:
+        _restore()
+
+
+def test_nasdaq_build_keeps_unknown_caps_but_drops_mega_caps():
+    """An unknown cap must be KEPT — Nasdaq omits it for the smallest names,
+    which are exactly this strategy's targets. Dropping on unknown would
+    silently delete the universe."""
+    _tmp_cache()
+    E.NASDAQ_PAUSE = 0
+    rows = [
+        {"ticker": "SMALL", "market_cap": 90e6},
+        {"ticker": "UNKNOWN", "market_cap": None},
+        {"ticker": "MEGA", "market_cap": 900e9},
+        {"ticker": "DUST", "market_cap": 1e3},
+    ]
+    try:
+        data = E.build_calendar_from_nasdaq(days_ahead=9, days_back=0,
+                                            fetch=lambda d: rows)
+        kept = {r["ticker"] for v in data["dates"].values() for r in v}
+        assert "SMALL" in kept and "UNKNOWN" in kept
+        assert "MEGA" not in kept, "a 900B cap is never a small-cap setup"
+        assert "DUST" not in kept
+    finally:
+        _restore()
+
+
+def test_a_held_position_survives_the_cap_filter():
+    """Whatever the account actually owns stays on the calendar even if its cap
+    is outside the band — you still need to know when it reports."""
+    _tmp_cache()
+    E.NASDAQ_PAUSE = 0
+    rows = [{"ticker": "MEGA", "market_cap": 900e9}]
+    try:
+        data = E.build_calendar_from_nasdaq(days_ahead=9, days_back=0,
+                                            keep={"mega"}, fetch=lambda d: rows)
+        kept = {r["ticker"] for v in data["dates"].values() for r in v}
+        assert "MEGA" in kept
+    finally:
+        _restore()
+
+
+def test_nasdaq_build_survives_some_days_failing():
+    _tmp_cache()
+    E.NASDAQ_PAUSE = 0
+    calls = {"n": 0}
+    def _flaky(day):
+        calls["n"] += 1
+        if calls["n"] % 3 == 0:
+            raise RuntimeError("rate limited")
+        return [{"ticker": "AAA", "market_cap": 100e6}]
+    try:
+        data = E.build_calendar_from_nasdaq(days_ahead=20, days_back=0, fetch=_flaky)
+        assert data["errors"] > 0
+        assert len(data["dates"]) > 0, "a partial calendar still beats none"
+    finally:
+        _restore()
+
+
+def test_nasdaq_build_raises_when_every_day_fails():
+    """Total failure must raise so build_calendar can fall back to Yahoo,
+    rather than quietly caching an empty calendar over a good one."""
+    _tmp_cache()
+    E.NASDAQ_PAUSE = 0
+    def _dead(day):
+        raise RuntimeError("blocked")
+    try:
+        try:
+            E.build_calendar_from_nasdaq(days_ahead=5, days_back=0, fetch=_dead)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("expected a raise when no day could be fetched")
+    finally:
+        _restore()
+
+
+def test_build_calendar_falls_back_to_yahoo_when_nasdaq_is_blocked():
+    _tmp_cache()
+    def _dead(**kw):
+        raise RuntimeError("nasdaq blocked")
+    E.build_calendar_from_nasdaq = _dead
+    E.next_report = lambda t: {"ticker": t, "date": _days(3),
+                               "eps_estimate": None, "confirmed": True}
+    try:
+        data = E.build_calendar(["AAA", "BBB"])
+        assert data["source"] == "yahoo"
+        assert data["count"] == 2
+    finally:
+        _restore()
+
+
+def test_build_calendar_prefers_nasdaq():
+    _tmp_cache()
+    E.NASDAQ_PAUSE = 0
+    E.build_calendar_from_tickers = lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("Yahoo must not be reached when Nasdaq works"))
+    try:
+        data = E.build_calendar_from_nasdaq(
+            days_ahead=9, days_back=0,
+            fetch=lambda d: [{"ticker": "AAA", "market_cap": 100e6}])
+        assert data["source"] == "nasdaq"
+    finally:
+        _restore()
+
+
+def test_month_view_reports_its_source():
+    _tmp_cache()
+    E._save_cache({"built_at": E._now_et().isoformat(),
+                   "dates": {"2026-09-21": [{"ticker": "AAA"}]},
+                   "count": 1, "errors": 0, "source": "nasdaq"})
+    try:
+        assert E.calendar_month(2026, 9)["source"] == "nasdaq"
+    finally:
+        _restore()
+
+
+def test_an_all_weekend_range_is_not_mistaken_for_total_failure():
+    """errors == len(days) is true when len(days) is ZERO. Without a separate
+    guard an all-weekend window reports Nasdaq as dead and sends the caller to
+    the fallback for no reason."""
+    _tmp_cache()
+    E.NASDAQ_PAUSE = 0
+    called = {"n": 0}
+    def _fetch(d):
+        called["n"] += 1
+        return []
+    try:
+        # A Saturday-to-Sunday window: zero trading days, zero fetches.
+        from datetime import datetime as _dt, timedelta as _td
+        sat = E._now_et()
+        while sat.weekday() != 5:
+            sat += _td(days=1)
+        E._now_et = lambda: sat
+        try:
+            E.build_calendar_from_nasdaq(days_ahead=1, days_back=0, fetch=_fetch)
+        except RuntimeError as e:
+            assert "no trading days" in str(e), f"wrong reason: {e}"
+        else:
+            raise AssertionError("expected a raise for an empty range")
+        assert called["n"] == 0, "weekend days must never be fetched"
+    finally:
+        _restore()
+
+
+def test_the_universe_list_does_not_bypass_the_cap_filter():
+    """Only held positions get to skip the cap band. If the whole universe were
+    passed as `keep`, the filter would be a no-op for every large cap in it."""
+    _tmp_cache()
+    E.NASDAQ_PAUSE = 0
+    seen = {}
+    def _spy(days_ahead=None, days_back=None, keep=None, progress=None, fetch=None):
+        seen["keep"] = set(keep or ())
+        return {"built_at": E._now_et().isoformat(), "dates": {}, "count": 0,
+                "errors": 0, "source": "nasdaq"}
+    E.build_calendar_from_nasdaq = _spy
+    try:
+        E.build_calendar(["MEGA", "HUGE", "AAA"], keep={"AAA"})
+        assert seen["keep"] == {"AAA"}, seen["keep"]
+    finally:
+        _restore()
 
 
 def main():

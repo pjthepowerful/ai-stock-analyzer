@@ -21,11 +21,17 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.19.1'
+const VERSION = '4.20.0'
 const VERSION_DATE = 'September 19, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.20.0', d: 'September 19, 2026', changes: [
+    'The earnings calendar now runs off the Nasdaq earnings calendar instead of looking each ticker up one at a time. It used to only know about companies already on the watch universe list \u2014 roughly 250 names \u2014 so anything reporting outside that list simply never appeared. Nasdaq answers the question the calendar actually asks (who reports on this date), so coverage is now every reporting company.',
+    'Names are filtered to a small-cap band, since a $900B company is never a setup for this strategy. Anything you actually hold stays on the calendar regardless of its size.',
+    'Each name now shows whether it reports before the open (BMO) or after the close (AMC).',
+    'If Nasdaq is unreachable the old per-ticker scan still runs, and the calendar says which source built it.',
+  ]},
   { v: '4.19.1', d: 'September 19, 2026', changes: [
     'The earnings calendar now says what actually went wrong instead of \u201cCould not load\u201d. A backend running an older build, an expired login and a real server error are three different problems, and each now names itself.',
     'An empty calendar now distinguishes \u201cnever built\u201d from \u201cbuilt, but every lookup failed\u201d \u2014 the second means the backend cannot reach the earnings provider, which is a server-side fix, not a Rebuild.',
@@ -3882,6 +3888,14 @@ function EarningsCalendar({ token }) {
             : `Nothing reports this month in the cached set (${month.count} tickers, built ${new Date(month.built_at).toLocaleString()}${month.errors ? `, ${month.errors} lookups failed` : ''}). Try another month, or Rebuild.`}
       </div>
     )}
+    {month?.built_at && Object.keys(month.dates || {}).length > 0 && (
+      <div style={{ fontSize: '.72rem', color: 'var(--dim)', marginTop: 8 }}>
+        {month.source === 'nasdaq'
+          ? `Nasdaq earnings calendar \u2014 ${month.count} companies`
+          : `Per-ticker scan (Nasdaq unavailable) \u2014 ${month.count} names`}
+        {month.errors ? `, ${month.errors} lookups failed` : ''}
+      </div>
+    )}
     {month?.stale && Object.keys(month.dates || {}).length > 0 && (
       <div style={{ fontSize: '.76rem', color: 'var(--amb)', marginTop: 8 }}>
         Cached data is stale — Rebuild for current dates.
@@ -3903,6 +3917,9 @@ function EarningsCalendar({ token }) {
           <div key={st.ticker} style={{ padding: '9px 0', borderTop: '1px solid var(--brd)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <b style={{ color: 'var(--wh)', fontSize: '.92rem' }}>{st.ticker}</b>
+              {st.hour && (
+                <span style={{ fontSize: '.66rem', color: 'var(--dim)', fontFamily: 'var(--mono)' }}>{st.hour}</span>
+              )}
               <span style={{ fontSize: '.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.3px', padding: '2px 7px', borderRadius: 5, color: v.color, background: v.bg }}>
                 {v.label}
               </span>
