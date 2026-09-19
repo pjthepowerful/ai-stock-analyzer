@@ -4,6 +4,41 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 4.18.0 — September 19, 2026
+Earnings, as a trading input and as an answerable question.
+
+- **`earnings.py`** — next report date + street EPS estimate, last print with
+  actual vs estimate and surprise %, session-aware "did this just report?",
+  and a forward guard. Every accessor tolerates yfinance's three return shapes
+  and degrades to `None`; none of them raise, because a guard that throws gets
+  caught upstream as "no earnings found" — permissive failure on exactly the
+  wrong question.
+- **Verified catalyst outranks the LLM.** `catalyst_grade()` asks a language
+  model to judge headlines, which cannot separate "Q3 revenue up 40%" from
+  "announces intent to explore Q3 opportunities". A print within
+  `EARNINGS_RECENT_SESSIONS` (2) is checkable, so it substitutes for the guess;
+  the LLM remains the fallback when no print explains the move.
+- A rally **against a miss** grades `fluff`, not `real` — the move is a bounce
+  against the news, so sizing into it is backwards.
+- `EARNINGS_BEAT_SIZE_MULT` (Intense: 1.25, Disciplined: 1.0) restores size on a
+  confirmed beat. It scales the risk budget only; the catastrophe cap is
+  unchanged and a test asserts the boost cannot breach it.
+- **`BLOCK_PRE_EARNINGS`** in both modes: no entry in a name reporting before
+  the next open. The 15:50 flatten already makes an after-close print
+  survivable; this covers the intraday case and is belt-and-braces for the rest.
+- `GET /api/earnings/{ticker}`, `POST /api/earnings/calendar` (defaults to open
+  positions — a print lands on a position whether or not it was watched).
+- Co-Pilot gains an Earnings panel; the chat `earnings` intent now returns the
+  estimate and last quarter's surprise rather than a bare date.
+- 28 tests. 11 mutations verified caught, including three against the
+  pre-earnings block specifically — the first version of that test was static
+  and passed while the block was disabled, so it was replaced with a
+  behavioural one that drives a full scan.
+
+**Not verified live:** Yahoo is unreachable from the build sandbox (proxy 403),
+so every earnings path is exercised against stubs. The shapes follow the
+existing `_has_upcoming_earnings()` handling, which works in production.
+
 ## 4.17.0 — August 31, 2026 — SECURITY
 Pre-publication audit of a repo that was **already public**.
 

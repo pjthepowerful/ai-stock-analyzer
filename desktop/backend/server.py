@@ -1094,7 +1094,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v4.17.0",  # bump marker  confirms running code
+        "build": "v4.18.0",  # bump marker  confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -3503,6 +3503,63 @@ async def diagnose_scan(authorization: str = Header(None)):
         out["verdict"] = (f"{out['candidates']} candidate(s) right now. Entries also require "
                           f"the time window, an open slot, and the daily/PDT limits to allow it.")
     return out
+
+
+# ── Earnings ───────────────────────────────────────────────────────────────
+
+@app.get("/api/earnings/{ticker}")
+async def earnings_for(ticker: str, authorization: str = Header(None)):
+    """Everything known about one ticker's earnings."""
+    if not _get_user(authorization):
+        return {"ok": False, "error": "Authentication required"}
+    try:
+        import earnings as _earn
+        snap = await asyncio.get_event_loop().run_in_executor(
+            _scan_executor, lambda: _earn.snapshot(ticker))
+        return {"ok": True, **snap}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
+
+
+@app.post("/api/earnings/calendar")
+async def earnings_calendar(req: dict = None, authorization: str = Header(None)):
+    """Upcoming reports across the account's positions plus any extra tickers.
+
+    Defaults to what is actually held, since that is the exposure that matters:
+    a print lands on a position whether or not it was on a watchlist.
+    """
+    if not _get_user(authorization):
+        return {"ok": False, "error": "Authentication required"}
+    req = req or {}
+    days = int(req.get("days", 14))
+    tickers = [str(t).upper() for t in (req.get("tickers") or []) if t]
+    if req.get("include_positions", True):
+        try:
+            for p in (engine.alpaca_positions() or []):
+                if p.get("ticker") and p["ticker"] not in tickers:
+                    tickers.append(p["ticker"])
+        except Exception:
+            pass
+    if not tickers:
+        return {"ok": True, "upcoming": [], "recent": [], "tickers": []}
+    try:
+        import earnings as _earn
+        loop = asyncio.get_event_loop()
+        upcoming = await loop.run_in_executor(
+            _scan_executor, lambda: _earn.calendar(tickers, days=days))
+        def _recents():
+            out = []
+            for t in tickers:
+                r = _earn.recent_print(t, within_sessions=5)
+                if r:
+                    out.append(_earn._serialise(r))
+            return out
+        recent = await loop.run_in_executor(_scan_executor, _recents)
+        return {"ok": True, "upcoming": upcoming, "recent": recent,
+                "tickers": tickers, "days": days}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
+
 
 # ── Run ──
 

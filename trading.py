@@ -7064,7 +7064,31 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
             warn = ""
             if days is not None and 0 <= days <= 5:
                 warn = " — soon, so holding through it carries overnight gap risk either way."
-            _lines.append(f"**{_raw}** next reports on **{ed['date']}** ({ed['when']}).{warn}")
+            _line = f"**{_raw}** next reports on **{ed['date']}** ({ed['when']}).{warn}"
+
+            # The date alone rarely answers what was actually asked. Add the
+            # street's estimate and how the last print landed, when available.
+            try:
+                import earnings as _earn
+                _nx = _earn.next_report(tick)
+                if _nx and _nx.get("eps_estimate") is not None:
+                    _line += f"\n\nStreet expects **${_nx['eps_estimate']:.2f}** EPS."
+                _lt = _earn.last_report(tick)
+                if _lt:
+                    _est = _lt.get("eps_estimate")
+                    _act = _lt.get("eps_actual")
+                    _sur = _lt.get("surprise_pct")
+                    if _act is not None and _est is not None:
+                        _verb = {"beat": "beat", "miss": "missed", "in line": "came in line with"}.get(
+                            _lt.get("verdict"), "reported against")
+                        _bit = (f"\n\nLast quarter ({_lt['date_str']}) it {_verb} "
+                                f"estimates: **${_act:.2f}** actual vs ${_est:.2f} expected")
+                        if _sur is not None:
+                            _bit += f" ({_sur:+.0f}%)"
+                        _line += _bit + "."
+            except Exception:
+                pass
+            _lines.append(_line)
         if not _lines:
             return {"ok": True, "type": "chat",
                     "msg": "I couldn't find confirmed upcoming earnings dates for those right now."}

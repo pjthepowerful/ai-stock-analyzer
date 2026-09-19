@@ -124,6 +124,8 @@ _STRICT = {
     # ── Section 5: hazards ─────────────────────────────────────────────────
     "REQUIRE_CATALYST": True,        # "none" grade is skipped outright
     "FLUFF_SIZE_MULT": 0.5,
+    "BLOCK_PRE_EARNINGS": True,       # same forward guard in both modes
+    "EARNINGS_BEAT_SIZE_MULT": 1.0,   # no boost; this mode sizes off setup quality
     "HAZARD_BLOCK_424B5_DAYS": 5,    # fresh takedown → skip
     "HAZARD_ATM_SIZE_MULT": 0.5,
     "BLOCK_REVERSE_SPLIT_MONTHS": 6,
@@ -228,6 +230,11 @@ _INTENSE = {
 
     "REQUIRE_CATALYST": False,
     "FLUFF_SIZE_MULT": 0.85,
+    # Earnings. This mode TRADES the reaction to a print (the session after,
+    # when the news is public and the book is liquid) but never holds INTO one
+    # — a gap ignores stops, and this mode concentrates ~18% in one name.
+    "BLOCK_PRE_EARNINGS": True,
+    "EARNINGS_BEAT_SIZE_MULT": _env_num("EARNINGS_BEAT_SIZE_MULT", 1.25),
     "HAZARD_BLOCK_424B5_DAYS": 2,
     "HAZARD_ATM_SIZE_MULT": 0.75,
     "BLOCK_REVERSE_SPLIT_MONTHS": 3,
@@ -2108,11 +2115,37 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
             continue
 
         hz = filings_hazard(tkr)
-        cat = catalyst_grade(tkr)
+
+        # ── Earnings: a verified catalyst outranks the LLM's reading ───────
+        # catalyst_grade() asks a language model to judge headlines, which
+        # cannot reliably separate "Q3 revenue up 40%" from "announces intent
+        # to explore Q3 opportunities". An earnings print can be checked: the
+        # numbers either beat or they didn't. When one explains today's move,
+        # it replaces the guess.
+        cat = None
+        earn_block = ""
+        try:
+            import earnings as _earn
+            _blocked, _why = _earn.reports_before_next_open(tkr)
+            if _blocked:
+                earn_block = _why
+            _ecat = _earn.catalyst_from_earnings(tkr)
+            if _ecat:
+                cat = _ecat
+        except Exception:
+            pass
+        if cat is None:
+            cat = catalyst_grade(tkr)
+
         size_mult = 1.0
         skip = None
 
-        if hz.get("days_since_424b5") is not None and hz["days_since_424b5"] <= mode["HAZARD_BLOCK_424B5_DAYS"]:
+        # Never open a position that would be held into a print. A stop does
+        # not execute through a gap, and this mode concentrates ~18% of the
+        # account in one name.
+        if earn_block and mode.get("BLOCK_PRE_EARNINGS", True):
+            skip = f"{earn_block} before the next open — no stop protects through a gap"
+        elif hz.get("days_since_424b5") is not None and hz["days_since_424b5"] <= mode["HAZARD_BLOCK_424B5_DAYS"]:
             skip = f"424B5 priced {hz['days_since_424b5']}d ago — you're buying into the offering"
         elif hz.get("serial_splitter") and mode["BLOCK_SERIAL_SPLITTER"]:
             skip = "serial reverse-splitter — volatility is the product here"
@@ -2122,7 +2155,7 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
             skip = "no identifiable catalyst — if you can't name it, you are it"
 
         if skip:
-            funnel["hazard_or_catalyst"] += 1
+            funnel["earnings_block" if earn_block else "hazard_or_catalyst"] += 1
             log.append(f"  ⏭ {tkr} — {skip}")
             continue
 
@@ -2130,6 +2163,12 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
             size_mult *= mode["HAZARD_ATM_SIZE_MULT"]
         if cat["grade"] == "fluff":
             size_mult *= mode["FLUFF_SIZE_MULT"]
+        # A confirmed beat is the only catalyst in this universe backed by a
+        # filing rather than a press release, so it earns size back — capped,
+        # because being right about the news is not the same as being right
+        # about the trade.
+        if cat.get("source") == "earnings" and cat.get("verdict") == "beat":
+            size_mult *= mode.get("EARNINGS_BEAT_SIZE_MULT", 1.0)
         if mode.get("LOW_FLOAT_CUTOFF") and s["float"] and s["float"] < mode["LOW_FLOAT_CUTOFF"]:
             size_mult *= mode["LOW_FLOAT_SIZE_MULT"]
         if mode.get("MIDDAY_SIZE_MULT") and _at(now, mode["MIDDAY"][0]) <= now <= _at(now, mode["MIDDAY"][1]):
@@ -2141,8 +2180,11 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
         best["stop"] = round(atr_stop(best["entry"], ctx, mode, best["stop"]), 2)
         candidates.append({**s, "ctx": ctx, "setup": best, "hazard": hz,
                            "catalyst": cat, "size_mult": size_mult, "vol": vol})
+        _cat_txt = cat["grade"]
+        if cat.get("source") == "earnings":
+            _cat_txt = f"EARNINGS ({cat.get('reason', '')})"
         log.append(f"  ✅ **{tkr}** {best['setup']} · grade {best['grade']} · RVOL {s['rvol']} · "
-                   f"catalyst {cat['grade']} · {vol['notes'][0] if vol['notes'] else ''}" + (f" · ⚠ {', '.join(hz['flags'][:2])}" if hz.get("flags") else ""))
+                   f"catalyst {_cat_txt} · {vol['notes'][0] if vol['notes'] else ''}" + (f" · ⚠ {', '.join(hz['flags'][:2])}" if hz.get("flags") else ""))
 
     if not candidates:
         top = ", ".join(f"{k} {v}" for k, v in funnel.most_common(3)

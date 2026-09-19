@@ -21,11 +21,18 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.17.0'
-const VERSION_DATE = 'August 31, 2026'
+const VERSION = '4.18.0'
+const VERSION_DATE = 'September 19, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.18.0', d: 'September 19, 2026', changes: [
+    'Earnings are now part of how Intense picks trades. It used to judge whether a gap had a real reason behind it by asking an AI to read the headlines — which can\u2019t reliably tell "revenue up 40%" from "exploring opportunities". A recent earnings report can be checked against the actual numbers, so when one explains the move it now overrides the guess, and a confirmed beat earns slightly larger size.',
+    'A stock that rallied despite MISSING is graded down rather than up \u2014 the move is a bounce against the news, not a reaction to it.',
+    'Autopilot will no longer open a position in a company reporting before the next open, in either mode. A stop does not execute through an earnings gap.',
+    'New Earnings panel in Co-Pilot: what your positions report next with the street\u2019s estimate, and how recent reports actually landed. Add any ticker to check it.',
+    'Asking about earnings in chat now answers with the expected EPS and how last quarter came in, not just the date.',
+  ]},
   { v: '4.17.0', d: 'August 31, 2026', changes: [
     'Security: the trading endpoints now require a logged-in, trade-authorised account. Previously anyone who knew the backend address could place or close orders on the connected account without logging in.',
     'Security: browser access is now restricted to this app’s own deployments. The old rule accepted any site hosted on vercel.app.',
@@ -3717,6 +3724,97 @@ function DashView({perf}){
   </div>)
 }
 
+
+// ── Earnings panel (Co-Pilot) ──────────────────────────────────────────────
+// What is coming, and how the last print landed. Autopilot will not open a
+// position that would be held into a report, so this is also the explanation
+// for why a name it was watching went quiet.
+function EarningsPanel({ token }) {
+  const [data, setData] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [extra, setExtra] = useState('')
+
+  const load = async () => {
+    setBusy(true); setErr('')
+    try {
+      const tickers = extra.split(/[\s,]+/).map(t => t.trim().toUpperCase()).filter(Boolean)
+      const r = await f(API + '/api/earnings/calendar', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tickers, days: 14, include_positions: true })
+      }).then(r => r.json())
+      if (r.ok) setData(r); else setErr(r.error || 'Could not load earnings')
+    } catch { setErr("Can't reach backend") }
+    setBusy(false)
+  }
+  useEffect(() => { load() }, [token])
+
+  const card = { background: 'var(--c1)', border: '1px solid var(--brd)', borderRadius: 10, padding: 14, marginBottom: 12 }
+  const lbl = { fontSize: '.78rem', textTransform: 'uppercase', letterSpacing: '.4px', color: 'var(--dim)', fontWeight: 600 }
+
+  return (<div style={card}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={lbl}>Earnings</div>
+      <button onClick={load} disabled={busy}
+        style={{ marginLeft: 'auto', font: 'inherit', fontSize: '.8rem', padding: '4px 10px', borderRadius: 7, border: '1px solid var(--brd)', background: 'var(--c2)', color: 'var(--txt)', cursor: 'pointer' }}>
+        {busy ? 'Loading…' : 'Refresh'}
+      </button>
+    </div>
+    <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+      <input value={extra} onChange={e => setExtra(e.target.value)} placeholder="Add tickers (AAPL, NVDA)"
+        onKeyDown={e => { if (e.key === 'Enter') load() }}
+        style={{ flex: 1, background: 'transparent', border: '1px solid var(--brd)', borderRadius: 7, color: 'var(--wh)', fontSize: '.85rem', padding: '6px 9px', outline: 'none' }} />
+    </div>
+
+    {err && <div style={{ fontSize: '.82rem', color: 'var(--red)', marginTop: 10 }}>{err}</div>}
+
+    {data && !data.tickers?.length && (
+      <div style={{ fontSize: '.82rem', color: 'var(--dim)', marginTop: 10, lineHeight: 1.5 }}>
+        No open positions. Add a ticker above to see its report date and last print.
+      </div>
+    )}
+
+    {data?.upcoming?.length > 0 && (<div style={{ marginTop: 12 }}>
+      <div style={{ ...lbl, marginBottom: 6 }}>Reporting soon</div>
+      {data.upcoming.map(e => (
+        <div key={e.ticker} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '6px 0', borderTop: '1px solid var(--brd)' }}>
+          <b style={{ color: 'var(--wh)', fontSize: '.9rem' }}>{e.ticker}</b>
+          <span style={{ fontSize: '.82rem', color: e.days_away <= 1 ? 'var(--amb)' : 'var(--txt)' }}>
+            {e.days_away === 0 ? 'today' : e.days_away === 1 ? 'tomorrow' : `in ${e.days_away} days`}
+          </span>
+          <span style={{ fontSize: '.78rem', color: 'var(--dim)', marginLeft: 'auto' }}>
+            {e.eps_estimate != null ? `est $${e.eps_estimate.toFixed(2)}` : e.date_str}
+          </span>
+        </div>
+      ))}
+      <div style={{ fontSize: '.76rem', color: 'var(--dim)', marginTop: 8, lineHeight: 1.5 }}>
+        Autopilot won't open a position that would be held into a report — a gap ignores stops.
+      </div>
+    </div>)}
+
+    {data?.recent?.length > 0 && (<div style={{ marginTop: 14 }}>
+      <div style={{ ...lbl, marginBottom: 6 }}>Just reported</div>
+      {data.recent.map(e => (
+        <div key={e.ticker} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '6px 0', borderTop: '1px solid var(--brd)' }}>
+          <b style={{ color: 'var(--wh)', fontSize: '.9rem' }}>{e.ticker}</b>
+          <span style={{ fontSize: '.82rem', fontWeight: 600, color: e.verdict === 'beat' ? 'var(--grn)' : e.verdict === 'miss' ? 'var(--red)' : 'var(--txt)' }}>
+            {e.verdict}
+          </span>
+          {e.surprise_pct != null && (
+            <span style={{ fontSize: '.8rem', color: 'var(--dim)' }}>
+              {e.surprise_pct > 0 ? '+' : ''}{e.surprise_pct}%
+            </span>
+          )}
+          <span style={{ fontSize: '.78rem', color: 'var(--dim)', marginLeft: 'auto', fontFamily: 'var(--mono)' }}>
+            {e.eps_actual != null ? `$${e.eps_actual.toFixed(2)}` : '—'}
+            {e.eps_estimate != null ? ` vs $${e.eps_estimate.toFixed(2)}` : ''}
+          </span>
+        </div>
+      ))}
+    </div>)}
+  </div>)
+}
+
 function CoPilot({ token, isPlus, setView }) {
   // Manual co-pilot: scan for picks, size positions against your buying power
   // (confirm each), then track your entered positions with live P/L. Positions
@@ -3909,6 +4007,8 @@ function CoPilot({ token, isPlus, setView }) {
       <p style={{ fontSize: '.82rem', color: 'var(--dim)', lineHeight: 1.5, marginBottom: 14 }}>
         Scan for picks, size each against your buying power, and confirm the ones you actually buy. Then track live P/L. You place the trades in your broker — this is a tracker and sizing helper, not a trading bot.
       </p>
+
+      <EarningsPanel token={token} />
 
       {/* Buying power */}
       <div style={card}>
