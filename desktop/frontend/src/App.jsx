@@ -21,11 +21,18 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.21.0'
+const VERSION = '4.22.0'
 const VERSION_DATE = 'September 19, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.22.0', d: 'September 19, 2026', changes: [
+    'New Earnings forecast section: companies reporting in the next three weeks, ranked by how likely they look to beat. It reads analyst estimate revisions (the best free predictor of a surprise), whether consensus has been rising, and how often the company has actually beaten in past quarters.',
+    'Every row shows how much that specific stock typically MOVES on earnings day, next to the call rather than behind a click. A company beating and its stock rising are different questions \u2014 plenty beat and fall on weak guidance \u2014 so the gap figure is what your money is exposed to, not the lean.',
+    'Leans are directions, not percentages. Nothing here has been tested against outcomes, and a number like "73%" would invite trust it has not earned.',
+    'Live progress bars: the earnings calendar rebuild, the research scan and the forecast scan now show what they are working on and how far along they are, instead of a spinner that looks identical to a hang.',
+    'Autopilot is unchanged and still refuses to hold a position through a print.',
+  ]},
   { v: '4.21.0', d: 'September 19, 2026', changes: [
     'New Research section in Co-Pilot: a longer-term book, separate from autopilot. It ranks companies that have ALREADY reported and beat, using the actual figures from their SEC filings \u2014 revenue growth, profitability, and share-count dilution \u2014 alongside recent news.',
     'It never places an order. It shows you the case for each name and you decide. Autopilot is untouched and still flattens daily.',
@@ -748,6 +755,53 @@ const fJSON = async (url, opts = {}) => {
   }
   return { ok: false, error: `Backend returned HTTP ${res.status} with no JSON body.` }
 }
+// ── Live progress ──────────────────────────────────────────────────────────
+// Long scans run in a worker thread on the backend and report over the socket.
+// The socket lives in the top-level component but the bars live in panels
+// several levels down, so a tiny bus carries frames between them rather than
+// threading state through every component in between.
+const workProgress = (() => {
+  const subs = new Set()
+  return {
+    emit: (d) => subs.forEach(f => { try { f(d) } catch {} }),
+    subscribe: (f) => { subs.add(f); return () => subs.delete(f) },
+  }
+})()
+
+function useWorkProgress(channel) {
+  const [p, setP] = useState(null)
+  useEffect(() => workProgress.subscribe(d => {
+    if (!d || d.channel !== channel) return
+    setP(d)
+    // Let a finished bar sit at 100 for a beat before it disappears, so the
+    // last frame is actually seen rather than flashing past.
+    if (d.pct >= 100) setTimeout(() => setP(null), 1500)
+  }), [channel])
+  return p
+}
+
+function ProgressBar({ p, idleLabel }) {
+  if (!p) return idleLabel
+    ? <div style={{ fontSize: '.82rem', color: 'var(--dim)' }}>{idleLabel}</div>
+    : null
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', marginBottom: 4 }}>
+        <span style={{ fontSize: '.78rem', color: 'var(--txt)' }}>
+          {p.label ? <>Checking <b style={{ color: 'var(--wh)', fontFamily: 'var(--mono)' }}>{p.label}</b></> : 'Working'}
+        </span>
+        <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: '.74rem', color: 'var(--dim)' }}>
+          {p.done}/{p.total}
+        </span>
+      </div>
+      <div style={{ height: 4, borderRadius: 3, background: 'var(--c2)', overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${Math.min(100, p.pct || 0)}%`,
+                      background: 'var(--grn)', transition: 'width .3s ease' }} />
+      </div>
+    </div>
+  )
+}
+
 const WS_URL = `${BACKEND.startsWith('https') ? 'wss:' : 'ws:'}//${new URL(BACKEND).host}/ws`
 
 function ChangelogRelease({ rel, defaultOpen, latest }) {
@@ -1894,6 +1948,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
               return [{ ticker: data.ticker, score: data.score, rr: data.rr, id: Date.now() + data.ticker }, ...prev].slice(0, 4)
             })
           }
+          if (event === 'work_progress') workProgress.emit(data)
           if (event === 'scan_progress') {
             // Live progress for the big market scan — show a bar while it runs.
             setScanProgress({ pct: data.pct, done: data.done, total: data.total, phase: data.phase, label: data.label })
@@ -3785,6 +3840,7 @@ const VERDICT_STYLE = {
 }
 
 function EarningsCalendar({ token }) {
+  const prog = useWorkProgress('calendar')
   const today = new Date()
   const [ym, setYm] = useState({ y: today.getFullYear(), m: today.getMonth() + 1 })
   const [month, setMonth] = useState(null)
@@ -3857,6 +3913,8 @@ function EarningsCalendar({ token }) {
       <div style={{ fontSize: '.95rem', fontWeight: 600, color: 'var(--wh)', minWidth: 150, textAlign: 'center' }}>{monthName}</div>
       <button onClick={() => shift(1)} style={nav}>›</button>
     </div>
+
+    <ProgressBar p={prog} />
 
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3 }}>
       {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
@@ -3979,6 +4037,7 @@ function ExposureMeter({ ex }) {
 }
 
 function ResearchPanel({ token }) {
+  const prog = useWorkProgress('research')
   const [rows, setRows] = useState(null)
   const [ex, setEx] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -4011,7 +4070,7 @@ function ResearchPanel({ token }) {
 
     <ExposureMeter ex={ex} />
 
-    {busy && !rows && <div style={{ fontSize: '.82rem', color: 'var(--dim)' }}>Reading filings and earnings history…</div>}
+    <ProgressBar p={prog} idleLabel={busy && !rows ? 'Reading filings and earnings history…' : null} />
     {err && <div style={{ fontSize: '.8rem', color: 'var(--txt)', marginBottom: 8, lineHeight: 1.5 }}>{err}</div>}
     {rows && !rows.length && !busy && !err && (
       <div style={{ fontSize: '.82rem', color: 'var(--dim)' }}>
@@ -4085,6 +4144,103 @@ function ResearchPanel({ token }) {
       These are ideas, not orders — nothing here buys anything. Every name has
       already reported; the trade is the drift after the print, never a position
       held into one.
+    </div>
+  </div>)
+}
+
+// ── Forecast: the one place that looks AHEAD of a print ────────────────────
+// Everything else in this app is deliberately backward-looking. This panel is
+// not, so it carries the risk figure next to the call: a beat lean means
+// nothing without knowing that the name routinely gaps 25% either way. The
+// company beating and the stock rising are different questions, and the second
+// one is the one your money is actually exposed to.
+function ForecastPanel({ token }) {
+  const prog = useWorkProgress('forecast')
+  const [rows, setRows] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [open, setOpen] = useState(null)
+
+  const load = async () => {
+    setBusy(true); setErr('')
+    const r = await fJSON(`${API}/api/forecast/upcoming?days=21&limit=12`)
+    if (r.ok) { setRows(r.rows || []); if (r.note) setErr(r.note) }
+    else { setRows(null); setErr(r.error) }
+    setBusy(false)
+  }
+  useEffect(() => { load() }, [token])
+
+  const card = { background: 'var(--c1)', border: '1px solid var(--brd)', borderRadius: 10, padding: 14, marginBottom: 12 }
+  const lbl = { fontSize: '.78rem', textTransform: 'uppercase', letterSpacing: '.4px', color: 'var(--dim)', fontWeight: 600 }
+  const btn = { font: 'inherit', fontSize: '.78rem', padding: '3px 10px', borderRadius: 7, cursor: 'pointer', border: '1px solid var(--brd)', background: 'var(--c2)', color: 'var(--txt)' }
+
+  const leanTone = (lean) =>
+    lean?.startsWith('strong beat') ? 'var(--grn)'
+    : lean?.startsWith('mild beat') ? 'var(--grn3)'
+    : lean?.includes('miss') ? 'var(--red)' : 'var(--dim)'
+
+  return (<div style={card}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+      <div style={lbl}>Earnings forecast — next 3 weeks</div>
+      <button onClick={load} disabled={busy} style={{ ...btn, marginLeft: 'auto' }}>
+        {busy ? '…' : 'Refresh'}
+      </button>
+    </div>
+
+    <ProgressBar p={prog} idleLabel={busy && !rows ? 'Reading estimate revisions and beat history…' : null} />
+    {err && <div style={{ fontSize: '.8rem', color: 'var(--txt)', marginBottom: 8, lineHeight: 1.5 }}>{err}</div>}
+    {rows && !rows.length && !busy && !err && (
+      <div style={{ fontSize: '.82rem', color: 'var(--dim)' }}>Nothing reports in the next three weeks.</div>
+    )}
+
+    {rows?.map(r => {
+      const isOpen = open === r.ticker
+      const risk = r.risk || {}
+      const riskTone = risk.typical_move_pct == null ? 'var(--dim)'
+        : risk.typical_move_pct >= 15 ? 'var(--red)'
+        : risk.typical_move_pct >= 8 ? 'var(--amb)' : 'var(--txt)'
+      return (
+        <div key={r.ticker} style={{ borderTop: '1px solid var(--brd)', padding: '10px 0' }}>
+          <button onClick={() => setOpen(isOpen ? null : r.ticker)}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', font: 'inherit',
+                     background: 'none', border: 0, padding: 0, cursor: 'pointer', textAlign: 'left' }}>
+            <b style={{ color: 'var(--wh)', fontSize: '.92rem' }}>{r.ticker}</b>
+            <span style={{ fontSize: '.7rem', fontWeight: 700, textTransform: 'uppercase',
+                           letterSpacing: '.3px', color: leanTone(r.lean) }}>
+              {r.lean}
+            </span>
+            <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: '.74rem', color: 'var(--dim)' }}>
+              {r.next?.days_away != null ? `in ${r.next.days_away}d` : ''}
+            </span>
+            <span style={{ color: 'var(--dim)', fontSize: '.8rem' }}>{isOpen ? '−' : '+'}</span>
+          </button>
+
+          {/* The risk figure sits beside the call, never behind a click. */}
+          <div style={{ fontSize: '.78rem', color: riskTone, marginTop: 3, lineHeight: 1.45 }}>
+            {risk.available
+              ? `Gaps about ${risk.typical_move_pct}% on earnings day — worst of the last ${risk.samples}: ${risk.worst_move_pct}%`
+              : (risk.note || 'earnings-day move not measurable')}
+          </div>
+
+          {isOpen && (<div style={{ marginTop: 8, paddingLeft: 10, borderLeft: '2px solid var(--brd)' }}>
+            {r.evidence?.map((e, i) => (
+              <div key={i} style={{ fontSize: '.78rem', color: 'var(--txt)', marginBottom: 3, lineHeight: 1.45 }}>{e}</div>
+            ))}
+            {r.next?.eps_estimate != null && (
+              <div style={{ fontFamily: 'var(--mono)', fontSize: '.76rem', color: 'var(--dim)', marginTop: 6 }}>
+                street expects ${r.next.eps_estimate.toFixed(2)} · {r.next.date_str}
+              </div>
+            )}
+          </div>)}
+        </div>
+      )
+    })}
+
+    <div style={{ fontSize: '.74rem', color: 'var(--dim)', marginTop: 12, lineHeight: 1.5 }}>
+      A lean is a direction, not a probability — none of this has been tested
+      against outcomes. And a company can beat while its stock falls, so the gap
+      figure above is the number your money is exposed to, not the lean.
+      Autopilot still never holds through a print.
     </div>
   </div>)
 }
@@ -4283,6 +4439,7 @@ function CoPilot({ token, isPlus, setView }) {
       </p>
 
       <EarningsCalendar token={token} />
+      <ForecastPanel token={token} />
       <ResearchPanel token={token} />
 
       {/* Buying power */}

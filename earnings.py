@@ -566,9 +566,9 @@ def build_calendar_from_nasdaq(days_ahead: int | None = None,
             kept.sort(key=lambda r: r["ticker"])
             dates[key] = kept
             tickers_seen.update(r["ticker"] for r in kept)
-        if progress and i % 5 == 0:
+        if progress:
             try:
-                progress(i + 1, len(days))
+                progress(i + 1, len(days), key)
             except Exception:
                 pass
         if NASDAQ_PAUSE:
@@ -623,9 +623,9 @@ def build_calendar_from_tickers(tickers: list[str], progress=None) -> dict:
                 })
         except Exception:
             errors += 1
-        if progress and i % 25 == 0:
+        if progress:
             try:
-                progress(i + 1, len(ordered))
+                progress(i + 1, len(ordered), t)
             except Exception:
                 pass
 

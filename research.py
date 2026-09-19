@@ -431,14 +431,25 @@ def evaluate(ticker: str, price: float | None = None,
 
 
 def rank(tickers: list[str], equity: float | None = None,
-         prices: dict | None = None, limit: int = 12) -> list[dict]:
-    """Score a list of names, best first. Failures drop out rather than raise."""
+         prices: dict | None = None, limit: int = 12, progress=None) -> list[dict]:
+    """Score a list of names, best first. Failures drop out rather than raise.
+
+    `progress(done, total, label)` is called as it goes. Each name costs an
+    EDGAR call and a news call, so a 60-name scan is minutes, not seconds —
+    long enough that silence reads as a hang.
+    """
     prices = prices or {}
     rows = []
-    for t in tickers or []:
+    names = list(tickers or [])
+    for i, t in enumerate(names):
         try:
             rows.append(evaluate(t, price=prices.get(str(t).upper()), equity=equity))
         except Exception:
-            continue
+            pass
+        if progress:
+            try:
+                progress(i + 1, len(names), str(t).upper())
+            except Exception:
+                pass
     rows.sort(key=lambda r: r["score"], reverse=True)
     return rows[:limit]

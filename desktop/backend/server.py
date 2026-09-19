@@ -1094,7 +1094,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v4.21.0",  # bump marker  confirms running code
+        "build": "v4.22.0",  # bump marker  confirms running code
         # Does THIS process actually serve the earnings calendar? The frontend
         # 404s against an older backend, which is indistinguishable from a bug
         # unless the running build says which routes it has.
@@ -3606,8 +3606,10 @@ async def earnings_refresh(authorization: str = Header(None)):
             loop = asyncio.get_event_loop()
             # `held` bypasses the cap filter; `tickers` is only used if the
             # Nasdaq source is unavailable and the per-ticker scan runs.
+            emit = _progress_emitter("calendar", loop)
             data = await loop.run_in_executor(
-                _scan_executor, lambda: _earn.build_calendar(tickers, keep=set(held)))
+                _scan_executor,
+                lambda: _earn.build_calendar(tickers, keep=set(held), progress=emit))
             print(f"[earnings] calendar built: {data['count']} tickers, "
                   f"{len(data['dates'])} dates, {data['errors']} errors", flush=True)
             await broadcast("earnings", {"status": "calendar_built",
@@ -3617,6 +3619,35 @@ async def earnings_refresh(authorization: str = Header(None)):
 
     _cal_build_task = asyncio.create_task(_build())
     return {"ok": True, "status": "building"}
+
+
+def _progress_emitter(channel: str, loop):
+    """Bridge a sync progress callback in a worker thread to the WebSocket.
+
+    The scans run in an executor, so they cannot await a broadcast; this
+    schedules it back onto the loop. Emissions are throttled because a frame
+    per ticker floods the socket and Railway's proxy drops it — the exact
+    failure that once killed long scans silently. The final tick always goes
+    out, so a bar never stops short of 100.
+    """
+    import time
+    last = {"at": 0.0}
+
+    def _cb(done, total, label=""):
+        now = time.time()
+        if done < total and now - last["at"] < 0.4:
+            return
+        last["at"] = now
+        try:
+            asyncio.run_coroutine_threadsafe(
+                broadcast("work_progress", {
+                    "channel": channel, "done": done, "total": total,
+                    "pct": int(done / total * 100) if total else 0,
+                    "label": str(label or ""),
+                }), loop)
+        except Exception:
+            pass
+    return _cb
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -3682,10 +3713,11 @@ async def research_candidates(limit: int = 12, authorization: str = Header(None)
         acct = engine.alpaca_account() or {}
         prices = {t: p.get("current_price") for t, p in held.items()}
         loop = asyncio.get_event_loop()
+        emit = _progress_emitter("research", loop)
         rows = await loop.run_in_executor(
             _scan_executor,
             lambda: _res.rank(names[:60], equity=acct.get("equity"),
-                              prices=prices, limit=limit))
+                              prices=prices, limit=limit, progress=emit))
         return {"ok": True, "candidates": rows, "scanned": min(len(names), 60),
                 "equity": acct.get("equity")}
     except Exception as e:
@@ -3707,6 +3739,66 @@ async def research_one(ticker: str, authorization: str = Header(None)):
         row = await loop.run_in_executor(
             _scan_executor,
             lambda: _res.evaluate(ticker, price=px, equity=acct.get("equity")))
+        return {"ok": True, **row}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
+
+
+@app.get("/api/forecast/upcoming")
+async def forecast_upcoming(days: int = 21, limit: int = 12,
+                            authorization: str = Header(None)):
+    """Companies reporting soon, ranked by how likely they look to beat.
+
+    Forward-looking by design — this is the one place in the app that looks
+    ahead of a print. It still places no orders, and the autopilot never sees
+    it: autopilot continues to refuse to hold through an announcement.
+    """
+    if not _get_user(authorization):
+        return {"ok": False, "error": "Authentication required"}
+    try:
+        import forecast as _fc
+        import earnings as _earn
+        from datetime import timedelta as _td
+
+        cache = _earn._load_cache()
+        dates = cache.get("dates") or {}
+        today = datetime.now(ZoneInfo("US/Eastern")).date()
+        horizon = today + _td(days=max(1, min(days, 90)))
+
+        names: list[str] = []
+        for dstr, rows in dates.items():
+            try:
+                d = datetime.strptime(dstr, "%Y-%m-%d").date()
+            except ValueError:
+                continue
+            if today <= d <= horizon:
+                names += [r["ticker"] for r in rows if r.get("ticker")]
+        names = list(dict.fromkeys(names))
+
+        if not names:
+            return {"ok": True, "rows": [], "scanned": 0,
+                    "note": f"nothing in the calendar reports in the next {days} "
+                            f"days — rebuild the earnings calendar"}
+
+        loop = asyncio.get_event_loop()
+        emit = _progress_emitter("forecast", loop)
+        rows = await loop.run_in_executor(
+            _scan_executor,
+            lambda: _fc.rank(names[:40], limit=limit, progress=emit))
+        return {"ok": True, "rows": rows, "scanned": min(len(names), 40)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
+
+
+@app.get("/api/forecast/{ticker}")
+async def forecast_one(ticker: str, authorization: str = Header(None)):
+    """Pre-earnings forecast for one name."""
+    if not _get_user(authorization):
+        return {"ok": False, "error": "Authentication required"}
+    try:
+        import forecast as _fc
+        loop = asyncio.get_event_loop()
+        row = await loop.run_in_executor(_scan_executor, lambda: _fc.forecast(ticker))
         return {"ok": True, **row}
     except Exception as e:
         return {"ok": False, "error": str(e)[:200]}
