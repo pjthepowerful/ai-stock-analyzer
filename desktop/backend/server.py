@@ -1094,7 +1094,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v4.18.0",  # bump marker  confirms running code
+        "build": "v4.19.0",  # bump marker  confirms running code
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
@@ -3521,44 +3521,93 @@ async def earnings_for(ticker: str, authorization: str = Header(None)):
         return {"ok": False, "error": str(e)[:200]}
 
 
-@app.post("/api/earnings/calendar")
-async def earnings_calendar(req: dict = None, authorization: str = Header(None)):
-    """Upcoming reports across the account's positions plus any extra tickers.
+@app.get("/api/earnings/calendar/month")
+async def earnings_month(year: int = 0, month: int = 0, authorization: str = Header(None)):
+    """Which tickers report on each day of a month. Served from cache."""
+    if not _get_user(authorization):
+        return {"ok": False, "error": "Authentication required"}
+    now = datetime.now(ZoneInfo("US/Eastern"))
+    y = year or now.year
+    m = month or now.month
+    try:
+        import earnings as _earn
+        data = _earn.calendar_month(y, m)
+        return {"ok": True, "year": y, "month": m, **data}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
 
-    Defaults to what is actually held, since that is the exposure that matters:
-    a print lands on a position whether or not it was on a watchlist.
+
+@app.get("/api/earnings/calendar/day")
+async def earnings_day(date: str, authorization: str = Header(None)):
+    """The stocks reporting on one date, each with a verdict.
+
+    Verdicts are computed here rather than during the cached build: they need
+    live price and cap, and only a handful of names are on any given day.
     """
     if not _get_user(authorization):
         return {"ok": False, "error": "Authentication required"}
-    req = req or {}
-    days = int(req.get("days", 14))
-    tickers = [str(t).upper() for t in (req.get("tickers") or []) if t]
-    if req.get("include_positions", True):
-        try:
-            for p in (engine.alpaca_positions() or []):
-                if p.get("ticker") and p["ticker"] not in tickers:
-                    tickers.append(p["ticker"])
-        except Exception:
-            pass
-    if not tickers:
-        return {"ok": True, "upcoming": [], "recent": [], "tickers": []}
     try:
         import earnings as _earn
+        import smallcap_pullback as _scp
+        mode_key = (engine.load_autopilot_config().get("STRATEGY_MODE") or "core").lower()
+        mode = _scp.get_mode(mode_key) if mode_key in ("strict", "intense") else None
+
+        cache = _earn._load_cache()
+        rows = (cache.get("dates") or {}).get(date, [])
         loop = asyncio.get_event_loop()
-        upcoming = await loop.run_in_executor(
-            _scan_executor, lambda: _earn.calendar(tickers, days=days))
-        def _recents():
+
+        def _verdicts():
             out = []
-            for t in tickers:
-                r = _earn.recent_print(t, within_sessions=5)
-                if r:
-                    out.append(_earn._serialise(r))
+            for r in rows[:40]:
+                v = _earn.verdict(r["ticker"], mode)
+                out.append({**r, **v})
+            order = {"candidate": 0, "watch": 1, "blocked": 2, "fade": 3, "skip": 4, "stale": 5}
+            out.sort(key=lambda x: (order.get(x.get("verdict"), 9), x["ticker"]))
             return out
-        recent = await loop.run_in_executor(_scan_executor, _recents)
-        return {"ok": True, "upcoming": upcoming, "recent": recent,
-                "tickers": tickers, "days": days}
+
+        results = await loop.run_in_executor(_scan_executor, _verdicts)
+        return {"ok": True, "date": date, "mode": mode_key, "stocks": results}
     except Exception as e:
         return {"ok": False, "error": str(e)[:200]}
+
+
+_cal_build_task = None
+
+
+@app.post("/api/earnings/calendar/refresh")
+async def earnings_refresh(authorization: str = Header(None)):
+    """Rebuild the cached calendar in the background."""
+    global _cal_build_task
+    if not _get_user(authorization):
+        return {"ok": False, "error": "Authentication required"}
+    if _cal_build_task and not _cal_build_task.done():
+        return {"ok": True, "status": "already building"}
+
+    async def _build():
+        try:
+            import earnings as _earn
+            tickers = []
+            try:
+                tickers += [p["ticker"] for p in (engine.alpaca_positions() or []) if p.get("ticker")]
+            except Exception:
+                pass
+            try:
+                from universe import liquid_universe
+                tickers += liquid_universe()
+            except Exception:
+                pass
+            loop = asyncio.get_event_loop()
+            data = await loop.run_in_executor(
+                _scan_executor, lambda: _earn.build_calendar(tickers))
+            print(f"[earnings] calendar built: {data['count']} tickers, "
+                  f"{len(data['dates'])} dates, {data['errors']} errors", flush=True)
+            await broadcast("earnings", {"status": "calendar_built",
+                                         "dates": len(data["dates"])})
+        except Exception as e:
+            print(f"[earnings] calendar build failed: {e!r}", flush=True)
+
+    _cal_build_task = asyncio.create_task(_build())
+    return {"ok": True, "status": "building"}
 
 
 # ── Run ──

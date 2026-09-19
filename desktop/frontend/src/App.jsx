@@ -21,11 +21,16 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.18.0'
+const VERSION = '4.19.0'
 const VERSION_DATE = 'September 19, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.19.0', d: 'September 19, 2026', changes: [
+    'The Co-Pilot earnings section is now a month calendar. Click any date to see which companies report that day, what the street expects, and whether the system would touch them.',
+    'Each name gets a plain verdict: “Tradable now” (already reported and beat, reaction still has volume), “Not into it” (reports before the next open — autopilot will not hold through a print), “Missed”, “Watch”, or “Out of range” for names outside the mode’s price and size bands.',
+    'Nothing is ever marked a buy BEFORE a report, because the strategy flattens daily and never holds through one — a stop does not execute through an earnings gap.',
+  ]},
   { v: '4.18.0', d: 'September 19, 2026', changes: [
     'Earnings are now part of how Intense picks trades. It used to judge whether a gap had a real reason behind it by asking an AI to read the headlines — which can\u2019t reliably tell "revenue up 40%" from "exploring opportunities". A recent earnings report can be checked against the actual numbers, so when one explains the move it now overrides the guess, and a confirmed beat earns slightly larger size.',
     'A stock that rallied despite MISSING is graded down rather than up \u2014 the move is a bounce against the news, not a reaction to it.',
@@ -3725,93 +3730,165 @@ function DashView({perf}){
 }
 
 
-// ── Earnings panel (Co-Pilot) ──────────────────────────────────────────────
-// What is coming, and how the last print landed. Autopilot will not open a
-// position that would be held into a report, so this is also the explanation
-// for why a name it was watching went quiet.
-function EarningsPanel({ token }) {
-  const [data, setData] = useState(null)
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState('')
-  const [extra, setExtra] = useState('')
+// ── Earnings calendar (Co-Pilot) ───────────────────────────────────────────
+// Click a date to see who reports that day and whether the system would touch
+// them. The honest answer before a print is always "not into it" — the strategy
+// flattens daily and never holds through an announcement, because a stop does
+// not execute through a gap. So the calendar's job is to show what is worth
+// watching for the reaction afterwards, not to invent a pre-earnings buy.
+const VERDICT_STYLE = {
+  candidate: { label: 'Tradable now', color: 'var(--grn)', bg: 'rgba(16,185,129,.12)' },
+  watch:     { label: 'Watch',        color: 'var(--txt)', bg: 'var(--c2)' },
+  blocked:   { label: 'Not into it',  color: 'var(--amb)', bg: 'rgba(245,158,11,.12)' },
+  fade:      { label: 'Missed',       color: 'var(--red)', bg: 'rgba(239,68,68,.12)' },
+  skip:      { label: 'Out of range', color: 'var(--dim)', bg: 'transparent' },
+  stale:     { label: 'Old news',     color: 'var(--dim)', bg: 'transparent' },
+}
 
-  const load = async () => {
+function EarningsCalendar({ token }) {
+  const today = new Date()
+  const [ym, setYm] = useState({ y: today.getFullYear(), m: today.getMonth() + 1 })
+  const [month, setMonth] = useState(null)
+  const [sel, setSel] = useState(null)
+  const [day, setDay] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [dayBusy, setDayBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const loadMonth = async (y, m) => {
     setBusy(true); setErr('')
     try {
-      const tickers = extra.split(/[\s,]+/).map(t => t.trim().toUpperCase()).filter(Boolean)
-      const r = await f(API + '/api/earnings/calendar', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tickers, days: 14, include_positions: true })
-      }).then(r => r.json())
-      if (r.ok) setData(r); else setErr(r.error || 'Could not load earnings')
+      const r = await f(`${API}/api/earnings/calendar/month?year=${y}&month=${m}`).then(r => r.json())
+      if (r.ok) setMonth(r); else setErr(r.error || 'Could not load')
     } catch { setErr("Can't reach backend") }
     setBusy(false)
   }
-  useEffect(() => { load() }, [token])
+  useEffect(() => { loadMonth(ym.y, ym.m) }, [ym.y, ym.m, token])
+
+  const loadDay = async (dateStr) => {
+    setSel(dateStr); setDay(null); setDayBusy(true)
+    try {
+      const r = await f(`${API}/api/earnings/calendar/day?date=${dateStr}`).then(r => r.json())
+      setDay(r.ok ? r : { stocks: [], error: r.error })
+    } catch { setDay({ stocks: [], error: "Can't reach backend" }) }
+    setDayBusy(false)
+  }
+
+  const rebuild = async () => {
+    setBusy(true)
+    try {
+      await f(API + '/api/earnings/calendar/refresh', { method: 'POST' }).then(r => r.json())
+      setErr('Rebuilding in the background — this takes a few minutes. Refresh shortly.')
+    } catch { setErr("Can't reach backend") }
+    setBusy(false)
+  }
+
+  const shift = (n) => {
+    let { y, m } = ym; m += n
+    if (m < 1) { m = 12; y -= 1 } else if (m > 12) { m = 1; y += 1 }
+    setYm({ y, m }); setSel(null); setDay(null)
+  }
+
+  // Grid: pad to the weekday the month starts on, then one cell per day.
+  const first = new Date(ym.y, ym.m - 1, 1)
+  const daysIn = new Date(ym.y, ym.m, 0).getDate()
+  const pad = first.getDay()
+  const cells = [...Array(pad).fill(null),
+                 ...Array.from({ length: daysIn }, (_, i) => i + 1)]
+  const key = (d) => `${ym.y}-${String(ym.m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  const monthName = first.toLocaleString('en-US', { month: 'long', year: 'numeric' })
 
   const card = { background: 'var(--c1)', border: '1px solid var(--brd)', borderRadius: 10, padding: 14, marginBottom: 12 }
   const lbl = { fontSize: '.78rem', textTransform: 'uppercase', letterSpacing: '.4px', color: 'var(--dim)', fontWeight: 600 }
+  const nav = { font: 'inherit', fontSize: '1rem', lineHeight: 1, padding: '3px 10px', borderRadius: 7, cursor: 'pointer', border: '1px solid var(--brd)', background: 'var(--c2)', color: 'var(--txt)' }
 
   return (<div style={card}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={lbl}>Earnings</div>
-      <button onClick={load} disabled={busy}
-        style={{ marginLeft: 'auto', font: 'inherit', fontSize: '.8rem', padding: '4px 10px', borderRadius: 7, border: '1px solid var(--brd)', background: 'var(--c2)', color: 'var(--txt)', cursor: 'pointer' }}>
-        {busy ? 'Loading…' : 'Refresh'}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+      <div style={lbl}>Earnings calendar</div>
+      <button onClick={rebuild} disabled={busy} style={{ ...nav, marginLeft: 'auto', fontSize: '.78rem' }}>
+        {busy ? '…' : 'Rebuild'}
       </button>
     </div>
-    <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-      <input value={extra} onChange={e => setExtra(e.target.value)} placeholder="Add tickers (AAPL, NVDA)"
-        onKeyDown={e => { if (e.key === 'Enter') load() }}
-        style={{ flex: 1, background: 'transparent', border: '1px solid var(--brd)', borderRadius: 7, color: 'var(--wh)', fontSize: '.85rem', padding: '6px 9px', outline: 'none' }} />
+
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+      <button onClick={() => shift(-1)} style={nav}>‹</button>
+      <div style={{ fontSize: '.95rem', fontWeight: 600, color: 'var(--wh)', minWidth: 150, textAlign: 'center' }}>{monthName}</div>
+      <button onClick={() => shift(1)} style={nav}>›</button>
     </div>
 
-    {err && <div style={{ fontSize: '.82rem', color: 'var(--red)', marginTop: 10 }}>{err}</div>}
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3 }}>
+      {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+        <div key={i} style={{ textAlign: 'center', fontSize: '.7rem', color: 'var(--dim)', padding: '2px 0' }}>{d}</div>
+      ))}
+      {cells.map((d, i) => {
+        if (!d) return <div key={'p' + i} />
+        const k = key(d)
+        const n = (month?.dates?.[k] || []).length
+        const isSel = sel === k
+        const isToday = k === todayKey
+        return (
+          <button key={k} onClick={() => loadDay(k)}
+            style={{
+              aspectRatio: '1', display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center', gap: 1,
+              font: 'inherit', cursor: 'pointer', borderRadius: 7,
+              border: isSel ? '2px solid var(--grn)' : isToday ? '1px solid var(--dim)' : '1px solid var(--brd)',
+              background: isSel ? 'rgba(16,185,129,.1)' : n ? 'var(--c2)' : 'transparent',
+              color: n ? 'var(--wh)' : 'var(--dim)',
+            }}>
+            <span style={{ fontSize: '.82rem', fontWeight: isToday ? 700 : 400 }}>{d}</span>
+            {n > 0 && <span style={{ fontSize: '.62rem', color: 'var(--grn3)', fontFamily: 'var(--mono)' }}>{n}</span>}
+          </button>
+        )
+      })}
+    </div>
 
-    {data && !data.tickers?.length && (
-      <div style={{ fontSize: '.82rem', color: 'var(--dim)', marginTop: 10, lineHeight: 1.5 }}>
-        No open positions. Add a ticker above to see its report date and last print.
+    {month && !Object.keys(month.dates || {}).length && !busy && (
+      <div style={{ fontSize: '.8rem', color: 'var(--dim)', marginTop: 10, lineHeight: 1.5 }}>
+        No dates cached for this month. Hit Rebuild to scan — it runs in the background.
       </div>
     )}
-
-    {data?.upcoming?.length > 0 && (<div style={{ marginTop: 12 }}>
-      <div style={{ ...lbl, marginBottom: 6 }}>Reporting soon</div>
-      {data.upcoming.map(e => (
-        <div key={e.ticker} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '6px 0', borderTop: '1px solid var(--brd)' }}>
-          <b style={{ color: 'var(--wh)', fontSize: '.9rem' }}>{e.ticker}</b>
-          <span style={{ fontSize: '.82rem', color: e.days_away <= 1 ? 'var(--amb)' : 'var(--txt)' }}>
-            {e.days_away === 0 ? 'today' : e.days_away === 1 ? 'tomorrow' : `in ${e.days_away} days`}
-          </span>
-          <span style={{ fontSize: '.78rem', color: 'var(--dim)', marginLeft: 'auto' }}>
-            {e.eps_estimate != null ? `est $${e.eps_estimate.toFixed(2)}` : e.date_str}
-          </span>
-        </div>
-      ))}
-      <div style={{ fontSize: '.76rem', color: 'var(--dim)', marginTop: 8, lineHeight: 1.5 }}>
-        Autopilot won't open a position that would be held into a report — a gap ignores stops.
+    {month?.stale && Object.keys(month.dates || {}).length > 0 && (
+      <div style={{ fontSize: '.76rem', color: 'var(--amb)', marginTop: 8 }}>
+        Cached data is stale — Rebuild for current dates.
       </div>
+    )}
+    {err && <div style={{ fontSize: '.8rem', color: 'var(--txt)', marginTop: 8 }}>{err}</div>}
+
+    {sel && (<div style={{ marginTop: 14, borderTop: '1px solid var(--brd)', paddingTop: 12 }}>
+      <div style={{ ...lbl, marginBottom: 8 }}>
+        {new Date(sel + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+      </div>
+      {dayBusy && <div style={{ fontSize: '.82rem', color: 'var(--dim)' }}>Checking each name…</div>}
+      {!dayBusy && day && !day.stocks?.length && (
+        <div style={{ fontSize: '.82rem', color: 'var(--dim)' }}>{day.error || 'Nothing reports on this date.'}</div>
+      )}
+      {!dayBusy && day?.stocks?.map(st => {
+        const v = VERDICT_STYLE[st.verdict] || VERDICT_STYLE.watch
+        return (
+          <div key={st.ticker} style={{ padding: '9px 0', borderTop: '1px solid var(--brd)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <b style={{ color: 'var(--wh)', fontSize: '.92rem' }}>{st.ticker}</b>
+              <span style={{ fontSize: '.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.3px', padding: '2px 7px', borderRadius: 5, color: v.color, background: v.bg }}>
+                {v.label}
+              </span>
+              {st.eps_estimate != null && (
+                <span style={{ fontSize: '.76rem', color: 'var(--dim)', marginLeft: 'auto', fontFamily: 'var(--mono)' }}>
+                  est ${st.eps_estimate.toFixed(2)}
+                </span>
+              )}
+            </div>
+            {st.reason && <div style={{ fontSize: '.78rem', color: 'var(--txt)', marginTop: 3, lineHeight: 1.45 }}>{st.reason}</div>}
+          </div>
+        )
+      })}
     </div>)}
 
-    {data?.recent?.length > 0 && (<div style={{ marginTop: 14 }}>
-      <div style={{ ...lbl, marginBottom: 6 }}>Just reported</div>
-      {data.recent.map(e => (
-        <div key={e.ticker} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '6px 0', borderTop: '1px solid var(--brd)' }}>
-          <b style={{ color: 'var(--wh)', fontSize: '.9rem' }}>{e.ticker}</b>
-          <span style={{ fontSize: '.82rem', fontWeight: 600, color: e.verdict === 'beat' ? 'var(--grn)' : e.verdict === 'miss' ? 'var(--red)' : 'var(--txt)' }}>
-            {e.verdict}
-          </span>
-          {e.surprise_pct != null && (
-            <span style={{ fontSize: '.8rem', color: 'var(--dim)' }}>
-              {e.surprise_pct > 0 ? '+' : ''}{e.surprise_pct}%
-            </span>
-          )}
-          <span style={{ fontSize: '.78rem', color: 'var(--dim)', marginLeft: 'auto', fontFamily: 'var(--mono)' }}>
-            {e.eps_actual != null ? `$${e.eps_actual.toFixed(2)}` : '—'}
-            {e.eps_estimate != null ? ` vs $${e.eps_estimate.toFixed(2)}` : ''}
-          </span>
-        </div>
-      ))}
-    </div>)}
+    <div style={{ fontSize: '.74rem', color: 'var(--dim)', marginTop: 12, lineHeight: 1.5 }}>
+      Autopilot never holds through a print, so nothing is ever a buy <i>before</i> one.
+      “Tradable now” means it already reported and beat, and the reaction still has volume.
+    </div>
   </div>)
 }
 
@@ -4008,7 +4085,7 @@ function CoPilot({ token, isPlus, setView }) {
         Scan for picks, size each against your buying power, and confirm the ones you actually buy. Then track live P/L. You place the trades in your broker — this is a tracker and sizing helper, not a trading bot.
       </p>
 
-      <EarningsPanel token={token} />
+      <EarningsCalendar token={token} />
 
       {/* Buying power */}
       <div style={card}>

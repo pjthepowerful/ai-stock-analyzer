@@ -378,3 +378,210 @@ def catalyst_from_earnings(ticker: str) -> dict | None:
     return {"grade": "real", "source": "earnings",
             "reason": f"reported {when}, in line",
             "surprise_pct": sur, "verdict": verdict}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  CALENDAR  —  who reports when, and whether the system would touch them
+# ═══════════════════════════════════════════════════════════════════════════
+# yfinance has no "who reports on date X" query; it is one call per ticker. A
+# few hundred of those is minutes, not milliseconds, so the calendar is built in
+# the background and cached, and the per-stock verdicts are computed on demand
+# for just the handful of names on the clicked date.
+
+import json
+import pathlib as _pl
+
+_CACHE_DIR = _pl.Path(os.environ.get("DB_DIR", os.path.dirname(os.path.abspath(__file__))))
+CALENDAR_CACHE = _CACHE_DIR / "earnings_calendar.json"
+CALENDAR_TTL_HOURS = float(os.environ.get("EARNINGS_CALENDAR_TTL_HOURS", 12))
+CALENDAR_MAX_TICKERS = int(os.environ.get("EARNINGS_CALENDAR_MAX", 250))
+
+
+def _load_cache() -> dict:
+    try:
+        if CALENDAR_CACHE.exists():
+            return json.loads(CALENDAR_CACHE.read_text())
+    except Exception:
+        pass
+    return {"built_at": None, "dates": {}, "count": 0, "errors": 0}
+
+
+def _save_cache(data: dict):
+    try:
+        CALENDAR_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        CALENDAR_CACHE.write_text(json.dumps(data))
+    except Exception:
+        pass
+
+
+def cache_age_hours() -> float | None:
+    c = _load_cache()
+    if not c.get("built_at"):
+        return None
+    try:
+        built = datetime.fromisoformat(c["built_at"])
+        return (_now_et() - built).total_seconds() / 3600.0
+    except Exception:
+        return None
+
+
+def cache_is_stale() -> bool:
+    age = cache_age_hours()
+    return age is None or age > CALENDAR_TTL_HOURS
+
+
+def build_calendar(tickers: list[str], progress=None) -> dict:
+    """Scan tickers for their next report date and cache date -> [tickers].
+
+    Slow and rate-limit sensitive, so it is capped and meant to run off the
+    request path. Partial results are still cached: a calendar covering 200 of
+    250 names is far more useful than none.
+    """
+    seen, ordered = set(), []
+    for t in tickers or []:
+        u = str(t).upper().strip()
+        if u and u not in seen:
+            seen.add(u)
+            ordered.append(u)
+    ordered = ordered[:CALENDAR_MAX_TICKERS]
+
+    dates: dict = {}
+    errors = 0
+    for i, t in enumerate(ordered):
+        try:
+            nxt = next_report(t)
+            if nxt and nxt.get("date"):
+                key = nxt["date"].strftime("%Y-%m-%d")
+                dates.setdefault(key, []).append({
+                    "ticker": t,
+                    "eps_estimate": nxt.get("eps_estimate"),
+                    "confirmed": nxt.get("confirmed", False),
+                    "hour": nxt["date"].strftime("%H:%M"),
+                })
+        except Exception:
+            errors += 1
+        if progress and i % 25 == 0:
+            try:
+                progress(i + 1, len(ordered))
+            except Exception:
+                pass
+
+    for k in dates:
+        dates[k].sort(key=lambda r: r["ticker"])
+    data = {"built_at": _now_et().isoformat(), "dates": dates,
+            "count": len(ordered), "errors": errors}
+    _save_cache(data)
+    return data
+
+
+def calendar_month(year: int, month: int) -> dict:
+    """date -> [tickers] for one month, straight from cache."""
+    c = _load_cache()
+    prefix = f"{year:04d}-{month:02d}-"
+    out = {k: v for k, v in (c.get("dates") or {}).items() if k.startswith(prefix)}
+    return {"dates": out, "built_at": c.get("built_at"),
+            "count": c.get("count", 0), "errors": c.get("errors", 0),
+            "stale": cache_is_stale()}
+
+
+# ── Per-stock verdict ──────────────────────────────────────────────────────
+
+def _universe_fit(ticker: str, mode: dict | None) -> tuple[bool, str]:
+    """Does this name fall inside the trading mode's universe at all?
+
+    Price and market cap only — the volatility and setup checks need intraday
+    bars that do not exist for a future date, so they are deliberately not
+    pretended at here.
+    """
+    if not mode:
+        return True, ""
+    try:
+        import yfinance as yf
+        info = yf.Ticker(ticker).get_info() or {}
+        price = info.get("currentPrice") or info.get("regularMarketPrice")
+        cap = info.get("marketCap")
+    except Exception:
+        return True, "couldn't load price/cap"
+
+    if price is not None:
+        lo, hi = mode.get("PRICE_MIN"), mode.get("PRICE_MAX")
+        if lo and price < lo:
+            return False, f"${price:.2f} below the ${lo:.0f} floor"
+        if hi and price > hi:
+            return False, f"${price:.2f} above the ${hi:.0f} ceiling"
+    if cap is not None:
+        lo, hi = mode.get("MCAP_MIN"), mode.get("MCAP_MAX")
+        if lo and cap < lo:
+            return False, f"${cap/1e6:.0f}M cap below the floor"
+        if hi and cap > hi:
+            return False, f"${cap/1e9:.1f}B cap above the ceiling"
+    return True, ""
+
+
+def verdict(ticker: str, mode: dict | None = None) -> dict:
+    """Would the system buy this around its earnings, and why not.
+
+    The honest answer before a print is always no. The strategy flattens daily
+    and never holds into an announcement, because a stop does not execute
+    through a gap. So the useful signal is not "buy before" — it is whether the
+    name is worth watching for the reaction afterwards, and whether the reaction
+    that already happened is still tradable.
+
+    Verdicts:
+      blocked   — reports before the next open; autopilot will not enter
+      watch     — reports later, fits the universe, worth watching after it prints
+      skip      — outside the tradable universe entirely
+      candidate — already reported and beat, still inside the drift window
+      fade      — already reported and MISSED; a rally on that is a fade setup
+      stale     — reported too long ago to be today's catalyst
+    """
+    out = {"ticker": ticker.upper(), "verdict": "watch", "reason": "",
+           "buyable": False, "next": None, "last": None}
+    try:
+        nxt = next_report(ticker)
+        last = last_report(ticker)
+        out["next"] = _serialise(nxt)
+        out["last"] = _serialise(last)
+
+        fits, why_not = _universe_fit(ticker, mode)
+        if not fits:
+            out["verdict"] = "skip"
+            out["reason"] = f"outside this mode's universe — {why_not}"
+            return out
+
+        rec = recent_print(ticker)
+        if rec:
+            if rec["verdict"] == "beat":
+                out["verdict"] = "candidate"
+                out["buyable"] = True
+                out["reason"] = (f"beat by {rec['surprise_pct']:.0f}% "
+                                 f"{'today' if rec['sessions_ago'] == 0 else 'recently'} — "
+                                 f"the reaction is tradable while it still has volume")
+            elif rec["verdict"] == "miss":
+                out["verdict"] = "fade"
+                out["reason"] = (f"missed by {abs(rec['surprise_pct']):.0f}% — "
+                                 f"any rally here is against the news, not because of it")
+            else:
+                out["verdict"] = "watch"
+                out["reason"] = "reported in line; no edge either way"
+            return out
+
+        blocked, why = reports_before_next_open(ticker)
+        if blocked:
+            out["verdict"] = "blocked"
+            out["reason"] = (f"{why} — autopilot will not open a position that "
+                             f"would be held through it; a stop does not execute "
+                             f"through an earnings gap")
+            return out
+
+        if nxt and nxt.get("days_away") is not None:
+            d = nxt["days_away"]
+            out["verdict"] = "watch"
+            out["reason"] = (f"reports in {d} day{'s' if d != 1 else ''}. Nothing to do "
+                             f"before then — the system trades the reaction, not the print")
+        else:
+            out["verdict"] = "watch"
+            out["reason"] = "no confirmed date"
+    except Exception as e:
+        out["reason"] = f"lookup failed: {str(e)[:80]}"
+    return out

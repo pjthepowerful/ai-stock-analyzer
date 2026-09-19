@@ -361,6 +361,198 @@ def test_scan_still_trades_a_name_with_no_pending_print():
     assert out["buys"] >= 1
 
 
+# ── Calendar ───────────────────────────────────────────────────────────────
+
+def _tmp_cache():
+    import tempfile, pathlib
+    d = tempfile.mkdtemp()
+    E.CALENDAR_CACHE = pathlib.Path(d) / "cal.json"
+    return E.CALENDAR_CACHE
+
+
+def test_calendar_groups_tickers_by_date():
+    _tmp_cache()
+    dates = {"AAA": 3, "BBB": 3, "CCC": 10}
+    E.next_report = lambda t: {"ticker": t, "date": _days(dates[t]),
+                               "eps_estimate": 1.0, "confirmed": True}
+    try:
+        data = E.build_calendar(["AAA", "BBB", "CCC"])
+        assert len(data["dates"]) == 2, data["dates"]
+        same = [v for v in data["dates"].values() if len(v) == 2][0]
+        assert {r["ticker"] for r in same} == {"AAA", "BBB"}
+    finally:
+        _restore()
+
+
+def test_calendar_survives_individual_lookup_failures():
+    """One bad ticker must not lose the whole scan — a partial calendar is far
+    more useful than none."""
+    _tmp_cache()
+    def _flaky(t):
+        if t == "BAD":
+            raise RuntimeError("boom")
+        return {"ticker": t, "date": _days(4), "eps_estimate": None, "confirmed": True}
+    E.next_report = _flaky
+    try:
+        data = E.build_calendar(["AAA", "BAD", "CCC"])
+        assert data["errors"] == 1
+        tickers = [r["ticker"] for v in data["dates"].values() for r in v]
+        assert set(tickers) == {"AAA", "CCC"}
+    finally:
+        _restore()
+
+
+def test_calendar_respects_the_ticker_cap():
+    _tmp_cache()
+    E.CALENDAR_MAX_TICKERS = 5
+    E.next_report = lambda t: {"ticker": t, "date": _days(2),
+                               "eps_estimate": None, "confirmed": True}
+    try:
+        data = E.build_calendar([f"T{i}" for i in range(50)])
+        assert data["count"] == 5
+    finally:
+        _restore()
+
+
+def test_calendar_deduplicates_tickers():
+    _tmp_cache()
+    E.next_report = lambda t: {"ticker": t, "date": _days(2),
+                               "eps_estimate": None, "confirmed": True}
+    try:
+        data = E.build_calendar(["AAA", "aaa", "AAA", "BBB"])
+        assert data["count"] == 2
+    finally:
+        _restore()
+
+
+def test_month_view_filters_to_that_month():
+    _tmp_cache()
+    E._save_cache({"built_at": E._now_et().isoformat(),
+                   "dates": {"2026-09-21": [{"ticker": "AAA"}],
+                             "2026-10-05": [{"ticker": "BBB"}]},
+                   "count": 2, "errors": 0})
+    try:
+        sep = E.calendar_month(2026, 9)
+        assert list(sep["dates"]) == ["2026-09-21"]
+        assert E.calendar_month(2026, 10)["dates"]["2026-10-05"][0]["ticker"] == "BBB"
+        assert E.calendar_month(2026, 11)["dates"] == {}
+    finally:
+        _restore()
+
+
+def test_missing_cache_reports_stale_rather_than_crashing():
+    import pathlib, tempfile
+    E.CALENDAR_CACHE = pathlib.Path(tempfile.mkdtemp()) / "nope.json"
+    try:
+        assert E.cache_age_hours() is None
+        assert E.cache_is_stale() is True
+        assert E.calendar_month(2026, 9)["dates"] == {}
+    finally:
+        _restore()
+
+
+# ── Verdicts ───────────────────────────────────────────────────────────────
+
+_MODE = {"PRICE_MIN": 1.0, "PRICE_MAX": 60.0, "MCAP_MIN": 25e6, "MCAP_MAX": 1.2e9}
+
+
+def _fit(ok=True, why=""):
+    E._universe_fit = lambda t, m: (ok, why)
+
+
+def test_pre_print_is_never_buyable():
+    """The whole point: there is no 'buy before earnings' in this system."""
+    _fit()
+    E.recent_print = lambda t, within_sessions=None: None
+    E.reports_before_next_open = lambda t: (True, "reports Sep 21 4:05 PM ET")
+    E.next_report = lambda t: {"ticker": t, "date": _days(0), "days_away": 0,
+                               "eps_estimate": 1.0, "confirmed": True}
+    E.last_report = lambda t: None
+    try:
+        v = E.verdict("AAA", _MODE)
+        assert v["verdict"] == "blocked"
+        assert v["buyable"] is False
+        assert "gap" in v["reason"]
+    finally:
+        _restore()
+
+
+def test_a_beat_inside_the_window_is_the_only_buyable_state():
+    _fit()
+    E.recent_print = lambda t, within_sessions=None: {
+        "verdict": "beat", "surprise_pct": 32.0, "sessions_ago": 1}
+    E.next_report = lambda t: None
+    E.last_report = lambda t: None
+    try:
+        v = E.verdict("AAA", _MODE)
+        assert v["verdict"] == "candidate" and v["buyable"] is True
+        assert "32%" in v["reason"]
+    finally:
+        _restore()
+
+
+def test_a_miss_is_flagged_as_a_fade_not_a_buy():
+    _fit()
+    E.recent_print = lambda t, within_sessions=None: {
+        "verdict": "miss", "surprise_pct": -28.0, "sessions_ago": 0}
+    E.next_report = lambda t: None
+    E.last_report = lambda t: None
+    try:
+        v = E.verdict("AAA", _MODE)
+        assert v["verdict"] == "fade" and v["buyable"] is False
+        assert "against the news" in v["reason"]
+    finally:
+        _restore()
+
+
+def test_out_of_universe_short_circuits_before_anything_else():
+    """A name the mode would never trade should say so plainly rather than
+    offering a verdict about a trade that cannot happen."""
+    _fit(False, "$412.00 above the $60 ceiling")
+    E.recent_print = lambda t, within_sessions=None: {
+        "verdict": "beat", "surprise_pct": 50.0, "sessions_ago": 0}
+    E.next_report = lambda t: None
+    E.last_report = lambda t: None
+    try:
+        v = E.verdict("AAA", _MODE)
+        assert v["verdict"] == "skip" and v["buyable"] is False
+        assert "ceiling" in v["reason"]
+    finally:
+        _restore()
+
+
+def test_a_distant_report_is_watch_and_says_there_is_nothing_to_do():
+    _fit()
+    E.recent_print = lambda t, within_sessions=None: None
+    E.reports_before_next_open = lambda t: (False, "")
+    E.next_report = lambda t: {"ticker": t, "date": _days(9), "days_away": 9,
+                               "eps_estimate": 2.0, "confirmed": True}
+    E.last_report = lambda t: None
+    try:
+        v = E.verdict("AAA", _MODE)
+        assert v["verdict"] == "watch" and v["buyable"] is False
+        assert "9 day" in v["reason"]
+    finally:
+        _restore()
+
+
+def test_verdict_never_raises_on_broken_data():
+    def _boom(t):
+        raise RuntimeError("down")
+    E.next_report = _boom
+    try:
+        v = E.verdict("AAA", _MODE)
+        assert v["ticker"] == "AAA" and v["buyable"] is False
+    finally:
+        _restore()
+
+
+def test_no_mode_means_no_universe_filtering():
+    """Core mode has no small-cap bands, so nothing should be marked out of range."""
+    ok, why = E._universe_fit("AAA", None)
+    assert ok is True and why == ""
+
+
 def main():
     tests = [(n, o) for n, o in sorted(globals().items())
              if n.startswith("test_") and callable(o)]

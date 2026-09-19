@@ -4,6 +4,30 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 4.19.0 — September 19, 2026
+Co-Pilot's earnings list becomes a clickable month calendar.
+
+- yfinance has no "who reports on date X" query — it is one call per ticker, so
+  a few hundred is minutes. The calendar is therefore built in the background
+  (`build_calendar`, capped by `EARNINGS_CALENDAR_MAX`, default 250, over
+  positions + `liquid_universe()`) and cached to `earnings_calendar.json` with a
+  12h TTL. Per-stock verdicts are computed on demand for only the names on the
+  clicked date, since they need live price and cap.
+- `verdict()` returns one of: `candidate` (reported and beat, still in the drift
+  window — the only buyable state), `fade` (missed; a rally on that is against
+  the news), `blocked` (reports before the next open), `watch`, `skip` (outside
+  the mode's price/cap bands), `stale`.
+- **There is deliberately no pre-earnings buy signal.** The strategy flattens
+  daily and never holds through a print, so the honest answer before one is
+  always no. The calendar's job is to show what is worth watching for the
+  reaction afterwards.
+- `_universe_fit()` checks price and market cap only — the volatility and setup
+  checks need intraday bars that do not exist for a future date, and inventing
+  them would be a fabricated signal.
+- `GET /api/earnings/calendar/month`, `GET /api/earnings/calendar/day`,
+  `POST /api/earnings/calendar/refresh` replace the old list endpoint.
+- 15 new tests; 7 mutations verified caught.
+
 ## 4.18.0 — September 19, 2026
 Earnings, as a trading input and as an answerable question.
 
