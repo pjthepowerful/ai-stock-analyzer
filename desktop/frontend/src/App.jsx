@@ -21,11 +21,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.19.0'
+const VERSION = '4.19.1'
 const VERSION_DATE = 'September 19, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.19.1', d: 'September 19, 2026', changes: [
+    'The earnings calendar now says what actually went wrong instead of \u201cCould not load\u201d. A backend running an older build, an expired login and a real server error are three different problems, and each now names itself.',
+    'An empty calendar now distinguishes \u201cnever built\u201d from \u201cbuilt, but every lookup failed\u201d \u2014 the second means the backend cannot reach the earnings provider, which is a server-side fix, not a Rebuild.',
+  ]},
   { v: '4.19.0', d: 'September 19, 2026', changes: [
     'The Co-Pilot earnings section is now a month calendar. Click any date to see which companies report that day, what the street expects, and whether the system would touch them.',
     'Each name gets a plain verdict: “Tradable now” (already reported and beat, reaction still has volume), “Not into it” (reports before the next open — autopilot will not hold through a print), “Missed”, “Watch”, or “Out of range” for names outside the mode’s price and size bands.',
@@ -708,6 +712,29 @@ const f = (url, opts = {}) => {
   const tk = localStorage.getItem('paula-token')
   if (tk) headers['Authorization'] = 'Bearer ' + tk
   return fetch(url, { ...opts, headers })
+}
+// Same as f(), but never loses WHY a call failed. Calling .json() straight off
+// f() throws away the status line, so a 404 from a backend running an older
+// build, a 401 from an expired token and a 500 from a real bug all collapse
+// into one useless "couldn't load". Each of those needs a different fix, so
+// each gets its own sentence.
+const fJSON = async (url, opts = {}) => {
+  let res
+  try { res = await f(url, opts) }
+  catch { return { ok: false, error: "Can't reach the backend — it may be asleep or the URL is wrong." } }
+  let body = null
+  try { body = await res.json() } catch { /* HTML error page, empty body, etc. */ }
+  if (res.status === 404) {
+    return { ok: false, error: `The backend doesn't have this endpoint (404). It's running an older build than this app (v${VERSION}) — redeploy the backend, then reload.` }
+  }
+  if (res.status === 401 || res.status === 403) {
+    return { ok: false, error: 'Signed out — log in again.' }
+  }
+  if (body && typeof body === 'object') {
+    if (body.ok) return body
+    return { ok: false, error: body.error || body.detail || `Backend returned HTTP ${res.status}.` }
+  }
+  return { ok: false, error: `Backend returned HTTP ${res.status} with no JSON body.` }
 }
 const WS_URL = `${BACKEND.startsWith('https') ? 'wss:' : 'ws:'}//${new URL(BACKEND).host}/ws`
 
@@ -3758,9 +3785,9 @@ function EarningsCalendar({ token }) {
   const loadMonth = async (y, m) => {
     setBusy(true); setErr('')
     try {
-      const r = await f(`${API}/api/earnings/calendar/month?year=${y}&month=${m}`).then(r => r.json())
-      if (r.ok) setMonth(r); else setErr(r.error || 'Could not load')
-    } catch { setErr("Can't reach backend") }
+      const r = await fJSON(`${API}/api/earnings/calendar/month?year=${y}&month=${m}`)
+      if (r.ok) setMonth(r); else { setMonth(null); setErr(r.error) }
+    } catch (e) { setMonth(null); setErr(String(e && e.message || e)) }
     setBusy(false)
   }
   useEffect(() => { loadMonth(ym.y, ym.m) }, [ym.y, ym.m, token])
@@ -3768,18 +3795,20 @@ function EarningsCalendar({ token }) {
   const loadDay = async (dateStr) => {
     setSel(dateStr); setDay(null); setDayBusy(true)
     try {
-      const r = await f(`${API}/api/earnings/calendar/day?date=${dateStr}`).then(r => r.json())
+      const r = await fJSON(`${API}/api/earnings/calendar/day?date=${dateStr}`)
       setDay(r.ok ? r : { stocks: [], error: r.error })
-    } catch { setDay({ stocks: [], error: "Can't reach backend" }) }
+    } catch (e) { setDay({ stocks: [], error: String(e && e.message || e) }) }
     setDayBusy(false)
   }
 
   const rebuild = async () => {
     setBusy(true)
     try {
-      await f(API + '/api/earnings/calendar/refresh', { method: 'POST' }).then(r => r.json())
-      setErr('Rebuilding in the background — this takes a few minutes. Refresh shortly.')
-    } catch { setErr("Can't reach backend") }
+      const r = await fJSON(API + '/api/earnings/calendar/refresh', { method: 'POST' })
+      setErr(r.ok
+        ? 'Rebuilding in the background — this takes a few minutes. Reload the page after that to see the dates fill in.'
+        : r.error)
+    } catch (e) { setErr(String(e && e.message || e)) }
     setBusy(false)
   }
 
@@ -3846,7 +3875,11 @@ function EarningsCalendar({ token }) {
 
     {month && !Object.keys(month.dates || {}).length && !busy && (
       <div style={{ fontSize: '.8rem', color: 'var(--dim)', marginTop: 10, lineHeight: 1.5 }}>
-        No dates cached for this month. Hit Rebuild to scan — it runs in the background.
+        {!month.built_at
+          ? 'No calendar has been built yet. Hit Rebuild — it scans in the background and takes a few minutes.'
+          : month.errors && !month.count
+            ? `The last build reached no data: ${month.errors} lookups failed. The backend can't get to the earnings provider — check its network egress and that yfinance is installed.`
+            : `Nothing reports this month in the cached set (${month.count} tickers, built ${new Date(month.built_at).toLocaleString()}${month.errors ? `, ${month.errors} lookups failed` : ''}). Try another month, or Rebuild.`}
       </div>
     )}
     {month?.stale && Object.keys(month.dates || {}).length > 0 && (

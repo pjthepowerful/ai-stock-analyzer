@@ -1094,7 +1094,13 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v4.19.0",  # bump marker  confirms running code
+        "build": "v4.19.1",  # bump marker  confirms running code
+        # Does THIS process actually serve the earnings calendar? The frontend
+        # 404s against an older backend, which is indistinguishable from a bug
+        # unless the running build says which routes it has.
+        "earnings_calendar": any(
+            getattr(r, "path", "") == "/api/earnings/calendar/month" for r in app.routes
+        ),
         "private_company_routing": bool(engine.route("what about the SpaceX IPO?").get("private_company")),
         "time_et": datetime.now(ct).strftime("%I:%M %p CT"),
         "autopilot": autopilot_task is not None and not autopilot_task.done(),
