@@ -358,3 +358,23 @@ def rank(tickers: list[str], limit: int = 12, progress=None) -> list[dict]:
                 pass
     rows.sort(key=lambda r: r["score"], reverse=True)
     return rows[:limit]
+
+
+def quick_lean(ticker: str) -> dict:
+    """A lean from the two heaviest legs only — revisions and beat history.
+
+    A full forecast() costs four or five network calls per name, which is fine
+    for one row and far too slow for a list of forty. This drops the estimate
+    drift leg (0.20 of the weight) and the price-history measurement, keeping
+    the two that carry 0.80 between them, and renormalises so the thresholds
+    still mean what they mean in forecast().
+    """
+    rev = revision_signal(ticker)
+    hist = beat_history(ticker)
+    score = round(rev["score"] * 0.5625 + hist["score"] * 0.4375, 3)
+    return {
+        "score": score,
+        "lean": _lean(score),
+        "grounded": bool(rev.get("available") or hist.get("available")),
+        "notes": [x["note"] for x in (rev, hist) if x.get("note")],
+    }

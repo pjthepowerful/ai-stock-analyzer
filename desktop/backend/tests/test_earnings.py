@@ -814,6 +814,99 @@ def test_the_universe_list_does_not_bypass_the_cap_filter():
         _restore()
 
 
+# ── Future dates must differentiate ────────────────────────────────────────
+
+def _future_verdict(lean):
+    """verdict() for a name reporting in 12 days, with quick_lean stubbed."""
+    import sys, types
+    E.next_report = lambda t: {"ticker": t, "date": _days(12), "days_away": 12,
+                               "eps_estimate": 1.0, "confirmed": True}
+    E.last_report = lambda t: None
+    E.recent_print = lambda t: None
+    E.reports_before_next_open = lambda t: (False, "")
+    E._universe_fit = lambda t, m: (True, "")
+    fake = types.ModuleType("forecast")
+    fake.quick_lean = lambda t: lean
+    old = sys.modules.get("forecast")
+    sys.modules["forecast"] = fake
+    try:
+        return E.verdict("AAA", None)
+    finally:
+        if old is not None: sys.modules["forecast"] = old
+        else: sys.modules.pop("forecast", None)
+
+
+def test_a_future_date_is_not_automatically_watch():
+    """The bug this replaces: every branch of verdict() needed the print to be
+    in the last two sessions or before the next open, and a calendar is almost
+    entirely neither — so every name on every future date read 'Watch' and the
+    calendar carried no information at all."""
+    try:
+        v = _future_verdict({"score": 0.7, "lean": "strong beat lean",
+                             "grounded": True, "notes": ["9 estimates up vs 1 down"]})
+        assert v["verdict"] == "lean_beat", v
+        assert "estimates up" in v["reason"]
+    finally:
+        _restore()
+
+
+def test_a_negative_lean_is_surfaced_not_flattened():
+    try:
+        v = _future_verdict({"score": -0.7, "lean": "strong miss lean",
+                             "grounded": True, "notes": ["6 estimates CUT vs 0 raised"]})
+        assert v["verdict"] == "lean_miss", v
+    finally:
+        _restore()
+
+
+def test_no_published_data_stays_watch_rather_than_inventing_a_lean():
+    """A name nobody covers must read as 'no lean', never as a mild call
+    manufactured out of two empty signals."""
+    try:
+        v = _future_verdict({"score": 0.0, "lean": "no lean",
+                             "grounded": False, "notes": []})
+        assert v["verdict"] == "watch"
+        assert "No lean" in v["reason"]
+    finally:
+        _restore()
+
+
+def test_a_lean_is_never_buyable():
+    """A lean says which way to watch, not what to own. Autopilot does not hold
+    through prints, so nothing on a future date may be marked buyable."""
+    try:
+        for lean in ({"score": 0.9, "lean": "strong beat lean", "grounded": True, "notes": []},
+                     {"score": -0.9, "lean": "strong miss lean", "grounded": True, "notes": []}):
+            assert _future_verdict(lean)["buyable"] is False
+    finally:
+        _restore()
+
+
+def test_verdict_survives_forecast_being_unavailable():
+    """The forecast module failing must degrade to 'no lean', never take the
+    calendar down with it."""
+    import sys, types
+    E.next_report = lambda t: {"ticker": t, "date": _days(12), "days_away": 12,
+                               "eps_estimate": None, "confirmed": True}
+    E.last_report = lambda t: None
+    E.recent_print = lambda t: None
+    E.reports_before_next_open = lambda t: (False, "")
+    E._universe_fit = lambda t, m: (True, "")
+    fake = types.ModuleType("forecast")
+    def _boom(t): raise RuntimeError("yahoo down")
+    fake.quick_lean = _boom
+    old = sys.modules.get("forecast")
+    sys.modules["forecast"] = fake
+    try:
+        v = E.verdict("AAA", None)
+        assert v["verdict"] == "watch"
+        assert "reports in 12 days" in v["reason"]
+    finally:
+        if old is not None: sys.modules["forecast"] = old
+        else: sys.modules.pop("forecast", None)
+        _restore()
+
+
 def main():
     tests = [(n, o) for n, o in sorted(globals().items())
              if n.startswith("test_") and callable(o)]

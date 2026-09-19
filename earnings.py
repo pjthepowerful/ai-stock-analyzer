@@ -760,9 +760,32 @@ def verdict(ticker: str, mode: dict | None = None) -> dict:
 
         if nxt and nxt.get("days_away") is not None:
             d = nxt["days_away"]
-            out["verdict"] = "watch"
-            out["reason"] = (f"reports in {d} day{'s' if d != 1 else ''}. Nothing to do "
-                             f"before then — the system trades the reaction, not the print")
+            when = f"reports in {d} day{'s' if d != 1 else ''}"
+            # Without this the calendar is a wall of identical "Watch" labels:
+            # every branch above needs the print to be in the last two sessions
+            # or before the next open, and a calendar is mostly neither. A
+            # future date does have information attached to it — whether
+            # analysts are raising or cutting, and whether the company has a
+            # habit of beating — so say which way it leans instead of nothing.
+            lean = None
+            try:
+                import forecast as _fc
+                lean = _fc.quick_lean(ticker)
+            except Exception:
+                lean = None
+
+            if lean and lean.get("grounded") and lean["lean"] != "no lean":
+                out["verdict"] = "lean_beat" if "beat" in lean["lean"] else "lean_miss"
+                detail = "; ".join(lean["notes"][:2])
+                out["reason"] = f"{when} — {lean['lean']}. {detail}"
+            else:
+                out["verdict"] = "watch"
+                out["reason"] = (f"{when}. No lean either way"
+                                 + (" — no revision or surprise history published"
+                                    if lean and not lean.get("grounded") else ""))
+            # A lean is never a buy: autopilot still will not hold through the
+            # print, and this label is about what to watch, not what to own.
+            out["buyable"] = False
         else:
             out["verdict"] = "watch"
             out["reason"] = "no confirmed date"

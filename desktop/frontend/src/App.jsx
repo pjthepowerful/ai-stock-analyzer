@@ -21,11 +21,15 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.22.0'
+const VERSION = '4.22.1'
 const VERSION_DATE = 'September 19, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.22.1', d: 'September 19, 2026', changes: [
+    'Fixed: every company on the earnings calendar said \u201cWatch\u201d. That was a design flaw, not a data problem \u2014 a name could only get a different label if it had reported in the last two sessions or reported before the next open, and a calendar is almost entirely neither, so everything fell through to the default.',
+    'Future dates now show which way the print leans, using analyst estimate revisions and the company\u2019s own beat history: \u201cLeans beat\u201d, \u201cLeans miss\u201d, or \u201cNo lean\u201d when nothing is published. A lean is still never a buy \u2014 autopilot does not hold through prints.',
+  ]},
   { v: '4.22.0', d: 'September 19, 2026', changes: [
     'New Earnings forecast section: companies reporting in the next three weeks, ranked by how likely they look to beat. It reads analyst estimate revisions (the best free predictor of a surprise), whether consensus has been rising, and how often the company has actually beaten in past quarters.',
     'Every row shows how much that specific stock typically MOVES on earnings day, next to the call rather than behind a click. A company beating and its stock rising are different questions \u2014 plenty beat and fall on weak guidance \u2014 so the gap figure is what your money is exposed to, not the lean.',
@@ -3832,7 +3836,12 @@ function DashView({perf}){
 // watching for the reaction afterwards, not to invent a pre-earnings buy.
 const VERDICT_STYLE = {
   candidate: { label: 'Tradable now', color: 'var(--grn)', bg: 'rgba(16,185,129,.12)' },
-  watch:     { label: 'Watch',        color: 'var(--txt)', bg: 'var(--c2)' },
+  // A future date is not a blank. Analysts raising or cutting into the print,
+  // and the company's own habit of beating, are real information — a lean says
+  // which way, without claiming it is a buy. Nothing here is buyable.
+  lean_beat: { label: 'Leans beat',   color: 'var(--grn3)', bg: 'rgba(16,185,129,.07)' },
+  lean_miss: { label: 'Leans miss',   color: 'var(--red)', bg: 'rgba(239,68,68,.08)' },
+  watch:     { label: 'No lean',      color: 'var(--txt)', bg: 'var(--c2)' },
   blocked:   { label: 'Not into it',  color: 'var(--amb)', bg: 'rgba(245,158,11,.12)' },
   fade:      { label: 'Missed',       color: 'var(--red)', bg: 'rgba(239,68,68,.12)' },
   skip:      { label: 'Out of range', color: 'var(--dim)', bg: 'transparent' },
