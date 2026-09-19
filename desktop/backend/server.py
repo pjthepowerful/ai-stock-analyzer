@@ -1094,7 +1094,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v4.20.0",  # bump marker  confirms running code
+        "build": "v4.21.0",  # bump marker  confirms running code
         # Does THIS process actually serve the earnings calendar? The frontend
         # 404s against an older backend, which is indistinguishable from a bug
         # unless the running build says which routes it has.
@@ -3617,6 +3617,99 @@ async def earnings_refresh(authorization: str = Header(None)):
 
     _cal_build_task = asyncio.create_task(_build())
     return {"ok": True, "status": "building"}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  RESEARCH  —  the longer-term book. Surfaces ideas; never places orders.
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/research/exposure")
+async def research_exposure(authorization: str = Header(None)):
+    """How close the held book is to switching day trading off.
+
+    This replaces the sleeve cap the user declined: the total stays visible
+    even though nothing enforces it.
+    """
+    if not _get_user(authorization):
+        return {"ok": False, "error": "Authentication required"}
+    try:
+        import research as _res
+        acct = engine.alpaca_account() or {}
+        pos = engine.alpaca_positions() or []
+        return {"ok": True, **_res.pdt_exposure(acct.get("equity"), pos)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
+
+
+@app.get("/api/research/candidates")
+async def research_candidates(limit: int = 12, authorization: str = Header(None)):
+    """Rank names currently inside a post-earnings drift window.
+
+    The universe comes from the earnings calendar's recent dates — companies
+    that have ALREADY reported. Nothing forward-looking is a candidate, by
+    design: there is no drift to trade before a print.
+    """
+    if not _get_user(authorization):
+        return {"ok": False, "error": "Authentication required"}
+    try:
+        import research as _res
+        import earnings as _earn
+        from datetime import timedelta as _td
+
+        cache = _earn._load_cache()
+        dates = cache.get("dates") or {}
+        today = datetime.now(ZoneInfo("US/Eastern")).date()
+        window_start = today - _td(days=_res.DRIFT_MAX_DAYS)
+
+        names: list[str] = []
+        for dstr, rows in dates.items():
+            try:
+                d = datetime.strptime(dstr, "%Y-%m-%d").date()
+            except ValueError:
+                continue
+            if window_start <= d <= today:
+                names += [r["ticker"] for r in rows if r.get("ticker")]
+
+        held = {p["ticker"]: p for p in (engine.alpaca_positions() or [])
+                if p.get("ticker")}
+        names = list(dict.fromkeys(names + list(held)))
+
+        if not names:
+            return {"ok": True, "candidates": [], "scanned": 0,
+                    "note": "no companies in the calendar have reported inside "
+                            "the drift window — rebuild the earnings calendar"}
+
+        acct = engine.alpaca_account() or {}
+        prices = {t: p.get("current_price") for t, p in held.items()}
+        loop = asyncio.get_event_loop()
+        rows = await loop.run_in_executor(
+            _scan_executor,
+            lambda: _res.rank(names[:60], equity=acct.get("equity"),
+                              prices=prices, limit=limit))
+        return {"ok": True, "candidates": rows, "scanned": min(len(names), 60),
+                "equity": acct.get("equity")}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
+
+
+@app.get("/api/research/{ticker}")
+async def research_one(ticker: str, authorization: str = Header(None)):
+    """Full research row for one name: filings, drift, news, suggested size."""
+    if not _get_user(authorization):
+        return {"ok": False, "error": "Authentication required"}
+    try:
+        import research as _res
+        acct = engine.alpaca_account() or {}
+        held = {p["ticker"]: p for p in (engine.alpaca_positions() or [])
+                if p.get("ticker")}
+        px = (held.get(ticker.upper()) or {}).get("current_price")
+        loop = asyncio.get_event_loop()
+        row = await loop.run_in_executor(
+            _scan_executor,
+            lambda: _res.evaluate(ticker, price=px, equity=acct.get("equity")))
+        return {"ok": True, **row}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
 
 
 # ── Run ──

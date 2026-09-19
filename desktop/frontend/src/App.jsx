@@ -21,11 +21,17 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.20.0'
+const VERSION = '4.21.0'
 const VERSION_DATE = 'September 19, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.21.0', d: 'September 19, 2026', changes: [
+    'New Research section in Co-Pilot: a longer-term book, separate from autopilot. It ranks companies that have ALREADY reported and beat, using the actual figures from their SEC filings \u2014 revenue growth, profitability, and share-count dilution \u2014 alongside recent news.',
+    'It never places an order. It shows you the case for each name and you decide. Autopilot is untouched and still flattens daily.',
+    'The rule autopilot follows \u2014 never hold through an earnings print \u2014 is about putting 10-20% of the account into one volatile small cap, where a gap is unsurvivable. It is not a rule about the calendar, so a diversified book at small size can hold for weeks. That is what this is.',
+    'A PDT exposure meter sits at the top: equity, total held overnight, and the across-the-board drop that would put you under $25,000 and switch off day trading. Positions are sized individually with no sleeve total, so this meter is what keeps the accumulated pile visible.',
+  ]},
   { v: '4.20.0', d: 'September 19, 2026', changes: [
     'The earnings calendar now runs off the Nasdaq earnings calendar instead of looking each ticker up one at a time. It used to only know about companies already on the watch universe list \u2014 roughly 250 names \u2014 so anything reporting outside that list simply never appeared. Nasdaq answers the question the calendar actually asks (who reports on this date), so coverage is now every reporting company.',
     'Names are filtered to a small-cap band, since a $900B company is never a setup for this strategy. Anything you actually hold stays on the calendar regardless of its size.',
@@ -3942,6 +3948,147 @@ function EarningsCalendar({ token }) {
   </div>)
 }
 
+// ── Research: the longer-term book ─────────────────────────────────────────
+// Separate from autopilot on purpose. Autopilot trades an intraday strategy
+// that flattens daily and refuses to hold through a print; that rule is about
+// CONCENTRATION, not the calendar, so a diversified book at small size can
+// hold for weeks. This panel surfaces those ideas and never places an order.
+//
+// The user chose per-position sizing with no sleeve total. Nothing here caps
+// the sleeve, so the exposure meter carries that job: it shows the pile while
+// it forms, and the one number that matters — the across-the-board drop that
+// puts equity under the PDT floor and switches day trading off.
+function ExposureMeter({ ex }) {
+  if (!ex) return null
+  const gap = ex.breach_gap_pct
+  const tone = gap == null ? 'var(--dim)' : gap < 10 ? 'var(--red)' : gap < 25 ? 'var(--amb)' : 'var(--grn)'
+  return (
+    <div style={{ border: '1px solid var(--brd)', borderLeft: `3px solid ${tone}`,
+                  borderRadius: 8, padding: '10px 12px', marginBottom: 12, background: 'var(--c2)' }}>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontFamily: 'var(--mono)', fontSize: '.78rem' }}>
+        <span style={{ color: 'var(--dim)' }}>equity <b style={{ color: 'var(--wh)' }}>
+          {ex.equity != null ? `$${ex.equity.toLocaleString()}` : '—'}</b></span>
+        <span style={{ color: 'var(--dim)' }}>held <b style={{ color: 'var(--wh)' }}>
+          ${(ex.exposure || 0).toLocaleString()}</b> ({ex.positions})</span>
+        <span style={{ color: 'var(--dim)' }}>PDT headroom <b style={{ color: tone }}>
+          {ex.headroom != null ? `$${ex.headroom.toLocaleString()}` : '—'}</b></span>
+      </div>
+      {ex.note && <div style={{ fontSize: '.76rem', color: tone, marginTop: 5 }}>{ex.note}</div>}
+    </div>
+  )
+}
+
+function ResearchPanel({ token }) {
+  const [rows, setRows] = useState(null)
+  const [ex, setEx] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [open, setOpen] = useState(null)
+
+  const load = async () => {
+    setBusy(true); setErr('')
+    const e = await fJSON(`${API}/api/research/exposure`)
+    if (e.ok) setEx(e)
+    const r = await fJSON(`${API}/api/research/candidates?limit=12`)
+    if (r.ok) { setRows(r.candidates || []); if (r.note) setErr(r.note) }
+    else { setRows(null); setErr(r.error) }
+    setBusy(false)
+  }
+  useEffect(() => { load() }, [token])
+
+  const card = { background: 'var(--c1)', border: '1px solid var(--brd)', borderRadius: 10, padding: 14, marginBottom: 12 }
+  const lbl = { fontSize: '.78rem', textTransform: 'uppercase', letterSpacing: '.4px', color: 'var(--dim)', fontWeight: 600 }
+  const btn = { font: 'inherit', fontSize: '.78rem', padding: '3px 10px', borderRadius: 7, cursor: 'pointer', border: '1px solid var(--brd)', background: 'var(--c2)', color: 'var(--txt)' }
+  const pct = (v, d = 0) => v == null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(d)}%`
+
+  return (<div style={card}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+      <div style={lbl}>Research — longer-term</div>
+      <button onClick={load} disabled={busy} style={{ ...btn, marginLeft: 'auto' }}>
+        {busy ? '…' : 'Refresh'}
+      </button>
+    </div>
+
+    <ExposureMeter ex={ex} />
+
+    {busy && !rows && <div style={{ fontSize: '.82rem', color: 'var(--dim)' }}>Reading filings and earnings history…</div>}
+    {err && <div style={{ fontSize: '.8rem', color: 'var(--txt)', marginBottom: 8, lineHeight: 1.5 }}>{err}</div>}
+    {rows && !rows.length && !busy && !err && (
+      <div style={{ fontSize: '.82rem', color: 'var(--dim)' }}>
+        Nothing is inside a post-earnings drift window right now.
+      </div>
+    )}
+
+    {rows?.map(r => {
+      const isOpen = open === r.ticker
+      return (
+        <div key={r.ticker} style={{ borderTop: '1px solid var(--brd)', padding: '10px 0' }}>
+          <button onClick={() => setOpen(isOpen ? null : r.ticker)}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', font: 'inherit',
+                     background: 'none', border: 0, padding: 0, cursor: 'pointer', textAlign: 'left' }}>
+            <b style={{ color: 'var(--wh)', fontSize: '.92rem' }}>{r.ticker}</b>
+            <span style={{ fontSize: '.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.3px',
+                           padding: '2px 7px', borderRadius: 5,
+                           color: r.buyable ? 'var(--grn)' : 'var(--dim)',
+                           background: r.buyable ? 'rgba(16,185,129,.12)' : 'var(--c2)' }}>
+              {r.buyable ? 'Candidate' : 'No setup'}
+            </span>
+            <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: '.76rem', color: 'var(--dim)' }}>
+              {r.size?.shares > 0 ? `${r.size.shares} sh · $${r.size.dollars.toLocaleString()}` : ''}
+            </span>
+            <span style={{ color: 'var(--dim)', fontSize: '.8rem' }}>{isOpen ? '−' : '+'}</span>
+          </button>
+          <div style={{ fontSize: '.78rem', color: 'var(--txt)', marginTop: 3, lineHeight: 1.45 }}>
+            {r.drift?.note}
+          </div>
+
+          {isOpen && (<div style={{ marginTop: 8, paddingLeft: 10, borderLeft: '2px solid var(--brd)' }}>
+            <div style={{ fontSize: '.72rem', color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '.3px', marginBottom: 4 }}>
+              From the filings
+            </div>
+            {r.fundamentals?.available ? (
+              <div style={{ fontFamily: 'var(--mono)', fontSize: '.76rem', color: 'var(--txt)', display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                <span>rev {pct(r.fundamentals.revenue_growth_pct)}</span>
+                <span>shares {pct(r.fundamentals.dilution_pct)}</span>
+                <span>{r.fundamentals.profitable === true ? 'profitable'
+                     : r.fundamentals.profitable === false ? 'loss-making' : 'income n/a'}</span>
+              </div>
+            ) : (
+              <div style={{ fontSize: '.76rem', color: 'var(--dim)' }}>
+                Not checked — {r.fundamentals?.reason || 'no filings'}
+              </div>
+            )}
+            {r.fundamental_notes?.length > 0 && (
+              <div style={{ fontSize: '.76rem', color: 'var(--txt)', marginTop: 4, lineHeight: 1.45 }}>
+                {r.fundamental_notes.join(' · ')}
+              </div>
+            )}
+            {r.news?.length > 0 && (<>
+              <div style={{ fontSize: '.72rem', color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '.3px', margin: '9px 0 4px' }}>
+                Recent news
+              </div>
+              {r.news.map((n, i) => (
+                <div key={i} style={{ fontSize: '.76rem', marginBottom: 3, lineHeight: 1.4 }}>
+                  <a href={n.url} target="_blank" rel="noreferrer" style={{ color: 'var(--txt)' }}>{n.headline}</a>
+                </div>
+              ))}
+            </>)}
+            {r.size?.note && (
+              <div style={{ fontSize: '.74rem', color: 'var(--dim)', marginTop: 8 }}>{r.size.note}</div>
+            )}
+          </div>)}
+        </div>
+      )
+    })}
+
+    <div style={{ fontSize: '.74rem', color: 'var(--dim)', marginTop: 12, lineHeight: 1.5 }}>
+      These are ideas, not orders — nothing here buys anything. Every name has
+      already reported; the trade is the drift after the print, never a position
+      held into one.
+    </div>
+  </div>)
+}
+
 function CoPilot({ token, isPlus, setView }) {
   // Manual co-pilot: scan for picks, size positions against your buying power
   // (confirm each), then track your entered positions with live P/L. Positions
@@ -4136,6 +4283,7 @@ function CoPilot({ token, isPlus, setView }) {
       </p>
 
       <EarningsCalendar token={token} />
+      <ResearchPanel token={token} />
 
       {/* Buying power */}
       <div style={card}>
