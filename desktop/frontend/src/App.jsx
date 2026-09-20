@@ -21,11 +21,14 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.22.1'
+const VERSION = '4.22.2'
 const VERSION_DATE = 'September 19, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.22.2', d: 'September 19, 2026', changes: [
+    'The earnings forecast list now runs worst to best by default, with a button in the header to flip it back.',
+  ]},
   { v: '4.22.1', d: 'September 19, 2026', changes: [
     'Fixed: every company on the earnings calendar said \u201cWatch\u201d. That was a design flaw, not a data problem \u2014 a name could only get a different label if it had reported in the last two sessions or reported before the next open, and a calendar is almost entirely neither, so everything fell through to the default.',
     'Future dates now show which way the print leans, using analyst estimate revisions and the company\u2019s own beat history: \u201cLeans beat\u201d, \u201cLeans miss\u201d, or \u201cNo lean\u201d when nothing is published. A lean is still never a buy \u2014 autopilot does not hold through prints.',
@@ -4166,6 +4169,9 @@ function ResearchPanel({ token }) {
 function ForecastPanel({ token }) {
   const prog = useWorkProgress('forecast')
   const [rows, setRows] = useState(null)
+  // Worst first by default. The backend ranks best-first; the flip happens
+  // here so the order can be toggled without another scan.
+  const [asc, setAsc] = useState(true)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [open, setOpen] = useState(null)
@@ -4191,7 +4197,10 @@ function ForecastPanel({ token }) {
   return (<div style={card}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
       <div style={lbl}>Earnings forecast — next 3 weeks</div>
-      <button onClick={load} disabled={busy} style={{ ...btn, marginLeft: 'auto' }}>
+      <button onClick={() => setAsc(a => !a)} style={{ ...btn, marginLeft: 'auto' }}>
+        {asc ? 'Worst → best' : 'Best → worst'}
+      </button>
+      <button onClick={load} disabled={busy} style={btn}>
         {busy ? '…' : 'Refresh'}
       </button>
     </div>
@@ -4202,7 +4211,7 @@ function ForecastPanel({ token }) {
       <div style={{ fontSize: '.82rem', color: 'var(--dim)' }}>Nothing reports in the next three weeks.</div>
     )}
 
-    {rows?.map(r => {
+    {(asc ? [...(rows || [])].reverse() : (rows || [])).map(r => {
       const isOpen = open === r.ticker
       const risk = r.risk || {}
       const riskTone = risk.typical_move_pct == null ? 'var(--dim)'
