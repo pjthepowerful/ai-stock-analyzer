@@ -1629,7 +1629,9 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
     return false
   })
   const dismissChangelog = () => { setShowChangelog(false); localStorage.setItem('paula-changelog-seen', VERSION) }
-  
+  const [showBugReport, setShowBugReport] = useState(false)
+  const [bugNote, setBugNote] = useState('')
+
   const [sideOpen, setSideOpen] = useState(window.innerWidth > 760)
   const [pinnedChats, setPinnedChats] = useState(() => {
     try { return JSON.parse(localStorage.getItem('paula-pinned') || '[]') } catch { return [] }
@@ -2436,9 +2438,8 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
 
   // Report-a-bug (testing feature): packages the CURRENT chat + a bit of context
   // and sends it to the backend, where it's saved for the developer to review.
-  const reportBug = async () => {
-    const note = window.prompt("Describe the bug (optional) — the full chat will be sent:", "")
-    if (note === null) return  // user cancelled the prompt
+  const reportBug = async (note) => {
+    setShowBugReport(false)
     const chat = chatsRef.current.find(c => c.id === chatIdRef.current)
     const payload = {
       note: note || "",
@@ -2559,6 +2560,37 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
         </div>
       </div>}
 
+      {/* Report a bug */}
+      {showBugReport&&<div className="cl-overlay" onClick={()=>setShowBugReport(false)}>
+        <div className="cl-modal bug-modal" onClick={e=>e.stopPropagation()}>
+          <div className="cl-top">
+            <div className="cl-top-l">
+              <span className="logo-p cl-logo">🐞</span>
+              <div>
+                <span className="cl-ver-title">Report a bug</span>
+                <span className="cl-date">The full chat will be sent to the developer</span>
+              </div>
+            </div>
+            <button className="cl-close" onClick={()=>setShowBugReport(false)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div className="cl-body">
+            <textarea
+              className="bug-textarea"
+              placeholder="Describe what happened (optional)…"
+              value={bugNote}
+              onChange={e=>setBugNote(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <div className="cl-footer bug-footer">
+            <button className="bug-cancel" onClick={()=>setShowBugReport(false)}>Cancel</button>
+            <button className="cl-dismiss" onClick={()=>reportBug(bugNote)}>Send report</button>
+          </div>
+        </div>
+      </div>}
+
       {/* Backdrop behind the mobile slide-in rail — tap to close */}
       <div className={'rail-backdrop'+(sideOpen?' rail-backdrop-on':'')} onClick={()=>setSideOpen(false)} />
 
@@ -2656,7 +2688,7 @@ function MainApp({ user, token, logout, setUser, theme, setTheme }) {
         <div className="hdr hdr-slim">
           <button className="ham" onClick={()=>setSideOpen(true)} aria-label="Open menu">☰</button>
           <button className="hdr-changelog" onClick={()=>setShowChangelog(true)} title="What's new">v{VERSION}</button>
-          <button className="hdr-bug" onClick={reportBug} title="Report a bug — sends this chat to the developer">🐞</button>
+          <button className="hdr-bug" onClick={()=>{setBugNote('');setShowBugReport(true)}} title="Report a bug — sends this chat to the developer">🐞</button>
           <div className="hdr-ticker">
             {account&&<>
               <span className="hdr-eq">${account.equity.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
@@ -5180,12 +5212,13 @@ function fmt(t){
   if(!t.trim())return '';
   let s = t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   // Markdown links [label](url) -> compact anchor
+  const attrEsc = (u) => u.replace(/"/g,'&quot;')
   s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
-    (_,label,url)=>`<a href="${url}" target="_blank" rel="noopener noreferrer" class="ai-link">${label}</a>`);
+    (_,label,url)=>`<a href="${attrEsc(url)}" target="_blank" rel="noopener noreferrer" class="ai-link">${label}</a>`);
   // Bare URLs -> clickable, labeled by domain (compact, not the full URL)
   s = s.replace(/(^|[\s(])(https?:\/\/[^\s)]+)/g, (m,pre,url)=>{
     let host=url; try{ host=new URL(url).hostname.replace(/^www\./,''); }catch{}
-    return `${pre}<a href="${url}" target="_blank" rel="noopener noreferrer" class="ai-link">${host}</a>`;
+    return `${pre}<a href="${attrEsc(url)}" target="_blank" rel="noopener noreferrer" class="ai-link">${host}</a>`;
   });
   s = s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
        .replace(/`(.+?)`/g,'<code>$1</code>')

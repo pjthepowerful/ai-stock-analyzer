@@ -262,14 +262,14 @@ export default function LandingPage({ onLaunch }) {
         <div className="lp-hero-glow" />
         <div className="lp-hero-inner r-split r-hero">
           <div>
-            <h1 className={`lp-hero-title lp-mount ${heroIn ? 'lp-mount-in' : ''}`} style={{ transitionDelay: '90ms' }}>
+            <h1 className={`lp-hero-title lp-mount ${heroIn ? 'lp-mount-in' : ''}`}>
               Every trade, <span className="lp-hero-accent">reasoned through</span> before it's placed.
             </h1>
-            <p className={`lp-hero-sub lp-mount ${heroIn ? 'lp-mount-in' : ''}`} style={{ transitionDelay: '180ms' }}>
+            <p className={`lp-hero-sub lp-mount ${heroIn ? 'lp-mount-in' : ''}`} style={{ transitionDelay: '40ms' }}>
               A live scanner, a chat copilot that shows its reasoning, and a position tracker that stays honest about where you stand.{' '}
               <b>Paula is not a stock-picking oracle.</b>
             </p>
-            <div className={`lp-hero-ctas lp-mount ${heroIn ? 'lp-mount-in' : ''}`} style={{ transitionDelay: '270ms' }}>
+            <div className={`lp-hero-ctas lp-mount ${heroIn ? 'lp-mount-in' : ''}`} style={{ transitionDelay: '80ms' }}>
               <button className="lp-btn-dark" onClick={onLaunch}>
                 Launch app →
               </button>
@@ -280,7 +280,7 @@ export default function LandingPage({ onLaunch }) {
             </div>
           </div>
 
-          <div className={`lp-preview-card lp-mount lp-mount-scale ${heroIn ? 'lp-mount-in' : ''}`} style={{ transitionDelay: '220ms' }}>
+          <div className={`lp-preview-card lp-mount lp-mount-scale ${heroIn ? 'lp-mount-in' : ''}`} style={{ transitionDelay: '60ms' }}>
             <div className="lp-preview-header">
               <span className="lp-preview-dot" />
               <span className="lp-preview-title">Paula — session preview</span>

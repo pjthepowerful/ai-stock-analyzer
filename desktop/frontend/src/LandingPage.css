@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700;800;900&display=swap');
+/* Fonts (Outfit, JetBrains Mono, DM Sans) are loaded via a non-blocking <link> in index.html */
 
 .landing-page {
   --bg: #141419;
@@ -73,8 +73,8 @@
 
 .lp-mount {
   opacity: 0;
-  transform: translateY(16px);
-  transition: opacity 0.65s var(--ease-out), transform 0.65s var(--ease-out);
+  transform: translateY(8px);
+  transition: opacity 0.32s var(--ease-out), transform 0.32s var(--ease-out);
 }
 
 .lp-mount-scale {
