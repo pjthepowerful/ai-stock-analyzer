@@ -4767,18 +4767,28 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
 
   return(<div className="view-scroll"><h2 className="view-h">Settings</h2>
 
+    {/* Everything Plus unlocks — one grouped card instead of three repeated
+        identical "locked" boxes. Only shown to non-Plus accounts. */}
+    {!isPlus && <LockedGroup
+      items={[
+        ...(user ? [{title:'Connections', sub:'Broker and data feeds'}] : []),
+        {title:'Autopilot strategy', sub:'Choose how the bot trades'},
+        {title:'Sounds', sub:'Trade & scan alerts'},
+      ]}
+      onUpgrade={()=>setView&&setView('plus')}
+    />}
+
     {/* Connections (Plus) */}
-    {user&&(isPlus?<div className="card wide"><label>Connections</label><span className="card-sub">Broker and data feeds</span>
+    {user&&isPlus&&<div className="card wide"><label>Connections</label><span className="card-sub">Broker and data feeds</span>
       <p className="s-hint">Add your own Alpaca paper keys to trade <b>your own account</b>. Leave blank to use the shared demo account. Keys are encrypted and never shown again.</p>
       <div className="s-row"><div className="s-col"><span>Alpaca Key</span><span className="s-desc">Broker · trade execution</span></div><input className="s-inp s-wide" type="password" name="alpaca-key-field" autoComplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" value={keys.alpaca_key} onChange={e=>setKeys({...keys,alpaca_key:e.target.value})} placeholder={keyExists.alpaca_key?'•••••••• saved — leave blank to keep':'Your Alpaca API key'}/></div>
       <div className="s-row"><div className="s-col"><span>Alpaca Secret</span><span className="s-desc">From your Alpaca dashboard</span></div><input className="s-inp s-wide" type="password" name="alpaca-secret-field" autoComplete="off" data-1p-ignore data-lpignore="true" data-form-type="other" value={keys.alpaca_secret} onChange={e=>setKeys({...keys,alpaca_secret:e.target.value})} placeholder={keyExists.alpaca_secret?'•••••••• saved — leave blank to keep':'Your Alpaca secret key'}/></div>
       <button className={'login-btn s-save'+(keySaved?' s-saved':'')} onClick={saveKeys}>{keySaved?'✓ Saved':'Save connections'}</button>
-    </div>:<LockedCard title="Connections" sub="Broker and data feeds" onUpgrade={()=>setView&&setView('plus')}/>)}
+    </div>}
 
     {/* Autopilot strategy */}
     {isPlus && <BellCard token={token}/>}
-    {isPlus?<StrategyCard token={token} autopilot={autopilot}/>
-      :<LockedCard title="Autopilot strategy" sub="Choose how the bot trades" onUpgrade={()=>setView&&setView('plus')}/>}
+    {isPlus && <StrategyCard token={token} autopilot={autopilot}/>}
 
     {/* Appearance */}
     <div className="card wide"><label>Appearance</label>
@@ -4824,10 +4834,10 @@ function SetView({settings,update,user,token,logout,autopilot,setAutopilot,persi
     </div>
 
     {/* Sounds (Plus) */}
-    {isPlus?<div className="card wide"><label>Sounds</label>
+    {isPlus&&<div className="card wide"><label>Sounds</label>
       <Tog l="Trade sounds" on={settings.sounds!==false} fn={()=>update('sounds',!(settings.sounds!==false))}/>
       <Tog l="Scan notification" on={settings.scanSound!==false} fn={()=>update('scanSound',!(settings.scanSound!==false))}/>
-    </div>:<LockedCard title="Sounds" sub="Trade & scan alerts" onUpgrade={()=>setView&&setView('plus')}/>}
+    </div>}
 
     
 
@@ -5084,15 +5094,21 @@ function GuestAuthModal({ onClose, onDone }) {
 
 function Tog({l,on,fn}){return <div className="s-row"><span>{l}</span><button className={'toggle-sw'+(on?' sw-on':'')} onClick={fn} role="switch" aria-checked={on}><span className="sw-thumb"/></button></div>}
 
-function LockedCard({title,sub,onUpgrade}){
+// One grouped card for everything a free/guest account can't use yet —
+// three separate identical boxes read as repeated filler; one list with
+// a single CTA reads as "here's the whole picture."
+function LockedGroup({items,onUpgrade}){
   return (
-    <button className="card wide locked-card" onClick={onUpgrade}>
-      <div className="lc-head">
-        <div><label>{title}</label>{sub&&<span className="card-sub">{sub}</span>}</div>
-        <svg className="lc-lock" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-      </div>
-      <div className="lc-cta"><span className="lc-plus">PLUS</span> Unlock with Paula Plus →</div>
-    </button>
+    <div className="card wide locked-group">
+      <div className="lg-group-head"><span className="lc-plus">PLUS</span><label>Unlocks with Paula Plus</label></div>
+      {items.map((it,i)=>(
+        <button key={it.title} className="lg-row" onClick={onUpgrade}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+          <div><span className="lg-row-title">{it.title}</span><span className="lg-row-sub">{it.sub}</span></div>
+        </button>
+      ))}
+      <button className="lg-cta" onClick={onUpgrade}>Unlock with Paula Plus →</button>
+    </div>
   )
 }
 
