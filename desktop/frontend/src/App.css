@@ -839,11 +839,13 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .lg-hero-grn { color: #10b981; }
 .lg-tagline { font-size: 18px; color: #9a9aaa; margin-top: 24px; max-width: 440px; line-height: 1.55; }
 .lg-pills { display: flex; gap: 10px; flex-wrap: wrap; }
-.lg-pill { font-size: 13px; color: #9a9aaa; border: 1px solid #2a2a35; border-radius: 999px; padding: 7px 15px; background: rgba(12,12,18,.7); backdrop-filter: blur(4px); white-space: nowrap; }
+.lg-pill { font-size: 13px; color: #9a9aaa; border: 1px solid #2a2a35; border-radius: 999px; padding: 7px 15px; background: #131318; white-space: nowrap; }
 
-/* Right — frosted form card */
+/* Right — form card. Solid, matching .cl-modal elsewhere — the dimmed
+   overlay behind it does the blurring, so the card itself reads as a
+   surface, not a pane of frosted glass. */
 .lg-right { display: flex; align-items: center; justify-content: center; padding: 0 64px 0 24px; }
-.lg-card { width: 100%; max-width: 480px; background: rgba(15,15,21,.85); backdrop-filter: blur(16px); border: 1px solid #26262f; border-radius: 20px; padding: 46px 42px; }
+.lg-card { width: 100%; max-width: 480px; background: #121218; border: 1px solid #26262f; border-radius: 18px; padding: 46px 42px; box-shadow: 0 24px 60px rgba(0,0,0,.35); }
 .lg-card-title { font-size: 28px; font-weight: 700; margin-bottom: 5px; }
 .lg-card-sub { font-size: 14px; color: #8a8a9a; margin-bottom: 28px; }
 .lg-form { display: flex; flex-direction: column; }
