@@ -21,11 +21,17 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.22.2'
+const VERSION = '4.23.0'
 const VERSION_DATE = 'September 19, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.23.0', d: 'September 21, 2026', changes: [
+    'The forecast now makes TWO calls per company, not one: whether it beats, and whether its stock has historically gone up when it beats. These come apart constantly \u2014 a company beats, guides down on the call, and the stock drops anyway.',
+    'Nothing free can read a conference call before it happens. But a company whose stock has fallen on most of its recent beats is one whose calls keep disappointing, and that pattern is measurable. Each row now shows it: \u201cFELL on 3 of its last 4 beats\u201d.',
+    'Also measured: how far the stock has already run into the print. Up 30% going in means a beat may already be in the price.',
+    'The two leans are deliberately never averaged together. A company that reliably beats whose stock reliably sells off is the single most useful thing to spot here, and blending would show it as a mild positive.',
+  ]},
   { v: '4.22.2', d: 'September 19, 2026', changes: [
     'The earnings forecast list now runs worst to best by default, with a button in the header to flip it back.',
   ]},
@@ -4233,6 +4239,20 @@ function ForecastPanel({ token }) {
             <span style={{ color: 'var(--dim)', fontSize: '.8rem' }}>{isOpen ? '−' : '+'}</span>
           </button>
 
+          {/* Two different questions, shown as two lines. The earnings lean is
+              on the header row; this is whether the STOCK has historically
+              cared. A company can beat and sell off on soft guidance, and
+              blending the two into one score would hide exactly that. */}
+          {r.stock_lean && r.stock_lean !== 'n/a — no beat expected' && (
+            <div style={{ fontSize: '.78rem', marginTop: 3, lineHeight: 1.45,
+                          color: r.stock_lean === 'often falls anyway' ? 'var(--red)'
+                               : r.stock_lean === 'usually rewards a beat' ? 'var(--grn3)'
+                               : 'var(--dim)' }}>
+              Stock: {r.stock_lean}
+              {r.reaction?.available ? ` — ${r.reaction.note}` : ''}
+            </div>
+          )}
+
           {/* The risk figure sits beside the call, never behind a click. */}
           <div style={{ fontSize: '.78rem', color: riskTone, marginTop: 3, lineHeight: 1.45 }}>
             {risk.available
@@ -4255,9 +4275,11 @@ function ForecastPanel({ token }) {
     })}
 
     <div style={{ fontSize: '.74rem', color: 'var(--dim)', marginTop: 12, lineHeight: 1.5 }}>
-      A lean is a direction, not a probability — none of this has been tested
-      against outcomes. And a company can beat while its stock falls, so the gap
-      figure above is the number your money is exposed to, not the lean.
+      Two separate calls per name: whether the company beats, and whether its
+      stock has historically cared. They come apart — guidance on the call
+      drives most reactions and nothing here can read a call before it happens.
+      Both are directions, not probabilities, and neither has been tested
+      against outcomes. The gap figure is what your money is exposed to.
       Autopilot still never holds through a print.
     </div>
   </div>)

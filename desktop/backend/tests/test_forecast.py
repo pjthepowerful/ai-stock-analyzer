@@ -339,6 +339,176 @@ def test_rank_survives_a_failing_name_and_still_finishes_progress():
         _restore()
 
 
+# ── The stock lean: a beat is not the same as the stock going up ──────────
+
+def _rx(pairs, runups=None):
+    """Stub _reactions with (surprise, move) pairs."""
+    runups = runups or [0] * len(pairs)
+    F._reactions = lambda t: ([{"surprise": s, "move_pct": m, "runup_pct": r}
+                               for (s, m), r in zip(pairs, runups)], "")
+
+
+def test_a_company_that_beats_and_falls_is_flagged():
+    """The case the whole thing exists for: reliably beats, stock drops anyway
+    because the call keeps disappointing. This must NOT read as bullish."""
+    try:
+        _rx([(20, -8), (15, -12), (10, -5), (25, 3)])
+        r = F.reaction_history("AAA")
+        assert r["beats"] == 4 and r["beats_up"] == 1
+        assert r["score"] < -0.4, r
+        assert "FELL on 3" in r["note"], r["note"]
+    finally:
+        _restore()
+
+
+def test_a_company_that_reliably_pops_on_beats_scores_positive():
+    try:
+        _rx([(20, 9), (15, 12), (10, 4), (25, 7)])
+        r = F.reaction_history("AAA")
+        assert r["beat_up_rate"] == 100 and r["score"] > 0.9
+        assert "all 4" in r["note"]
+    finally:
+        _restore()
+
+
+def test_misses_do_not_pollute_the_beat_reaction_stat():
+    """Only beats answer 'does beating help'. A miss falling is not evidence
+    that a beat would have."""
+    try:
+        _rx([(20, 5), (-30, -20), (-25, -18), (10, 4)])
+        r = F.reaction_history("AAA")
+        assert r["beats"] == 2 and r["beats_up"] == 2
+        assert r["score"] > 0.9, "the two crashes on misses must not count"
+    finally:
+        _restore()
+
+
+def test_no_beats_in_the_window_is_stated_not_scored():
+    try:
+        _rx([(-10, -4), (-20, -9)])
+        r = F.reaction_history("AAA")
+        assert r["available"] is False and r["score"] == 0.0
+        assert "no beats" in r["note"]
+    finally:
+        _restore()
+
+
+def test_typical_move_and_reaction_share_one_fetch():
+    """Both derive from _reactions, so a name costs one price download, not
+    two. Verified by counting calls."""
+    calls = {"n": 0}
+    def _counted(t):
+        calls["n"] += 1
+        return ([{"surprise": 10, "move_pct": -6, "runup_pct": 0}], "")
+    F._reactions = _counted
+    try:
+        F.typical_move("AAA"); F.reaction_history("AAA")
+        assert calls["n"] == 2, "one fetch each, not one per signal inside them"
+        # And the risk figure is unsigned while the reaction figure is signed.
+        F._reactions = _counted
+        assert F.typical_move("AAA")["typical_move_pct"] == 6.0
+    finally:
+        _restore()
+
+
+def test_a_big_runup_scores_negative_and_a_flat_stock_scores_zero():
+    """Buy the rumour, sell the news — but only a LARGE run-up is informative.
+    A flat stock into a print says nothing and must score neutral."""
+    import types, sys as _s
+    class _H:
+        def __init__(self, closes): self._c = closes
+        empty = False
+        def iterrows(self):
+            return [(i, {"Close": c}) for i, c in enumerate(self._c)]
+    def _mk(closes):
+        m = types.ModuleType("yfinance")
+        m.Ticker = lambda t: type("T", (), {"history": lambda s, **k: _H(closes)})()
+        _s.modules["yfinance"] = m
+    old = _s.modules.get("yfinance")
+    try:
+        _mk([100.0] * 20 + [140.0])          # +40% into the print
+        hot = F.runup("AAA")
+        assert hot["runup_pct"] == 40.0 and hot["score"] < -0.5
+        assert "priced in" in hot["note"]
+
+        _mk([100.0] * 21)                     # flat
+        flat = F.runup("AAA")
+        assert flat["score"] == 0.0, "a flat stock is not a signal"
+    finally:
+        if old is not None: _s.modules["yfinance"] = old
+        else: _s.modules.pop("yfinance", None)
+        _restore()
+
+
+def test_runup_needs_enough_sessions():
+    import types, sys as _s
+    class _H:
+        empty = False
+        def iterrows(self): return [(i, {"Close": 100.0}) for i in range(5)]
+    m = types.ModuleType("yfinance")
+    m.Ticker = lambda t: type("T", (), {"history": lambda s, **k: _H()})()
+    old = _s.modules.get("yfinance")
+    _s.modules["yfinance"] = m
+    try:
+        r = F.runup("AAA")
+        assert r["available"] is False and "not enough sessions" in r["note"]
+    finally:
+        if old is not None: _s.modules["yfinance"] = old
+        else: _s.modules.pop("yfinance", None)
+        _restore()
+
+
+def _stub_legs(earn_score, react_score, run_score, react_avail=True, run_avail=True):
+    F.revision_signal = lambda t: {"score": earn_score, "note": ""}
+    F.estimate_drift = lambda t: {"score": earn_score, "note": ""}
+    F.beat_history = lambda t: {"score": earn_score, "note": ""}
+    F.typical_move = lambda t: {"available": False, "note": ""}
+    F.reaction_history = lambda t: {"score": react_score, "available": react_avail, "note": ""}
+    F.runup = lambda t: {"score": run_score, "available": run_avail, "note": ""}
+
+
+def test_the_stock_lean_is_never_blended_into_the_earnings_lean():
+    """The point of two numbers. A company that reliably beats whose stock
+    reliably sells off must show BOTH — averaging them into one mild positive
+    hides the single most useful fact on the row."""
+    try:
+        _stub_legs(earn_score=0.9, react_score=-0.9, run_score=-0.5)
+        f = F.forecast("AAA")
+        assert f["lean"] == "strong beat lean", f["lean"]
+        assert f["stock_lean"] == "often falls anyway", f["stock_lean"]
+        assert f["score"] > 0.8, "the earnings lean must not be dragged down"
+        assert f["stock_score"] < -0.5
+    finally:
+        _restore()
+
+
+def test_the_stock_lean_is_not_asked_when_no_beat_is_expected():
+    """'How does it react to beats' is only a question if a beat is coming."""
+    try:
+        _stub_legs(earn_score=-0.9, react_score=0.9, run_score=0.0)
+        f = F.forecast("AAA")
+        assert f["stock_lean"] == "n/a — no beat expected", f["stock_lean"]
+    finally:
+        _restore()
+
+
+def test_the_stock_lean_is_unknown_when_nothing_was_measurable():
+    try:
+        _stub_legs(earn_score=0.9, react_score=0.0, run_score=0.0,
+                   react_avail=False, run_avail=False)
+        assert F.forecast("AAA")["stock_lean"] == "unknown"
+    finally:
+        _restore()
+
+
+def test_reaction_weighs_more_than_runup():
+    try:
+        _stub_legs(earn_score=0.9, react_score=1.0, run_score=-1.0)
+        assert F.forecast("AAA")["stock_score"] > 0, "history must outweigh run-up"
+    finally:
+        _restore()
+
+
 def main():
     tests = [(n, o) for n, o in sorted(globals().items())
              if n.startswith("test_") and callable(o)]

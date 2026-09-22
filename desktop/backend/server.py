@@ -1094,7 +1094,7 @@ async def health():
     ct = ZoneInfo("US/Central")
     return {
         "status": "ok",
-        "build": "v4.22.2",  # bump marker  confirms running code
+        "build": "v4.23.0",  # bump marker  confirms running code
         # Does THIS process actually serve the earnings calendar? The frontend
         # 404s against an older backend, which is indistinguishable from a bug
         # unless the running build says which routes it has.
