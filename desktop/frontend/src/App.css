@@ -341,8 +341,8 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .input-area.ia-active { padding: 0 16px 20px } /* slightly wider when chatting */
 .input-wrap { max-width: 720px; margin: 0 auto; width: 100%; transition: max-width .3s cubic-bezier(.16,1,.3,1) }
 .ia-active .input-wrap { max-width: 760px }
-.input-box { display: flex; align-items: center; background: var(--c1); border: 1px solid var(--brd); border-radius: 16px; padding: 4px 5px 4px 20px; transition: all .25s cubic-bezier(.16,1,.3,1); box-shadow: 0 2px 10px rgba(0,0,0,.12) }
-.input-box:focus-within { border-color: rgba(16,185,129,.3); box-shadow: 0 0 0 3px rgba(16,185,129,.06), 0 2px 16px rgba(0,0,0,.2); background: var(--c2) }
+.input-box { display: flex; align-items: center; background: var(--c1); border: 1px solid var(--brd); border-radius: 16px; padding: 4px 5px 4px 20px; transition: all .25s cubic-bezier(.16,1,.3,1) }
+.input-box:focus-within { border-color: var(--grn); background: var(--c2) }
 .input-box input, .chat-textarea { flex: 1; background: none; border: none; outline: none; color: var(--lt); font-family: var(--sans); font-size: var(--chat-fs); padding: 12px 0; resize: none; max-height: 120px; line-height: 1.5 }
 .input-box input::placeholder, .chat-textarea::placeholder { color: var(--dim) }
 .input-box input:disabled { opacity: .3 }
@@ -391,7 +391,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 
 /* Stat cards */
 .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px }
-.stat-card { background: var(--c1); border: 1px solid var(--brd); border-radius: 12px; padding: 16px 18px; text-align: left; transition: .15s; box-shadow: 0 1px 3px rgba(0,0,0,.06) }
+.stat-card { background: var(--c1); border: 1px solid var(--brd); border-radius: 12px; padding: 16px 18px; text-align: left; transition: .15s }
 .stat-card:hover { background: var(--c2) }
 .stat-l { display: block; font-size: .42rem; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); font-weight: 600; margin-bottom: 6px; font-family: var(--mono) }
 .stat-n { display: block; font-family: var(--mono); font-size: 1.3rem; font-weight: 700; color: var(--wh); letter-spacing: -.01em }
@@ -682,7 +682,7 @@ code { font-family: var(--mono); background: var(--c2); color: var(--grn); paddi
 .bt-ml { color: var(--lt) }
 .bt-ml:hover { border-color: rgba(16,185,129,.3); color: var(--grn) }
 .bt-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px }
-.bt-stat { background: var(--c1); border: 1px solid var(--brd); border-radius: 8px; padding: 12px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.06) }
+.bt-stat { background: var(--c1); border: 1px solid var(--brd); border-radius: 8px; padding: 12px; text-align: center }
 .bt-n { display: block; font-family: var(--mono); font-size: 1.2rem; font-weight: 700; color: var(--wh); letter-spacing: -.01em }
 .bt-l { display: block; font-size: .46rem; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); margin-top: 3px; font-weight: 600 }
 
