@@ -7,43 +7,63 @@ export interface WsEvent {
   data: Record<string, unknown>
 }
 
-export function useWebSocket(onEvent: (e: WsEvent) => void) {
+type Listener = (e: WsEvent) => void
+
+// One socket per tab, shared by every subscriber. It opens with the first
+// listener, reconnects while anyone is listening, and closes with the last.
+const listeners = new Set<Listener>()
+let socket: WebSocket | null = null
+let pingTimer: ReturnType<typeof setInterval> | null = null
+let retryTimer: ReturnType<typeof setTimeout> | null = null
+
+function connect() {
+  if (socket || listeners.size === 0) return
+  const ws = new WebSocket(WS_URL)
+  socket = ws
+  ws.onopen = () => {
+    pingTimer = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }))
+    }, 25_000)
+  }
+  ws.onmessage = (msg) => {
+    let parsed: WsEvent
+    try {
+      parsed = JSON.parse(msg.data)
+    } catch {
+      return // ignore malformed frames
+    }
+    if (parsed.event === 'pong') return
+    for (const l of listeners) l(parsed)
+  }
+  ws.onclose = () => {
+    if (pingTimer) clearInterval(pingTimer)
+    pingTimer = null
+    if (socket === ws) socket = null
+    if (listeners.size > 0) retryTimer = setTimeout(connect, 3000)
+  }
+}
+
+function disconnect() {
+  if (retryTimer) clearTimeout(retryTimer)
+  retryTimer = null
+  const ws = socket
+  socket = null
+  ws?.close()
+}
+
+export function useWebSocket(onEvent: Listener) {
   const handlerRef = useRef(onEvent)
-  handlerRef.current = onEvent
+  useEffect(() => {
+    handlerRef.current = onEvent
+  })
 
   useEffect(() => {
-    let ws: WebSocket | null = null
-    let closed = false
-    let pingTimer: ReturnType<typeof setInterval> | null = null
-
-    function connect() {
-      if (closed) return
-      ws = new WebSocket(WS_URL)
-      ws.onopen = () => {
-        pingTimer = setInterval(() => {
-          if (ws?.readyState === 1) ws.send(JSON.stringify({ type: 'ping' }))
-        }, 25_000)
-      }
-      ws.onmessage = (msg) => {
-        try {
-          const parsed = JSON.parse(msg.data)
-          if (parsed.event === 'pong') return
-          handlerRef.current(parsed)
-        } catch {
-          /* ignore malformed frames */
-        }
-      }
-      ws.onclose = () => {
-        if (pingTimer) clearInterval(pingTimer)
-        if (!closed) setTimeout(connect, 3000)
-      }
-    }
+    const listener: Listener = (e) => handlerRef.current(e)
+    listeners.add(listener)
     connect()
-
     return () => {
-      closed = true
-      if (pingTimer) clearInterval(pingTimer)
-      ws?.close()
+      listeners.delete(listener)
+      if (listeners.size === 0) disconnect()
     }
   }, [])
 }
