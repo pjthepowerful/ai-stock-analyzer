@@ -8,6 +8,7 @@ import { PortfolioScreen } from '../features/portfolio/PortfolioScreen'
 import { SettingsScreen } from '../features/settings/SettingsScreen'
 import type { ChatMessage } from '../lib/api'
 import { useSession } from '../lib/auth'
+import { ChatsProvider } from '../lib/chats'
 import { ChromeContext, type Chrome } from '../lib/chrome'
 import './shell.css'
 
@@ -38,50 +39,53 @@ export function Shell() {
 
   return (
     <ChromeContext.Provider value={chrome}>
-      <div className="shell">
-        <header className="shell-header">
-          <span className="shell-logo">P</span>
-          <span className="shell-title">Paula</span>
-          <span className="shell-badge">preview</span>
+      {/* Keyed per account so signing in/out swaps to that account's chats. */}
+      <ChatsProvider key={user ? `u${user.id}` : 'guest'}>
+        <div className="shell">
+          <header className="shell-header">
+            <span className="shell-logo">P</span>
+            <span className="shell-title">Paula</span>
+            <span className="shell-badge">preview</span>
 
-          <nav className="shell-tabs">
-            {tabs.map((t) => (
-              <button
-                key={t.id}
-                className={'shell-tab' + (view === t.id ? ' shell-tab-on' : '')}
-                onClick={() => setView(t.id)}
-              >
-                {t.label}
+            <nav className="shell-tabs">
+              {tabs.map((t) => (
+                <button
+                  key={t.id}
+                  className={'shell-tab' + (view === t.id ? ' shell-tab-on' : '')}
+                  onClick={() => setView(t.id)}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </nav>
+
+            <div className="shell-header-spacer" />
+            {!user?.plus && !user?.is_admin && (
+              <button className="shell-upgrade" onClick={chrome.openPlus}>
+                Get Plus
               </button>
-            ))}
-          </nav>
-
-          <div className="shell-header-spacer" />
-          {!user?.plus && !user?.is_admin && (
-            <button className="shell-upgrade" onClick={chrome.openPlus}>
-              Get Plus
+            )}
+            <button className="shell-quiet" onClick={() => chrome.openReport()}>
+              Report a problem
             </button>
-          )}
-          <button className="shell-quiet" onClick={() => chrome.openReport()}>
-            Report a problem
-          </button>
-          <span className="shell-user">
-            {user?.username ?? 'Guest'}
-            {user?.plus && <span className="shell-plus-mark">PLUS</span>}
-          </span>
-          <button className="shell-quiet" onClick={signOut}>
-            {isGuest ? 'Exit guest' : 'Sign out'}
-          </button>
-        </header>
+            <span className="shell-user">
+              {user?.username ?? 'Guest'}
+              {user?.plus && <span className="shell-plus-mark">PLUS</span>}
+            </span>
+            <button className="shell-quiet" onClick={signOut}>
+              {isGuest ? 'Exit guest' : 'Sign out'}
+            </button>
+          </header>
 
-        <main className="shell-content">
-          {view === 'chat' && <ChatScreen onNavigateAnalyze={() => setView('analyze')} />}
-          {view === 'analyze' && <AnalyzeScreen />}
-          {view === 'portfolio' && <PortfolioScreen />}
-          {view === 'settings' && <SettingsScreen />}
-          {view === 'admin' && user?.is_admin && <AdminScreen />}
-        </main>
-      </div>
+          <main className="shell-content">
+            {view === 'chat' && <ChatScreen onNavigateAnalyze={() => setView('analyze')} />}
+            {view === 'analyze' && <AnalyzeScreen />}
+            {view === 'portfolio' && <PortfolioScreen />}
+            {view === 'settings' && <SettingsScreen />}
+            {view === 'admin' && user?.is_admin && <AdminScreen />}
+          </main>
+        </div>
+      </ChatsProvider>
 
       <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
       <ReportSheet

@@ -58,6 +58,17 @@ def friendly_error(err: str) -> str:
     return f"Something went wrong: {err}"
 
 
+def _ai_unavailable(raw: str) -> str:
+    e = raw.lower()
+    if "invalid api key" in e or "invalid_api_key" in e or "401" in e:
+        return ("Paula's language model isn't reachable right now — the server's AI key was "
+                "rejected. Stock data and charts still work in Analyze; chat answers will be "
+                "back once the key is fixed.")
+    if "rate" in e or "429" in e:
+        return "Paula's AI is rate-limited at the moment. Give it a minute and ask again."
+    return "Paula couldn't generate an answer just now. Try again in a moment."
+
+
 def taste_analysis(result: dict) -> dict:
     """Free/guest users get the headline numbers from a deep analysis, not the
     full breakdown (entry/stop/target, chart, reasoning) — that's Plus."""
@@ -179,6 +190,14 @@ async def build_response(
     else:
         resp = await _fallback_reply(loop, user_msg, result, chat_history)
 
+    # engine.ai_response() reports LLM failures as a plain "AI error: <raw
+    # provider JSON>" string. Don't show that to people — and don't save it
+    # into their chat history as if Paula had said it.
+    ai_failed = isinstance(resp, str) and resp.lstrip().startswith("AI error:")
+    if ai_failed:
+        print(f"[chat] LLM failure: {resp[:200]}", flush=True)
+        resp = _ai_unavailable(resp)
+
     # Price-hallucination guard on the final text, mirroring the original.
     if resp and result:
         rd = result.get("data") or {}
@@ -186,8 +205,9 @@ async def build_response(
         if real_price and real_price > 0:
             resp = _fix_prices(resp, real_price, min_diff=0.25)
 
-    chat_history.append({"role": "assistant", "content": resp})
-    if user:
+    if not ai_failed:
+        chat_history.append({"role": "assistant", "content": resp})
+    if user and not ai_failed:
         trim_history(user["id"])
         try:
             auth.save_chat(user["id"], "assistant", resp, msg_type=(result or {}).get("type", "chat"), ticker=(result or {}).get("ticker"))

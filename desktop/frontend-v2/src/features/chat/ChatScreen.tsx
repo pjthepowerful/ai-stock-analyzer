@@ -1,72 +1,80 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, ApiError, type ChatMessage, type ChatResponse } from '../../lib/api'
 import { useSession } from '../../lib/auth'
+import { NEW_TITLE, useChats } from '../../lib/chats'
 import { useChrome } from '../../lib/chrome'
-import { useWebSocket, type WsEvent } from '../../lib/ws'
+import { ChatList } from './ChatList'
 import { MessageBubble } from './MessageBubble'
 import './chat.css'
-
-interface DisplayMessage {
-  role: 'user' | 'assistant'
-  content: string
-  meta?: { taste?: boolean; limitReached?: boolean }
-}
 
 interface Props {
   onNavigateAnalyze: () => void
 }
 
+function fallbackTitle(text: string) {
+  return text.length <= 30 ? text : text.slice(0, 28).trimEnd() + '…'
+}
+
 export function ChatScreen({ onNavigateAnalyze }: Props) {
-  const { user } = useSession()
+  const { user, isGuest } = useSession()
   const { openReport } = useChrome()
-  const [messages, setMessages] = useState<DisplayMessage[]>([])
+  const { active, append, rename, ensureActive, scan, startScan } = useChats()
   const [input, setInput] = useState('')
-  const [sending, setSending] = useState(false)
-  const [scanProgress, setScanProgress] = useState<{ pct: number; label: string } | null>(null)
+  const [sendingChat, setSendingChat] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
-  useWebSocket((e: WsEvent) => {
-    if (e.event === 'scan_progress') {
-      setScanProgress({ pct: Number(e.data.pct ?? 0), label: String(e.data.label ?? '') })
-    }
-    if (e.event === 'scan_result') {
-      setScanProgress(null)
-      setMessages((prev) => [...prev, { role: 'assistant', content: String(e.data.message ?? '') }])
-    }
-  })
+  const messages = active?.messages ?? []
+  const sending = sendingChat !== null && sendingChat === active?.id
+  const scanHere = scan && scan.chatId === active?.id ? scan : null
 
-  function scrollToBottom() {
+  // Follow new messages and scan progress in the open chat.
+  useEffect(() => {
     requestAnimationFrame(() => {
       listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' })
     })
+  }, [messages.length, active?.id, scanHere?.pct])
+
+  async function nameChat(chatId: string, firstMessage: string) {
+    if (isGuest) {
+      rename(chatId, fallbackTitle(firstMessage))
+      return
+    }
+    try {
+      const res = await api.post<{ title: string }>('/api/chat/title', { message: firstMessage })
+      rename(chatId, res.title || fallbackTitle(firstMessage))
+    } catch {
+      rename(chatId, fallbackTitle(firstMessage))
+    }
   }
 
   async function send(text: string) {
     const trimmed = text.trim()
-    if (!trimmed || sending) return
-    setInput('')
-    setSending(true)
-
+    if (!trimmed || sendingChat) return
+    const chatId = ensureActive()
     const history: ChatMessage[] = messages.map((m) => ({ role: m.role, content: m.content }))
-    setMessages((prev) => [...prev, { role: 'user', content: trimmed }])
-    scrollToBottom()
+    const isFirst = messages.length === 0
+
+    setInput('')
+    setSendingChat(chatId)
+    append(chatId, { role: 'user', content: trimmed })
+    if (isFirst && (active?.title ?? NEW_TITLE) === NEW_TITLE) void nameChat(chatId, trimmed)
 
     try {
       const res = await api.post<ChatResponse>('/api/chat', { message: trimmed, history })
       if (res.type === 'scan_started') {
-        setScanProgress({ pct: 0, label: 'Starting…' })
+        startScan(chatId)
       } else {
-        setMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: res.message, meta: { taste: res.taste, limitReached: res.limit_reached } },
-        ])
+        append(chatId, {
+          role: 'assistant',
+          content: res.message,
+          meta: { taste: res.taste, limitReached: res.limit_reached },
+        })
       }
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : 'Something went wrong reaching Paula.'
-      setMessages((prev) => [...prev, { role: 'assistant', content: msg }])
+      append(chatId, { role: 'assistant', content: msg })
     } finally {
-      setSending(false)
-      scrollToBottom()
+      setSendingChat(null)
     }
   }
 
@@ -74,66 +82,72 @@ export function ChatScreen({ onNavigateAnalyze }: Props) {
 
   return (
     <div className="chat-screen">
-      <div className="chat-body" ref={listRef}>
-        {messages.length === 0 && (
-          <div className="chat-empty">
-            <h1 className="chat-greeting">Good to see you, {displayName}.</h1>
-            <p className="chat-greeting-sub">What are we trading today?</p>
-            <div className="chat-suggestions">
-              <button className="chat-chip" onClick={() => send('What should I invest in right now? Give me your real take.')}>
-                What should I buy?
-              </button>
-              <button className="chat-chip" onClick={() => send('How is the market looking today?')}>
-                Check the market
-              </button>
-              <button className="chat-chip" onClick={onNavigateAnalyze}>
-                Analyze a stock
-              </button>
+      <ChatList />
+
+      <div className="chat-main">
+        <div className="chat-body" ref={listRef}>
+          {messages.length === 0 && (
+            <div className="chat-empty">
+              <h1 className="chat-greeting">Good to see you, {displayName}.</h1>
+              <p className="chat-greeting-sub">What are we trading today?</p>
+              <div className="chat-suggestions">
+                <button className="chat-chip" onClick={() => send('What should I invest in right now? Give me your real take.')}>
+                  What should I buy?
+                </button>
+                <button className="chat-chip" onClick={() => send('How is the market looking today?')}>
+                  Check the market
+                </button>
+                <button className="chat-chip" onClick={onNavigateAnalyze}>
+                  Analyze a stock
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {messages.map((m, i) => (
-          <MessageBubble key={i} role={m.role} content={m.content} meta={m.meta} />
-        ))}
+          {messages.map((m, i) => (
+            <MessageBubble key={i} role={m.role} content={m.content} meta={m.meta} />
+          ))}
 
-        {messages.length > 0 && !sending && !scanProgress && (
-          <button
-            className="chat-report"
-            onClick={() => openReport(messages.map((m) => ({ role: m.role, content: m.content })))}
-          >
-            Something off? Report this chat
+          {sending && <div className="chat-thinking">Paula is thinking…</div>}
+
+          {messages.length > 0 && !sending && !scanHere && (
+            <button
+              className="chat-report"
+              onClick={() => openReport(messages.map((m) => ({ role: m.role, content: m.content })))}
+            >
+              Something off? Report this chat
+            </button>
+          )}
+
+          {scanHere && (
+            <div className="chat-scan">
+              <div className="chat-scan-label">{scanHere.label || 'Scanning the market…'}</div>
+              <div className="chat-scan-track">
+                <div className="chat-scan-fill" style={{ width: `${scanHere.pct}%` }} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <form
+          className="chat-input-row"
+          onSubmit={(e) => {
+            e.preventDefault()
+            send(input)
+          }}
+        >
+          <input
+            className="chat-input"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Message Paula — ask for a setup, scan, or recap…"
+            disabled={sendingChat !== null}
+          />
+          <button className="chat-send" type="submit" disabled={sendingChat !== null || !input.trim()}>
+            →
           </button>
-        )}
-
-        {scanProgress && (
-          <div className="chat-scan">
-            <div className="chat-scan-label">{scanProgress.label || 'Scanning the market…'}</div>
-            <div className="chat-scan-track">
-              <div className="chat-scan-fill" style={{ width: `${scanProgress.pct}%` }} />
-            </div>
-          </div>
-        )}
+        </form>
       </div>
-
-      <form
-        className="chat-input-row"
-        onSubmit={(e) => {
-          e.preventDefault()
-          send(input)
-        }}
-      >
-        <input
-          className="chat-input"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Message Paula — ask for a setup, scan, or recap…"
-          disabled={sending}
-        />
-        <button className="chat-send" type="submit" disabled={sending || !input.trim()}>
-          →
-        </button>
-      </form>
     </div>
   )
 }

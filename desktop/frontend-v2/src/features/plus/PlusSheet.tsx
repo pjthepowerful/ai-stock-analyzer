@@ -15,7 +15,7 @@ const FEATURES: [string, string][] = [
   ['Unlimited messages', 'No daily cap on questions.'],
   ['The full signal', 'Entry, stop, target, chart and reasoning on every ticker — not just the verdict.'],
   ['Your own broker', 'Connect your Alpaca account; keys are encrypted at rest.'],
-  ['Autopilot strategies', 'Core, strict and intense modes, with the daily loss limits you set.'],
+  ['Unlimited chats', 'A separate thread for every idea, synced across your devices.'],
 ]
 
 interface Props {

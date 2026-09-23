@@ -12,6 +12,7 @@ from .routers import auth as auth_router
 from .routers import autopilot as autopilot_router
 from .routers import chart as chart_router
 from .routers import chat as chat_router
+from .routers import chats as chats_router
 from .routers import earnings as earnings_router
 from .routers import market as market_router
 from .routers import plus as plus_router
@@ -29,6 +30,7 @@ app.add_middleware(
 
 app.include_router(auth_router.router)
 app.include_router(chat_router.router)
+app.include_router(chats_router.router)
 app.include_router(market_router.router)
 app.include_router(chart_router.router)
 app.include_router(autopilot_router.router)
