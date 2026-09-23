@@ -21,11 +21,16 @@ const API = BACKEND
 // ── Version: bump this on every shipped change (semver: major.minor.patch) ──
 // patch = fix, minor = feature, major = big release. Shown in the header, the
 // settings About row, and the "What's new" modal.
-const VERSION = '4.23.0'
-const VERSION_DATE = 'September 19, 2026'
+const VERSION = '4.24.0'
+const VERSION_DATE = 'September 22, 2026'
 // Full version history for the scrollable "What's new" modal — newest first.
 // Add a new entry at the TOP whenever VERSION bumps.
 const CHANGELOG_DATA = [
+  { v: '4.24.0', d: 'September 22, 2026', changes: [
+    'The bug-report button used a native browser prompt to ask what went wrong — that kind of dialog freezes the whole window until it’s dismissed. Replaced it with a normal in-app modal.',
+    'Fonts were loaded through a render-blocking @import, and duplicated across two stylesheets — on a slow connection this showed as a blank, unstyled flash on first load. Fixed to load once, without blocking.',
+    'A pass on the visual design itself: dropped the soft drop-shadow that every card and the message box carried (the generic default-dashboard look), de-glassed the frosted sign-in card, merged three near-identical “Unlock with Paula Plus” boxes in Settings into one list, and dropped the filled chat bubble on your own messages in favor of plain right-aligned text — closer to how Perplexity and other answer-first products separate the question from the answer.',
+  ]},
   { v: '4.23.0', d: 'September 21, 2026', changes: [
     'The forecast now makes TWO calls per company, not one: whether it beats, and whether its stock has historically gone up when it beats. These come apart constantly \u2014 a company beats, guides down on the call, and the stock drops anyway.',
     'Nothing free can read a conference call before it happens. But a company whose stock has fallen on most of its recent beats is one whose calls keep disappointing, and that pattern is measurable. Each row now shows it: \u201cFELL on 3 of its last 4 beats\u201d.',
