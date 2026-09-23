@@ -60,6 +60,7 @@ export interface AuthUser {
   email: string
   plus?: boolean
   is_admin?: boolean
+  can_autopilot?: boolean
 }
 
 export interface MeResponse {

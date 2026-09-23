@@ -18,6 +18,7 @@ from ..models.auth import (
     VerifyCodeRequest,
 )
 from ..models.settings import SettingsRequest
+from .autopilot import can_autopilot
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -28,7 +29,6 @@ EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 def _send_code_email(email: str, code: str, purpose: str) -> bool:
     # Same no-op-if-unconfigured behavior as the original backend: log to
     # console when RESEND_API_KEY isn't set, rather than failing signup/login.
-    import os
     if not os.environ.get("RESEND_API_KEY"):
         print(f"[auth] (no RESEND_API_KEY) {purpose} code for {email}: {code}", flush=True)
         return False
@@ -120,7 +120,14 @@ def me(authorization: str = Header(None)):
     is_plus = auth.is_plus(user["id"])
     return {
         "ok": True,
-        "user": {**user, "plus": is_plus, "is_admin": is_admin(user)},
+        "user": {
+            **user,
+            "plus": is_plus,
+            "is_admin": is_admin(user),
+            # Read-only flag so the UI can hide autopilot controls from
+            # people who'd only get a 403.
+            "can_autopilot": can_autopilot(user),
+        },
         "gift_msg": auth.get_gift_msg(user["id"]) if is_plus else "",
         "messages_today": auth.messages_today(user["id"]),
     }

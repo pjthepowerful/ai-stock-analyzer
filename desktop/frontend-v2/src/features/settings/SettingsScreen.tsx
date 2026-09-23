@@ -44,8 +44,8 @@ export function SettingsScreen() {
       setDisplayName(s.display_name ?? '')
       setAlpacaConnected(s.alpaca_connected)
     })
-    api.get<ModesResponse>('/api/autopilot/modes').then(setModes)
-  }, [isGuest])
+    if (user?.can_autopilot) api.get<ModesResponse>('/api/autopilot/modes').then(setModes)
+  }, [isGuest, user?.can_autopilot])
 
   async function saveName() {
     setNameError(null)
@@ -114,34 +114,38 @@ export function SettingsScreen() {
         </div>
       </section>
 
-      <section className="settings-section">
-        <h2 className="settings-section-title">Autopilot strategy</h2>
-        <p className="settings-section-note">
-          Read-only in this preview build — the autonomous trading loop isn't wired up yet by design.
-        </p>
-        {modes && (
-          <div className="settings-modes">
-            {modes.modes.map((m) => (
-              <div key={m.key} className={'settings-mode' + (modes.current === m.key ? ' settings-mode-on' : '')}>
-                <div className="settings-mode-head">
-                  <span className="settings-mode-label">{m.label}</span>
-                  {modes.current === m.key && <span className="settings-mode-badge">active</span>}
-                </div>
-                <p className="settings-mode-tagline">{m.tagline}</p>
-                <div className="settings-mode-stats mono">
-                  risk {(m.risk_per_trade * 100).toFixed(1)}% · max {m.max_positions} positions · daily loss limit{' '}
-                  {(m.daily_loss_limit * 100).toFixed(0)}% · RVOL ≥ {m.rvol_min}
-                </div>
+      {user?.can_autopilot && (
+        <>
+          <section className="settings-section">
+            <h2 className="settings-section-title">Autopilot strategy</h2>
+            <p className="settings-section-note">
+              Read-only in this preview build — the autonomous trading loop isn't wired up yet by design.
+            </p>
+            {modes && (
+              <div className="settings-modes">
+                {modes.modes.map((m) => (
+                  <div key={m.key} className={'settings-mode' + (modes.current === m.key ? ' settings-mode-on' : '')}>
+                    <div className="settings-mode-head">
+                      <span className="settings-mode-label">{m.label}</span>
+                      {modes.current === m.key && <span className="settings-mode-badge">active</span>}
+                    </div>
+                    <p className="settings-mode-tagline">{m.tagline}</p>
+                    <div className="settings-mode-stats mono">
+                      risk {(m.risk_per_trade * 100).toFixed(1)}% · max {m.max_positions} positions · daily loss limit{' '}
+                      {(m.daily_loss_limit * 100).toFixed(0)}% · RVOL ≥ {m.rvol_min}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
-        <button className="settings-diag-btn" onClick={runDiagnostics} disabled={diagBusy}>
-          {diagBusy ? 'Running…' : 'Why no trades? →'}
-        </button>
-        {diagnostics && <div className="settings-diag-result">{diagnostics}</div>}
-        {diagError && <div className="settings-diag-error">{diagError}</div>}
-      </section>
+            )}
+            <button className="settings-diag-btn" onClick={runDiagnostics} disabled={diagBusy}>
+              {diagBusy ? 'Running…' : 'Why no trades? →'}
+            </button>
+            {diagnostics && <div className="settings-diag-result">{diagnostics}</div>}
+            {diagError && <div className="settings-diag-error">{diagError}</div>}
+          </section>
+        </>
+      )}
 
       <section className="settings-section">
         <h2 className="settings-section-title">Connections</h2>

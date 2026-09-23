@@ -10,6 +10,7 @@ preview build; do it from a shell if it's ever really needed.
 Also public here (no auth): POST /api/report-bug and GET /api/maintenance,
 since they live next to the admin views that consume them.
 """
+import asyncio
 import json
 import os
 import uuid
@@ -238,8 +239,12 @@ class MaintenanceRequest(BaseModel):
 async def set_maintenance(req: MaintenanceRequest, authorization: Optional[str] = Header(None)):
     admin_required(authorization)
     state = {"on": req.on, "message": req.message.strip()[:300]}
-    with open(_MAINT_FILE, "w") as f:
-        json.dump(state, f)
+
+    def _write():
+        with open(_MAINT_FILE, "w") as f:
+            json.dump(state, f)
+
+    await asyncio.to_thread(_write)
     # Flip every open client immediately instead of waiting for a poll.
     await manager.broadcast("maintenance", state)
     return {"ok": True, **state}

@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/autopilot", tags=["autopilot"])
 AUTOPILOT_EMAILS = {"parjan.d@icloud.com", "pinakin.d@moftmail.com"}
 
 
-def _can_autopilot(user: dict | None) -> bool:
+def can_autopilot(user: dict | None) -> bool:
     return bool(user) and user.get("email", "").lower() in AUTOPILOT_EMAILS
 
 
@@ -53,7 +53,7 @@ def diagnostics(authorization: str = Header(None)):
     """Answer 'why did it place no trades?' — a read-only scan of the active
     mode, no orders, no state writes. Ported faithfully from server.py."""
     user = current_user_required(authorization)
-    if not _can_autopilot(user):
+    if not can_autopilot(user):
         raise HTTPException(403, "Restricted")
 
     mode = "core"
