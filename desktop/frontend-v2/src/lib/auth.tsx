@@ -20,21 +20,24 @@ const GUEST_KEY = 'paula-v2-guest'
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
-  const [isGuest, setIsGuest] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [isGuest, setIsGuest] = useState(
+    () => !localStorage.getItem('paula-v2-token') && localStorage.getItem(GUEST_KEY) === '1',
+  )
+  // Only a stored token needs a round-trip before we know who you are.
+  const [loading, setLoading] = useState(() => !!localStorage.getItem('paula-v2-token'))
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const token = localStorage.getItem('paula-v2-token')
-    if (!token) {
-      if (localStorage.getItem(GUEST_KEY) === '1') setIsGuest(true)
-      setLoading(false)
-      return
-    }
+    if (!localStorage.getItem('paula-v2-token')) return
     api
       .get<MeResponse>('/api/auth/me')
       .then((res) => setUser(res.user))
-      .catch(() => setToken(null))
+      .catch((e) => {
+        // Only a rejected token means signed out. A backend that's restarting
+        // or unreachable shouldn't throw away a perfectly good login.
+        if (e instanceof ApiError && e.status === 401) setToken(null)
+        else setError('Can’t reach Paula right now — retrying when you reload.')
+      })
       .finally(() => setLoading(false))
   }, [])
 

@@ -12,7 +12,7 @@ interface Maintenance {
 }
 
 export default function App() {
-  const { user, isGuest, loading } = useSession()
+  const { user, isGuest, loading, error } = useSession()
   const [maint, setMaint] = useState<Maintenance>({ on: false, message: '' })
   const [ownerSignIn, setOwnerSignIn] = useState(false)
 
@@ -52,6 +52,20 @@ export default function App() {
   }
 
   if (!user && !isGuest) {
+    // Still holding a token means the backend was unreachable, not that
+    // you're signed out — don't show a login form for that.
+    if (error && localStorage.getItem('paula-v2-token')) {
+      return (
+        <div className="maint">
+          <span className="maint-logo">P</span>
+          <h1 className="maint-title">Can’t reach Paula.</h1>
+          <p className="maint-msg">The server didn’t answer. You’re still signed in.</p>
+          <button className="maint-door" onClick={() => location.reload()}>
+            Try again
+          </button>
+        </div>
+      )
+    }
     return <AuthScreen />
   }
 

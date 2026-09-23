@@ -1,17 +1,22 @@
-import { useMemo, useState } from 'react'
-import { AdminScreen } from '../features/admin/AdminScreen'
-import { AnalyzeScreen } from '../features/analyze/AnalyzeScreen'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { ChatScreen } from '../features/chat/ChatScreen'
-import { EarningsScreen } from '../features/earnings/EarningsScreen'
 import { ReportSheet } from '../features/feedback/ReportSheet'
 import { PlusSheet } from '../features/plus/PlusSheet'
-import { PortfolioScreen } from '../features/portfolio/PortfolioScreen'
 import { SettingsScreen } from '../features/settings/SettingsScreen'
 import type { ChatMessage } from '../lib/api'
 import { useSession } from '../lib/auth'
 import { ChatsProvider } from '../lib/chats'
 import { ChromeContext, type Chrome } from '../lib/chrome'
 import './shell.css'
+
+// Chat is the landing screen; the chart-heavy and owner-only screens load on
+// first visit so they don't weigh down the first paint.
+const AdminScreen = lazy(() => import('../features/admin/AdminScreen').then((m) => ({ default: m.AdminScreen })))
+const AnalyzeScreen = lazy(() => import('../features/analyze/AnalyzeScreen').then((m) => ({ default: m.AnalyzeScreen })))
+const EarningsScreen = lazy(() => import('../features/earnings/EarningsScreen').then((m) => ({ default: m.EarningsScreen })))
+const PortfolioScreen = lazy(() =>
+  import('../features/portfolio/PortfolioScreen').then((m) => ({ default: m.PortfolioScreen })),
+)
 
 type View = 'chat' | 'analyze' | 'portfolio' | 'earnings' | 'settings' | 'admin'
 
@@ -80,12 +85,14 @@ export function Shell() {
           </header>
 
           <main className="shell-content">
+            <Suspense fallback={null}>
             {view === 'chat' && <ChatScreen onNavigateAnalyze={() => setView('analyze')} />}
             {view === 'analyze' && <AnalyzeScreen />}
             {view === 'portfolio' && <PortfolioScreen />}
             {view === 'earnings' && <EarningsScreen />}
             {view === 'settings' && <SettingsScreen />}
             {view === 'admin' && user?.is_admin && <AdminScreen />}
+            </Suspense>
           </main>
         </div>
       </ChatsProvider>
