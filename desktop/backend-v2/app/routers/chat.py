@@ -14,7 +14,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Header, Request
 
 from ..bridge import auth, engine
 from ..deps import current_user_optional, in_request_context, is_admin
@@ -42,8 +42,42 @@ def _make_progress_cb(loop: asyncio.AbstractEventLoop):
     return _cb
 
 
+FREE_DAILY_MESSAGES = 3
+
+# Guests have no account to count against, so count by client IP for the
+# day. The original only counted guests in the browser (clear storage, get
+# more); this is the server-side version of the same "3 a day" rule.
+_guest_counts: dict[str, tuple[str, int]] = {}
+
+
+def _client_ip(request: Request) -> str:
+    # X-Forwarded-For is client-controlled unless a proxy we run sets it, so
+    # only honour it when deployed behind one (TRUST_PROXY=1); otherwise a
+    # guest could dodge the limit by sending a fake header.
+    import os
+
+    if os.environ.get("TRUST_PROXY") == "1":
+        fwd = request.headers.get("x-forwarded-for")
+        if fwd:
+            return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _guest_over_limit(ip: str) -> bool:
+    from datetime import date
+
+    today = date.today().isoformat()
+    day, n = _guest_counts.get(ip, (today, 0))
+    if day != today:
+        n = 0
+    if n >= FREE_DAILY_MESSAGES:
+        return True
+    _guest_counts[ip] = (today, n + 1)
+    return False
+
+
 @router.post("")
-async def chat(req: ChatRequest, authorization: str = Header(None)):
+async def chat(req: ChatRequest, request: Request, authorization: str = Header(None)):
     user_msg = req.message.strip()
     if not user_msg:
         return {"ok": False, "error": "Empty message"}
@@ -52,10 +86,15 @@ async def chat(req: ChatRequest, authorization: str = Header(None)):
     user_id = user["id"] if user else 0
     is_plus = _is_plus_or_exempt(user)
 
-    if user and not is_plus and auth.messages_today(user["id"]) >= 3:
+    if user and not is_plus and auth.messages_today(user["id"]) >= FREE_DAILY_MESSAGES:
         return {
             "ok": True, "type": "limit", "limit_reached": True,
             "message": "You've used your 3 free messages for today. Upgrade to Paula Plus for unlimited messages.",
+        }
+    if not user and _guest_over_limit(_client_ip(request)):
+        return {
+            "ok": True, "type": "limit", "limit_reached": True,
+            "message": "That's the 3 free guest messages for today. Create a free account to keep going.",
         }
 
     if user:
@@ -63,8 +102,12 @@ async def chat(req: ChatRequest, authorization: str = Header(None)):
 
     if req.history is not None:
         chat_history = [{"role": m.role, "content": m.content} for m in req.history][-12:]
-    else:
+    elif user:
         chat_history = orch.get_user_history(user_id)
+    else:
+        # Never fall back to a server-side history for guests: they all share
+        # user_id 0, so one guest's conversation would leak into another's.
+        chat_history = []
     chat_history.append({"role": "user", "content": user_msg})
 
     intent = engine.route(user_msg, history=chat_history[:-1])
