@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
+import { Performance } from './Performance'
 import './portfolio.css'
 
 interface Account {
@@ -88,6 +89,8 @@ export function PortfolioScreen() {
           </div>
         </div>
       )}
+
+      <Performance />
 
       <h2 className="portfolio-section-title">Open positions</h2>
       {positions.length === 0 ? (

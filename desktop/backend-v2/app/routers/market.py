@@ -5,7 +5,7 @@ engine.* functions the original backend uses; only the HTTP layer is new.
 from fastapi import APIRouter, Header, HTTPException
 
 from ..bridge import engine
-from ..deps import current_user_optional
+from ..deps import current_user_optional, current_user_required
 
 router = APIRouter(prefix="/api", tags=["market"])
 
@@ -84,7 +84,11 @@ def portfolio_benchmark(period: str = "1M", authorization: str = Header(None)):
         start = dt.datetime.fromtimestamp(ts[0])
         end = dt.datetime.fromtimestamp(ts[-1])
         days = max((end - start).days + 2, 3)
-        spy = engine._polygon_daily_hist("SPY", days=days + 5)
+        # _polygon_daily_hist returns None for < 50 bars (it's built for the
+        # indicator pipeline), so always fetch a long window and slice it.
+        spy = engine._polygon_daily_hist("SPY", days=max(days + 5, 120))
+        if spy is not None:
+            spy = spy[spy.index >= start.replace(hour=0, minute=0, second=0)]
         if spy is not None and len(spy) >= 2:
             closes = spy["Close"].tolist()
             sbase = closes[0]
@@ -105,3 +109,83 @@ def portfolio_benchmark(period: str = "1M", authorization: str = Header(None)):
         "spy_series": spy_pct,
         "timestamps": ts,
     }
+
+
+_PERIOD_DAYS = {"1D": 1, "1W": 7, "1M": 30, "3M": 90, "6M": 180, "1A": 365}
+
+
+@router.get("/portfolio/performance")
+def portfolio_performance(period: str = "1M", authorization: str = Header(None)):
+    """Equity curve + trade activity for the Portfolio screen. Port of the
+    original /api/performance, minus the autopilot config dump, and behind
+    sign-in (the original serves account data to anyone)."""
+    from collections import defaultdict
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    import requests
+
+    current_user_required(authorization)
+    if period not in _PERIOD_DAYS:
+        raise HTTPException(422, f"period must be one of {', '.join(_PERIOD_DAYS)}")
+
+    et = ZoneInfo("US/Eastern")
+    hist = engine.alpaca_portfolio_history(period=period) or {}
+    curve = [
+        {"ts": t, "equity": round(e, 2), "pnl": round(p or 0, 2)}
+        for t, e, p in zip(hist.get("timestamps", []), hist.get("equity", []), hist.get("profit_loss", []))
+        if e and e > 0
+    ]
+
+    # Filled orders in the window, bucketed by day / week / month.
+    bucket = "day" if period in ("1D", "1W") else "week" if period == "1M" else "month"
+    after = (datetime.now(et) - timedelta(days=_PERIOD_DAYS[period])).isoformat()
+    orders = []
+    try:
+        r = requests.get(
+            f"{engine.ALPACA_BASE}/v2/orders",
+            headers=engine._alpaca_headers(),
+            params={"status": "closed", "limit": 500, "after": after},
+            timeout=15,
+        )
+        if r.status_code == 200:
+            orders = [o for o in r.json() if float(o.get("filled_qty") or 0) > 0]
+    except Exception:
+        pass
+
+    def key_for(day: str) -> str:
+        if bucket == "day":
+            return day
+        d = datetime.strptime(day, "%Y-%m-%d")
+        if bucket == "week":
+            return (d - timedelta(days=d.weekday())).strftime("%Y-%m-%d")  # Monday
+        return day[:7] + "-01"
+
+    pnl_by_day = defaultdict(float)
+    # profit_loss from Alpaca is per-bar; with daily bars that's the day's P&L.
+    if period not in ("1D", "1W"):
+        for p in curve:
+            pnl_by_day[datetime.fromtimestamp(p["ts"], tz=et).strftime("%Y-%m-%d")] += p["pnl"]
+
+    groups: dict = defaultdict(lambda: {"buys": 0, "sells": 0, "tickers": set(), "days": set()})
+    for o in orders:
+        day = (o.get("filled_at") or o.get("created_at") or "")[:10]
+        if not day:
+            continue
+        g = groups[key_for(day)]
+        g["buys" if o.get("side") == "buy" else "sells"] += 1
+        g["tickers"].add(o.get("symbol"))
+        g["days"].add(day)
+
+    recaps = []
+    for k in sorted(groups, reverse=True):
+        g = groups[k]
+        recaps.append({
+            "start": k,
+            "buys": g["buys"],
+            "sells": g["sells"],
+            "tickers": sorted(t for t in g["tickers"] if t)[:12],
+            "pnl": round(sum(pnl_by_day.get(d, 0) for d in g["days"]), 2) if pnl_by_day else None,
+        })
+
+    return {"ok": True, "period": period, "bucket": bucket, "curve": curve, "recaps": recaps}
