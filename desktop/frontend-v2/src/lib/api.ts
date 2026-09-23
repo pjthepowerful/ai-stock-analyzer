@@ -33,8 +33,15 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (!res.ok) {
     // Real status codes now (see backend-v2 plan note) — a 401/422/etc IS the
     // error signal, not a 200 with {ok:false} to check by hand everywhere.
-    const message = body?.detail || body?.error || res.statusText
-    throw new ApiError(res.status, typeof message === 'string' ? message : 'Request failed')
+    const detail = body?.detail ?? body?.error
+    // FastAPI validation errors arrive as a list of {loc, msg}; show the first.
+    const message =
+      typeof detail === 'string'
+        ? detail
+        : Array.isArray(detail) && typeof detail[0]?.msg === 'string'
+          ? detail[0].msg
+          : res.statusText || 'Request failed'
+    throw new ApiError(res.status, message)
   }
   return body as T
 }
