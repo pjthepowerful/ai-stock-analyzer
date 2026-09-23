@@ -7,6 +7,8 @@ import re
 
 from fastapi import APIRouter, Header, HTTPException
 
+import os
+
 from ..bridge import auth
 from ..deps import current_user_required
 from ..models.auth import (
@@ -15,8 +17,11 @@ from ..models.auth import (
     SignupRequest,
     VerifyCodeRequest,
 )
+from ..models.settings import SettingsRequest
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+ADMIN_EMAIL = "parjan.d@icloud.com"
 
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
@@ -115,3 +120,30 @@ def me(authorization: str = Header(None)):
     user = current_user_required(authorization)
     is_plus = auth.is_plus(user["id"])
     return {"ok": True, "user": {**user, "plus": is_plus}}
+
+
+@router.get("/settings")
+def get_settings(authorization: str = Header(None)):
+    user = current_user_required(authorization)
+    return {"ok": True, **auth.get_settings(user["id"])}
+
+
+@router.post("/settings")
+def save_settings(req: SettingsRequest, authorization: str = Header(None)):
+    user = current_user_required(authorization)
+    is_plus = auth.is_plus(user["id"]) or user.get("email", "").lower() == ADMIN_EMAIL
+    payload = req.dict()
+    if not is_plus:
+        # Connections (broker/data API keys) are Plus-only. The UI hides
+        # them, but the endpoint enforces it too so a direct POST can't
+        # bypass the paywall.
+        for k in ("alpaca_key", "alpaca_secret", "groq_key", "polygon_key"):
+            payload.pop(k, None)
+        return auth.save_settings(user["id"], payload)
+
+    result = auth.save_settings(user["id"], payload)
+    if req.alpaca_key:
+        os.environ["ALPACA_KEY_ID"] = req.alpaca_key
+    if req.alpaca_secret:
+        os.environ["ALPACA_SECRET"] = req.alpaca_secret
+    return result

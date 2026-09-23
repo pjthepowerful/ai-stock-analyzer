@@ -1,0 +1,198 @@
+.settings-screen {
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--space-6);
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.settings-title {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  margin: 0 0 var(--space-6);
+}
+
+.settings-guest-note {
+  color: var(--text-dim);
+}
+
+.settings-section {
+  margin-bottom: var(--space-7);
+}
+
+.settings-section-title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  margin: 0 0 var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-section-note {
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  margin: 0 0 var(--space-3);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
+  gap: var(--space-4);
+}
+
+.settings-row-label {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+.settings-row-value {
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.settings-row-input-group {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.settings-input {
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+}
+
+.settings-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.settings-save {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.settings-save:hover {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.settings-modes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.settings-mode {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  opacity: 0.65;
+}
+
+.settings-mode-on {
+  opacity: 1;
+  border-color: var(--accent);
+}
+
+.settings-mode-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settings-mode-label {
+  font-weight: 600;
+}
+
+.settings-mode-badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--accent-strong);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+}
+
+.settings-mode-tagline {
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  margin: var(--space-1) 0;
+}
+
+.settings-mode-stats {
+  font-size: var(--text-2xs);
+  color: var(--text-dim);
+}
+
+.settings-diag-btn {
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.settings-diag-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.settings-diag-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-diag-result {
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  border-left: 2px solid var(--accent);
+  padding-left: var(--space-3);
+}
+
+.settings-diag-error {
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--negative);
+}
+
+.settings-locked {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+}
+
+.settings-locked-badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 800;
+  background: linear-gradient(120deg, var(--accent), var(--accent-strong));
+  color: var(--accent-ink);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+}

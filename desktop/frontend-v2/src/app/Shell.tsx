@@ -2,15 +2,17 @@ import { useState } from 'react'
 import { AnalyzeScreen } from '../features/analyze/AnalyzeScreen'
 import { ChatScreen } from '../features/chat/ChatScreen'
 import { PortfolioScreen } from '../features/portfolio/PortfolioScreen'
+import { SettingsScreen } from '../features/settings/SettingsScreen'
 import { useSession } from '../lib/auth'
 import './shell.css'
 
-type View = 'chat' | 'analyze' | 'portfolio'
+type View = 'chat' | 'analyze' | 'portfolio' | 'settings'
 
 const TABS: { id: View; label: string }[] = [
   { id: 'chat', label: 'Chat' },
   { id: 'analyze', label: 'Analyze' },
   { id: 'portfolio', label: 'Portfolio' },
+  { id: 'settings', label: 'Settings' },
 ]
 
 export function Shell() {
@@ -47,6 +49,7 @@ export function Shell() {
         {view === 'chat' && <ChatScreen onNavigateAnalyze={() => setView('analyze')} />}
         {view === 'analyze' && <AnalyzeScreen />}
         {view === 'portfolio' && <PortfolioScreen />}
+        {view === 'settings' && <SettingsScreen />}
       </main>
     </div>
   )
