@@ -24,6 +24,15 @@ interface Position {
   stop_loss: number
 }
 
+interface Exposure {
+  equity: number | null
+  floor: number
+  headroom: number | null
+  exposure: number
+  positions: number
+  note: string
+}
+
 interface Benchmark {
   ok: boolean
   portfolio_return_pct: number
@@ -37,6 +46,7 @@ export function PortfolioScreen() {
   const [positions, setPositions] = useState<Position[]>([])
   const [benchmark, setBenchmark] = useState<Benchmark | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [exposure, setExposure] = useState<Exposure | null>(null)
 
   useEffect(() => {
     api
@@ -50,6 +60,10 @@ export function PortfolioScreen() {
     api
       .get<Benchmark>('/api/portfolio/benchmark')
       .then(setBenchmark)
+      .catch(() => {})
+    api
+      .get<Exposure>('/api/research/exposure')
+      .then(setExposure)
       .catch(() => {})
   }, [])
 
@@ -88,6 +102,18 @@ export function PortfolioScreen() {
             </span>
           </div>
         </div>
+      )}
+
+      {exposure?.headroom != null && (
+        <p className={'portfolio-pdt' + (exposure.headroom < 1000 ? ' portfolio-pdt-tight' : '')}>
+          <span className="mono">
+            {exposure.headroom >= 0 ? '$' : '−$'}
+            {Math.abs(exposure.headroom).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+          </span>{' '}
+          {exposure.headroom >= 0 ? 'above' : 'below'} the ${exposure.floor.toLocaleString()} pattern-day-trader floor
+          {exposure.headroom < 0 && ' — day trades are restricted'}
+          {exposure.positions > 0 && ` · ${exposure.note}`}
+        </p>
       )}
 
       <Performance />
