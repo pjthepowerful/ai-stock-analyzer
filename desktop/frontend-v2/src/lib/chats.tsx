@@ -51,6 +51,9 @@ interface Chats {
 const ChatsContext = createContext<Chats | null>(null)
 
 const FREE_CHAT_LIMIT = 1
+// Must match the keys ChatsProvider derives for owner 'guest'.
+const GUEST_KEY = 'paula-v2-chats-guest'
+const GUEST_TS_KEY = 'paula-v2-chats-ts-guest'
 const NEW_TITLE = 'New chat'
 
 function newId() {
@@ -133,6 +136,14 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     [keys, push],
   )
 
+  const select = useCallback(
+    (id: string) => {
+      setActiveId(id)
+      write(keys.active, id)
+    },
+    [keys],
+  )
+
   // Initial pull: last-write-wins against whatever this device cached.
   useEffect(() => {
     if (!canSync) return
@@ -144,6 +155,25 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
         const localTs = Number(localStorage.getItem(keys.ts)) || 0
         if ((res.updated_at || 0) > localTs && res.chats) adopt(res.chats, res.updated_at)
         syncReady.current = true
+
+        // Chats made as a guest on this device follow you into the account
+        // you sign in to (once — they're removed from guest storage after).
+        const guest = readJSON<Chat[]>(GUEST_KEY, []).filter((c) => c.messages.length > 0)
+        if (guest.length) {
+          const have = new Set(chatsRef.current.map((c) => c.id))
+          const fresh = guest.filter((c) => !have.has(c.id))
+          try {
+            localStorage.removeItem(GUEST_KEY)
+            localStorage.removeItem(GUEST_TS_KEY)
+          } catch {
+            /* ignore */
+          }
+          if (fresh.length) {
+            commit((prev) => [...fresh, ...prev])
+            select(fresh[0].id)
+            return
+          }
+        }
         if (localTs > (res.updated_at || 0)) push()
       })
       .catch(() => {
@@ -152,17 +182,9 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [adopt, canSync, keys, push])
+  }, [adopt, canSync, commit, keys, push, select])
 
   const active = chats.find((c) => c.id === activeId) ?? chats[0] ?? null
-
-  const select = useCallback(
-    (id: string) => {
-      setActiveId(id)
-      write(keys.active, id)
-    },
-    [keys],
-  )
 
   const create = useCallback(() => {
     const current = chatsRef.current
