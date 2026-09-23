@@ -41,6 +41,7 @@ export const api = {
   get: <T>(path: string) => request<T>(path, { method: 'GET' }),
   post: <T>(path: string, data?: unknown) =>
     request<T>(path, { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
+  del: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 }
 
 export interface AuthUser {
@@ -48,6 +49,14 @@ export interface AuthUser {
   username: string
   email: string
   plus?: boolean
+  is_admin?: boolean
+}
+
+export interface MeResponse {
+  ok: boolean
+  user: AuthUser
+  gift_msg: string
+  messages_today: number
 }
 
 export interface AuthResult {

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { api, ApiError, setToken, type AuthResult, type AuthUser } from './api'
+import { api, ApiError, setToken, type AuthResult, type AuthUser, type MeResponse } from './api'
 
 interface Session {
   user: AuthUser | null
@@ -10,6 +10,8 @@ interface Session {
   signup: (username: string, email: string, password: string) => Promise<void>
   continueAsGuest: () => void
   signOut: () => void
+  /** Re-reads /me — call after anything that changes plan or role. */
+  refresh: () => Promise<void>
 }
 
 const SessionContext = createContext<Session | null>(null)
@@ -30,11 +32,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       return
     }
     api
-      .get<{ ok: boolean; user: AuthUser }>('/api/auth/me')
+      .get<MeResponse>('/api/auth/me')
       .then((res) => setUser(res.user))
       .catch(() => setToken(null))
       .finally(() => setLoading(false))
   }, [])
+
+  async function refresh() {
+    try {
+      const res = await api.get<MeResponse>('/api/auth/me')
+      setUser(res.user)
+    } catch {
+      /* keep the current user; a transient failure shouldn't sign anyone out */
+    }
+  }
 
   async function login(email: string, password: string) {
     setError(null)
@@ -45,6 +56,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setUser(res.user ?? null)
         setIsGuest(false)
         localStorage.removeItem(GUEST_KEY)
+        await refresh()
       }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not sign in')
@@ -61,6 +73,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setUser(res.user ?? null)
         setIsGuest(false)
         localStorage.removeItem(GUEST_KEY)
+        await refresh()
       }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not create account')
@@ -81,7 +94,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <SessionContext.Provider value={{ user, isGuest, loading, error, login, signup, continueAsGuest, signOut }}>
+    <SessionContext.Provider value={{ user, isGuest, loading, error, login, signup, continueAsGuest, signOut, refresh }}>
       {children}
     </SessionContext.Provider>
   )

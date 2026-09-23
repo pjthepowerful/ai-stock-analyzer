@@ -7,12 +7,14 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from .json_safe import SafeJSONResponse
+from .routers import admin as admin_router
 from .routers import auth as auth_router
 from .routers import autopilot as autopilot_router
 from .routers import chart as chart_router
 from .routers import chat as chat_router
 from .routers import earnings as earnings_router
 from .routers import market as market_router
+from .routers import plus as plus_router
 from .ws import manager
 
 app = FastAPI(title="Paula v2", default_response_class=SafeJSONResponse)
@@ -31,6 +33,8 @@ app.include_router(market_router.router)
 app.include_router(chart_router.router)
 app.include_router(autopilot_router.router)
 app.include_router(earnings_router.router)
+app.include_router(plus_router.router)
+app.include_router(admin_router.router)
 
 
 @app.get("/api/health")

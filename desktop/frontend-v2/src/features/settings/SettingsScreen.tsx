@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError } from '../../lib/api'
 import { useSession } from '../../lib/auth'
+import { useChrome } from '../../lib/chrome'
 import './settings.css'
 
 interface AutopilotMode {
@@ -28,6 +29,7 @@ interface UserSettings {
 
 export function SettingsScreen() {
   const { user, isGuest } = useSession()
+  const { openPlus } = useChrome()
   const [displayName, setDisplayName] = useState('')
   const [saved, setSaved] = useState(false)
   const [modes, setModes] = useState<ModesResponse | null>(null)
@@ -95,7 +97,14 @@ export function SettingsScreen() {
         </div>
         <div className="settings-row">
           <span className="settings-row-label">Plan</span>
-          <span className="settings-row-value">{user?.plus ? 'Paula Plus' : 'Free'}</span>
+          <span className="settings-row-value settings-plan">
+            {user?.plus ? 'Paula Plus' : 'Free'}
+            {!user?.plus && (
+              <button className="settings-save" onClick={openPlus}>
+                Upgrade
+              </button>
+            )}
+          </span>
         </div>
       </section>
 
@@ -133,10 +142,10 @@ export function SettingsScreen() {
         {user?.plus ? (
           <p className="settings-section-note">Broker and data-feed keys — manage in your account.</p>
         ) : (
-          <div className="settings-locked">
+          <button className="settings-locked" onClick={openPlus}>
             <span>Connect your own Alpaca account</span>
             <span className="settings-locked-badge">PLUS</span>
-          </div>
+          </button>
         )}
       </section>
     </div>

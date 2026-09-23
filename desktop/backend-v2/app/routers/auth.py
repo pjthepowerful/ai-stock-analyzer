@@ -10,7 +10,7 @@ from fastapi import APIRouter, Header, HTTPException
 import os
 
 from ..bridge import auth
-from ..deps import current_user_required
+from ..deps import current_user_required, is_admin
 from ..models.auth import (
     LoginRequest,
     ResendCodeRequest,
@@ -21,7 +21,6 @@ from ..models.settings import SettingsRequest
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-ADMIN_EMAIL = "parjan.d@icloud.com"
 
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
@@ -119,7 +118,12 @@ def resend_code(req: ResendCodeRequest):
 def me(authorization: str = Header(None)):
     user = current_user_required(authorization)
     is_plus = auth.is_plus(user["id"])
-    return {"ok": True, "user": {**user, "plus": is_plus}}
+    return {
+        "ok": True,
+        "user": {**user, "plus": is_plus, "is_admin": is_admin(user)},
+        "gift_msg": auth.get_gift_msg(user["id"]) if is_plus else "",
+        "messages_today": auth.messages_today(user["id"]),
+    }
 
 
 @router.get("/settings")
@@ -131,7 +135,7 @@ def get_settings(authorization: str = Header(None)):
 @router.post("/settings")
 def save_settings(req: SettingsRequest, authorization: str = Header(None)):
     user = current_user_required(authorization)
-    is_plus = auth.is_plus(user["id"]) or user.get("email", "").lower() == ADMIN_EMAIL
+    is_plus = auth.is_plus(user["id"]) or is_admin(user)
     payload = req.dict()
     if not is_plus:
         # Connections (broker/data API keys) are Plus-only. The UI hides

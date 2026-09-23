@@ -15,7 +15,6 @@ from ..deps import current_user_required
 
 router = APIRouter(prefix="/api/autopilot", tags=["autopilot"])
 
-ADMIN_EMAIL = "parjan.d@icloud.com"
 AUTOPILOT_EMAILS = {"parjan.d@icloud.com", "pinakin.d@moftmail.com"}
 
 

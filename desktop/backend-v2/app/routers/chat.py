@@ -18,7 +18,7 @@ from typing import Optional
 from fastapi import APIRouter, Header
 
 from ..bridge import auth, engine
-from ..deps import current_user_optional
+from ..deps import current_user_optional, is_admin
 from ..models.chat import ChatRequest
 from ..services import chat_orchestrator as orch
 from ..ws import manager
@@ -29,13 +29,10 @@ _scan_executor = ThreadPoolExecutor(max_workers=2)
 _light_executor = ThreadPoolExecutor(max_workers=4)
 _active_scans: dict[int, asyncio.Task] = {}
 
-ADMIN_EMAIL = "parjan.d@icloud.com"
-
-
 def _is_plus_or_exempt(user: Optional[dict]) -> bool:
     if not user:
         return False
-    return bool(auth.is_plus(user["id"]) or user.get("email", "").lower() == ADMIN_EMAIL)
+    return bool(auth.is_plus(user["id"]) or is_admin(user))
 
 
 def _make_progress_cb(loop: asyncio.AbstractEventLoop):

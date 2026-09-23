@@ -1,0 +1,369 @@
+.admin-screen {
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--space-6);
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.admin-denied {
+  color: var(--text-dim);
+}
+
+.admin-title {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  margin: 0 0 var(--space-5);
+}
+
+/* Stat strip: big tabular numbers separated by hairlines, no cards. */
+.admin-stats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  margin: 0 0 var(--space-5);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-stat {
+  padding: var(--space-3) var(--space-4);
+  border-left: 1px solid var(--border);
+}
+
+.admin-stat:first-child {
+  border-left: none;
+  padding-left: 0;
+}
+
+.admin-stat dt {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+.admin-stat dd {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xl);
+  font-weight: 600;
+}
+
+.admin-stat-warn {
+  color: var(--warning);
+}
+
+.admin-maint-live {
+  margin: 0 0 var(--space-5);
+  padding: var(--space-2) var(--space-3);
+  border-left: 2px solid var(--warning);
+  color: var(--warning);
+  font-size: var(--text-sm);
+}
+
+.admin-tabs {
+  display: flex;
+  gap: var(--space-5);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--space-4);
+}
+
+.admin-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: var(--space-2) 0;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-transform: capitalize;
+  cursor: pointer;
+}
+
+.admin-tab:hover {
+  color: var(--text-secondary);
+}
+
+.admin-tab-on {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.admin-filter {
+  width: 100%;
+  max-width: 360px;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.admin-filter:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.admin-table th {
+  text-align: left;
+  font-weight: 500;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  padding: var(--space-2) var(--space-3) var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-table td {
+  padding: var(--space-3) var(--space-3) var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.admin-table .num {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-table tbody tr:hover {
+  background: var(--surface);
+}
+
+.admin-user-name {
+  font-weight: 500;
+}
+
+.admin-user-email {
+  font-size: var(--text-2xs);
+  color: var(--text-dim);
+}
+
+.admin-dim {
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+}
+
+.admin-plan {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.admin-plan:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.admin-plan-plus {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.admin-row-actions {
+  text-align: right;
+}
+
+.admin-row-actions > * + * {
+  margin-left: var(--space-3);
+}
+
+.admin-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.admin-link:hover {
+  color: var(--text);
+}
+
+.admin-danger,
+.admin-primary {
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: none;
+}
+
+.admin-danger {
+  border: 1px solid var(--negative);
+  color: var(--negative);
+}
+
+.admin-danger:hover:not(:disabled) {
+  background: var(--negative);
+  color: var(--bg);
+}
+
+.admin-primary {
+  border: 1px solid var(--accent);
+  color: var(--accent-strong);
+}
+
+.admin-primary:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.admin-danger:disabled,
+.admin-primary:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.admin-empty {
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+}
+
+.admin-error {
+  color: var(--negative);
+  font-size: var(--text-sm);
+}
+
+/* Reports */
+.admin-report {
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-report-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+  padding: var(--space-3) 0;
+  background: none;
+  border: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-report-head:hover .admin-report-note {
+  color: var(--accent-strong);
+}
+
+.admin-report-note {
+  font-size: var(--text-sm);
+}
+
+.admin-report-note em {
+  color: var(--text-dim);
+}
+
+.admin-report-meta {
+  font-size: var(--text-2xs);
+  color: var(--text-dim);
+}
+
+.admin-report-body {
+  padding: 0 0 var(--space-4);
+}
+
+.admin-transcript {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  max-height: 360px;
+  overflow-y: auto;
+  font-size: var(--text-sm);
+}
+
+.admin-transcript li {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+}
+
+.admin-transcript-role {
+  font-size: var(--text-2xs);
+  color: var(--text-dim);
+  padding-top: 2px;
+}
+
+.admin-transcript-assistant .admin-transcript-role {
+  color: var(--accent);
+}
+
+.admin-transcript-text {
+  white-space: pre-wrap;
+  color: var(--text-secondary);
+}
+
+.admin-report-ua {
+  font-size: var(--text-2xs);
+  color: var(--text-dim);
+  margin: 0 0 var(--space-3);
+  word-break: break-all;
+}
+
+/* Maintenance */
+.admin-maint {
+  max-width: 520px;
+}
+
+.admin-maint-label {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+.admin-maint-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+}
+
+@media (max-width: 720px) {
+  .admin-screen {
+    padding: var(--space-4);
+  }
+
+  .admin-stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .admin-stat:nth-child(4) {
+    border-left: none;
+    padding-left: 0;
+  }
+}

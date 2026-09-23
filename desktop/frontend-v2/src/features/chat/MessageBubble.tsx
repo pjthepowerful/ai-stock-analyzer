@@ -1,3 +1,5 @@
+import { useChrome } from '../../lib/chrome'
+
 interface Props {
   role: 'user' | 'assistant'
   content: string
@@ -16,6 +18,7 @@ function formatMessage(text: string): string {
 }
 
 export function MessageBubble({ role, content, meta }: Props) {
+  const { openPlus } = useChrome()
   if (role === 'user') {
     return (
       <div className="msg-row msg-row-user">
@@ -28,9 +31,21 @@ export function MessageBubble({ role, content, meta }: Props) {
     <div className="msg-row msg-row-assistant">
       <div className="msg-assistant-text" dangerouslySetInnerHTML={{ __html: formatMessage(content) }} />
       {meta?.taste && (
-        <div className="msg-upsell">Full breakdown — entry/stop/target, chart, reasoning — is part of Paula Plus.</div>
+        <div className="msg-upsell">
+          Full breakdown — entry/stop/target, chart, reasoning — is part of Paula Plus.{' '}
+          <button className="msg-upsell-btn" onClick={openPlus}>
+            See Plus →
+          </button>
+        </div>
       )}
-      {meta?.limitReached && <div className="msg-upsell">Upgrade to Paula Plus for unlimited messages.</div>}
+      {meta?.limitReached && (
+        <div className="msg-upsell">
+          You've hit today's free message limit.{' '}
+          <button className="msg-upsell-btn" onClick={openPlus}>
+            Go unlimited →
+          </button>
+        </div>
+      )}
     </div>
   )
 }

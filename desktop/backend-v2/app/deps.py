@@ -48,3 +48,19 @@ def current_user_required(authorization: Optional[str] = Header(None)) -> dict:
     if not user:
         raise HTTPException(status_code=401, detail="Sign in required")
     return user
+
+
+# Owner account — the only one that gets the admin panel. Same value the
+# original backend hard-codes as ADMIN_EMAIL.
+ADMIN_EMAIL = "parjan.d@icloud.com"
+
+
+def is_admin(user: Optional[dict]) -> bool:
+    return bool(user) and (user.get("email") or "").lower() == ADMIN_EMAIL
+
+
+def admin_required(authorization: Optional[str] = Header(None)) -> dict:
+    user = current_user_required(authorization)
+    if not is_admin(user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    return user

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { api, ApiError, type ChatMessage, type ChatResponse } from '../../lib/api'
 import { useSession } from '../../lib/auth'
+import { useChrome } from '../../lib/chrome'
 import { useWebSocket, type WsEvent } from '../../lib/ws'
 import { MessageBubble } from './MessageBubble'
 import './chat.css'
@@ -17,6 +18,7 @@ interface Props {
 
 export function ChatScreen({ onNavigateAnalyze }: Props) {
   const { user } = useSession()
+  const { openReport } = useChrome()
   const [messages, setMessages] = useState<DisplayMessage[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -94,6 +96,15 @@ export function ChatScreen({ onNavigateAnalyze }: Props) {
         {messages.map((m, i) => (
           <MessageBubble key={i} role={m.role} content={m.content} meta={m.meta} />
         ))}
+
+        {messages.length > 0 && !sending && !scanProgress && (
+          <button
+            className="chat-report"
+            onClick={() => openReport(messages.map((m) => ({ role: m.role, content: m.content })))}
+          >
+            Something off? Report this chat
+          </button>
+        )}
 
         {scanProgress && (
           <div className="chat-scan">

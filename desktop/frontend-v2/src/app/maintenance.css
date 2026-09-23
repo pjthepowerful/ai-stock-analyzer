@@ -1,0 +1,54 @@
+.maint {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--space-6) max(var(--space-5), 12vw);
+  background: var(--bg);
+}
+
+.maint-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--accent-ink);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-weight: 800;
+  margin-bottom: var(--space-6);
+}
+
+.maint-title {
+  font-family: var(--font-display);
+  font-size: clamp(var(--text-2xl), 6vw, var(--text-4xl));
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  max-width: 14ch;
+  margin: 0 0 var(--space-5);
+}
+
+.maint-msg {
+  font-size: var(--text-lg);
+  color: var(--text-secondary);
+  max-width: 48ch;
+  margin: 0;
+}
+
+.maint-door {
+  align-self: flex-start;
+  margin-top: var(--space-8);
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.maint-door:hover {
+  color: var(--text-secondary);
+}
