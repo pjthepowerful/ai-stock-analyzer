@@ -1,6 +1,6 @@
 import { AuthScreen } from '../features/auth/AuthScreen'
-import { ChatScreen } from '../features/chat/ChatScreen'
 import { useSession } from '../lib/auth'
+import { Shell } from './Shell'
 
 export default function App() {
   const { user, isGuest, loading } = useSession()
@@ -11,5 +11,5 @@ export default function App() {
     return <AuthScreen />
   }
 
-  return <ChatScreen />
+  return <Shell />
 }

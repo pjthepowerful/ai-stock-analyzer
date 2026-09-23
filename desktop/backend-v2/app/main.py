@@ -6,12 +6,14 @@ Runs on :4141 so it never collides with the original backend on :3141.
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+from .json_safe import SafeJSONResponse
 from .routers import auth as auth_router
+from .routers import chart as chart_router
 from .routers import chat as chat_router
 from .routers import market as market_router
 from .ws import manager
 
-app = FastAPI(title="Paula v2")
+app = FastAPI(title="Paula v2", default_response_class=SafeJSONResponse)
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,6 +26,7 @@ app.add_middleware(
 app.include_router(auth_router.router)
 app.include_router(chat_router.router)
 app.include_router(market_router.router)
+app.include_router(chart_router.router)
 
 
 @app.get("/api/health")

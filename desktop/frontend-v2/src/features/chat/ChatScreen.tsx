@@ -8,13 +8,15 @@ import './chat.css'
 interface DisplayMessage {
   role: 'user' | 'assistant'
   content: string
-  meta?: { taste?: boolean; limitReached?: boolean; scanning?: boolean }
+  meta?: { taste?: boolean; limitReached?: boolean }
 }
 
-const SUGGESTIONS = ['What should I buy?', 'Check the market', 'Analyze a stock']
+interface Props {
+  onNavigateAnalyze: () => void
+}
 
-export function ChatScreen() {
-  const { user, isGuest, signOut } = useSession()
+export function ChatScreen({ onNavigateAnalyze }: Props) {
+  const { user } = useSession()
   const [messages, setMessages] = useState<DisplayMessage[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -54,11 +56,7 @@ export function ChatScreen() {
       } else {
         setMessages((prev) => [
           ...prev,
-          {
-            role: 'assistant',
-            content: res.message,
-            meta: { taste: res.taste, limitReached: res.limit_reached },
-          },
+          { role: 'assistant', content: res.message, meta: { taste: res.taste, limitReached: res.limit_reached } },
         ])
       }
     } catch (e) {
@@ -74,27 +72,21 @@ export function ChatScreen() {
 
   return (
     <div className="chat-screen">
-      <header className="chat-header">
-        <span className="chat-logo">P</span>
-        <span className="chat-title">Paula</span>
-        <span className="chat-badge">preview</span>
-        <div className="chat-header-spacer" />
-        <button className="chat-signout" onClick={signOut}>
-          {isGuest ? 'Exit guest' : 'Sign out'}
-        </button>
-      </header>
-
       <div className="chat-body" ref={listRef}>
         {messages.length === 0 && (
           <div className="chat-empty">
             <h1 className="chat-greeting">Good to see you, {displayName}.</h1>
             <p className="chat-greeting-sub">What are we trading today?</p>
             <div className="chat-suggestions">
-              {SUGGESTIONS.map((s) => (
-                <button key={s} className="chat-chip" onClick={() => send(s === 'What should I buy?' ? 'What should I invest in right now? Give me your real take.' : s)}>
-                  {s}
-                </button>
-              ))}
+              <button className="chat-chip" onClick={() => send('What should I invest in right now? Give me your real take.')}>
+                What should I buy?
+              </button>
+              <button className="chat-chip" onClick={() => send('How is the market looking today?')}>
+                Check the market
+              </button>
+              <button className="chat-chip" onClick={onNavigateAnalyze}>
+                Analyze a stock
+              </button>
             </div>
           </div>
         )}
