@@ -1,0 +1,95 @@
+/* Paula v2 design tokens — "Confident Editorial Terminal"
+   Cool near-black base, one disciplined green accent, oversized display type
+   at emotional beats, tabular mono for every number, restrained radii,
+   motion only on real state changes. See the v2-rewrite plan for the
+   research (Perplexity Finance, Linear, Mercury, Raycast) behind these
+   choices. */
+
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+  /* ── Color: cool near-black, single accent ── */
+  --bg: #08090b;
+  --surface: #101216;
+  --surface-2: #171a1f;
+  --surface-3: #1f2329;
+  --border: #23262c;
+  --border-strong: #33383f;
+
+  --text: #f5f6f7;
+  --text-secondary: #9aa0a8;
+  --text-dim: #5a6068;
+
+  --accent: #10b981;
+  --accent-strong: #4ade80;
+  --accent-ink: #04140d;
+
+  --positive: #34d399;
+  --negative: #f87171;
+  --warning: #fbbf24;
+
+  /* ── Type ── */
+  --font-display: 'Bricolage Grotesque', 'Outfit', system-ui, sans-serif;
+  --font-sans: 'Outfit', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --text-2xs: 0.6875rem;   /* 11px */
+  --text-xs: 0.75rem;      /* 12px */
+  --text-sm: 0.8125rem;    /* 13px */
+  --text-base: 0.9375rem;  /* 15px */
+  --text-lg: 1.125rem;     /* 18px */
+  --text-xl: 1.5rem;       /* 24px */
+  --text-2xl: 2.25rem;     /* 36px */
+  --text-3xl: 3.5rem;      /* 56px */
+  --text-4xl: 5rem;        /* 80px — the Raycast-scale hero moment */
+
+  /* ── Space (4px base scale) ── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+
+  /* ── Radius — restrained; sharp for data, soft only where it earns it ── */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* ── Motion — fast, purposeful, never decorative on static content ── */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 260ms;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Numbers are ALWAYS tabular mono — a price that jitters in width while it
+   updates is a small but real "unpolished" tell. */
+.mono, .num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.positive { color: var(--positive); }
+.negative { color: var(--negative); }

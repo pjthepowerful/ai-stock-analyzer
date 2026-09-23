@@ -1,0 +1,238 @@
+.chat-screen {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.chat-logo {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--accent-ink);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-weight: 800;
+  font-size: var(--text-sm);
+}
+
+.chat-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-lg);
+}
+
+.chat-badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+}
+
+.chat-header-spacer {
+  flex: 1;
+}
+
+.chat-signout {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.chat-signout:hover {
+  color: var(--text);
+}
+
+.chat-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-6) var(--space-6) var(--space-4);
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.chat-empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-3);
+}
+
+.chat-greeting {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(2rem, 4vw, var(--text-3xl));
+  letter-spacing: -0.02em;
+  color: var(--accent-strong);
+  margin: 0;
+}
+
+.chat-greeting-sub {
+  font-size: var(--text-lg);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-4);
+}
+
+.chat-suggestions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.chat-chip {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.chat-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+/* Messages: plain text, distinguished by alignment + weight, not by a
+   filled chat-app pill — see the v1 fix + Perplexity comparison this was
+   based on. */
+.msg-row {
+  margin: var(--space-4) 0;
+}
+
+.msg-row-user {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.msg-user-text {
+  margin: 0;
+  max-width: 70%;
+  text-align: right;
+  font-weight: 600;
+  font-size: var(--text-base);
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.msg-assistant-text {
+  font-size: var(--text-base);
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.msg-assistant-text strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.msg-assistant-text .num-hl {
+  color: var(--accent-strong);
+}
+
+.msg-upsell {
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-3);
+}
+
+.chat-scan {
+  margin: var(--space-4) 0;
+}
+
+.chat-scan-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+  margin-bottom: var(--space-2);
+}
+
+.chat-scan-track {
+  height: 3px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.chat-scan-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width var(--dur-slow) var(--ease-out);
+}
+
+/* Flat input — no ambient shadow (the v1 fix), a solid accent border on
+   focus instead of a glow ring. */
+.chat-input-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--space-4) var(--space-6) var(--space-6);
+  flex-shrink: 0;
+}
+
+.chat-input {
+  flex: 1;
+  font: inherit;
+  font-size: var(--text-base);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.chat-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.chat-send {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: var(--text-lg);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.chat-send:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+
+.chat-send:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
