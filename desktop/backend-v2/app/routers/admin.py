@@ -158,6 +158,13 @@ class SetPlusRequest(BaseModel):
 @router.post("/api/admin/set-plus")
 def set_plus(req: SetPlusRequest, authorization: Optional[str] = Header(None)):
     admin_required(authorization)
+    db = auth._get_db()
+    try:
+        exists = db.execute("SELECT 1 FROM users WHERE id = ?", (req.user_id,)).fetchone()
+    finally:
+        db.close()
+    if not exists:
+        raise HTTPException(404, "No such user")
     auth.set_plus(req.user_id, req.on, gift_msg=req.message if req.on else "")
     return {"ok": True, "user_id": req.user_id, "plus": req.on}
 
@@ -173,6 +180,9 @@ def delete_user(user_id: int, authorization: Optional[str] = Header(None)):
             raise HTTPException(404, "No such user")
         db.execute("DELETE FROM chat_history WHERE user_id = ?", (user_id,))
         db.execute("DELETE FROM user_settings WHERE user_id = ?", (user_id,))
+        # The original leaves synced chats behind; don't keep a deleted
+        # person's conversations.
+        db.execute("DELETE FROM synced_chats WHERE user_id = ?", (user_id,))
         db.execute("DELETE FROM users WHERE id = ?", (user_id,))
         db.commit()
     finally:
