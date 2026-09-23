@@ -3,6 +3,9 @@ Paula v2 backend — FastAPI, typed routers, real HTTP status codes.
 Reuses the existing engine/auth/trading modules unchanged (see bridge.py).
 Runs on :4141 so it never collides with the original backend on :3141.
 """
+import asyncio
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -21,7 +24,17 @@ from .routers import research as research_router
 from .routers import strategy as strategy_router
 from .ws import manager
 
-app = FastAPI(title="Paula v2", default_response_class=SafeJSONResponse)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Keep the market strip's cache warm so no page load waits on it.
+    warm = asyncio.create_task(overview_router.keep_warm())
+    yield
+    warm.cancel()
+
+
+app = FastAPI(title="Paula v2", default_response_class=SafeJSONResponse, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

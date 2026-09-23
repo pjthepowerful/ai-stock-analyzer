@@ -65,17 +65,22 @@ def _tape() -> list[dict]:
     return out
 
 
+def _safe(fn, default):
+    try:
+        return fn()
+    except Exception:
+        return default
+
+
 def _build() -> dict:
-    regime = {}
-    try:
-        regime = engine.check_market_regime() or {}
-    except Exception:
-        pass
-    gainer, loser = _movers()
-    try:
-        tape = _tape()
-    except Exception:
-        tape = []
+    # Three independent upstream fetches — run them side by side.
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        f_regime = pool.submit(_safe, lambda: engine.check_market_regime() or {}, {})
+        f_movers = pool.submit(_safe, _movers, (None, None))
+        f_tape = pool.submit(_safe, _tape, [])
+        regime, (gainer, loser), tape = f_regime.result(), f_movers.result(), f_tape.result()
     return {
         "regime": regime.get("regime"),
         "safe_to_buy": regime.get("safe_to_buy"),
@@ -101,3 +106,22 @@ def overview():
         if data["regime"] or data["tape"]:
             _cache.update(at=time.time(), data=data)
         return {"ok": True, "cached": False, **data}
+
+
+async def keep_warm():
+    """Rebuild the overview just before it expires, so no request ever pays
+    the cold ~6s. Started from the app lifespan; runs until cancelled."""
+    import asyncio
+
+    loop = asyncio.get_running_loop()
+    while True:
+        try:
+            data = await loop.run_in_executor(None, _build)
+            if data["regime"] or data["tape"]:
+                # No _lock here: a request thread may hold it for seconds
+                # while building, and blocking on it would stall the event
+                # loop. One dict update is atomic under the GIL.
+                _cache.update(at=time.time(), data=data)
+        except Exception as e:
+            print(f"[overview] warm refresh failed: {e!r}", flush=True)
+        await asyncio.sleep(TTL - 10)

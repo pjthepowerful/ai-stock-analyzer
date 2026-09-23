@@ -4,6 +4,7 @@ tuned part (which feed to trust, how a "candidate/watch/blocked/fade/skip"
 verdict is derived); preserved as-is, only the HTTP layer is new.
 """
 import asyncio
+import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -11,11 +12,16 @@ from fastapi import APIRouter, Header, HTTPException
 
 from ..bridge import engine
 from ..deps import current_user_required
+from ..services.parallel import pmap
 from ..ws import manager
 
 router = APIRouter(prefix="/api/earnings", tags=["earnings"])
 
 _cal_build_task: asyncio.Task | None = None
+
+# Per-day verdicts need live quotes but don't move minute to minute.
+_DAY_TTL = 5 * 60
+_day_cache: dict[tuple, tuple[float, dict]] = {}
 
 
 @router.get("/calendar/month")
@@ -45,17 +51,24 @@ def calendar_day(date: str, authorization: str = Header(None)):
         mode_key = (engine.load_autopilot_config().get("STRATEGY_MODE") or "core").lower()
         mode = scp.get_mode(mode_key) if mode_key in ("strict", "intense") else None
 
+        key = (date, mode_key)
+        hit = _day_cache.get(key)
+        if hit and time.time() - hit[0] < _DAY_TTL:
+            return hit[1]
+
         cache = earn._load_cache()
         rows = (cache.get("dates") or {}).get(date, [])
 
-        out = []
-        for r in rows[:40]:
-            v = earn.verdict(r["ticker"], mode)
-            out.append({**r, **v})
+        # One verdict per name, each a few network calls — run them
+        # concurrently instead of one after another.
+        verdicts = pmap(lambda r: {**r, **earn.verdict(r["ticker"], mode)}, rows[:40])
+        out = list(verdicts)
         order = {"candidate": 0, "watch": 1, "blocked": 2, "fade": 3, "skip": 4, "stale": 5}
         out.sort(key=lambda x: (order.get(x.get("verdict"), 9), x["ticker"]))
 
-        return {"ok": True, "date": date, "mode": mode_key, "stocks": out}
+        result = {"ok": True, "date": date, "mode": mode_key, "stocks": out}
+        _day_cache[key] = (time.time(), result)
+        return result
     except Exception as e:
         raise HTTPException(502, str(e)[:200])
 
@@ -110,6 +123,7 @@ async def refresh_calendar(authorization: str = Header(None)):
                 pass
             emit = _progress_emitter("calendar", loop)
             data = await loop.run_in_executor(None, lambda: earn.build_calendar(tickers, keep=set(held), progress=emit))
+            _day_cache.clear()
             await manager.broadcast("earnings", {"status": "calendar_built", "dates": len(data["dates"])})
         except Exception as e:
             print(f"[earnings] calendar build failed: {e!r}", flush=True)

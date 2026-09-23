@@ -14,6 +14,7 @@ from fastapi import APIRouter, Header, HTTPException
 
 from ..bridge import engine
 from ..deps import current_user_required, in_request_context
+from ..services.parallel import pmap
 from .earnings import _progress_emitter
 
 router = APIRouter(prefix="/api", tags=["research"])
@@ -106,7 +107,13 @@ async def _build_upcoming(days: int, limit: int) -> dict:
                 "note": f"Nothing in the calendar reports in the next {days} days — rebuild the calendar."}
     loop = asyncio.get_running_loop()
     emit = _progress_emitter("forecast", loop)
-    rows = await loop.run_in_executor(None, in_request_context(fc.rank, names[:40], limit=limit, progress=emit))
+    # Same as forecast.rank(), but concurrent (see services/parallel.py).
+    def ranked():
+        rows = pmap(fc.forecast, names[:40], progress=emit)
+        rows.sort(key=lambda r: r["score"], reverse=True)
+        return rows[:limit]
+
+    rows = await loop.run_in_executor(None, in_request_context(ranked))
     return {"ok": True, "rows": rows, "scanned": min(len(names), 40)}
 
 
@@ -135,10 +142,17 @@ async def _build_candidates(limit: int) -> dict:
     prices = {t: p.get("current_price") for t, p in held.items()}
     loop = asyncio.get_running_loop()
     emit = _progress_emitter("research", loop)
-    rows = await loop.run_in_executor(
-        None,
-        in_request_context(res.rank, names[:60], equity=acct.get("equity"), prices=prices, limit=limit, progress=emit),
-    )
+    # Same as research.rank(), but concurrent (see services/parallel.py).
+    def ranked():
+        rows = pmap(
+            lambda t: res.evaluate(t, price=prices.get(str(t).upper()), equity=acct.get("equity")),
+            names[:60],
+            progress=emit,
+        )
+        rows.sort(key=lambda r: r["score"], reverse=True)
+        return rows[:limit]
+
+    rows = await loop.run_in_executor(None, in_request_context(ranked))
     return {"ok": True, "candidates": [_fix_sec_note(r) for r in rows], "scanned": min(len(names), 60), "equity": acct.get("equity")}
 
 
