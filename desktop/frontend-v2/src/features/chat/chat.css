@@ -466,3 +466,7 @@
   border-radius: var(--radius-sm);
   background: var(--surface-2);
 }
+
+.msg-card {
+  margin-top: var(--space-3);
+}

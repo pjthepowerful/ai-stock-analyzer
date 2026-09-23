@@ -1,3 +1,5 @@
+import type { Signal } from '../components/SignalCard'
+
 const API_BASE = 'http://127.0.0.1:4141'
 
 export class ApiError extends Error {
@@ -83,4 +85,6 @@ export interface ChatResponse {
   plus_upsell?: boolean
   limit_reached?: boolean
   scan_id?: string
+  trade_signal?: Signal | null
+  quote?: { ticker: string; name?: string; price: number; change: number; change_pct: number } | null
 }

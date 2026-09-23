@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import type { AnalyzeData } from '../components/SignalCard'
 import { api } from './api'
 import { useSession } from './auth'
 import { useWebSocket } from './ws'
@@ -9,7 +10,7 @@ export interface StoredMessage {
   role: 'user' | 'assistant'
   content: string
   time?: string
-  meta?: { taste?: boolean; limitReached?: boolean }
+  meta?: { taste?: boolean; limitReached?: boolean; card?: AnalyzeData }
 }
 
 export interface Chat {

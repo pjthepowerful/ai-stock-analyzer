@@ -65,10 +65,11 @@ export function ChatScreen({ onNavigateAnalyze }: Props) {
       if (res.type === 'scan_started') {
         startScan(chatId, res.scan_id ?? '')
       } else {
+        const card = res.trade_signal && res.quote ? { ...res.quote, signal: res.trade_signal } : undefined
         append(chatId, {
           role: 'assistant',
           content: res.message,
-          meta: { taste: res.taste, limitReached: res.limit_reached },
+          meta: { taste: res.taste, limitReached: res.limit_reached, card },
         })
       }
     } catch (e) {

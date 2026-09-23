@@ -1,10 +1,12 @@
+import { SignalCard } from '../../components/SignalCard'
+import type { StoredMessage } from '../../lib/chats'
 import { useChrome } from '../../lib/chrome'
 import { formatMessage } from '../../lib/format'
 
 interface Props {
   role: 'user' | 'assistant'
   content: string
-  meta?: { taste?: boolean; limitReached?: boolean }
+  meta?: StoredMessage['meta']
 }
 
 export function MessageBubble({ role, content, meta }: Props) {
@@ -20,6 +22,11 @@ export function MessageBubble({ role, content, meta }: Props) {
   return (
     <div className="msg-row msg-row-assistant">
       <div className="msg-assistant-text" dangerouslySetInnerHTML={{ __html: formatMessage(content) }} />
+      {meta?.card && (
+        <div className="msg-card">
+          <SignalCard data={meta.card} />
+        </div>
+      )}
       {meta?.taste && (
         <div className="msg-upsell">
           Full breakdown — entry/stop/target, chart, reasoning — is part of Paula Plus.{' '}

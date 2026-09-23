@@ -70,6 +70,19 @@ def _ai_unavailable(raw: str) -> str:
     return "Paula couldn't generate an answer just now. Try again in a moment."
 
 
+def _quote(result: Optional[dict]) -> Optional[dict]:
+    if not result or result.get("type") != "analysis" or not result.get("trade_signal"):
+        return None
+    d = result.get("data") or {}
+    return {
+        "ticker": (result.get("ticker") or d.get("ticker") or "").upper(),
+        "name": d.get("name"),
+        "price": d.get("price", 0),
+        "change": d.get("change", 0),
+        "change_pct": d.get("change_pct", 0),
+    }
+
+
 def taste_analysis(result: dict) -> dict:
     """Free/guest users get the headline numbers from a deep analysis, not the
     full breakdown (entry/stop/target, chart, reasoning) — that's Plus."""
@@ -222,6 +235,9 @@ async def build_response(
         "ticker": (result or {}).get("ticker"),
         "tickers": [],
         "trade_signal": (result or {}).get("trade_signal"),
+        # Headline numbers for the structured signal card shown under the
+        # reply (only present for full, non-taste analyses).
+        "quote": _quote(result),
         "signal_data": (result or {}).get("signal_data"),
         "table": (result or {}).get("data") if result and result.get("type") == "list" else None,
         "autopilot": False,
