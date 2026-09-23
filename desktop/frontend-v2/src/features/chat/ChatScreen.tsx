@@ -4,6 +4,7 @@ import { useSession } from '../../lib/auth'
 import { NEW_TITLE, useChats } from '../../lib/chats'
 import { useChrome } from '../../lib/chrome'
 import { ChatList } from './ChatList'
+import { MarketStrip } from './MarketStrip'
 import { MessageBubble } from './MessageBubble'
 import './chat.css'
 
@@ -85,6 +86,7 @@ export function ChatScreen({ onNavigateAnalyze }: Props) {
       <ChatList />
 
       <div className="chat-main">
+        <MarketStrip />
         <div className="chat-body" ref={listRef}>
           {messages.length === 0 && (
             <div className="chat-empty">

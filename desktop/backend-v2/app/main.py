@@ -15,6 +15,7 @@ from .routers import chat as chat_router
 from .routers import chats as chats_router
 from .routers import earnings as earnings_router
 from .routers import market as market_router
+from .routers import overview as overview_router
 from .routers import plus as plus_router
 from .ws import manager
 
@@ -32,6 +33,7 @@ app.include_router(auth_router.router)
 app.include_router(chat_router.router)
 app.include_router(chats_router.router)
 app.include_router(market_router.router)
+app.include_router(overview_router.router)
 app.include_router(chart_router.router)
 app.include_router(autopilot_router.router)
 app.include_router(earnings_router.router)
