@@ -220,6 +220,18 @@
   .earn-company {
     display: none;
   }
+
+  .earn-cell-count-word {
+    display: none;
+  }
+
+  .earn-head {
+    flex-wrap: wrap;
+  }
+
+  .earn-title {
+    font-size: var(--text-xl);
+  }
 }
 
 /* ── Mode switch ── */

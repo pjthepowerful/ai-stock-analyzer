@@ -188,7 +188,10 @@ export function EarningsScreen() {
                   {rows.length > 0 && (
                     <>
                       <span className="earn-cell-tickers mono">{biggest.map((r) => r.ticker).join(' ')}</span>
-                      <span className="earn-cell-count">{rows.length} reporting</span>
+                      <span className="earn-cell-count">
+                        {rows.length}
+                        <span className="earn-cell-count-word"> reporting</span>
+                      </span>
                 </>
               )}
             </button>

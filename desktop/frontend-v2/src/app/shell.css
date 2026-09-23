@@ -15,6 +15,7 @@
 }
 
 .shell-logo {
+  flex-shrink: 0;
   width: 26px;
   height: 26px;
   border-radius: var(--radius-sm);
@@ -124,4 +125,41 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
+}
+
+/* Phone: two rows — brand + actions on top, a swipeable tab row below. */
+@media (max-width: 760px) {
+  .shell-header {
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-3);
+    padding: var(--space-2) var(--space-4) 0;
+  }
+
+  .shell-badge,
+  .shell-user {
+    display: none;
+  }
+
+  .shell-tabs {
+    order: 10;
+    width: calc(100% + 2 * var(--space-4));
+    margin: 0 calc(-1 * var(--space-4));
+    padding: 0 var(--space-3) var(--space-1);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .shell-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .shell-tab {
+    flex-shrink: 0;
+  }
+
+  .shell-quiet,
+  .shell-upgrade {
+    font-size: var(--text-xs);
+    white-space: nowrap;
+  }
 }
