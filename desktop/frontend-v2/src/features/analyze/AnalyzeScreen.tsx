@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Chart } from '../../components/Chart'
 import { SignalCard, type AnalyzeData } from '../../components/SignalCard'
 import { api, ApiError } from '../../lib/api'
+import { ResearchPanel } from './ResearchPanel'
 import './analyze.css'
 
 interface AnalyzeApiResponse {
@@ -61,6 +62,7 @@ export function AnalyzeScreen() {
         <div className="analyze-result">
           <SignalCard data={result} />
           <Chart ticker={result.ticker} height={340} />
+          <ResearchPanel ticker={result.ticker} />
         </div>
       )}
 

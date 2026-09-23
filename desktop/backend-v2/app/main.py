@@ -17,6 +17,7 @@ from .routers import earnings as earnings_router
 from .routers import market as market_router
 from .routers import overview as overview_router
 from .routers import plus as plus_router
+from .routers import research as research_router
 from .ws import manager
 
 app = FastAPI(title="Paula v2", default_response_class=SafeJSONResponse)
@@ -38,6 +39,7 @@ app.include_router(chart_router.router)
 app.include_router(autopilot_router.router)
 app.include_router(earnings_router.router)
 app.include_router(plus_router.router)
+app.include_router(research_router.router)
 app.include_router(admin_router.router)
 
 
