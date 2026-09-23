@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { api } from '../../lib/api'
 import { Performance } from './Performance'
 import './portfolio.css'
@@ -42,30 +42,32 @@ interface Benchmark {
 }
 
 export function PortfolioScreen() {
-  const [account, setAccount] = useState<Account | null>(null)
-  const [positions, setPositions] = useState<Position[]>([])
-  const [benchmark, setBenchmark] = useState<Benchmark | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [exposure, setExposure] = useState<Exposure | null>(null)
+  // Cached across tab switches (staleTime from the QueryClient defaults), so
+  // coming back to Portfolio doesn't re-wait on four broker round trips.
+  const accountQ = useQuery({
+    queryKey: ['account'],
+    queryFn: () => api.get<{ ok: boolean; data: Account }>('/api/account').then((r) => r.data),
+  })
+  const positionsQ = useQuery({
+    queryKey: ['positions'],
+    queryFn: () => api.get<{ ok: boolean; data: Position[] }>('/api/positions').then((r) => r.data),
+  })
+  const benchmarkQ = useQuery({
+    queryKey: ['benchmark'],
+    queryFn: () => api.get<Benchmark>('/api/portfolio/benchmark'),
+    retry: false,
+  })
+  const exposureQ = useQuery({
+    queryKey: ['exposure'],
+    queryFn: () => api.get<Exposure>('/api/research/exposure'),
+    retry: false,
+  })
 
-  useEffect(() => {
-    api
-      .get<{ ok: boolean; data: Account }>('/api/account')
-      .then((r) => setAccount(r.data))
-      .catch(() => setError('Could not reach your brokerage account.'))
-    api
-      .get<{ ok: boolean; data: Position[] }>('/api/positions')
-      .then((r) => setPositions(r.data))
-      .catch(() => {})
-    api
-      .get<Benchmark>('/api/portfolio/benchmark')
-      .then(setBenchmark)
-      .catch(() => {})
-    api
-      .get<Exposure>('/api/research/exposure')
-      .then(setExposure)
-      .catch(() => {})
-  }, [])
+  const account = accountQ.data ?? null
+  const positions = positionsQ.data ?? []
+  const benchmark = benchmarkQ.data ?? null
+  const exposure = exposureQ.data ?? null
+  const error = accountQ.error ? 'Could not reach your brokerage account.' : null
 
   return (
     <div className="portfolio-screen">

@@ -5,7 +5,8 @@
    research (Perplexity Finance, Linear, Mercury, Raycast) behind these
    choices. */
 
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+/* Fonts are linked from index.html (preconnect + stylesheet) so the browser
+   fetches them in parallel with the app instead of after this file parses. */
 
 :root {
   /* ── Color: cool near-black, single accent ── */
