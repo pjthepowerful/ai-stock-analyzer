@@ -64,3 +64,16 @@ def admin_required(authorization: Optional[str] = Header(None)) -> dict:
     if not is_admin(user):
         raise HTTPException(status_code=403, detail="Admin only")
     return user
+
+
+def in_request_context(fn, *args, **kwargs):
+    """Bind fn to a copy of the current context for run_in_executor.
+
+    Per-user Alpaca creds live in a contextvar (engine.set_alpaca_creds), and
+    executor threads don't inherit contextvars — without this, account and
+    position lookups made inside an executor silently hit the shared account
+    instead of the signed-in user's own."""
+    import contextvars
+    import functools
+
+    return functools.partial(contextvars.copy_context().run, fn, *args, **kwargs)

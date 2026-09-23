@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Header, HTTPException
 
 from ..bridge import engine
-from ..deps import current_user_required
+from ..deps import current_user_required, in_request_context
 from .earnings import _progress_emitter
 
 router = APIRouter(prefix="/api", tags=["research"])
@@ -106,7 +106,7 @@ async def _build_upcoming(days: int, limit: int) -> dict:
                 "note": f"Nothing in the calendar reports in the next {days} days — rebuild the calendar."}
     loop = asyncio.get_running_loop()
     emit = _progress_emitter("forecast", loop)
-    rows = await loop.run_in_executor(None, lambda: fc.rank(names[:40], limit=limit, progress=emit))
+    rows = await loop.run_in_executor(None, in_request_context(fc.rank, names[:40], limit=limit, progress=emit))
     return {"ok": True, "rows": rows, "scanned": min(len(names), 40)}
 
 
@@ -137,7 +137,7 @@ async def _build_candidates(limit: int) -> dict:
     emit = _progress_emitter("research", loop)
     rows = await loop.run_in_executor(
         None,
-        lambda: res.rank(names[:60], equity=acct.get("equity"), prices=prices, limit=limit, progress=emit),
+        in_request_context(res.rank, names[:60], equity=acct.get("equity"), prices=prices, limit=limit, progress=emit),
     )
     return {"ok": True, "candidates": [_fix_sec_note(r) for r in rows], "scanned": min(len(names), 60), "equity": acct.get("equity")}
 

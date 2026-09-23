@@ -11,14 +11,13 @@ and deliver the result over the WebSocket as a `scan_result` event, returning
 an immediate `scan_started` ack from the HTTP call itself.
 """
 import asyncio
-import functools
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 from fastapi import APIRouter, Header
 
 from ..bridge import auth, engine
-from ..deps import current_user_optional, is_admin
+from ..deps import current_user_optional, in_request_context, is_admin
 from ..models.chat import ChatRequest
 from ..services import chat_orchestrator as orch
 from ..ws import manager
@@ -77,7 +76,7 @@ async def chat(req: ChatRequest, authorization: str = Header(None)):
         return await _start_scan(intent, user_id, is_plus)
 
     loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(_light_executor, functools.partial(engine.execute, intent, is_plus=is_plus))
+    result = await loop.run_in_executor(_light_executor, in_request_context(engine.execute, intent, is_plus=is_plus))
     return await orch.build_response(loop, user_msg, intent, result, chat_history, user, is_plus)
 
 
@@ -92,7 +91,7 @@ async def _start_scan(intent: dict, user_id: int, is_plus: bool):
     async def _run_scan():
         try:
             res = await asyncio.wait_for(
-                loop.run_in_executor(_scan_executor, functools.partial(engine.execute, intent, progress_cb=prog, is_plus=is_plus)),
+                loop.run_in_executor(_scan_executor, in_request_context(engine.execute, intent, progress_cb=prog, is_plus=is_plus)),
                 timeout=240,
             )
             msg_out = res.get("msg", "") if res and res.get("ok") else orch.friendly_error((res or {}).get("error", ""))

@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 from typing import Optional
 
 from ..bridge import auth, engine
+from ..deps import in_request_context
 
 KNOWN_TICKERS = set([
     "AAPL","MSFT","NVDA","GOOGL","AMZN","META","TSLA","AMD","NFLX","SPY","QQQ","JPM","V","BA","HD",
@@ -161,7 +162,7 @@ async def build_response(
                             amsg = user_msg + f"\n\n[LIVE NEWS (use these recent headlines, cite dates):\n{al}\n]"
                     except Exception:
                         pass
-                ai_text = await loop.run_in_executor(None, engine.ai_response, amsg, result.get("data"), chat_history, "US")
+                ai_text = await loop.run_in_executor(None, in_request_context(engine.ai_response), amsg, result.get("data"), chat_history, "US")
                 data = result.get("data", {})
                 ticker = result.get("ticker", "")
                 resp = ai_text
@@ -170,14 +171,14 @@ async def build_response(
                     resp = _fix_prices(resp, price)
 
         elif rtype == "position_size":
-            resp = await loop.run_in_executor(None, engine.ai_response, user_msg, {"position_size": result.get("data", {})}, chat_history, "US")
+            resp = await loop.run_in_executor(None, in_request_context(engine.ai_response), user_msg, {"position_size": result.get("data", {})}, chat_history, "US")
 
         elif rtype == "compare":
-            resp = await loop.run_in_executor(None, engine.ai_response, user_msg, result.get("data", {}), chat_history, "US")
+            resp = await loop.run_in_executor(None, in_request_context(engine.ai_response), user_msg, result.get("data", {}), chat_history, "US")
 
         elif rtype == "list":
             resp = await loop.run_in_executor(
-                None, engine.ai_response, user_msg,
+                None, in_request_context(engine.ai_response), user_msg,
                 {"list_title": result.get("title", ""), "stocks": result.get("data", [])},
                 chat_history, "US",
             )
@@ -292,7 +293,7 @@ async def _generic_reply(loop, user_msg: str, result: Optional[dict], chat_histo
         except Exception:
             pass
 
-    return await loop.run_in_executor(None, engine.ai_response, umsg, chat_data if chat_data else None, chat_history, "US")
+    return await loop.run_in_executor(None, in_request_context(engine.ai_response), umsg, chat_data if chat_data else None, chat_history, "US")
 
 
 async def _fallback_reply(loop, user_msg: str, result: Optional[dict], chat_history: list) -> str:
@@ -337,4 +338,4 @@ async def _fallback_reply(loop, user_msg: str, result: Optional[dict], chat_hist
         except Exception:
             pass
 
-    return await loop.run_in_executor(None, engine.ai_response, fmsg, fall_data, chat_history, "US")
+    return await loop.run_in_executor(None, in_request_context(engine.ai_response), fmsg, fall_data, chat_history, "US")
