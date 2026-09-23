@@ -9,7 +9,7 @@ from fastapi import APIRouter, Header, HTTPException
 
 import os
 
-from ..bridge import auth
+from ..bridge import auth, engine
 from ..deps import current_user_required, is_admin
 from ..models.auth import (
     LoginRequest,
@@ -129,25 +129,90 @@ def me(authorization: str = Header(None)):
 @router.get("/settings")
 def get_settings(authorization: str = Header(None)):
     user = current_user_required(authorization)
-    return {"ok": True, **auth.get_settings(user["id"])}
+    raw = auth.get_settings(user["id"])
+    # auth.get_settings() returns the Groq/Polygon keys in plain text. Never
+    # send a stored secret back to the browser — only whether one is set.
+    return {
+        "ok": True,
+        "display_name": raw.get("display_name", ""),
+        "settings": raw.get("settings", {}),
+        "alpaca_connected": bool(raw.get("alpaca_key_set") and raw.get("alpaca_secret_set")),
+        "groq_key_set": bool(raw.get("groq_key")),
+        "polygon_key_set": bool(raw.get("polygon_key")),
+    }
+
+
+def _alpaca_check(key_id: str, secret: str) -> dict:
+    """Read-only probe of a key pair against Alpaca's account endpoint."""
+    import requests
+
+    try:
+        r = requests.get(
+            f"{engine.ALPACA_BASE}/v2/account",
+            headers={"APCA-API-KEY-ID": key_id, "APCA-API-SECRET-KEY": secret},
+            timeout=8,
+        )
+    except Exception:
+        return {"ok": False, "error": "Couldn't reach Alpaca — try again in a moment."}
+    if r.status_code in (401, 403):
+        return {"ok": False, "error": "Alpaca rejected those keys. Paula uses paper trading — use your paper account's keys."}
+    if r.status_code != 200:
+        return {"ok": False, "error": f"Alpaca returned {r.status_code}."}
+    acct = r.json()
+    return {"ok": True, "equity": float(acct.get("equity") or 0), "account_number": acct.get("account_number")}
 
 
 @router.post("/settings")
 def save_settings(req: SettingsRequest, authorization: str = Header(None)):
     user = current_user_required(authorization)
-    is_plus = auth.is_plus(user["id"]) or is_admin(user)
-    payload = req.dict()
-    if not is_plus:
-        # Connections (broker/data API keys) are Plus-only. The UI hides
-        # them, but the endpoint enforces it too so a direct POST can't
-        # bypass the paywall.
-        for k in ("alpaca_key", "alpaca_secret", "groq_key", "polygon_key"):
-            payload.pop(k, None)
-        return auth.save_settings(user["id"], payload)
+    current = auth.get_settings(user["id"])
 
-    result = auth.save_settings(user["id"], payload)
-    if req.alpaca_key:
-        os.environ["ALPACA_KEY_ID"] = req.alpaca_key
-    if req.alpaca_secret:
-        os.environ["ALPACA_SECRET"] = req.alpaca_secret
+    # auth.save_settings() overwrites display_name and settings_json every
+    # time, so fill in anything the client didn't send from what's stored —
+    # otherwise saving a key would blank your name, and saving your name
+    # would wipe your preferences.
+    payload = {
+        "display_name": req.display_name if req.display_name is not None else current.get("display_name", ""),
+        "settings": {**current.get("settings", {}), **(req.settings or {})},
+        "alpaca_key": "",
+        "alpaca_secret": "",
+        "groq_key": "",
+        "polygon_key": "",
+    }
+
+    wants_keys = any((req.alpaca_key, req.alpaca_secret, req.groq_key, req.polygon_key))
+    if wants_keys and not (auth.is_plus(user["id"]) or is_admin(user)):
+        raise HTTPException(403, "Connecting your own accounts is part of Paula Plus.")
+
+    result: dict = {"ok": True}
+    if req.alpaca_key or req.alpaca_secret:
+        if not (req.alpaca_key and req.alpaca_secret):
+            raise HTTPException(422, "Enter both the Alpaca key ID and secret.")
+        check = _alpaca_check(req.alpaca_key.strip(), req.alpaca_secret.strip())
+        if not check["ok"]:
+            raise HTTPException(422, check["error"])
+        payload["alpaca_key"] = req.alpaca_key.strip()
+        payload["alpaca_secret"] = req.alpaca_secret.strip()
+        result["alpaca"] = {"equity": check["equity"]}
+    if req.groq_key:
+        payload["groq_key"] = req.groq_key.strip()
+    if req.polygon_key:
+        payload["polygon_key"] = req.polygon_key.strip()
+
+    # Note: the original also copied the keys into os.environ, which made one
+    # user's broker account the fallback for every other user and guest.
+    # Per-request creds (deps._resolve_user) already cover the owner.
+    auth.save_settings(user["id"], payload)
     return result
+
+
+@router.delete("/connections/alpaca")
+def disconnect_alpaca(authorization: str = Header(None)):
+    user = current_user_required(authorization)
+    db = auth._get_db()
+    try:
+        db.execute("UPDATE user_settings SET alpaca_key = NULL, alpaca_secret = NULL WHERE user_id = ?", (user["id"],))
+        db.commit()
+    finally:
+        db.close()
+    return {"ok": True}

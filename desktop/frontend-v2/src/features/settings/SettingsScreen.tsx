@@ -22,9 +22,8 @@ interface ModesResponse {
 
 interface UserSettings {
   ok: boolean
-  display_name?: string
-  alpaca_key_set?: boolean
-  alpaca_secret_set?: boolean
+  display_name: string
+  alpaca_connected: boolean
 }
 
 export function SettingsScreen() {
@@ -32,6 +31,8 @@ export function SettingsScreen() {
   const { openPlus } = useChrome()
   const [displayName, setDisplayName] = useState('')
   const [saved, setSaved] = useState(false)
+  const [nameError, setNameError] = useState<string | null>(null)
+  const [alpacaConnected, setAlpacaConnected] = useState(false)
   const [modes, setModes] = useState<ModesResponse | null>(null)
   const [diagnostics, setDiagnostics] = useState<string | null>(null)
   const [diagBusy, setDiagBusy] = useState(false)
@@ -39,17 +40,21 @@ export function SettingsScreen() {
 
   useEffect(() => {
     if (isGuest) return
-    api.get<UserSettings>('/api/auth/settings').then((s) => setDisplayName(s.display_name ?? ''))
+    api.get<UserSettings>('/api/auth/settings').then((s) => {
+      setDisplayName(s.display_name ?? '')
+      setAlpacaConnected(s.alpaca_connected)
+    })
     api.get<ModesResponse>('/api/autopilot/modes').then(setModes)
   }, [isGuest])
 
   async function saveName() {
+    setNameError(null)
     try {
-      await api.post('/api/auth/settings', { display_name: displayName })
+      await api.post('/api/auth/settings', { display_name: displayName.trim() })
       setSaved(true)
       setTimeout(() => setSaved(false), 1500)
-    } catch {
-      /* surfaced implicitly by nothing changing — acceptable for this preview */
+    } catch (e) {
+      setNameError(e instanceof ApiError ? e.message : 'Could not save.')
     }
   }
 
@@ -95,6 +100,7 @@ export function SettingsScreen() {
             </button>
           </div>
         </div>
+        {nameError && <div className="settings-diag-error">{nameError}</div>}
         <div className="settings-row">
           <span className="settings-row-label">Plan</span>
           <span className="settings-row-value settings-plan">
@@ -139,8 +145,8 @@ export function SettingsScreen() {
 
       <section className="settings-section">
         <h2 className="settings-section-title">Connections</h2>
-        {user?.plus ? (
-          <p className="settings-section-note">Broker and data-feed keys — manage in your account.</p>
+        {user?.plus || user?.is_admin ? (
+          <AlpacaConnection connected={alpacaConnected} onChange={setAlpacaConnected} />
         ) : (
           <button className="settings-locked" onClick={openPlus}>
             <span>Connect your own Alpaca account</span>
@@ -149,5 +155,114 @@ export function SettingsScreen() {
         )}
       </section>
     </div>
+  )
+}
+
+function AlpacaConnection({ connected, onChange }: { connected: boolean; onChange: (c: boolean) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [keyId, setKeyId] = useState('')
+  const [secret, setSecret] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [equity, setEquity] = useState<number | null>(null)
+
+  async function connect(e: React.FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await api.post<{ alpaca?: { equity: number } }>('/api/auth/settings', {
+        alpaca_key: keyId.trim(),
+        alpaca_secret: secret.trim(),
+      })
+      setEquity(res.alpaca?.equity ?? null)
+      setKeyId('')
+      setSecret('')
+      setEditing(false)
+      onChange(true)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not connect.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function disconnect() {
+    setBusy(true)
+    setError(null)
+    try {
+      await api.del('/api/auth/connections/alpaca')
+      setEquity(null)
+      onChange(false)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not disconnect.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (connected && !editing) {
+    return (
+      <div className="settings-conn">
+        <div className="settings-row">
+          <span className="settings-row-label">Alpaca (paper)</span>
+          <span className="settings-row-value settings-conn-on">
+            Connected
+            {equity != null && (
+              <span className="mono"> · ${equity.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+            )}
+          </span>
+        </div>
+        <div className="settings-conn-actions">
+          <button className="settings-save" onClick={() => setEditing(true)} disabled={busy}>
+            Replace keys
+          </button>
+          <button className="settings-conn-remove" onClick={disconnect} disabled={busy}>
+            Disconnect
+          </button>
+        </div>
+        {error && <div className="settings-diag-error">{error}</div>}
+      </div>
+    )
+  }
+
+  return (
+    <form className="settings-conn" onSubmit={connect}>
+      <p className="settings-section-note">
+        Trade your own Alpaca paper account instead of the shared one. Keys are checked with Alpaca before saving and
+        stored encrypted; Paula never shows them again.
+      </p>
+      <label className="settings-field">
+        <span>API key ID</span>
+        <input
+          className="settings-input mono"
+          value={keyId}
+          onChange={(e) => setKeyId(e.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </label>
+      <label className="settings-field">
+        <span>Secret key</span>
+        <input
+          className="settings-input mono"
+          type="password"
+          value={secret}
+          onChange={(e) => setSecret(e.target.value)}
+          autoComplete="new-password"
+        />
+      </label>
+      <div className="settings-conn-actions">
+        <button className="settings-save" type="submit" disabled={busy || !keyId.trim() || !secret.trim()}>
+          {busy ? 'Checking with Alpaca…' : 'Connect'}
+        </button>
+        {editing && (
+          <button type="button" className="settings-conn-remove" onClick={() => setEditing(false)}>
+            Cancel
+          </button>
+        )}
+      </div>
+      {error && <div className="settings-diag-error">{error}</div>}
+    </form>
   )
 }
