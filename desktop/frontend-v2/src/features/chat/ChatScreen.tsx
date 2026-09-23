@@ -63,7 +63,7 @@ export function ChatScreen({ onNavigateAnalyze }: Props) {
     try {
       const res = await api.post<ChatResponse>('/api/chat', { message: trimmed, history })
       if (res.type === 'scan_started') {
-        startScan(chatId)
+        startScan(chatId, res.scan_id ?? '')
       } else {
         append(chatId, {
           role: 'assistant',

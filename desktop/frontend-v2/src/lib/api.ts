@@ -82,4 +82,5 @@ export interface ChatResponse {
   taste?: boolean
   plus_upsell?: boolean
   limit_reached?: boolean
+  scan_id?: string
 }

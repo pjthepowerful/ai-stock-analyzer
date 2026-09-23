@@ -28,6 +28,7 @@ interface SyncResponse {
 
 export interface ScanState {
   chatId: string
+  scanId: string
   pct: number
   label: string
 }
@@ -35,7 +36,7 @@ export interface ScanState {
 interface Chats {
   scan: ScanState | null
   /** Marks a server-side scan as running on behalf of this chat. */
-  startScan: (chatId: string) => void
+  startScan: (chatId: string, scanId: string) => void
   chats: Chat[]
   active: Chat | null
   select: (id: string) => void
@@ -237,21 +238,23 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
   // here (not in ChatScreen) means the result still lands in the chat that
   // started it after you switch chats or tabs.
   const [scan, setScan] = useState<ScanState | null>(null)
-  const scanChatRef = useRef<string | null>(null)
-  const startScan = useCallback((chatId: string) => {
-    scanChatRef.current = chatId
-    setScan({ chatId, pct: 0, label: 'Starting…' })
+  const scanRef = useRef<{ chatId: string; scanId: string } | null>(null)
+  const startScan = useCallback((chatId: string, scanId: string) => {
+    scanRef.current = { chatId, scanId }
+    setScan({ chatId, scanId, pct: 0, label: 'Starting…' })
   }, [])
 
   useWebSocket((e) => {
+    // Scan events are broadcast to every client; only act on our own scan.
+    const mine = scanRef.current
+    if (!mine || e.data.scan_id !== mine.scanId) return
     if (e.event === 'scan_progress') {
       setScan((s) => (s ? { ...s, pct: Number(e.data.pct ?? 0), label: String(e.data.label ?? '') } : s))
     }
     if (e.event === 'scan_result') {
-      const chatId = scanChatRef.current
-      scanChatRef.current = null
+      scanRef.current = null
       setScan(null)
-      if (chatId) append(chatId, { role: 'assistant', content: String(e.data.message ?? '') })
+      append(mine.chatId, { role: 'assistant', content: String(e.data.message ?? '') })
     }
   })
 

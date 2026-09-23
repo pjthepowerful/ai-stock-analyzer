@@ -34,10 +34,10 @@ def _is_plus_or_exempt(user: Optional[dict]) -> bool:
     return bool(auth.is_plus(user["id"]) or is_admin(user))
 
 
-def _make_progress_cb(loop: asyncio.AbstractEventLoop):
+def _make_progress_cb(loop: asyncio.AbstractEventLoop, scan_id: str):
     def _cb(phase: str, pct: float, label: str = ""):
         asyncio.run_coroutine_threadsafe(
-            manager.broadcast("scan_progress", {"phase": phase, "pct": pct, "label": label}), loop,
+            manager.broadcast("scan_progress", {"scan_id": scan_id, "phase": phase, "pct": pct, "label": label}), loop,
         )
     return _cb
 
@@ -124,8 +124,13 @@ async def chat(req: ChatRequest, request: Request, authorization: str = Header(N
 
 
 async def _start_scan(intent: dict, user_id: int, is_plus: bool):
+    # Scan events go out on the shared broadcast channel; the id lets each
+    # client pick out its own scan instead of taking whichever finishes first.
+    import uuid
+
+    scan_id = uuid.uuid4().hex[:12]
     loop = asyncio.get_event_loop()
-    prog = _make_progress_cb(loop)
+    prog = _make_progress_cb(loop, scan_id)
 
     prev = _active_scans.pop(user_id, None)
     if prev and not prev.done():
@@ -144,18 +149,18 @@ async def _start_scan(intent: dict, user_id: int, is_plus: bool):
                     auth.save_chat(user_id, "assistant", msg_out)
                 except Exception:
                     pass
-            await manager.broadcast("scan_result", {"ok": bool(res and res.get("ok")), "message": msg_out, "tickers": tickers_out})
+            await manager.broadcast("scan_result", {"scan_id": scan_id, "ok": bool(res and res.get("ok")), "message": msg_out, "tickers": tickers_out})
         except asyncio.CancelledError:
             raise
         except asyncio.TimeoutError:
-            await manager.broadcast("scan_result", {"ok": False, "message": "The scan is taking longer than usual — try again in a moment."})
+            await manager.broadcast("scan_result", {"scan_id": scan_id, "ok": False, "message": "The scan is taking longer than usual — try again in a moment."})
         except Exception as e:
-            await manager.broadcast("scan_result", {"ok": False, "message": orch.friendly_error(str(e))})
+            await manager.broadcast("scan_result", {"scan_id": scan_id, "ok": False, "message": orch.friendly_error(str(e))})
 
     task = asyncio.ensure_future(_run_scan())
     if user_id:
         _active_scans[user_id] = task
-    return {"ok": True, "type": "scan_started", "message": "Scanning the market…"}
+    return {"ok": True, "type": "scan_started", "scan_id": scan_id, "message": "Scanning the market…"}
 
 
 @router.post("/clear")
