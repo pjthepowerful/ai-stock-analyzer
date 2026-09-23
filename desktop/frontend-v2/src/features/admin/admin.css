@@ -367,3 +367,156 @@
     padding-left: 0;
   }
 }
+
+/* Strategy */
+.strat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.strat-block {
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-4);
+}
+
+.strat-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.strat-title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  margin: 0;
+}
+
+.strat-sub {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+  max-width: 60ch;
+}
+
+.strat-running {
+  flex-shrink: 0;
+  font-size: var(--text-2xs);
+  color: var(--accent-strong);
+}
+
+.strat-body {
+  margin-top: var(--space-4);
+}
+
+.strat-verdict {
+  display: flex;
+  gap: var(--space-3);
+  align-items: baseline;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-4);
+}
+
+.strat-badge {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  padding: 1px 8px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+}
+
+.strat-badge.warn {
+  color: var(--warning);
+}
+
+.strat-reasons {
+  margin: 0;
+  padding-left: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.strat-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  margin: 0 0 var(--space-4);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.strat-stats > div {
+  padding: var(--space-2) var(--space-3) var(--space-2) 0;
+}
+
+.strat-stats dt {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+.strat-stats dd {
+  margin: 2px 0 0;
+  font-size: var(--text-lg);
+}
+
+.strat-deciles {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: var(--space-2);
+  height: 140px;
+}
+
+.strat-decile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.strat-decile-track {
+  flex: 1;
+  position: relative;
+  background: linear-gradient(to bottom, transparent calc(50% - 0.5px), var(--border) calc(50% - 0.5px), var(--border) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+}
+
+.strat-decile-bar {
+  position: absolute;
+  left: 15%;
+  right: 15%;
+}
+
+.strat-up {
+  background: var(--positive);
+}
+
+.strat-down {
+  background: var(--negative);
+}
+
+.strat-decile-label {
+  text-align: center;
+  font-size: var(--text-2xs);
+  color: var(--text-dim);
+}
+
+.strat-axis,
+.strat-caveat {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-2xs);
+  color: var(--text-dim);
+}
+
+.strat-caveat {
+  font-style: italic;
+}
+
+.strat-small {
+  font-size: var(--text-2xs);
+  color: var(--text-dim);
+}

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api, ApiError, type ChatMessage } from '../../lib/api'
 import { useSession } from '../../lib/auth'
+import { StrategyPanel } from './StrategyPanel'
 import './admin.css'
 
 interface Stats {
@@ -39,7 +40,7 @@ interface FullReport extends ReportSummary {
   url: string
 }
 
-type Tab = 'users' | 'reports' | 'maintenance'
+type Tab = 'users' | 'reports' | 'strategy' | 'maintenance'
 
 function ago(iso: string | null): string {
   if (!iso) return '—'
@@ -88,7 +89,7 @@ export function AdminScreen() {
       )}
 
       <nav className="admin-tabs">
-        {(['users', 'reports', 'maintenance'] as Tab[]).map((t) => (
+        {(['users', 'reports', 'strategy', 'maintenance'] as Tab[]).map((t) => (
           <button key={t} className={'admin-tab' + (tab === t ? ' admin-tab-on' : '')} onClick={() => setTab(t)}>
             {t}
           </button>
@@ -97,6 +98,7 @@ export function AdminScreen() {
 
       {tab === 'users' && <UsersPanel />}
       {tab === 'reports' && <ReportsPanel />}
+      {tab === 'strategy' && <StrategyPanel />}
       {tab === 'maintenance' && s && (
         // Keyed so the draft message resets whenever the saved state changes.
         <MaintenancePanel key={`${s.maintenance.on}:${s.maintenance.message}`} current={s.maintenance} />
