@@ -123,7 +123,33 @@ async def chat(req: ChatRequest, request: Request, authorization: str = Header(N
     return await orch.build_response(loop, user_msg, intent, result, chat_history, user, is_plus)
 
 
+# A market scan takes ~15s and reads the same universe for everyone, so an
+# identical scan (same category/filters, same plan tier) inside a few minutes
+# is answered from the last run instead of re-downloading everything.
+_SCAN_TTL = 3 * 60
+_scan_cache: dict[str, tuple[float, str]] = {}
+
+
+def _scan_key(intent: dict, is_plus: bool) -> str:
+    import json
+
+    shape = {k: v for k, v in intent.items() if not k.startswith("_")}
+    return json.dumps([shape, is_plus], sort_keys=True, default=str)
+
+
 async def _start_scan(intent: dict, user_id: int, is_plus: bool):
+    import time
+
+    key = _scan_key(intent, is_plus)
+    hit = _scan_cache.get(key)
+    if hit and time.time() - hit[0] < _SCAN_TTL:
+        if user_id:
+            try:
+                auth.save_chat(user_id, "assistant", hit[1])
+            except Exception:
+                pass
+        return {"ok": True, "type": "chat", "message": hit[1], "cached_scan": True}
+
     # Scan events go out on the shared broadcast channel; the id lets each
     # client pick out its own scan instead of taking whichever finishes first.
     import uuid
@@ -143,6 +169,10 @@ async def _start_scan(intent: dict, user_id: int, is_plus: bool):
                 timeout=240,
             )
             msg_out = res.get("msg", "") if res and res.get("ok") else orch.friendly_error((res or {}).get("error", ""))
+            if res and res.get("ok") and msg_out:
+                import time as _t
+
+                _scan_cache[key] = (_t.time(), msg_out)
             tickers_out = (res or {}).get("tickers", []) if res and res.get("ok") else []
             if user_id:
                 try:
