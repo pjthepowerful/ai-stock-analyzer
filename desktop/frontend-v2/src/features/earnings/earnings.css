@@ -1,0 +1,223 @@
+.earn-screen {
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--space-6);
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.earn-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.earn-title {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  margin: 0;
+}
+
+.earn-nav {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.earn-nav button {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+}
+
+.earn-nav button:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.earn-note {
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+  margin: var(--space-2) 0 var(--space-4);
+}
+
+.earn-error {
+  color: var(--negative);
+  font-size: var(--text-sm);
+}
+
+/* Weekdays only: nothing reports on a Saturday, and dropping the weekend
+   columns gives each trading day real room. Hairline grid, not cards. */
+.earn-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+}
+
+.earn-dow {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  padding: var(--space-2) var(--space-3);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.earn-cell {
+  min-height: 84px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.earn-cell:hover:not(:disabled) {
+  background: var(--surface);
+}
+
+.earn-cell:disabled {
+  cursor: default;
+}
+
+.earn-cell-pad {
+  background: repeating-linear-gradient(135deg, transparent 0 6px, rgb(255 255 255 / 0.015) 6px 7px);
+}
+
+.earn-cell-on {
+  background: var(--surface-2);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.earn-cell-d {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.earn-cell-today .earn-cell-d {
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.earn-cell-empty .earn-cell-d {
+  color: var(--text-dim);
+}
+
+.earn-cell-tickers {
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.earn-cell-count {
+  margin-top: auto;
+  font-size: var(--text-2xs);
+  color: var(--text-dim);
+}
+
+.earn-day {
+  margin-top: var(--space-6);
+}
+
+.earn-day-title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  margin: 0 0 var(--space-3);
+}
+
+.earn-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.earn-table th {
+  text-align: left;
+  font-weight: 500;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  padding: var(--space-2) var(--space-3) var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.earn-table td {
+  padding: var(--space-2) var(--space-3) var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+  vertical-align: baseline;
+}
+
+.earn-table .num {
+  text-align: right;
+}
+
+.earn-ticker {
+  font-weight: 600;
+}
+
+.earn-company {
+  color: var(--text-secondary);
+}
+
+.earn-verdict {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-right: var(--space-2);
+  color: var(--text-dim);
+}
+
+.earn-verdict-candidate {
+  color: var(--positive);
+}
+
+.earn-verdict-watch {
+  color: var(--warning);
+}
+
+.earn-verdict-blocked,
+.earn-verdict-fade {
+  color: var(--negative);
+}
+
+.earn-reason {
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+}
+
+@media (max-width: 720px) {
+  .earn-screen {
+    padding: var(--space-4);
+  }
+
+  .earn-cell {
+    min-height: 56px;
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .earn-cell-tickers {
+    display: none;
+  }
+
+  .earn-company {
+    display: none;
+  }
+}

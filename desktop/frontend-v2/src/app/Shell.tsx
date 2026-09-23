@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { AdminScreen } from '../features/admin/AdminScreen'
 import { AnalyzeScreen } from '../features/analyze/AnalyzeScreen'
 import { ChatScreen } from '../features/chat/ChatScreen'
+import { EarningsScreen } from '../features/earnings/EarningsScreen'
 import { ReportSheet } from '../features/feedback/ReportSheet'
 import { PlusSheet } from '../features/plus/PlusSheet'
 import { PortfolioScreen } from '../features/portfolio/PortfolioScreen'
@@ -12,12 +13,13 @@ import { ChatsProvider } from '../lib/chats'
 import { ChromeContext, type Chrome } from '../lib/chrome'
 import './shell.css'
 
-type View = 'chat' | 'analyze' | 'portfolio' | 'settings' | 'admin'
+type View = 'chat' | 'analyze' | 'portfolio' | 'earnings' | 'settings' | 'admin'
 
 const TABS: { id: View; label: string }[] = [
   { id: 'chat', label: 'Chat' },
   { id: 'analyze', label: 'Analyze' },
   { id: 'portfolio', label: 'Portfolio' },
+  { id: 'earnings', label: 'Earnings' },
   { id: 'settings', label: 'Settings' },
 ]
 
@@ -81,6 +83,7 @@ export function Shell() {
             {view === 'chat' && <ChatScreen onNavigateAnalyze={() => setView('analyze')} />}
             {view === 'analyze' && <AnalyzeScreen />}
             {view === 'portfolio' && <PortfolioScreen />}
+            {view === 'earnings' && <EarningsScreen />}
             {view === 'settings' && <SettingsScreen />}
             {view === 'admin' && user?.is_admin && <AdminScreen />}
           </main>
