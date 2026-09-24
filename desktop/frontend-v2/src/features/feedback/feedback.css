@@ -1,18 +1,8 @@
 .fb-note {
-  width: 100%;
+  height: auto;
+  padding: var(--space-2) var(--space-3);
   resize: vertical;
-  font: inherit;
-  font-size: var(--text-sm);
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: var(--space-3);
-}
-
-.fb-note:focus {
-  outline: none;
-  border-color: var(--accent);
+  line-height: 1.5;
 }
 
 .fb-attach {
@@ -31,25 +21,6 @@
 
 .fb-submit {
   margin-top: var(--space-4);
-  padding: var(--space-2) var(--space-4);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--accent-strong);
-  font: inherit;
-  font-size: var(--text-sm);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.fb-submit:hover:not(:disabled) {
-  background: var(--accent);
-  color: var(--accent-ink);
-}
-
-.fb-submit:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 .fb-sent {

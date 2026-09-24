@@ -66,52 +66,68 @@ export function AdminScreen() {
   })
 
   if (stats.error instanceof ApiError && stats.error.status === 403) {
-    return <div className="admin-screen admin-denied">This area is owner-only.</div>
+    return (
+      <div className="page">
+        <div className="page-inner">
+          <p className="card empty">This area is owner-only.</p>
+        </div>
+      </div>
+    )
   }
 
   const s = stats.data
   return (
-    <div className="admin-screen">
-      <h1 className="admin-title">Admin</h1>
+    <div className="page">
+      <div className="page-inner">
+        <header className="page-head">
+          <div>
+            <h1 className="page-title">Admin</h1>
+            <p className="page-sub">Users, reports, strategy health and maintenance</p>
+          </div>
+          <div className="seg" role="tablist" aria-label="Section">
+            {(['users', 'reports', 'strategy', 'maintenance'] as Tab[]).map((t) => (
+              <button
+                key={t}
+                role="tab"
+                aria-selected={tab === t}
+                className={'seg-btn' + (tab === t ? ' seg-on' : '')}
+                onClick={() => setTab(t)}
+              >
+                {t[0].toUpperCase() + t.slice(1)}
+              </button>
+            ))}
+          </div>
+        </header>
 
-      <dl className="admin-stats">
-        <Stat label="Users" value={s?.total_users} />
-        <Stat label="Plus" value={s?.plus_users} />
-        <Stat label="Active 7d" value={s?.active_7d} />
-        <Stat label="Messages" value={s?.total_messages} />
-        <Stat label="Reports" value={s?.open_reports} warn={!!s?.open_reports} />
-      </dl>
+        <div className="grid-stats">
+          <Stat label="Users" value={s?.total_users} />
+          <Stat label="Plus" value={s?.plus_users} />
+          <Stat label="Active 7 days" value={s?.active_7d} />
+          <Stat label="Messages" value={s?.total_messages} />
+          <Stat label="Open reports" value={s?.open_reports} warn={!!s?.open_reports} />
+        </div>
 
-      {s?.maintenance.on && (
-        <p className="admin-maint-live">
-          Maintenance mode is ON — everyone but you sees the maintenance screen.
-        </p>
-      )}
+        {s?.maintenance.on && (
+          <p className="note-warn">Maintenance mode is on — everyone but you sees the maintenance screen.</p>
+        )}
 
-      <nav className="admin-tabs">
-        {(['users', 'reports', 'strategy', 'maintenance'] as Tab[]).map((t) => (
-          <button key={t} className={'admin-tab' + (tab === t ? ' admin-tab-on' : '')} onClick={() => setTab(t)}>
-            {t}
-          </button>
-        ))}
-      </nav>
-
-      {tab === 'users' && <UsersPanel />}
-      {tab === 'reports' && <ReportsPanel />}
-      {tab === 'strategy' && <StrategyPanel />}
-      {tab === 'maintenance' && s && (
-        // Keyed so the draft message resets whenever the saved state changes.
-        <MaintenancePanel key={`${s.maintenance.on}:${s.maintenance.message}`} current={s.maintenance} />
-      )}
+        {tab === 'users' && <UsersPanel />}
+        {tab === 'reports' && <ReportsPanel />}
+        {tab === 'strategy' && <StrategyPanel />}
+        {tab === 'maintenance' && s && (
+          // Keyed so the draft message resets whenever the saved state changes.
+          <MaintenancePanel key={`${s.maintenance.on}:${s.maintenance.message}`} current={s.maintenance} />
+        )}
+      </div>
     </div>
   )
 }
 
 function Stat({ label, value, warn }: { label: string; value: number | undefined; warn?: boolean }) {
   return (
-    <div className="admin-stat">
-      <dt>{label}</dt>
-      <dd className={'mono' + (warn ? ' admin-stat-warn' : '')}>{value ?? '·'}</dd>
+    <div className="card stat">
+      <span className="stat-label">{label}</span>
+      <span className={'stat-value' + (warn ? ' admin-stat-warn' : '')}>{value ?? '—'}</span>
     </div>
   )
 }
@@ -151,16 +167,16 @@ function UsersPanel() {
   const mutationError = setPlus.error ?? remove.error
 
   return (
-    <section>
+    <section className="card admin-panel">
       <input
-        className="admin-filter"
+        className="input admin-filter"
         placeholder="Filter by name or email"
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
       />
       {mutationError && <p className="admin-error">{mutationError.message}</p>}
       <div className="admin-table-wrap">
-        <table className="admin-table">
+        <table className="table admin-table">
           <thead>
             <tr>
               <th>User</th>
@@ -196,7 +212,7 @@ function UsersPanel() {
                     <span className="admin-dim">you</span>
                   ) : confirmDelete === u.id ? (
                     <>
-                      <button className="admin-danger" disabled={remove.isPending} onClick={() => remove.mutate(u.id)}>
+                      <button className="btn btn-danger btn-sm" disabled={remove.isPending} onClick={() => remove.mutate(u.id)}>
                         {remove.isPending ? 'Deleting…' : 'Delete for good'}
                       </button>
                       <button className="admin-link" onClick={() => setConfirmDelete(null)}>
@@ -241,7 +257,7 @@ function ReportsPanel() {
   if (reports.data.reports.length === 0) return <p className="admin-empty">No bug reports. Nice.</p>
 
   return (
-    <section className="admin-reports">
+    <section className="card admin-panel admin-reports">
       {remove.error && <p className="admin-error">{remove.error.message}</p>}
       {reports.data.reports.map((r) => (
         <article key={r.id} className={'admin-report' + (openId === r.id ? ' admin-report-open' : '')}>
@@ -283,7 +299,7 @@ function ReportDetail({ id, onDelete, deleting }: { id: string; onDelete: () => 
         <p className="admin-dim">No chat attached.</p>
       )}
       <p className="admin-report-ua mono">{r.user_agent}</p>
-      <button className="admin-danger" onClick={onDelete} disabled={deleting}>
+      <button className="btn btn-danger btn-sm" onClick={onDelete} disabled={deleting}>
         {deleting ? 'Deleting…' : 'Delete report'}
       </button>
     </div>
@@ -302,7 +318,7 @@ function MaintenancePanel({ current }: { current: { on: boolean; message: string
   })
 
   return (
-    <section className="admin-maint">
+    <section className="card admin-panel admin-maint">
       <p className="admin-dim">
         Takes the app offline for everyone except you. Open sessions flip instantly over the websocket.
       </p>
@@ -311,7 +327,7 @@ function MaintenancePanel({ current }: { current: { on: boolean; message: string
       </label>
       <input
         id="maint-msg"
-        className="admin-filter"
+        className="input admin-filter"
         placeholder="Back in about 15 minutes."
         value={message}
         maxLength={300}
@@ -320,7 +336,7 @@ function MaintenancePanel({ current }: { current: { on: boolean; message: string
       <div className="admin-maint-actions">
         {current.on ? (
           <>
-            <button className="admin-primary" disabled={save.isPending} onClick={() => save.mutate(false)}>
+            <button className="btn btn-primary" disabled={save.isPending} onClick={() => save.mutate(false)}>
               Bring the app back
             </button>
             <button className="admin-link" disabled={save.isPending} onClick={() => save.mutate(true)}>
@@ -328,7 +344,7 @@ function MaintenancePanel({ current }: { current: { on: boolean; message: string
             </button>
           </>
         ) : (
-          <button className="admin-danger" disabled={save.isPending} onClick={() => save.mutate(true)}>
+          <button className="btn btn-danger btn-sm" disabled={save.isPending} onClick={() => save.mutate(true)}>
             Turn maintenance on
           </button>
         )}

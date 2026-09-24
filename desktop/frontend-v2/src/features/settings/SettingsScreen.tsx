@@ -75,17 +75,30 @@ export function SettingsScreen() {
 
   if (isGuest) {
     return (
-      <div className="settings-screen">
-        <h1 className="settings-title">Settings</h1>
+      <div className="page">
+        <div className="page-inner page-inner-narrow">
+        <header className="page-head">
+          <div>
+            <h1 className="page-title">Settings</h1>
+            <p className="page-sub">Appearance, account and connections</p>
+          </div>
+        </header>
         <Appearance />
-        <p className="settings-guest-note">Sign in to manage your account, connections, and autopilot preferences.</p>
+        <p className="card empty">Sign in to manage your account, connections, and autopilot preferences.</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="settings-screen">
-      <h1 className="settings-title">Settings</h1>
+    <div className="page">
+      <div className="page-inner page-inner-narrow">
+      <header className="page-head">
+        <div>
+          <h1 className="page-title">Settings</h1>
+          <p className="page-sub">Appearance, account and connections</p>
+        </div>
+      </header>
 
       <Appearance />
 
@@ -98,8 +111,8 @@ export function SettingsScreen() {
         <div className="settings-row">
           <span className="settings-row-label">Display name</span>
           <div className="settings-row-input-group">
-            <input className="settings-input" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-            <button className="settings-save" onClick={saveName}>
+            <input className="input settings-name-input" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+            <button className="btn btn-secondary btn-sm" onClick={saveName}>
               {saved ? '✓ Saved' : 'Save'}
             </button>
           </div>
@@ -110,7 +123,7 @@ export function SettingsScreen() {
           <span className="settings-row-value settings-plan">
             {user?.plus ? 'Paula Plus' : 'Free'}
             {!user?.plus && (
-              <button className="settings-save" onClick={openPlus}>
+              <button className="btn btn-secondary btn-sm" onClick={openPlus}>
                 Upgrade
               </button>
             )}
@@ -142,7 +155,7 @@ export function SettingsScreen() {
                 ))}
               </div>
             )}
-            <button className="settings-diag-btn" onClick={runDiagnostics} disabled={diagBusy}>
+            <button className="btn btn-secondary" onClick={runDiagnostics} disabled={diagBusy}>
               {diagBusy ? 'Running…' : 'Why no trades? →'}
             </button>
             {diagnostics && <div className="settings-diag-result">{diagnostics}</div>}
@@ -162,6 +175,7 @@ export function SettingsScreen() {
           </button>
         )}
       </section>
+      </div>
     </div>
   )
 }
@@ -222,10 +236,10 @@ function AlpacaConnection({ connected, onChange }: { connected: boolean; onChang
           </span>
         </div>
         <div className="settings-conn-actions">
-          <button className="settings-save" onClick={() => setEditing(true)} disabled={busy}>
+          <button className="btn btn-secondary btn-sm" onClick={() => setEditing(true)} disabled={busy}>
             Replace keys
           </button>
-          <button className="settings-conn-remove" onClick={disconnect} disabled={busy}>
+          <button className="btn btn-ghost btn-sm" onClick={disconnect} disabled={busy}>
             Disconnect
           </button>
         </div>
@@ -243,7 +257,7 @@ function AlpacaConnection({ connected, onChange }: { connected: boolean; onChang
       <label className="settings-field">
         <span>API key ID</span>
         <input
-          className="settings-input mono"
+          className="input mono"
           value={keyId}
           onChange={(e) => setKeyId(e.target.value)}
           autoComplete="off"
@@ -253,7 +267,7 @@ function AlpacaConnection({ connected, onChange }: { connected: boolean; onChang
       <label className="settings-field">
         <span>Secret key</span>
         <input
-          className="settings-input mono"
+          className="input mono"
           type="password"
           value={secret}
           onChange={(e) => setSecret(e.target.value)}
@@ -261,11 +275,11 @@ function AlpacaConnection({ connected, onChange }: { connected: boolean; onChang
         />
       </label>
       <div className="settings-conn-actions">
-        <button className="settings-save" type="submit" disabled={busy || !keyId.trim() || !secret.trim()}>
+        <button className="btn btn-secondary btn-sm" type="submit" disabled={busy || !keyId.trim() || !secret.trim()}>
           {busy ? 'Checking with Alpaca…' : 'Connect'}
         </button>
         {editing && (
-          <button type="button" className="settings-conn-remove" onClick={() => setEditing(false)}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>
             Cancel
           </button>
         )}
@@ -282,13 +296,13 @@ function Appearance() {
       <h2 className="settings-section-title">Appearance</h2>
       <div className="settings-row">
         <span className="settings-row-label">Theme</span>
-        <div className="settings-seg" role="radiogroup" aria-label="Theme">
+        <div className="seg" role="radiogroup" aria-label="Theme">
           {(['light', 'dark'] as const).map((t) => (
             <button
               key={t}
               role="radio"
               aria-checked={theme === t}
-              className={'settings-seg-btn' + (theme === t ? ' settings-seg-on' : '')}
+              className={'seg-btn' + (theme === t ? ' seg-on' : '')}
               onClick={() => setTheme(t)}
             >
               {t === 'light' ? 'Light' : 'Dark'}

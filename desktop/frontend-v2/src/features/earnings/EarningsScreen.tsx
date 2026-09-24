@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { api } from '../../lib/api'
 import { useSession } from '../../lib/auth'
@@ -105,138 +106,181 @@ export function EarningsScreen() {
     setDay(null)
   }
 
+  const verdictBadge = (v: string) =>
+    v === 'candidate' ? 'badge-green' : v === 'watch' ? 'badge-amber' : v === 'blocked' || v === 'fade' ? 'badge-red' : ''
+
+  const head = (
+    <header className="page-head">
+      <div>
+        <h1 className="page-title">Earnings</h1>
+        <p className="page-sub">Who reports when, and Paula’s read on each</p>
+      </div>
+      {user && (
+        <div className="seg" role="tablist" aria-label="View">
+          {(['calendar', 'ideas'] as const).map((m) => (
+            <button
+              key={m}
+              role="tab"
+              aria-selected={mode === m}
+              className={'seg-btn' + (mode === m ? ' seg-on' : '')}
+              onClick={() => setMode(m)}
+            >
+              {m === 'calendar' ? 'Calendar' : 'Ideas'}
+            </button>
+          ))}
+        </div>
+      )}
+    </header>
+  )
+
   if (!user) {
     return (
-      <div className="earn-screen">
-        <h1 className="earn-title">Earnings</h1>
-        <p className="earn-note">Sign in to see who reports when, with Paula's read on each.</p>
+      <div className="page">
+        <div className="page-inner">
+          {head}
+          <p className="card empty">Sign in to see the earnings calendar and Paula’s read on each report.</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="earn-screen">
-      <nav className="earn-modes" role="tablist">
-        {(['calendar', 'ideas'] as const).map((m) => (
-          <button
-            key={m}
-            role="tab"
-            aria-selected={mode === m}
-            className={'earn-mode' + (mode === m ? ' earn-mode-on' : '')}
-            onClick={() => setMode(m)}
-          >
-            {m}
-          </button>
-        ))}
-      </nav>
+    <div className="page">
+      <div className="page-inner">
+        {head}
 
-      {mode === 'ideas' ? (
-        <IdeasPanel />
-      ) : (
-        <>
-          <header className="earn-head">
-            <h1 className="earn-title">{label}</h1>
-            <div className="earn-nav">
-              <button onClick={() => shift(-1)} aria-label="Previous month">
-                ←
-              </button>
-              <button onClick={() => setYm({ y: now.getFullYear(), m: now.getMonth() + 1 })}>today</button>
-              <button onClick={() => shift(1)} aria-label="Next month">
-                →
-              </button>
-              <button onClick={rebuild} disabled={!!building}>
-                {building
-                  ? building.total
-                    ? `rebuilding ${Math.round((building.done / building.total) * 100)}%`
-                    : 'rebuilding…'
-                  : 'rebuild'}
-              </button>
-            </div>
-          </header>
-          {month.data?.built_at && (
-            <p className="earn-note">
-              Calendar built {new Date(month.data.built_at).toLocaleString()}
-              {month.data.stale && ' — stale; rebuild to pick up new dates'}
-            </p>
-          )}
-          {month.error && <p className="earn-error">{month.error.message}</p>}
+        {mode === 'ideas' ? (
+          <IdeasPanel />
+        ) : (
+          <>
+            <section className="card">
+              <header className="card-head">
+                <div>
+                  <h2 className="card-title">{label}</h2>
+                  <p className="card-desc">
+                    {month.data?.built_at
+                      ? `Calendar built ${new Date(month.data.built_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}${month.data.stale ? ' · stale' : ''}`
+                      : 'Loading…'}
+                  </p>
+                </div>
+                <div className="page-actions">
+                  <button className="btn btn-secondary btn-sm btn-icon" onClick={() => shift(-1)} aria-label="Previous month">
+                    <ChevronLeft size={15} />
+                  </button>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setYm({ y: now.getFullYear(), m: now.getMonth() + 1 })}
+                  >
+                    Today
+                  </button>
+                  <button className="btn btn-secondary btn-sm btn-icon" onClick={() => shift(1)} aria-label="Next month">
+                    <ChevronRight size={15} />
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={rebuild} disabled={!!building}>
+                    <RefreshCw size={13} className={building ? 'spin' : undefined} />
+                    {building
+                      ? building.total
+                        ? `${Math.round((building.done / building.total) * 100)}%`
+                        : 'Rebuilding'
+                      : 'Rebuild'}
+                  </button>
+                </div>
+              </header>
+              {month.error && <p className="note-warn earn-err">{month.error.message}</p>}
 
-          <div className="earn-grid" role="grid">
-            {WEEKDAYS.map((w) => (
-              <div key={w} className="earn-dow">
-                {w}
+              <div className="card-body">
+                <div className="earn-grid" role="grid">
+                  {WEEKDAYS.map((w) => (
+                    <div key={w} className="earn-dow">
+                      {w}
+                    </div>
+                  ))}
+                  {cells.map((d, i) => {
+                    if (d == null) return <div key={`x${i}`} className="earn-cell earn-cell-pad" />
+                    const key = iso(ym.y, ym.m, d)
+                    const rows = month.data?.dates[key] ?? []
+                    const biggest = [...rows].sort((a, b) => (b.market_cap ?? 0) - (a.market_cap ?? 0)).slice(0, 3)
+                    return (
+                      <button
+                        key={key}
+                        className={
+                          'earn-cell' +
+                          (key === day ? ' earn-cell-on' : '') +
+                          (key === todayIso ? ' earn-cell-today' : '') +
+                          (rows.length ? '' : ' earn-cell-empty')
+                        }
+                        onClick={() => rows.length && setDay(key)}
+                        disabled={!rows.length}
+                      >
+                        <span className="earn-cell-d">{d}</span>
+                        {rows.length > 0 && (
+                          <>
+                            <span className="earn-cell-tickers">{biggest.map((r) => r.ticker).join(' · ')}</span>
+                            <span className="earn-cell-count">
+                              {rows.length}
+                              <span className="earn-cell-count-word"> reporting</span>
+                            </span>
+                          </>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-            ))}
-            {cells.map((d, i) => {
-              if (d == null) return <div key={`x${i}`} className="earn-cell earn-cell-pad" />
-              const key = iso(ym.y, ym.m, d)
-              const rows = month.data?.dates[key] ?? []
-              const biggest = [...rows].sort((a, b) => (b.market_cap ?? 0) - (a.market_cap ?? 0)).slice(0, 3)
-              return (
-                <button
-                  key={key}
-                  className={
-                    'earn-cell' +
-                    (key === day ? ' earn-cell-on' : '') +
-                    (key === todayIso ? ' earn-cell-today' : '') +
-                    (rows.length ? '' : ' earn-cell-empty')
-                  }
-                  onClick={() => rows.length && setDay(key)}
-                  disabled={!rows.length}
-                >
-                  <span className="earn-cell-d mono">{d}</span>
-                  {rows.length > 0 && (
-                    <>
-                      <span className="earn-cell-tickers mono">{biggest.map((r) => r.ticker).join(' ')}</span>
-                      <span className="earn-cell-count">
-                        {rows.length}
-                        <span className="earn-cell-count-word"> reporting</span>
-                      </span>
-                </>
-              )}
-            </button>
-          )
-        })}
-      </div>
+            </section>
 
-      {day && (
-        <section className="earn-day">
-          <h2 className="earn-day-title">
-            {new Date(day + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
-          </h2>
-          {dayQ.isPending ? (
-            <p className="earn-note">Scoring each name…</p>
-          ) : dayQ.error ? (
-            <p className="earn-error">{dayQ.error.message}</p>
-          ) : (
-            <table className="earn-table">
-              <thead>
-                <tr>
-                  <th>Ticker</th>
-                  <th>Company</th>
-                  <th className="num">Mkt cap</th>
-                  <th>Read</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dayQ.data.stocks.map((s) => (
-                  <tr key={s.ticker}>
-                    <td className="mono earn-ticker">{s.ticker}</td>
-                    <td className="earn-company">{s.company}</td>
-                    <td className="num mono">{cap(s.market_cap)}</td>
-                    <td>
-                      <span className={'earn-verdict earn-verdict-' + s.verdict}>{s.verdict}</span>
-                      <span className="earn-reason">{s.reason}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
-      )}
-        </>
-      )}
+            {day && (
+              <section className="card">
+                <header className="card-head">
+                  <div>
+                    <h2 className="card-title">
+                      {new Date(day + 'T12:00:00').toLocaleDateString(undefined, {
+                        weekday: 'long',
+                        month: 'long',
+                        day: 'numeric',
+                      })}
+                    </h2>
+                    <p className="card-desc">
+                      {dayQ.data ? `${dayQ.data.stocks.length} companies reporting` : 'Scoring each name…'}
+                    </p>
+                  </div>
+                </header>
+                <div className="card-body-flush">
+                  {dayQ.isPending ? (
+                    <p className="empty">Scoring each name…</p>
+                  ) : dayQ.error ? (
+                    <p className="empty">{dayQ.error.message}</p>
+                  ) : (
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Symbol</th>
+                          <th className="earn-col-company">Company</th>
+                          <th className="num">Market cap</th>
+                          <th>Paula’s read</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dayQ.data.stocks.map((st) => (
+                          <tr key={st.ticker}>
+                            <td className="earn-ticker">{st.ticker}</td>
+                            <td className="earn-col-company text-dim">{st.company}</td>
+                            <td className="num">{cap(st.market_cap)}</td>
+                            <td>
+                              <span className={'badge ' + verdictBadge(st.verdict)}>{st.verdict}</span>
+                              <span className="earn-reason">{st.reason}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </section>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }

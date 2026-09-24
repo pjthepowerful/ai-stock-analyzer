@@ -1,9 +1,9 @@
+import { Activity, ArrowUp, ChartCandlestick, Lightbulb, Wallet, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { api, ApiError, type ChatMessage, type ChatResponse } from '../../lib/api'
 import { useSession } from '../../lib/auth'
 import { NEW_TITLE, useChats } from '../../lib/chats'
 import { useChrome } from '../../lib/chrome'
-import { ChatList } from './ChatList'
 import { MarketStrip } from './MarketStrip'
 import { MessageBubble } from './MessageBubble'
 import './chat.css'
@@ -80,76 +80,139 @@ export function ChatScreen({ onNavigateAnalyze }: Props) {
     }
   }
 
-  const displayName = user?.username ?? 'Guest'
+  const firstName = (user?.username ?? '').split(' ')[0]
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+  const busy = sendingChat !== null
+
+  const suggestions: { icon: LucideIcon; title: string; desc: string; run: () => void }[] = [
+    {
+      icon: Lightbulb,
+      title: 'What should I buy?',
+      desc: 'Scan the market for setups that clear the full bar',
+      run: () => send('What should I invest in right now? Give me your real take.'),
+    },
+    {
+      icon: Activity,
+      title: 'How is the market today?',
+      desc: 'Regime, breadth and what’s moving',
+      run: () => send('How is the market looking today?'),
+    },
+    {
+      icon: ChartCandlestick,
+      title: 'Analyze a stock',
+      desc: 'Signal, levels, chart and earnings for any ticker',
+      run: onNavigateAnalyze,
+    },
+    {
+      icon: Wallet,
+      title: 'How did I do today?',
+      desc: 'A recap of your positions and P&L',
+      run: () => send('How did we do today?'),
+    },
+  ]
 
   return (
-    <div className="chat-screen">
-      <ChatList />
+    <div className="chat">
+      <MarketStrip />
 
-      <div className="chat-main">
-        <MarketStrip />
-        <div className="chat-body" ref={listRef}>
-          {messages.length === 0 && (
+      <div className="chat-scroll" ref={listRef}>
+        <div className="chat-column">
+          {messages.length === 0 ? (
             <div className="chat-empty">
-              <h1 className="chat-greeting">Good to see you, {displayName}.</h1>
-              <p className="chat-greeting-sub">What are we trading today?</p>
-              <div className="chat-suggestions">
-                <button className="chat-chip" onClick={() => send('What should I invest in right now? Give me your real take.')}>
-                  What should I buy?
-                </button>
-                <button className="chat-chip" onClick={() => send('How is the market looking today?')}>
-                  Check the market
-                </button>
-                <button className="chat-chip" onClick={onNavigateAnalyze}>
-                  Analyze a stock
-                </button>
+              <span className="chat-empty-mark">P</span>
+              <h1 className="chat-hello">
+                {greeting}
+                {firstName && `, ${firstName}`}
+              </h1>
+              <p className="chat-hello-sub">Ask about a stock, a setup, or your portfolio.</p>
+              <div className="chat-suggest">
+                {suggestions.map(({ icon: Icon, title, desc, run }) => (
+                  <button key={title} className="suggest" onClick={run} disabled={busy}>
+                    <Icon size={16} strokeWidth={1.8} />
+                    <span className="suggest-title">{title}</span>
+                    <span className="suggest-desc">{desc}</span>
+                  </button>
+                ))}
               </div>
             </div>
-          )}
+          ) : (
+            <>
+              {messages.map((m, i) => (
+                <MessageBubble key={i} role={m.role} content={m.content} meta={m.meta} />
+              ))}
 
-          {messages.map((m, i) => (
-            <MessageBubble key={i} role={m.role} content={m.content} meta={m.meta} />
-          ))}
+              {sending && (
+                <div className="msg msg-assistant">
+                  <span className="msg-avatar">P</span>
+                  <div className="msg-thinking" aria-label="Paula is thinking">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                </div>
+              )}
 
-          {sending && <div className="chat-thinking">Paula is thinking…</div>}
+              {scanHere && (
+                <div className="msg msg-assistant">
+                  <span className="msg-avatar">P</span>
+                  <div className="scan">
+                    <div className="scan-label">
+                      <span>{scanHere.label ? `Scanning — ${scanHere.label}` : 'Scanning the market…'}</span>
+                      <span className="mono">{Math.round(scanHere.pct)}%</span>
+                    </div>
+                    <div className="scan-track">
+                      <div className="scan-fill" style={{ width: `${scanHere.pct}%` }} />
+                    </div>
+                  </div>
+                </div>
+              )}
 
-          {messages.length > 0 && !sending && !scanHere && (
-            <button
-              className="chat-report"
-              onClick={() => openReport(messages.map((m) => ({ role: m.role, content: m.content })))}
-            >
-              Something off? Report this chat
-            </button>
-          )}
-
-          {scanHere && (
-            <div className="chat-scan">
-              <div className="chat-scan-label">{scanHere.label || 'Scanning the market…'}</div>
-              <div className="chat-scan-track">
-                <div className="chat-scan-fill" style={{ width: `${scanHere.pct}%` }} />
-              </div>
-            </div>
+              {!sending && !scanHere && (
+                <button
+                  className="chat-report"
+                  onClick={() => openReport(messages.map((m) => ({ role: m.role, content: m.content })))}
+                >
+                  Something off? Report this chat
+                </button>
+              )}
+            </>
           )}
         </div>
+      </div>
 
+      <div className="composer-wrap">
         <form
-          className="chat-input-row"
+          className="composer"
           onSubmit={(e) => {
             e.preventDefault()
             send(input)
           }}
         >
-          <input
-            className="chat-input"
+          <textarea
+            className="composer-input"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Message Paula — ask for a setup, scan, or recap…"
-            disabled={sendingChat !== null}
+            rows={1}
+            onChange={(e) => {
+              setInput(e.target.value)
+              // Grow with the text, up to a few lines.
+              e.target.style.height = 'auto'
+              e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault()
+                send(input)
+              }
+            }}
+            placeholder="Message Paula…"
+            disabled={busy}
           />
-          <button className="chat-send" type="submit" disabled={sendingChat !== null || !input.trim()}>
-            →
+          <button className="composer-send" type="submit" disabled={busy || !input.trim()} aria-label="Send">
+            <ArrowUp size={16} strokeWidth={2.2} />
           </button>
         </form>
+        <p className="composer-hint">Paula can be wrong. Research only — nothing here is an order.</p>
       </div>
     </div>
   )

@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import './design/tokens.css'
+import './design/ui.css'
 import App from './app/App'
 import { SessionProvider } from './lib/auth'
-import './design/tokens.css'
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -51,14 +51,14 @@ function ReportForm({ onClose, transcript }: Omit<Props, 'open'>) {
       <p className="fb-sent">
         Sent. Reference <span className="mono">{sentId}</span>.
       </p>
-      <button className="fb-submit" onClick={onClose}>
+      <button className="btn btn-primary fb-submit" onClick={onClose}>
         Done
       </button>
     </div>
   ) : (
     <>
       <textarea
-        className="fb-note"
+        className="input fb-note"
         placeholder="What happened, and what did you expect instead?"
         value={note}
         onChange={(e) => setNote(e.target.value)}
@@ -70,7 +70,7 @@ function ReportForm({ onClose, transcript }: Omit<Props, 'open'>) {
           Include this chat ({transcript!.length} messages)
         </label>
       )}
-      <button className="fb-submit" onClick={submit} disabled={busy || (!note.trim() && !(hasChat && attach))}>
+      <button className="btn btn-primary fb-submit" onClick={submit} disabled={busy || (!note.trim() && !(hasChat && attach))}>
         {busy ? 'Sending…' : 'Send report'}
       </button>
       {error && <p className="fb-error">{error}</p>}

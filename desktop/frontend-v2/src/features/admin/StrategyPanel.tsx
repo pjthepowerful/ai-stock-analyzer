@@ -104,7 +104,7 @@ export function StrategyPanel() {
         Two honest checks on the strategy. Both are read-only: they change no settings and place no orders.
       </p>
 
-      <article className="strat-block">
+      <article className="card strat-block">
         <header className="strat-head">
           <div>
             <h3 className="strat-title">Does the score predict returns?</h3>
@@ -118,7 +118,7 @@ export function StrategyPanel() {
         {signal.result ? <SignalView r={signal.result} /> : <p className="admin-empty">Not run yet.</p>}
       </article>
 
-      <article className="strat-block">
+      <article className="card strat-block">
         <header className="strat-head">
           <div>
             <h3 className="strat-title">Does the strategy survive costs?</h3>
@@ -141,7 +141,7 @@ function RunButton({ job, onRun, busy }: { job: Job<unknown>; onRun: () => void;
     return <span className="strat-running mono">running · {since(job.started_at)}</span>
   }
   return (
-    <button className="admin-primary" onClick={onRun} disabled={busy}>
+    <button className="btn btn-primary btn-sm" onClick={onRun} disabled={busy}>
       {job.result ? 'Run again' : 'Run'}
     </button>
   )

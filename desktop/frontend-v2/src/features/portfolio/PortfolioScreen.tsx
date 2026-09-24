@@ -69,77 +69,116 @@ export function PortfolioScreen() {
   const exposure = exposureQ.data ?? null
   const error = accountQ.error ? 'Could not reach your brokerage account.' : null
 
+  const signedPct = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(2)}%`
+  const tone = (n: number) => (n > 0 ? 'positive' : n < 0 ? 'negative' : '')
+
   return (
-    <div className="portfolio-screen">
-      {error && <div className="portfolio-error">{error}</div>}
+    <div className="page">
+      <div className="page-inner">
+        <header className="page-head">
+          <div>
+            <h1 className="page-title">Portfolio</h1>
+            <p className="page-sub">Your Alpaca paper account</p>
+          </div>
+        </header>
 
-      {account && (
-        <div className="portfolio-hero">
-          <span className="portfolio-eq-label">Equity</span>
-          <span className="portfolio-eq-value mono">${account.equity.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-          <span className={'portfolio-eq-change mono ' + (account.daily_pnl >= 0 ? 'positive' : 'negative')}>
-            {account.daily_pnl >= 0 ? '+' : ''}
-            ${account.daily_pnl.toFixed(2)} ({account.daily_pnl_pct.toFixed(2)}%) today
-          </span>
-        </div>
-      )}
+        {error && <p className="note-warn">{error}</p>}
 
-      {benchmark?.ok && (
-        <div className="portfolio-bench">
-          <div className="portfolio-bench-item">
-            <span className="portfolio-bench-label">You</span>
-            <span className={'mono ' + (benchmark.portfolio_return_pct >= 0 ? 'positive' : 'negative')}>
-              {benchmark.portfolio_return_pct >= 0 ? '+' : ''}
-              {benchmark.portfolio_return_pct.toFixed(2)}%
+        <div className="grid-stats">
+          <div className="card stat">
+            <span className="stat-label">Equity</span>
+            <span className="stat-value">
+              {account ? `$${account.equity.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—'}
             </span>
+            {account && (
+              <span className={'stat-foot ' + tone(account.daily_pnl)}>
+                {account.daily_pnl >= 0 ? '+' : '−'}${Math.abs(account.daily_pnl).toFixed(2)} (
+                {signedPct(account.daily_pnl_pct)}) today
+              </span>
+            )}
           </div>
-          <div className="portfolio-bench-item">
-            <span className="portfolio-bench-label">S&amp;P 500</span>
-            <span className="mono">{benchmark.spy_return_pct != null ? `${benchmark.spy_return_pct.toFixed(2)}%` : '—'}</span>
-          </div>
-          <div className="portfolio-bench-item">
-            <span className="portfolio-bench-label">Alpha</span>
-            <span className={'mono ' + (benchmark.beating_market ? 'positive' : 'negative')}>
-              {benchmark.alpha_pct != null ? `${benchmark.alpha_pct.toFixed(2)}%` : '—'}
+
+          <div className="card stat">
+            <span className="stat-label">Return this month</span>
+            <span className={'stat-value ' + (benchmark ? tone(benchmark.portfolio_return_pct) : '')}>
+              {benchmark ? signedPct(benchmark.portfolio_return_pct) : '—'}
             </span>
+            {benchmark?.spy_return_pct != null && (
+              <span className="stat-foot">S&amp;P 500 {signedPct(benchmark.spy_return_pct)}</span>
+            )}
+          </div>
+
+          <div className="card stat">
+            <span className="stat-label">Vs. the market</span>
+            <span className={'stat-value ' + (benchmark?.alpha_pct != null ? tone(benchmark.alpha_pct) : '')}>
+              {benchmark?.alpha_pct != null ? signedPct(benchmark.alpha_pct) : '—'}
+            </span>
+            {benchmark && (
+              <span className="stat-foot">{benchmark.beating_market ? 'Ahead of the S&P' : 'Behind the S&P'}</span>
+            )}
+          </div>
+
+          <div className="card stat">
+            <span className="stat-label">Day-trade headroom</span>
+            <span className={'stat-value ' + (exposure?.headroom != null && exposure.headroom < 1000 ? 'warn' : '')}>
+              {exposure?.headroom != null
+                ? `${exposure.headroom < 0 ? '−' : ''}$${Math.abs(exposure.headroom).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                : '—'}
+            </span>
+            {exposure && (
+              <span className="stat-foot">
+                {exposure.headroom != null && exposure.headroom < 0
+                  ? 'Below the $25k PDT floor — day trades restricted'
+                  : `Above the $${exposure.floor.toLocaleString()} PDT floor`}
+              </span>
+            )}
           </div>
         </div>
-      )}
 
-      {exposure?.headroom != null && (
-        <p className={'portfolio-pdt' + (exposure.headroom < 1000 ? ' portfolio-pdt-tight' : '')}>
-          <span className="mono">
-            {exposure.headroom >= 0 ? '$' : '−$'}
-            {Math.abs(exposure.headroom).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-          </span>{' '}
-          {exposure.headroom >= 0 ? 'above' : 'below'} the ${exposure.floor.toLocaleString()} pattern-day-trader floor
-          {exposure.headroom < 0 && ' — day trades are restricted'}
-          {exposure.positions > 0 && ` · ${exposure.note}`}
-        </p>
-      )}
+        <Performance />
 
-      <Performance />
-
-      <h2 className="portfolio-section-title">Open positions</h2>
-      {positions.length === 0 ? (
-        <div className="portfolio-empty">No open positions.</div>
-      ) : (
-        <div className="portfolio-positions">
-          {positions.map((p) => (
-            <div className="portfolio-pos" key={p.ticker}>
-              <span className="mono portfolio-pos-ticker">{p.ticker}</span>
-              <span className="portfolio-pos-qty">
-                {p.qty} sh · avg ${p.avg_entry.toFixed(2)}
-              </span>
-              <div className="portfolio-pos-spacer" />
-              <span className={'mono ' + (p.unrealized_pnl >= 0 ? 'positive' : 'negative')}>
-                {p.unrealized_pnl >= 0 ? '+' : ''}
-                ${p.unrealized_pnl.toFixed(2)} ({p.unrealized_pnl_pct.toFixed(2)}%)
-              </span>
+        <section className="card">
+          <header className="card-head">
+            <div>
+              <h2 className="card-title">Open positions</h2>
+              <p className="card-desc">{positions.length ? `${positions.length} held` : 'Nothing held right now'}</p>
             </div>
-          ))}
-        </div>
-      )}
+          </header>
+          <div className="card-body-flush">
+            {positions.length === 0 ? (
+              <p className="empty">No open positions.</p>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th className="num">Shares</th>
+                    <th className="num">Avg cost</th>
+                    <th className="num">Price</th>
+                    <th className="num">Market value</th>
+                    <th className="num">Unrealized</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {positions.map((p) => (
+                    <tr key={p.ticker}>
+                      <td className="pos-sym">{p.ticker}</td>
+                      <td className="num">{p.qty}</td>
+                      <td className="num">${p.avg_entry.toFixed(2)}</td>
+                      <td className="num">${p.current_price.toFixed(2)}</td>
+                      <td className="num">${p.market_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                      <td className={'num ' + tone(p.unrealized_pnl)}>
+                        {p.unrealized_pnl >= 0 ? '+' : '−'}${Math.abs(p.unrealized_pnl).toFixed(2)}
+                        <span className="text-dim"> {signedPct(p.unrealized_pnl_pct)}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </section>
+      </div>
     </div>
   )
 }

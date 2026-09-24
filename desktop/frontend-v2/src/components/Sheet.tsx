@@ -1,3 +1,4 @@
+import { X } from 'lucide-react'
 import { useEffect, useRef, type ReactNode } from 'react'
 import './Sheet.css'
 
@@ -43,8 +44,8 @@ export function Sheet({ open, onClose, title, children, width = 520 }: Props) {
       <div className="sheet-inner">
         <header className="sheet-head">
           <h2 className="sheet-title">{title}</h2>
-          <button className="sheet-close" onClick={onClose} aria-label="Close">
-            esc
+          <button className="btn btn-ghost btn-icon btn-sm" onClick={onClose} aria-label="Close">
+            <X size={16} />
           </button>
         </header>
         {children}

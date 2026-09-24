@@ -1,93 +1,65 @@
-.analyze-screen {
-  height: 100%;
-  overflow-y: auto;
-  padding: var(--space-6);
-  max-width: 760px;
-  margin: 0 auto;
-}
+/* Analyze-specific bits; frame comes from design/ui.css. */
 
 .analyze-search {
+  position: relative;
   display: flex;
   gap: var(--space-2);
-  margin-bottom: var(--space-5);
+  width: min(380px, 100%);
+}
+
+.analyze-search-icon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-dim);
+  pointer-events: none;
 }
 
 .analyze-input {
-  flex: 1;
-  font: inherit;
-  font-size: var(--text-lg);
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-4);
+  padding-left: 32px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
-.analyze-input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-.analyze-go {
-  padding: 0 var(--space-5);
-  border: none;
-  border-radius: var(--radius-md);
-  background: var(--accent);
-  color: var(--accent-ink);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.analyze-go:hover:not(:disabled) {
-  background: var(--accent-strong);
-}
-
-.analyze-go:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.analyze-error {
-  color: var(--negative);
-  font-size: var(--text-sm);
-  margin-bottom: var(--space-4);
-}
-
-.analyze-result {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
+.analyze-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr);
+  gap: var(--space-4);
+  align-items: start;
 }
 
 .analyze-empty {
-  color: var(--text-dim);
-  font-size: var(--text-base);
+  padding: var(--space-7) var(--space-5);
   text-align: center;
-  margin-top: var(--space-8);
 }
 
-/* ── Research panel ── */
+.analyze-empty-title {
+  margin: 0 0 var(--space-1);
+  font-weight: 600;
+}
+
+.analyze-quick {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+/* ── Research cards ── */
 .rp {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-6);
-  margin-top: var(--space-5);
-  padding-top: var(--space-5);
-  border-top: 1px solid var(--border);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: start;
 }
 
-.rp-title {
-  font-size: var(--text-2xs);
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+.rp-signin {
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--text-sm);
   color: var(--text-dim);
-  margin: 0 0 var(--space-2);
-}
-
-.rp-title:not(:first-child) {
-  margin-top: var(--space-5);
 }
 
 .rp-facts {
@@ -95,20 +67,26 @@
 }
 
 .rp-facts > div {
-  display: grid;
-  grid-template-columns: 130px 1fr;
+  display: flex;
+  justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-2) 0;
   border-bottom: 1px solid var(--border);
   font-size: var(--text-sm);
 }
 
+.rp-facts > div:last-child {
+  border-bottom: none;
+}
+
 .rp-facts dt {
-  color: var(--text-secondary);
+  color: var(--text-dim);
+  flex-shrink: 0;
 }
 
 .rp-facts dd {
   margin: 0;
+  text-align: right;
 }
 
 .rp-dim {
@@ -122,21 +100,18 @@
 }
 
 .rp-warn {
-  font-size: var(--text-xs);
-  color: var(--warning);
-  border-left: 2px solid var(--warning);
-  padding-left: var(--space-2);
-  margin: var(--space-3) 0 0;
+  margin-top: var(--space-3);
 }
 
 .rp-evidence {
   margin: var(--space-3) 0 0;
   padding-left: var(--space-4);
   font-size: var(--text-xs);
+  line-height: 1.5;
   color: var(--text-secondary);
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 2px;
 }
 
 .rp-news {
@@ -153,24 +128,46 @@
   border-bottom: 1px solid var(--border);
 }
 
-.rp-news a {
+.rp-news li:first-child {
+  padding-top: 0;
+}
+
+.rp-news li:last-child {
+  border-bottom: none;
+}
+
+.rp-news a,
+.rp-news span:first-child {
   color: var(--text);
   font-size: var(--text-sm);
+  line-height: 1.4;
   text-decoration: none;
 }
 
 .rp-news a:hover {
   color: var(--accent-strong);
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 
 .rp-news .rp-dim {
   font-size: var(--text-2xs);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 1100px) {
+  .analyze-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .rp {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .rp-news-card {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 700px) {
+  .rp {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

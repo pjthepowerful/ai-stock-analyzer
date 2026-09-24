@@ -55,7 +55,9 @@ export function ResearchPanel({ ticker }: { ticker: string }) {
   const research = useQuery({ queryKey: ['research', ticker], queryFn: () => api.get<Research>(`/api/research/${ticker}`), ...opts })
 
   if (!enabled) {
-    return <p className="rp-note">Sign in to see the earnings forecast, fundamentals and news for {ticker}.</p>
+    return (
+      <p className="card rp-signin">Sign in to see the earnings forecast, fundamentals and news for {ticker}.</p>
+    )
   }
 
   const e = earnings.data
@@ -65,8 +67,14 @@ export function ResearchPanel({ ticker }: { ticker: string }) {
 
   return (
     <div className="rp">
-      <section className="rp-col">
-        <h3 className="rp-title">Earnings</h3>
+      <section className="card">
+        <header className="card-head">
+          <div>
+            <h2 className="card-title">Earnings</h2>
+            <p className="card-desc">Dates and Paula’s pre-report read</p>
+          </div>
+        </header>
+        <div className="card-body">
         {earnings.isPending || forecast.isPending ? (
           <p className="rp-note">Loading…</p>
         ) : (
@@ -99,11 +107,11 @@ export function ResearchPanel({ ticker }: { ticker: string }) {
               )}
             </dl>
             {stale && (
-              <p className="rp-warn">
+              <p className="note-warn rp-warn">
                 The earnings source hasn't updated since {e?.last?.date_str} — treat this section as out of date.
               </p>
             )}
-            {e?.blocked && <p className="rp-warn">{e.block_reason}</p>}
+            {e?.blocked && <p className="note-warn rp-warn">{e.block_reason}</p>}
             {f?.evidence && f.evidence.length > 0 && (
               <ul className="rp-evidence">
                 {f.evidence.map((line) => (
@@ -113,8 +121,17 @@ export function ResearchPanel({ ticker }: { ticker: string }) {
             )}
           </>
         )}
+        </div>
+      </section>
 
-        <h3 className="rp-title">Fundamentals</h3>
+      <section className="card">
+        <header className="card-head">
+          <div>
+            <h2 className="card-title">Fundamentals</h2>
+            <p className="card-desc">From SEC filings</p>
+          </div>
+        </header>
+        <div className="card-body">
         {research.isPending ? (
           <p className="rp-note">Loading…</p>
         ) : r?.fundamentals.available ? (
@@ -139,10 +156,17 @@ export function ResearchPanel({ ticker }: { ticker: string }) {
         ) : (
           <p className="rp-note">{r?.fundamental_notes[0] ?? 'Not available.'}</p>
         )}
+        </div>
       </section>
 
-      <section className="rp-col">
-        <h3 className="rp-title">News</h3>
+      <section className="card rp-news-card">
+        <header className="card-head">
+          <div>
+            <h2 className="card-title">News</h2>
+            <p className="card-desc">Latest headlines</p>
+          </div>
+        </header>
+        <div className="card-body">
         {research.isPending ? (
           <p className="rp-note">Loading…</p>
         ) : research.error ? (
@@ -167,6 +191,7 @@ export function ResearchPanel({ ticker }: { ticker: string }) {
             ))}
           </ul>
         )}
+        </div>
       </section>
     </div>
   )

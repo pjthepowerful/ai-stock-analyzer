@@ -60,67 +60,81 @@ export function Performance() {
   const changePct = first && change != null ? (change / first) * 100 : null
 
   return (
-    <section className="perf">
-      <div className="perf-head">
-        <h2 className="portfolio-section-title">Performance</h2>
-        <div className="perf-periods" role="tablist">
-          {PERIODS.map((p) => (
-            <button
-              key={p.id}
-              role="tab"
-              aria-selected={period === p.id}
-              className={'perf-period' + (period === p.id ? ' perf-period-on' : '')}
-              onClick={() => setPeriod(p.id)}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {change != null && changePct != null && (
-        <p className={'perf-change mono ' + (change >= 0 ? 'positive' : 'negative')}>
-          {money(change)} ({change >= 0 ? '+' : ''}
-          {changePct.toFixed(2)}%)
-        </p>
-      )}
-
-      {perf.isPending ? (
-        <div className="perf-chart perf-chart-empty">Loading…</div>
-      ) : curve.length < 2 ? (
-        <div className="perf-chart perf-chart-empty">
-          {perf.error ? perf.error.message : 'Not enough history for this range yet.'}
-        </div>
-      ) : (
-        <EquityCurve points={curve} up={(change ?? 0) >= 0} />
-      )}
-
-      {perf.data && (
-        <>
-          <h3 className="perf-sub">Activity</h3>
-          {perf.data.recaps.length === 0 ? (
-            <p className="portfolio-empty">No filled orders in this range.</p>
+    <>
+      <section className="card">
+        <header className="card-head">
+          <div>
+            <h2 className="card-title">Performance</h2>
+            <p className={'card-desc ' + (change != null ? tone(change) : '')}>
+              {change != null && changePct != null
+                ? `${money(change)} (${change >= 0 ? '+' : ''}${changePct.toFixed(2)}%) over this range`
+                : 'Account value over time'}
+            </p>
+          </div>
+          <div className="seg" role="tablist" aria-label="Range">
+            {PERIODS.map((p) => (
+              <button
+                key={p.id}
+                role="tab"
+                aria-selected={period === p.id}
+                className={'seg-btn' + (period === p.id ? ' seg-on' : '')}
+                onClick={() => setPeriod(p.id)}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </header>
+        <div className="card-body">
+          {perf.isPending ? (
+            <div className="perf-chart perf-chart-empty">Loading…</div>
+          ) : curve.length < 2 ? (
+            <div className="perf-chart perf-chart-empty">
+              {perf.error ? perf.error.message : 'Not enough history for this range yet.'}
+            </div>
           ) : (
-            <ul className="perf-recaps">
-              {perf.data.recaps.map((r) => (
-                <li key={r.start} className="perf-recap">
-                  <span className="perf-recap-when">{recapLabel(r.start, perf.data.bucket)}</span>
-                  <span className="perf-recap-what">
-                    <span className="mono">
-                      {r.buys} buy{r.buys === 1 ? '' : 's'} · {r.sells} sell{r.sells === 1 ? '' : 's'}
-                    </span>
-                    <span className="perf-recap-tickers mono">{r.tickers.join(' ')}</span>
-                  </span>
-                  {r.pnl != null && (
-                    <span className={'perf-recap-pnl mono ' + tone(r.pnl)}>{money(r.pnl)}</span>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <EquityCurve points={curve} up={(change ?? 0) >= 0} />
           )}
-        </>
-      )}
-    </section>
+        </div>
+      </section>
+
+      <section className="card">
+        <header className="card-head">
+          <div>
+            <h2 className="card-title">Activity</h2>
+            <p className="card-desc">Filled orders, grouped by {perf.data?.bucket ?? 'period'}</p>
+          </div>
+        </header>
+        <div className="card-body-flush">
+          {!perf.data || perf.data.recaps.length === 0 ? (
+            <p className="empty">{perf.isPending ? 'Loading…' : 'No filled orders in this range.'}</p>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Period</th>
+                  <th>Orders</th>
+                  <th>Symbols</th>
+                  <th className="num">P&amp;L</th>
+                </tr>
+              </thead>
+              <tbody>
+                {perf.data.recaps.map((r) => (
+                  <tr key={r.start}>
+                    <td>{recapLabel(r.start, perf.data.bucket)}</td>
+                    <td className="text-dim">
+                      {r.buys} buy{r.buys === 1 ? '' : 's'} · {r.sells} sell{r.sells === 1 ? '' : 's'}
+                    </td>
+                    <td className="activity-syms">{r.tickers.join(', ')}</td>
+                    <td className={'num ' + (r.pnl != null ? tone(r.pnl) : '')}>{r.pnl != null ? money(r.pnl) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
+    </>
   )
 }
 
@@ -133,7 +147,7 @@ function EquityCurve({ points, up }: { points: PerformanceResponse['curve']; up:
     if (!el) return
     const c = chartColors()
     const chart = createChart(el, {
-      height: 220,
+      height: 240,
       layout: { background: { color: 'transparent' }, textColor: c.text, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
       grid: { vertLines: { visible: false }, horzLines: { color: c.grid } },
       rightPriceScale: { borderVisible: false },

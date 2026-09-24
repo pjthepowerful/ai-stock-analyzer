@@ -47,7 +47,7 @@ export function PlusSheet({ open, onClose }: Props) {
       {user?.plus ? (
         <div className="plus-done">
           <p className="plus-done-lede">Everything is unlocked on this account.</p>
-          <button className="plus-cta" onClick={onClose}>
+          <button className="btn btn-primary plus-cta" onClick={onClose}>
             Back to Paula
           </button>
         </div>
@@ -85,7 +85,7 @@ export function PlusSheet({ open, onClose }: Props) {
             <p className="plus-fine">Create an account first — Plus is tied to your login.</p>
           ) : (
             <>
-              <button className="plus-cta" onClick={buy} disabled={busy}>
+              <button className="btn btn-primary plus-cta" onClick={buy} disabled={busy}>
                 {busy ? 'Processing…' : `Get Plus — ${PLANS[plan].price}${PLANS[plan].per}`}
               </button>
               {error && <p className="plus-error">{error}</p>}

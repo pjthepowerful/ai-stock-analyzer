@@ -1,3 +1,4 @@
+import { Check, TriangleAlert } from 'lucide-react'
 import './SignalCard.css'
 
 export interface TradeLevels {
@@ -39,84 +40,109 @@ const CATEGORY_LABELS: Record<string, string> = {
 }
 
 function actionClass(action: string): string {
-  if (action.includes('BUY')) return 'sig-buy'
-  if (action.includes('SELL')) return 'sig-sell'
-  return 'sig-hold'
+  if (action.includes('BUY')) return 'badge-green'
+  if (action.includes('SELL')) return 'badge-red'
+  return ''
 }
 
 export function SignalCard({ data }: { data: AnalyzeData }) {
   const { signal } = data
   const up = data.change >= 0
+  const factors = Object.entries(signal.category_scores)
+  // Factor scores are small signed integers; scale bars to the largest so
+  // they're readable, growing left (bearish) or right (bullish) of center.
+  const maxAbs = Math.max(1, ...factors.map(([, v]) => Math.abs(v)))
 
   return (
-    <div className="signal-card">
+    <div className="signal-card card">
       <div className="sig-head">
-        <span className="sig-ticker mono">{data.ticker}</span>
-        {data.name && <span className="sig-name">{data.name}</span>}
-        <div className="sig-spacer" />
-        <span className={'mono ' + (up ? 'positive' : 'negative')}>
-          ${data.price.toFixed(2)} {up ? '+' : ''}
-          {data.change.toFixed(2)} ({data.change_pct.toFixed(2)}%)
-        </span>
+        <div className="sig-id">
+          <span className="sig-ticker">{data.ticker}</span>
+          {data.name && <span className="sig-name">{data.name}</span>}
+        </div>
+        <div className="sig-quote">
+          <span className="sig-price">${data.price.toFixed(2)}</span>
+          <span className={'sig-change ' + (up ? 'positive' : 'negative')}>
+            {up ? '+' : '−'}
+            {Math.abs(data.change).toFixed(2)} ({up ? '+' : '−'}
+            {Math.abs(data.change_pct).toFixed(2)}%)
+          </span>
+        </div>
       </div>
 
       <div className="sig-verdict">
-        <span className={'sig-action ' + actionClass(signal.action)}>{signal.action.replace('_', ' ')}</span>
-        <span className="sig-score mono">
-          score <b>{signal.score}</b>/100 · confidence <b>{signal.confidence}</b>%
-        </span>
+        <span className={'badge ' + actionClass(signal.action)}>{signal.action.replace('_', ' ')}</span>
         <span className="sig-setup">{signal.setup}</span>
       </div>
 
+      <div className="sig-metrics">
+        <div>
+          <span className="sig-metric-label">Score</span>
+          <span className="sig-metric-value">
+            {signal.score}
+            <small>/100</small>
+          </span>
+        </div>
+        <div>
+          <span className="sig-metric-label">Confidence</span>
+          <span className="sig-metric-value">
+            {signal.confidence}
+            <small>%</small>
+          </span>
+        </div>
+      </div>
+
       <div className="sig-bars">
-        {Object.entries(signal.category_scores).map(([key, value]) => (
+        {factors.map(([key, value]) => (
           <div className="sig-bar-row" key={key}>
             <span className="sig-bar-label">{CATEGORY_LABELS[key] ?? key}</span>
             <div className="sig-bar-track">
               <div
-                className={'sig-bar-fill ' + (value >= 0 ? 'positive-bg' : 'negative-bg')}
-                style={{ width: `${Math.min(100, Math.abs(value))}%` }}
+                className={'sig-bar-fill ' + (value >= 0 ? 'sig-bar-pos' : 'sig-bar-neg')}
+                style={{ width: `${(Math.abs(value) / maxAbs) * 50}%` }}
               />
             </div>
-            <span className="sig-bar-value mono">{value}</span>
+            <span className="sig-bar-value">{value > 0 ? `+${value}` : value}</span>
           </div>
         ))}
       </div>
 
       {(signal.signals.length > 0 || signal.warnings.length > 0) && (
-        <div className="sig-notes">
+        <ul className="sig-notes">
           {signal.signals.map((s) => (
-            <div className="sig-note sig-note-good" key={s}>
-              ✓ {s}
-            </div>
+            <li className="sig-note sig-note-good" key={s}>
+              <Check size={14} strokeWidth={2.2} />
+              {s}
+            </li>
           ))}
           {signal.warnings.map((w) => (
-            <div className="sig-note sig-note-warn" key={w}>
-              ⚠ {w}
-            </div>
+            <li className="sig-note sig-note-warn" key={w}>
+              <TriangleAlert size={14} strokeWidth={2} />
+              {w}
+            </li>
           ))}
-        </div>
+        </ul>
       )}
 
       {signal.trade && (
-        <div className="sig-trade">
-          <div className="sig-trade-row">
-            <span>Entry</span>
-            <span className="mono">${signal.trade.entry.toFixed(2)}</span>
+        <dl className="sig-trade">
+          <div>
+            <dt>Entry</dt>
+            <dd>${signal.trade.entry.toFixed(2)}</dd>
           </div>
-          <div className="sig-trade-row">
-            <span>Stop</span>
-            <span className="mono negative">${signal.trade.stop_loss.toFixed(2)}</span>
+          <div>
+            <dt>Stop</dt>
+            <dd className="negative">${signal.trade.stop_loss.toFixed(2)}</dd>
           </div>
-          <div className="sig-trade-row">
-            <span>Target</span>
-            <span className="mono positive">${signal.trade.target_1.toFixed(2)}</span>
+          <div>
+            <dt>Target</dt>
+            <dd className="positive">${signal.trade.target_1.toFixed(2)}</dd>
           </div>
-          <div className="sig-trade-row">
-            <span>Reward:risk</span>
-            <span className="mono">{signal.trade.risk_reward.toFixed(1)}:1</span>
+          <div>
+            <dt>R:R</dt>
+            <dd>{signal.trade.risk_reward.toFixed(1)}:1</dd>
           </div>
-        </div>
+        </dl>
       )}
     </div>
   )

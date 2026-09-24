@@ -157,9 +157,9 @@ export function Chart({ ticker, height = 320 }: { ticker: string; height?: numbe
   }, [ticker, period, height, theme])
 
   return (
-    <div className="pchart">
+    <div className="pchart card">
       <div className="pchart-head">
-        <span className="pchart-sym mono">{ticker}</span>
+        <span className="pchart-sym">{ticker}</span>
         {ohlc && (
           <span className="pchart-ohlc mono">
             O {ohlc.o.toFixed(2)} H {ohlc.h.toFixed(2)} L {ohlc.l.toFixed(2)} C{' '}
@@ -171,9 +171,9 @@ export function Chart({ ticker, height = 320 }: { ticker: string; height?: numbe
           </span>
         )}
         <div className="pchart-spacer" />
-        <div className="pchart-periods">
+        <div className="seg">
           {PERIODS.map(([p, label]) => (
-            <button key={p} className={'pchart-period' + (period === p ? ' pchart-period-on' : '')} onClick={() => setPeriod(p)}>
+            <button key={p} className={'seg-btn' + (period === p ? ' seg-on' : '')} onClick={() => setPeriod(p)}>
               {label}
             </button>
           ))}

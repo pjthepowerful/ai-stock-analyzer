@@ -1,3 +1,4 @@
+import { Search } from 'lucide-react'
 import { useState } from 'react'
 import { Chart } from '../../components/Chart'
 import { SignalCard, type AnalyzeData } from '../../components/SignalCard'
@@ -9,6 +10,8 @@ interface AnalyzeApiResponse {
   ok: boolean
   data?: AnalyzeData
 }
+
+const QUICK = ['AAPL', 'NVDA', 'MSFT', 'TSLA', 'AMZN', 'META', 'SPY']
 
 export function AnalyzeScreen() {
   const [ticker, setTicker] = useState('')
@@ -36,39 +39,68 @@ export function AnalyzeScreen() {
   }
 
   return (
-    <div className="analyze-screen">
-      <form
-        className="analyze-search"
-        onSubmit={(e) => {
-          e.preventDefault()
-          lookup(ticker)
-        }}
-      >
-        <input
-          className="analyze-input"
-          value={ticker}
-          onChange={(e) => setTicker(e.target.value)}
-          placeholder="Enter a ticker — AAPL, TSLA, NVDA…"
-          autoFocus
-        />
-        <button className="analyze-go" type="submit" disabled={loading || !ticker.trim()}>
-          {loading ? '…' : 'Analyze →'}
-        </button>
-      </form>
+    <div className="page">
+      <div className="page-inner">
+        <header className="page-head">
+          <div>
+            <h1 className="page-title">Analyze</h1>
+            <p className="page-sub">Signal, levels, chart and research for any US ticker</p>
+          </div>
+          <form
+            className="analyze-search"
+            onSubmit={(e) => {
+              e.preventDefault()
+              lookup(ticker)
+            }}
+          >
+            <Search size={15} className="analyze-search-icon" />
+            <input
+              className="input analyze-input"
+              value={ticker}
+              onChange={(e) => setTicker(e.target.value.toUpperCase())}
+              placeholder="Ticker, e.g. NVDA"
+              aria-label="Ticker"
+              autoFocus
+            />
+            <button className="btn btn-primary" type="submit" disabled={loading || !ticker.trim()}>
+              {loading ? 'Analyzing…' : 'Analyze'}
+            </button>
+          </form>
+        </header>
 
-      {error && <div className="analyze-error">{error}</div>}
+        {error && <p className="note-warn">{error}</p>}
 
-      {result && (
-        <div className="analyze-result">
-          <SignalCard data={result} />
-          <Chart ticker={result.ticker} height={340} />
-          <ResearchPanel ticker={result.ticker} />
-        </div>
-      )}
-
-      {!result && !error && !loading && (
-        <div className="analyze-empty">Real signal engine, real data — enter any ticker to see the full read.</div>
-      )}
+        {result ? (
+          <>
+            <div className="analyze-grid">
+              <Chart ticker={result.ticker} height={380} />
+              <SignalCard data={result} />
+            </div>
+            <ResearchPanel ticker={result.ticker} />
+          </>
+        ) : (
+          !loading && (
+            <section className="card analyze-empty">
+              <p className="analyze-empty-title">Pick a ticker to start</p>
+              <p className="text-dim">The same signal engine Paula uses in chat, with the full breakdown.</p>
+              <div className="analyze-quick">
+                {QUICK.map((t) => (
+                  <button
+                    key={t}
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      setTicker(t)
+                      lookup(t)
+                    }}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </section>
+          )
+        )}
+      </div>
     </div>
   )
 }

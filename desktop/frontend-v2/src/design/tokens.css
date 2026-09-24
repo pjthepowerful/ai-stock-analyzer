@@ -12,12 +12,13 @@
   color-scheme: light;
 
   /* ── Color: warm paper, ink text, single accent ── */
-  --bg: #f7f5f0;
+  --bg: #f7f6f3;
+  --sidebar: #f0eee9;
   --surface: #ffffff;
-  --surface-2: #efece4;
-  --surface-3: #e7e3d9;
-  --border: #e2ddd2;
-  --border-strong: #cbc5b7;
+  --surface-2: #f3f1ec;
+  --surface-3: #e9e6df;
+  --border: #e4e1da;
+  --border-strong: #cfcbc2;
 
   --text: #16181b;
   --text-secondary: #474c53;
@@ -34,6 +35,10 @@
   --scrim: rgb(22 24 27 / 0.32);
   --stripe: rgb(0 0 0 / 0.03);
 
+  --shadow-card: 0 1px 2px rgb(20 20 16 / 0.04), 0 1px 1px rgb(20 20 16 / 0.02);
+  --shadow-pop: 0 8px 24px rgb(20 20 16 / 0.08), 0 2px 6px rgb(20 20 16 / 0.04);
+  --focus: 0 0 0 3px rgb(15 138 95 / 0.18);
+
   /* Charts read these at draw time (see lib/theme.ts). */
   --chart-text: #6b6f76;
   --chart-grid: rgba(22, 24, 27, 0.07);
@@ -47,8 +52,9 @@
   color-scheme: dark;
 
   /* ── Color: cool near-black, single accent ── */
-  --bg: #08090b;
-  --surface: #101216;
+  --bg: #0b0c0e;
+  --sidebar: #08090b;
+  --surface: #121418;
   --surface-2: #171a1f;
   --surface-3: #1f2329;
   --border: #23262c;
@@ -69,6 +75,10 @@
   --scrim: rgb(4 5 6 / 0.72);
   --stripe: rgb(255 255 255 / 0.015);
 
+  --shadow-card: none;
+  --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.5);
+  --focus: 0 0 0 3px rgb(16 185 129 / 0.25);
+
   --chart-text: #5a6068;
   --chart-grid: rgba(35, 38, 44, 0.5);
   --chart-up: #34d399;
@@ -79,14 +89,15 @@
 
 :root {
   /* ── Type ── */
-  --font-display: 'Bricolage Grotesque', 'Outfit', system-ui, sans-serif;
-  --font-sans: 'Outfit', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  /* One family, weights for hierarchy. Display is the same face, tighter. */
+  --font-display: 'Geist', system-ui, sans-serif;
+  --font-sans: 'Geist', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
 
   --text-2xs: 0.6875rem;   /* 11px */
   --text-xs: 0.75rem;      /* 12px */
   --text-sm: 0.8125rem;    /* 13px */
-  --text-base: 0.9375rem;  /* 15px */
+  --text-base: 0.875rem;   /* 14px */
   --text-lg: 1.125rem;     /* 18px */
   --text-xl: 1.5rem;       /* 24px */
   --text-2xl: 2.25rem;     /* 36px */
@@ -107,7 +118,7 @@
   /* ── Radius — restrained; sharp for data, soft only where it earns it ── */
   --radius-sm: 4px;
   --radius-md: 8px;
-  --radius-lg: 14px;
+  --radius-lg: 12px;
   --radius-pill: 999px;
 
   /* ── Motion — fast, purposeful, never decorative on static content ── */
