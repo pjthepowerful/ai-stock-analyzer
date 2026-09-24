@@ -23,10 +23,6 @@
   margin-top: var(--space-4);
 }
 
-.fb-sent {
-  color: var(--text-secondary);
-  margin: 0;
-}
 
 .fb-error {
   margin: var(--space-3) 0 0;
