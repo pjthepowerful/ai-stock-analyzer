@@ -4,6 +4,21 @@ Version lives in `desktop/frontend/src/App.jsx` as the `VERSION` constant.
 Bump it on every shipped change: **patch** for a fix, **minor** for a feature,
 **major** for a big release. Add a line here when you bump.
 
+## 5.0.0 — September 23, 2026
+A whole new Paula: the v2 rewrite (`desktop/frontend-v2` + `desktop/backend-v2`).
+v5's version and user-facing notes live in `desktop/frontend-v2/src/lib/changelog.ts`
+(shown in the app under *What's new*, with Before/After demos for big changes).
+
+- New app frame (sidebar, cards, Geist), black by default with Light/System.
+- ⌘K palette; saved chats synced across devices; typing greeting; thank-you screens.
+- Popular tickers are real: every Analyze lookup and chat analysis is recorded in
+  `ticker_lookups` (salted hash of user/IP, once per person per day) and ranked by
+  distinct people over 7 days (`backend-v2/app/services/popularity.py`).
+- Phone layouts for every screen.
+- Speed: rankings 60–78s → 10–15s, cached lookups, background warm-up.
+- v2 does **not** include autopilot or order placement yet — see
+  `desktop/MIGRATION-v5.md` before pointing production at it.
+
 ## 4.19.0 — September 19, 2026
 Co-Pilot's earnings list becomes a clickable month calendar.
 

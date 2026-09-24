@@ -37,14 +37,20 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="Paula v2", default_response_class=SafeJSONResponse, lifespan=lifespan)
 
-# Local dev: any localhost port. Hosted: set ALLOWED_ORIGINS to the site's
-# URL(s), comma-separated (e.g. https://paula.vercel.app).
+# Local dev: any localhost port. Hosted: the same Vercel deployments the
+# original backend allows (override with FRONTEND_ORIGIN_REGEX), plus any exact
+# URLs in ALLOWED_ORIGINS, comma-separated.
 _extra_origins = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_extra_origins,
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_origin_regex=os.environ.get(
+        "FRONTEND_ORIGIN_REGEX",
+        r"https://ai-stock-analyzer[a-z0-9-]*\.vercel\.app"
+        r"|https://([a-z0-9-]+-)?pjthepowerful[a-z0-9-]*\.vercel\.app",
+    )
+    + r"|https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
+import { API_BASE } from './api'
 
-const WS_URL = 'ws://127.0.0.1:4141/ws'
+const WS_URL = API_BASE.replace(/^http/, 'ws') + '/ws'
 
 export interface WsEvent {
   event: string

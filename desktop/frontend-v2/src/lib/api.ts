@@ -1,6 +1,7 @@
 import type { Signal } from '../components/SignalCard'
 
-const API_BASE = 'http://127.0.0.1:4141'
+// Set VITE_API_URL when hosting (e.g. the Railway backend); local dev uses :4141.
+export const API_BASE = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:4141').replace(/\/+$/, '')
 
 export class ApiError extends Error {
   status: number
