@@ -11,3 +11,4 @@ python-jose[cryptography]>=3.3
 passlib[bcrypt]>=1.7
 cryptography>=41.0
 python-dotenv
+tzdata  # time zones for zoneinfo on slim containers (Railpack has none)
