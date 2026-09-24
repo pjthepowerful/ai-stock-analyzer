@@ -16,8 +16,11 @@ v5's version and user-facing notes live in `desktop/frontend-v2/src/lib/changelo
   distinct people over 7 days (`backend-v2/app/services/popularity.py`).
 - Phone layouts for every screen.
 - Speed: rankings 60–78s → 10–15s, cached lookups, background warm-up.
-- v2 does **not** include autopilot or order placement yet — see
-  `desktop/MIGRATION-v5.md` before pointing production at it.
+- Autopilot ported (`backend-v2/app/services/autopilot_runner.py`, strategy
+  untouched) with start/stop/strategy in Settings. Chat orders — including
+  "close all", which the original executed straight from the message — now
+  always go through a confirm card; trading needs your own Alpaca keys or an
+  allowlisted account. See `desktop/MIGRATION-v5.md` before switching production.
 
 ## 4.19.0 — September 19, 2026
 Co-Pilot's earnings list becomes a clickable month calendar.

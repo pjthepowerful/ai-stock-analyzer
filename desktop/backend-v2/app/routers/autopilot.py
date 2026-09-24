@@ -1,17 +1,17 @@
 """
-Autopilot config + diagnostics — read-only in this preview build. Starting/
-stopping the real autonomous trading loop is intentionally NOT wired up here
-yet: it's a real background process that places (paper) trades on its own,
-and that's a bigger decision than a UI-rewrite pass should make unilaterally.
-Mode selection and the "why no trades" diagnostic are both read-only/
-informational, so they're safe to expose now.
+Autopilot: start/stop the autonomous trading loop (services/autopilot_runner),
+switch strategy, and the "why no trades" diagnostic. Everything that changes
+anything is limited to the same allowlisted accounts as the original backend.
 """
 import os
 
 from fastapi import APIRouter, Header, HTTPException
+from pydantic import BaseModel
 
 from ..bridge import engine, read_strategy_mode
-from ..deps import current_user_required
+from ..deps import current_user_optional, current_user_required
+from ..services import autopilot_runner as runner
+from ..ws import manager
 
 router = APIRouter(prefix="/api/autopilot", tags=["autopilot"])
 
@@ -22,15 +22,72 @@ def can_autopilot(user: dict | None) -> bool:
     return bool(user) and user.get("email", "").lower() in AUTOPILOT_EMAILS
 
 
-@router.get("/status")
-def status():
-    mode = "core"
+def _require_autopilot(authorization: str | None) -> dict:
+    user = current_user_required(authorization)
+    if not can_autopilot(user):
+        raise HTTPException(403, "Autopilot is limited to authorized accounts")
+    return user
+
+
+def _mode() -> str:
     try:
-        mode = read_strategy_mode()
+        return read_strategy_mode()
     except Exception:
-        pass
-    # Autopilot itself never runs in this preview build (see module docstring).
-    return {"ok": True, "running": False, "mode": mode}
+        return "core"
+
+
+@router.get("/status")
+def status(authorization: str = Header(None)):
+    out = {"ok": True, "running": runner.is_running(), "mode": _mode()}
+    # Tickers and cycle logs are the owner's trading activity — only the
+    # accounts allowed to run autopilot see them.
+    if can_autopilot(current_user_optional(authorization)):
+        st = runner.status()
+        out.update(started_at=st["started_at"], recent=st["recent"])
+    return out
+
+
+@router.post("/start")
+async def start(authorization: str = Header(None)):
+    user = _require_autopilot(authorization)
+    try:
+        started = await runner.start(user)
+    except runner.AutopilotConflict as e:
+        raise HTTPException(409, str(e))
+    return {"ok": True, "running": True, "message": "Autopilot started" if started else "Autopilot already running"}
+
+
+@router.post("/stop")
+async def stop(authorization: str = Header(None)):
+    _require_autopilot(authorization)
+    await runner.stop()
+    return {"ok": True, "running": False, "message": "Autopilot stopped"}
+
+
+class ModeRequest(BaseModel):
+    mode: str
+
+
+@router.post("/mode")
+async def set_mode(req: ModeRequest, authorization: str = Header(None)):
+    """Refused while running: the modes manage positions differently, and
+    handing an open book to the other mode's exit logic can leave a position
+    with no owner and no stop. Stop, switch, restart."""
+    _require_autopilot(authorization)
+    mode = req.mode.lower().strip()
+    valid = getattr(engine, "STRATEGY_MODES", ["core"])
+    if mode not in valid:
+        raise HTTPException(400, f"Unknown mode {mode!r}. Valid: {', '.join(valid)}")
+    if runner.is_running():
+        raise HTTPException(409, "Stop autopilot before switching strategy — open positions are managed by the mode that opened them.")
+    try:
+        engine.save_autopilot_config({"STRATEGY_MODE": mode})
+    except Exception as e:
+        raise HTTPException(500, f"Could not save mode: {str(e)[:120]}")
+    if _mode() != mode:
+        raise HTTPException(500, "Mode did not persist")
+    await manager.broadcast("autopilot", {"kind": "mode_changed", "running": False})
+    return {"ok": True, "mode": mode}
 
 
 @router.get("/modes")

@@ -84,10 +84,23 @@ export interface ChatMessage {
   content: string
 }
 
+/** An order Paula understood from chat. Nothing is placed until the user
+ *  confirms it (POST /api/trade/execute). */
+export interface TradeIntent {
+  action: 'buy' | 'sell' | 'short' | 'cover' | 'cancel_orders' | 'close_all'
+  ticker?: string
+  qty?: number | null
+  notional?: number | null
+  smart?: boolean
+  sell_all?: boolean
+  cover_all?: boolean
+}
+
 export interface ChatResponse {
   ok: boolean
   type: string
   message: string
+  trade?: TradeIntent
   ticker?: string | null
   tickers?: string[]
   taste?: boolean

@@ -59,6 +59,8 @@ export const RELEASES: Release[] = [
       },
     ],
     changes: [
+      'Autopilot controls in Settings: start/stop, pick a strategy, and see recent activity. It keeps running with the app closed and comes back on its own after a restart.',
+      'Orders from chat (“buy 5 AAPL”, “close all”) show a confirm card first — nothing is sent to your broker until you press Confirm.',
       'Saved chats that sync across devices, with one-click delete and Undo.',
       'Analyze: autocomplete by symbol or company, recent tickers, the signal card beside the chart, and an earnings / fundamentals / news panel.',
       'Portfolio: equity curve with ranges, activity by week or month, positions table, S&P comparison and day-trade headroom.',

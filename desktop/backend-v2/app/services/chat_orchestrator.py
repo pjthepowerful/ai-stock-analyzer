@@ -157,21 +157,11 @@ async def build_response(
         resp = result.get("msg", "")
 
         if rtype == "confirm_trade":
-            # The original shows a confirm card that calls /api/trade/execute.
-            # Order placement isn't enabled in v2 yet, so say what was
-            # understood instead of returning an empty, unactionable reply.
-            t = result.get("trade") or {}
-            if t.get("action") == "cancel_orders":
-                what = "cancel all open orders"
-            else:
-                what = " ".join(str(x) for x in (t.get("action"), t.get("qty"), t.get("ticker")) if x)
-            return {
-                "ok": True,
-                "type": "chat",
-                "message": (f"Got it — **{what}**. " if what else "")
-                + "Placing orders from chat isn't switched on in this version of Paula yet, "
-                "so nothing was sent to your broker.",
-            }
+            # Never trade from the message itself: return a confirm card; only
+            # its Confirm button calls /api/trade/execute.
+            if not user:
+                return {"ok": True, "type": "chat", "message": "Sign in and connect your Alpaca account to place orders."}
+            return {"ok": True, "type": "confirm_trade", "message": "", "trade": result.get("trade") or {}}
 
         if rtype == "analysis":
             is_deep = bool(result.get("ticker")) and isinstance(result.get("data"), dict)

@@ -8,6 +8,7 @@ import { Typewriter } from '../../components/Typewriter'
 import { MarketStrip } from './MarketStrip'
 import { Snapshot } from './Snapshot'
 import { MessageBubble } from './MessageBubble'
+import { describeTrade } from './TradeConfirm'
 import './chat.css'
 
 // Cycled under the greeting, as in the original app.
@@ -33,7 +34,7 @@ function fallbackTitle(text: string) {
 export function ChatScreen({ onNavigateAnalyze, draft }: Props) {
   const { user, isGuest } = useSession()
   const { openReport } = useChrome()
-  const { active, append, rename, ensureActive, scan, startScan } = useChats()
+  const { active, append, patchMeta, rename, ensureActive, scan, startScan } = useChats()
   const [input, setInput] = useState(draft?.text ?? '')
   const [seenDraft, setSeenDraft] = useState(draft)
   if (draft !== seenDraft) {
@@ -83,6 +84,12 @@ export function ChatScreen({ onNavigateAnalyze, draft }: Props) {
       const res = await api.post<ChatResponse>('/api/chat', { message: trimmed, history })
       if (res.type === 'scan_started') {
         startScan(chatId, res.scan_id ?? '')
+      } else if (res.type === 'confirm_trade' && res.trade) {
+        append(chatId, {
+          role: 'assistant',
+          content: `Confirm order: ${describeTrade(res.trade)}`,
+          meta: { trade: res.trade, tradeState: 'pending' },
+        })
       } else {
         const card = res.trade_signal && res.quote ? { ...res.quote, signal: res.trade_signal } : undefined
         append(chatId, {
@@ -161,7 +168,13 @@ export function ChatScreen({ onNavigateAnalyze, draft }: Props) {
           ) : (
             <>
               {messages.map((m, i) => (
-                <MessageBubble key={i} role={m.role} content={m.content} meta={m.meta} />
+                <MessageBubble
+                  key={i}
+                  role={m.role}
+                  content={m.content}
+                  meta={m.meta}
+                  onMeta={(meta) => active && patchMeta(active.id, i, meta)}
+                />
               ))}
 
               {sending && (
@@ -234,7 +247,7 @@ export function ChatScreen({ onNavigateAnalyze, draft }: Props) {
             <ArrowUp size={16} strokeWidth={2.2} />
           </button>
         </form>
-        <p className="composer-hint">Paula can be wrong. Research only — nothing here is an order.</p>
+        <p className="composer-hint">Paula can be wrong. No order is placed until you confirm it.</p>
       </div>
     </div>
   )

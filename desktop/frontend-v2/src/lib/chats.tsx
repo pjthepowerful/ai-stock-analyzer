@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { AnalyzeData } from '../components/SignalCard'
-import { api } from './api'
+import { api, type TradeIntent } from './api'
 import { useSession } from './auth'
 import { useWebSocket } from './ws'
 
@@ -10,7 +10,14 @@ export interface StoredMessage {
   role: 'user' | 'assistant'
   content: string
   time?: string
-  meta?: { taste?: boolean; limitReached?: boolean; card?: AnalyzeData }
+  meta?: {
+    taste?: boolean
+    limitReached?: boolean
+    card?: AnalyzeData
+    trade?: TradeIntent
+    tradeState?: 'pending' | 'placing' | 'done' | 'failed' | 'cancelled'
+    tradeResult?: string
+  }
 }
 
 export interface Chat {
@@ -47,6 +54,8 @@ interface Chats {
   /** Put a just-deleted chat back where it was (Undo). */
   restore: (chat: Chat, index: number) => void
   append: (chatId: string, msg: StoredMessage) => void
+  /** Merge into one message's meta (e.g. a trade card's state). */
+  patchMeta: (chatId: string, index: number, meta: StoredMessage['meta']) => void
   rename: (chatId: string, title: string) => void
   /** Makes sure there's an active chat to write into and returns its id. */
   ensureActive: () => string
@@ -237,6 +246,18 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     [commit],
   )
 
+  const patchMeta = useCallback(
+    (chatId: string, index: number, meta: StoredMessage['meta']) =>
+      commit((prev) =>
+        prev.map((c) =>
+          c.id === chatId
+            ? { ...c, messages: c.messages.map((m, i) => (i === index ? { ...m, meta: { ...m.meta, ...meta } } : m)) }
+            : c,
+        ),
+      ),
+    [commit],
+  )
+
   const rename = useCallback(
     (chatId: string, title: string) => commit((prev) => prev.map((c) => (c.id === chatId ? { ...c, title } : c))),
     [commit],
@@ -275,8 +296,8 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
   })
 
   const value = useMemo(
-    () => ({ scan, startScan, chats, active, select, create, remove, restore, append, rename, ensureActive }),
-    [scan, startScan, chats, active, select, create, remove, restore, append, rename, ensureActive],
+    () => ({ scan, startScan, chats, active, select, create, remove, restore, append, patchMeta, rename, ensureActive }),
+    [scan, startScan, chats, active, select, create, remove, restore, append, patchMeta, rename, ensureActive],
   )
 
   return <ChatsContext.Provider value={value}>{children}</ChatsContext.Provider>

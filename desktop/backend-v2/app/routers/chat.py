@@ -114,7 +114,29 @@ async def chat(req: ChatRequest, request: Request, authorization: str = Header(N
     intent = engine.route(user_msg, history=chat_history[:-1])
 
     if intent.get("type") in ("autopilot", "stop_autopilot"):
-        return {"ok": True, "type": "chat", "message": "Autopilot isn't wired up in this preview build yet."}
+        from ..services import autopilot_runner
+        from .autopilot import can_autopilot
+
+        if not can_autopilot(user):
+            return {"ok": True, "type": "chat", "message": "Autopilot is limited to authorized accounts."}
+        if intent["type"] == "autopilot":
+            try:
+                await autopilot_runner.start(user)
+            except autopilot_runner.AutopilotConflict as e:
+                return {"ok": True, "type": "chat", "message": str(e)}
+            msg = "Autopilot is on — scanning every 5 minutes while the market is open."
+        else:
+            await autopilot_runner.stop()
+            msg = "Autopilot stopped."
+        auth.save_chat(user_id, "assistant", msg)
+        return {"ok": True, "type": "chat", "message": msg, "autopilot": autopilot_runner.is_running()}
+
+    # engine.execute() closes every position immediately for this intent; in
+    # v2 it goes through the same confirm card as every other order.
+    if intent.get("type") == "close_all":
+        if not user:
+            return {"ok": True, "type": "chat", "message": "Sign in and connect your Alpaca account to place orders."}
+        return {"ok": True, "type": "confirm_trade", "message": "", "trade": {"action": "close_all"}}
 
     if intent.get("type") == "stock_ideas":
         return await _start_scan(intent, user_id, is_plus)

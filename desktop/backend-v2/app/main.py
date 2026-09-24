@@ -23,6 +23,8 @@ from .routers import overview as overview_router
 from .routers import plus as plus_router
 from .routers import research as research_router
 from .routers import strategy as strategy_router
+from .routers import trade as trade_router
+from .services import autopilot_runner
 from .ws import manager
 
 
@@ -31,8 +33,14 @@ from .ws import manager
 async def lifespan(_app: FastAPI):
     # Keep the market strip's cache warm so no page load waits on it.
     warm = asyncio.create_task(overview_router.keep_warm())
+    # Autopilot runs unattended: bring it back if it was on before a restart.
+    try:
+        await autopilot_runner.resume_if_needed()
+    except Exception as e:
+        print(f"[autopilot] could not resume: {e!r}", flush=True)
     yield
     warm.cancel()
+    await autopilot_runner.shutdown()
 
 
 app = FastAPI(title="Paula v2", default_response_class=SafeJSONResponse, lifespan=lifespan)
@@ -63,6 +71,7 @@ app.include_router(market_router.router)
 app.include_router(overview_router.router)
 app.include_router(chart_router.router)
 app.include_router(autopilot_router.router)
+app.include_router(trade_router.router)
 app.include_router(earnings_router.router)
 app.include_router(plus_router.router)
 app.include_router(research_router.router)

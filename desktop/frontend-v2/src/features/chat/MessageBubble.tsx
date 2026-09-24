@@ -4,14 +4,16 @@ import { SignalCard } from '../../components/SignalCard'
 import type { StoredMessage } from '../../lib/chats'
 import { useChrome } from '../../lib/chrome'
 import { formatMessage } from '../../lib/format'
+import { TradeConfirm } from './TradeConfirm'
 
 interface Props {
   role: 'user' | 'assistant'
   content: string
   meta?: StoredMessage['meta']
+  onMeta?: (meta: StoredMessage['meta']) => void
 }
 
-export function MessageBubble({ role, content, meta }: Props) {
+export function MessageBubble({ role, content, meta, onMeta }: Props) {
   const { openPlus } = useChrome()
 
   if (role === 'user') {
@@ -26,7 +28,16 @@ export function MessageBubble({ role, content, meta }: Props) {
     <div className="msg msg-assistant">
       <span className="msg-avatar">P</span>
       <div className="msg-assistant-body">
-        <div className="msg-assistant-text" dangerouslySetInnerHTML={{ __html: formatMessage(content) }} />
+        {meta?.trade ? (
+          <TradeConfirm
+            trade={meta.trade}
+            state={meta.tradeState}
+            result={meta.tradeResult}
+            onChange={(m) => onMeta?.(m)}
+          />
+        ) : (
+          <div className="msg-assistant-text" dangerouslySetInnerHTML={{ __html: formatMessage(content) }} />
+        )}
         {meta?.card && (
           <div className="msg-card">
             <SignalCard data={meta.card} />

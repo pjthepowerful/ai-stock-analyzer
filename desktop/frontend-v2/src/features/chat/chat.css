@@ -555,3 +555,54 @@ button.mstrip-item:hover {
     animation: none;
   }
 }
+
+/* ── Order confirmation card ── */
+.trade-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+}
+
+.trade-card-danger {
+  border-color: color-mix(in srgb, var(--negative) 45%, var(--border));
+}
+
+.trade-card-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.trade-card-label {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-dim);
+}
+
+.trade-card-what {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.trade-card-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.trade-card-result {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.trade-card-done {
+  color: var(--positive);
+}
+
+.trade-card-failed {
+  color: var(--negative);
+}
