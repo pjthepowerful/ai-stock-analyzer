@@ -5,7 +5,6 @@ import {
   ChartCandlestick,
   CornerDownLeft,
   MessageSquare,
-  Monitor,
   Moon,
   Search,
   Settings,
@@ -81,7 +80,6 @@ export function CommandPalette({ open, onClose, go, analyze }: Props) {
         : []),
       { id: 'theme-light', group: 'Theme', label: 'Light theme', icon: Sun, run: () => setThemePref('light') },
       { id: 'theme-dark', group: 'Theme', label: 'Dark theme', icon: Moon, run: () => setThemePref('dark') },
-      { id: 'theme-system', group: 'Theme', label: 'Match system theme', icon: Monitor, keywords: 'auto', run: () => setThemePref('system') },
     ]
     const recent: Item[] = chats
       .filter((c) => c.messages.length > 0)

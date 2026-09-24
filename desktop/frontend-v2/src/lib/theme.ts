@@ -1,28 +1,21 @@
 import { useEffect, useState } from 'react'
 
 export type Theme = 'light' | 'dark'
-/** What the person picked; 'system' follows the OS appearance. */
-export type ThemePref = Theme | 'system'
+export type ThemePref = Theme
 
 // index.html applies the stored preference before first paint (no flash);
 // this module owns changing it afterwards.
-// New key for v5: everyone starts on the new black default once.
+// New key for v5: everyone starts on the new black default once. A stored
+// 'system' (offered in early 5.0 builds) now reads as dark.
 const KEY = 'paula-theme'
 const EVENT = 'paula-theme'
-const darkQuery = typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)') : null
 
 function readPref(): ThemePref {
   try {
-    const v = localStorage.getItem(KEY)
-    return v === 'dark' || v === 'light' || v === 'system' ? v : 'dark'
+    return localStorage.getItem(KEY) === 'light' ? 'light' : 'dark'
   } catch {
     return 'dark'
   }
-}
-
-function resolve(pref: ThemePref): Theme {
-  if (pref === 'system') return darkQuery?.matches ? 'dark' : 'light'
-  return pref
 }
 
 function apply(theme: Theme) {
@@ -42,13 +35,8 @@ export function setThemePref(pref: ThemePref) {
   } catch {
     /* private mode — the choice just won't persist */
   }
-  apply(resolve(pref))
+  apply(pref)
 }
-
-// Following the system: re-apply when the OS switches (e.g. at sunset).
-darkQuery?.addEventListener('change', () => {
-  if (readPref() === 'system') apply(resolve('system'))
-})
 
 /** [resolved theme on screen, the person's preference, setter]. Charts key
  *  their redraw on the resolved theme. */

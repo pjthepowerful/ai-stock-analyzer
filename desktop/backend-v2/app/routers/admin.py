@@ -157,7 +157,7 @@ class SetPlusRequest(BaseModel):
 
 
 @router.post("/api/admin/set-plus")
-def set_plus(req: SetPlusRequest, authorization: Optional[str] = Header(None)):
+async def set_plus(req: SetPlusRequest, authorization: Optional[str] = Header(None)):
     admin_required(authorization)
     db = auth._get_db()
     try:
@@ -166,7 +166,13 @@ def set_plus(req: SetPlusRequest, authorization: Optional[str] = Header(None)):
         db.close()
     if not exists:
         raise HTTPException(404, "No such user")
-    auth.set_plus(req.user_id, req.on, gift_msg=req.message if req.on else "")
+    auth.set_plus(req.user_id, req.on, gift_msg=req.message.strip()[:300] if req.on else "")
+    # Only the id goes over the shared socket; that person's app refetches
+    # its own account (and the gift note) through the signed-in /me.
+    try:
+        await manager.broadcast("plus_changed", {"user_id": req.user_id})
+    except Exception:
+        pass
     return {"ok": True, "user_id": req.user_id, "plus": req.on}
 
 

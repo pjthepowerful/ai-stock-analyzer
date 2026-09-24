@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Power } from 'lucide-react'
 import { useState } from 'react'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { api, ApiError } from '../../lib/api'
 import { useToast } from '../../lib/toast'
 import { useWebSocket } from '../../lib/ws'
@@ -105,18 +106,35 @@ export function AutopilotPanel() {
     }
   }
 
-  async function pickMode(key: string) {
-    if (running || key === current) return
-    setError(null)
+  // Picking a strategy opens a confirm; the switch happens on Confirm.
+  const [pending, setPending] = useState<AutopilotMode | null>(null)
+  const [switching, setSwitching] = useState(false)
+  const [switchError, setSwitchError] = useState<string | null>(null)
+
+  function pickMode(m: AutopilotMode) {
+    if (running || m.key === current) return
+    setSwitchError(null)
+    setPending(m)
+  }
+
+  async function confirmMode() {
+    if (!pending) return
+    setSwitching(true)
+    setSwitchError(null)
     try {
-      await api.post('/api/autopilot/mode', { mode: key })
-      toast.show('Strategy switched')
+      await api.post('/api/autopilot/mode', { mode: pending.key })
+      toast.show(`Switched to ${pending.label}`)
+      setPending(null)
       await qc.invalidateQueries({ queryKey: ['autopilot-modes'] })
       await qc.invalidateQueries({ queryKey: ['autopilot-status'] })
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Could not switch strategy.')
+      setSwitchError(e instanceof ApiError ? e.message : 'Could not switch strategy.')
+    } finally {
+      setSwitching(false)
     }
   }
+
+  const currentLabel = modes.data?.modes.find((m) => m.key === current)?.label ?? current
 
   async function runDiagnostics() {
     setDiagBusy(true)
@@ -169,7 +187,7 @@ export function AutopilotPanel() {
               <button
                 key={m.key}
                 className={'settings-mode' + (current === m.key ? ' settings-mode-on' : '')}
-                onClick={() => pickMode(m.key)}
+                onClick={() => pickMode(m)}
                 disabled={running && current !== m.key}
                 aria-pressed={current === m.key}
               >
@@ -208,6 +226,31 @@ export function AutopilotPanel() {
         {diagBusy ? 'Running…' : 'Why no trades? →'}
       </button>
       {diagnostics && <div className="settings-diag-result">{diagnostics}</div>}
+
+      <ConfirmDialog
+        open={!!pending}
+        title={`Switch to ${pending?.label ?? ''}?`}
+        confirmLabel={`Switch to ${pending?.label ?? ''}`}
+        busy={switching}
+        error={switchError}
+        onCancel={() => setPending(null)}
+        onConfirm={confirmMode}
+        body={
+          pending && (
+            <>
+              <p>
+                The next time autopilot runs it trades with <strong>{pending.label}</strong> instead of{' '}
+                <strong>{currentLabel}</strong>.
+              </p>
+              <p>
+                {pending.label} risks {(pending.risk_per_trade * 100).toFixed(1)}% per trade, holds up to{' '}
+                {pending.max_positions} positions and stops for the day at a{' '}
+                {(pending.daily_loss_limit * 100).toFixed(0)}% loss.
+              </p>
+            </>
+          )
+        }
+      />
     </section>
   )
 }

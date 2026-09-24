@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api, ApiError, type ChatMessage } from '../../lib/api'
 import { useSession } from '../../lib/auth'
+import { useToast } from '../../lib/toast'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { StrategyPanel } from './StrategyPanel'
 import './admin.css'
 
@@ -137,6 +139,7 @@ function Stat({ label, value, warn }: { label: string; value: number | undefined
 function UsersPanel() {
   const qc = useQueryClient()
   const { user: me } = useSession()
+  const toast = useToast()
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
   const [filter, setFilter] = useState('')
   const users = useQuery({
@@ -145,9 +148,17 @@ function UsersPanel() {
   })
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['admin'] })
+  // Granting or removing Plus always goes through a confirm dialog; a gift
+  // can carry a note the person sees the next time they open Paula.
+  const [planFor, setPlanFor] = useState<AdminUser | null>(null)
+  const [giftNote, setGiftNote] = useState('')
   const setPlus = useMutation({
-    mutationFn: (v: { user_id: number; on: boolean }) => api.post('/api/admin/set-plus', v),
-    onSuccess: invalidate,
+    mutationFn: (v: { user_id: number; on: boolean; message?: string }) => api.post('/api/admin/set-plus', v),
+    onSuccess: (_d, v) => {
+      setPlanFor(null)
+      toast.show(v.on ? 'Plus gifted' : 'Plus removed')
+      invalidate()
+    },
   })
   const remove = useMutation({
     mutationFn: (id: number) => api.del(`/api/admin/users/${id}`),
@@ -164,7 +175,7 @@ function UsersPanel() {
   const rows = users.data.users.filter(
     (u) => !q || u.email.toLowerCase().includes(q) || u.username.toLowerCase().includes(q),
   )
-  const mutationError = setPlus.error ?? remove.error
+  const mutationError = remove.error
 
   return (
     <section className="card admin-panel">
@@ -201,8 +212,12 @@ function UsersPanel() {
                   <button
                     className={'admin-plan' + (u.plus ? ' admin-plan-plus' : '')}
                     disabled={setPlus.isPending}
-                    onClick={() => setPlus.mutate({ user_id: u.id, on: !u.plus })}
-                    title={u.plus ? 'Revoke Plus' : 'Grant Plus'}
+                    onClick={() => {
+                      setPlus.reset()
+                      setGiftNote('')
+                      setPlanFor(u)
+                    }}
+                    title={u.plus ? 'Remove Plus' : 'Gift Plus'}
                   >
                     {u.plus ? 'PLUS' : 'free'}
                   </button>
@@ -231,6 +246,50 @@ function UsersPanel() {
         </table>
       </div>
       {rows.length === 0 && <p className="admin-empty">No users match.</p>}
+
+      <ConfirmDialog
+        open={!!planFor}
+        title={planFor?.plus ? 'Remove Paula Plus?' : 'Gift Paula Plus'}
+        danger={!!planFor?.plus}
+        busy={setPlus.isPending}
+        error={setPlus.error?.message}
+        confirmLabel={planFor?.plus ? 'Remove Plus' : 'Gift Plus'}
+        onCancel={() => setPlanFor(null)}
+        onConfirm={() =>
+          planFor &&
+          setPlus.mutate({ user_id: planFor.id, on: !planFor.plus, message: planFor.plus ? '' : giftNote.trim() })
+        }
+        body={
+          planFor?.plus ? (
+            <>
+              <p>
+                <strong>{planFor.username}</strong> ({planFor.email}) goes back to the free plan right away: 3 messages a
+                day, one chat, and no deep analysis or broker connection.
+              </p>
+              <p>Any gift note they had is cleared.</p>
+            </>
+          ) : (
+            <p>
+              <strong>{planFor?.username}</strong> ({planFor?.email}) gets Plus straight away. Add a note if you like —
+              they’ll see it the next time they open Paula.
+            </p>
+          )
+        }
+      >
+        {planFor && !planFor.plus && (
+          <label className="confirm-field">
+            Message (optional)
+            <textarea
+              className="input"
+              value={giftNote}
+              maxLength={300}
+              placeholder="Write a personal note…"
+              onChange={(e) => setGiftNote(e.target.value)}
+            />
+            <span className="confirm-count">{giftNote.length}/300</span>
+          </label>
+        )}
+      </ConfirmDialog>
     </section>
   )
 }

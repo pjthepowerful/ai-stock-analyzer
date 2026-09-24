@@ -176,3 +176,10 @@
     animation: none;
   }
 }
+
+.gift-note {
+  display: block;
+  font-style: italic;
+  color: var(--text);
+  white-space: pre-wrap;
+}

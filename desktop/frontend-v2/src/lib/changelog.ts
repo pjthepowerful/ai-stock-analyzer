@@ -33,7 +33,7 @@ export const RELEASES: Release[] = [
     highlights: [
       {
         title: 'Rebuilt from the ground up',
-        desc: 'A new app frame — sidebar, cards, one type family — so every screen feels like the same product. Black by default, with Light and System in one click.',
+        desc: 'A new app frame — sidebar, cards, one type family — so every screen feels like the same product. Black by default, with a light theme one click away.',
         demo: {
           before: '/whatsnew/chat-before.jpg',
           after: '/whatsnew/chat-after.jpg',

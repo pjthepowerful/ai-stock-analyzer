@@ -20,6 +20,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react
 import { ChatScreen } from '../features/chat/ChatScreen'
 import { ReportSheet } from '../features/feedback/ReportSheet'
 import { PlusSheet } from '../features/plus/PlusSheet'
+import { GiftSheet } from '../features/plus/GiftSheet'
 import { WelcomeSheet } from '../features/plus/WelcomeSheet'
 import { SettingsScreen } from '../features/settings/SettingsScreen'
 import { CommandPalette } from '../components/CommandPalette'
@@ -232,6 +233,7 @@ export function Shell() {
 
         <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
         <WelcomeSheet />
+        <GiftSheet />
         {whatsNew && (
           <Suspense fallback={null}>
             <WhatsNewSheet open={whatsNew} onClose={() => setWhatsNew(false)} />

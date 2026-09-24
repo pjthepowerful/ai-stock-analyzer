@@ -62,6 +62,8 @@ export interface AuthUser {
   plus?: boolean
   is_admin?: boolean
   can_autopilot?: boolean
+  /** Note from the team when Plus was gifted (from /api/auth/me). */
+  gift_msg?: string
 }
 
 export interface MeResponse {

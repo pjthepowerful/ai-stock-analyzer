@@ -20,7 +20,7 @@
         // Black is the default; only an explicit Light (or System in light
         // mode) opts out.
         var t = localStorage.getItem('paula-theme')
-        var light = t === 'light' || (t === 'system' && !matchMedia('(prefers-color-scheme: dark)').matches)
+        var light = t === 'light'
         if (!light) document.documentElement.dataset.theme = 'dark'
       } catch (e) {}
     </script>
