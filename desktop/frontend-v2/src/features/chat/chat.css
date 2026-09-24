@@ -517,3 +517,26 @@
   background: var(--surface-2);
   color: var(--text);
 }
+
+/* New messages ease in rather than pop. */
+.msg {
+  animation: msg-in var(--dur-slow) var(--ease-out);
+}
+
+.chat-empty {
+  animation: msg-in 320ms var(--ease-out);
+}
+
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg,
+  .chat-empty {
+    animation: none;
+  }
+}
