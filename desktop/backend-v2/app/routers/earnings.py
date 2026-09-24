@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Header, HTTPException
 
-from ..bridge import engine
+from ..bridge import engine, read_strategy_mode
 from ..deps import current_user_required
 from ..services.parallel import pmap
 from ..ws import manager
@@ -48,7 +48,7 @@ def calendar_day(date: str, authorization: str = Header(None)):
         import earnings as earn
         import smallcap_pullback as scp
 
-        mode_key = (engine.load_autopilot_config().get("STRATEGY_MODE") or "core").lower()
+        mode_key = read_strategy_mode()
         mode = scp.get_mode(mode_key) if mode_key in ("strict", "intense") else None
 
         key = (date, mode_key)

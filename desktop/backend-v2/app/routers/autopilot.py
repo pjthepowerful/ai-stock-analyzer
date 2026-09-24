@@ -10,7 +10,7 @@ import os
 
 from fastapi import APIRouter, Header, HTTPException
 
-from ..bridge import engine
+from ..bridge import engine, read_strategy_mode
 from ..deps import current_user_required
 
 router = APIRouter(prefix="/api/autopilot", tags=["autopilot"])
@@ -26,7 +26,7 @@ def can_autopilot(user: dict | None) -> bool:
 def status():
     mode = "core"
     try:
-        mode = (engine.load_autopilot_config().get("STRATEGY_MODE") or "core").lower()
+        mode = read_strategy_mode()
     except Exception:
         pass
     # Autopilot itself never runs in this preview build (see module docstring).
@@ -37,7 +37,7 @@ def status():
 def modes():
     current = "core"
     try:
-        current = (engine.load_autopilot_config().get("STRATEGY_MODE") or "core").lower()
+        current = read_strategy_mode()
     except Exception:
         pass
     mode_list = []
@@ -58,7 +58,7 @@ def diagnostics(authorization: str = Header(None)):
 
     mode = "core"
     try:
-        mode = (engine.load_autopilot_config().get("STRATEGY_MODE") or "core").lower()
+        mode = read_strategy_mode()
     except Exception:
         pass
 

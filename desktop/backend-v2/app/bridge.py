@@ -39,3 +39,20 @@ import engine   # noqa: E402  (must come after sys.path/env setup above)
 import auth     # noqa: E402
 
 __all__ = ["engine", "auth"]
+
+
+def read_strategy_mode() -> str:
+    """The autopilot's STRATEGY_MODE, read without side effects.
+
+    engine.load_autopilot_config() re-writes autopilot_config.json on every
+    call. Both apps call it, so a read racing a write can see a truncated
+    file, fall back to defaults and quietly report (or persist) 'core'. The
+    GET endpoints here only need the mode, so they read the file directly.
+    """
+    import json
+
+    try:
+        with open(engine.autopilot_cfg_path()) as f:
+            return (json.load(f).get("STRATEGY_MODE") or "core").lower()
+    except Exception:
+        return "core"
