@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SUITES = ["test_signal_logic.py", "test_auth_reset.py", "test_router.py", "test_backtest.py", "test_price_math.py", "test_smallcap.py", "test_bells.py", "test_groq_models.py", "test_security.py", "test_earnings.py", "test_research.py", "test_forecast.py"]
+SUITES = ["test_signal_logic.py", "test_auth_reset.py", "test_router.py", "test_backtest.py", "test_price_math.py", "test_smallcap.py", "test_bells.py", "test_groq_models.py", "test_security.py", "test_earnings.py", "test_research.py", "test_forecast.py", "test_backtest.py"]
 
 
 def main():
