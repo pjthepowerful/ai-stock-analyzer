@@ -43,3 +43,13 @@
   font-size: var(--text-sm);
   background: var(--surface);
 }
+
+@media (max-width: 560px) {
+  .pchart-ohlc {
+    display: none;
+  }
+
+  .pchart-head {
+    justify-content: space-between;
+  }
+}

@@ -114,7 +114,7 @@ export function Performance() {
                 <tr>
                   <th>Period</th>
                   <th>Orders</th>
-                  <th>Symbols</th>
+                  <th className="hide-sm">Symbols</th>
                   <th className="num">P&amp;L</th>
                 </tr>
               </thead>
@@ -125,7 +125,7 @@ export function Performance() {
                     <td className="text-dim">
                       {r.buys} buy{r.buys === 1 ? '' : 's'} · {r.sells} sell{r.sells === 1 ? '' : 's'}
                     </td>
-                    <td className="activity-syms">{r.tickers.join(', ')}</td>
+                    <td className="activity-syms hide-sm">{r.tickers.join(', ')}</td>
                     <td className={'num ' + (r.pnl != null ? tone(r.pnl) : '')}>{r.pnl != null ? money(r.pnl) : '—'}</td>
                   </tr>
                 ))}

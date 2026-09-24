@@ -66,7 +66,8 @@ export function Chart({ ticker, height = 320 }: { ticker: string; height?: numbe
 
     const chart = createChart(containerRef.current, {
       width: containerRef.current.clientWidth,
-      height,
+      // Shorter on phones so the chart doesn't fill the whole screen.
+      height: Math.min(height, Math.max(220, Math.round(containerRef.current.clientWidth * 0.72))),
       layout: { background: { color: 'transparent' }, textColor: c.text, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
       grid: { vertLines: { color: c.grid }, horzLines: { color: c.grid } },
       crosshair: { mode: CrosshairMode.Normal },

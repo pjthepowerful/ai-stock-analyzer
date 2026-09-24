@@ -157,6 +157,11 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* Stacked: the verdict matters more than the chart, so it goes first. */
+  .analyze-grid > .signal-card {
+    order: -1;
+  }
+
   .rp {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }

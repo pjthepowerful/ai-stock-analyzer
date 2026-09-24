@@ -163,9 +163,9 @@ export function PortfolioScreen() {
                   <tr>
                     <th>Symbol</th>
                     <th className="num">Shares</th>
-                    <th className="num">Avg cost</th>
+                    <th className="num hide-sm">Avg cost</th>
                     <th className="num">Price</th>
-                    <th className="num">Market value</th>
+                    <th className="num hide-sm">Market value</th>
                     <th className="num">Unrealized</th>
                   </tr>
                 </thead>
@@ -178,9 +178,9 @@ export function PortfolioScreen() {
                         </button>
                       </td>
                       <td className="num">{p.qty}</td>
-                      <td className="num">${p.avg_entry.toFixed(2)}</td>
+                      <td className="num hide-sm">${p.avg_entry.toFixed(2)}</td>
                       <td className="num">${p.current_price.toFixed(2)}</td>
-                      <td className="num">${p.market_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                      <td className="num hide-sm">${p.market_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
                       <td className={'num ' + tone(p.unrealized_pnl)}>
                         {p.unrealized_pnl >= 0 ? '+' : '−'}${Math.abs(p.unrealized_pnl).toFixed(2)}
                         <span className="text-dim"> {signedPct(p.unrealized_pnl_pct)}</span>
