@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Clock, MessageSquare, Search } from 'lucide-react'
+import { Clock, MessageSquare, Search, TrendingUp } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Chart } from '../../components/Chart'
 import { SignalCard, type AnalyzeData } from '../../components/SignalCard'
@@ -14,7 +14,13 @@ interface AnalyzeApiResponse {
   data?: AnalyzeData
 }
 
-const QUICK = ['AAPL', 'NVDA', 'MSFT', 'TSLA', 'AMZN', 'META', 'SPY']
+const FALLBACK = ['AAPL', 'NVDA', 'MSFT', 'TSLA', 'AMZN', 'META', 'SPY']
+
+interface Popular {
+  ticker: string
+  people: number
+  trending: boolean
+}
 const RECENT_KEY = 'paula-v2-recent-tickers'
 
 function readRecent(): string[] {
@@ -68,6 +74,15 @@ export function AnalyzeScreen({ request }: Props) {
     const clean = t.trim().toUpperCase()
     if (clean) setActive(clean)
   }
+
+  // What people are actually looking up this week (server-side counts).
+  const popular = useQuery({
+    queryKey: ['popular-tickers'],
+    queryFn: () => api.get<{ tickers: Popular[] }>('/api/tickers/popular?limit=8').then((r) => r.tickers),
+    staleTime: 60_000,
+  })
+  const quick: Popular[] = popular.data ?? FALLBACK.map((t) => ({ ticker: t, people: 0, trending: false }))
+  const anyTrending = quick.some((p) => p.trending)
 
   const result = q.data ?? null
   const recent = result ? [] : readRecent()
@@ -126,11 +141,25 @@ export function AnalyzeScreen({ request }: Props) {
                 </div>
               </>
             )}
-            <p className="analyze-quick-label">Popular</p>
+            <p className="analyze-quick-label">
+              {anyTrending ? (
+                <>
+                  <TrendingUp size={12} /> Trending on Paula this week
+                </>
+              ) : (
+                'Popular'
+              )}
+            </p>
             <div className="analyze-quick">
-              {QUICK.map((t) => (
-                <button key={t} className="btn btn-secondary btn-sm" onClick={() => lookup(t)}>
-                  {t}
+              {quick.map((p) => (
+                <button
+                  key={p.ticker}
+                  className={'btn btn-secondary btn-sm' + (p.trending ? ' quick-trending' : '')}
+                  onClick={() => lookup(p.ticker)}
+                  title={p.trending ? `${p.people} ${p.people === 1 ? 'person' : 'people'} looked this up this week` : undefined}
+                >
+                  {p.trending && <TrendingUp size={12} />}
+                  {p.ticker}
                 </button>
               ))}
             </div>

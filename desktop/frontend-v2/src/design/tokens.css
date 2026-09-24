@@ -51,18 +51,18 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  /* ── Color: soft graphite (not pure black), single accent ── */
-  --bg: #121315;
-  --sidebar: #0e0f11;
-  --surface: #1a1b1e;
-  --surface-2: #222326;
-  --surface-3: #2b2c30;
-  --border: #2c2e32;
-  --border-strong: #3c3f44;
+  /* ── Color: black (Vercel-style), zinc text tiers, single accent ── */
+  --bg: #0a0a0b;
+  --sidebar: #070708;
+  --surface: #111113;
+  --surface-2: #18181b;
+  --surface-3: #222226;
+  --border: #232327;
+  --border-strong: #34343a;
 
-  --text: #eceef0;
-  --text-secondary: #a8adb4;
-  --text-dim: #7d838b;
+  --text: #ededef;
+  --text-secondary: #a1a1aa;
+  --text-dim: #71717a;
 
   --accent: #10b981;
   --accent-strong: #4ade80;

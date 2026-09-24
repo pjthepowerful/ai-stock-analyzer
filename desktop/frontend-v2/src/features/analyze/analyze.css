@@ -243,3 +243,7 @@
   font-size: var(--text-sm);
   color: var(--text-secondary);
 }
+
+.quick-trending svg {
+  color: var(--accent);
+}

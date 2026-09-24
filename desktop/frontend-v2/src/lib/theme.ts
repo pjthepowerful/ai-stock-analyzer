@@ -6,16 +6,17 @@ export type ThemePref = Theme | 'system'
 
 // index.html applies the stored preference before first paint (no flash);
 // this module owns changing it afterwards.
-const KEY = 'paula-v2-theme'
+// New key for v5: everyone starts on the new black default once.
+const KEY = 'paula-theme'
 const EVENT = 'paula-theme'
 const darkQuery = typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)') : null
 
 function readPref(): ThemePref {
   try {
     const v = localStorage.getItem(KEY)
-    return v === 'dark' || v === 'light' || v === 'system' ? v : 'light'
+    return v === 'dark' || v === 'light' || v === 'system' ? v : 'dark'
   } catch {
-    return 'light'
+    return 'dark'
   }
 }
 

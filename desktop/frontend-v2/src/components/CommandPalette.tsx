@@ -1,5 +1,6 @@
 import {
   Bug,
+  Gift,
   CalendarDays,
   ChartCandlestick,
   CornerDownLeft,
@@ -12,10 +13,13 @@ import {
   Sparkles,
   SquarePen,
   Sun,
+  TrendingUp,
   Wallet,
   type LucideIcon,
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { api } from '../lib/api'
 import { useSession } from '../lib/auth'
 import { useChats } from '../lib/chats'
 import { useChrome } from '../lib/chrome'
@@ -46,7 +50,7 @@ interface Props {
 export function CommandPalette({ open, onClose, go, analyze }: Props) {
   const { user } = useSession()
   const { chats, select, create } = useChats()
-  const { openPlus, openReport } = useChrome()
+  const { openPlus, openReport, openWhatsNew } = useChrome()
   const [query, setQuery] = useState('')
   const [hi, setHi] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -71,6 +75,7 @@ export function CommandPalette({ open, onClose, go, analyze }: Props) {
         run: () => (create() ? go('chat') : openPlus()),
       },
       { id: 'report', group: 'Actions', label: 'Report a problem', icon: Bug, keywords: 'bug feedback', run: () => openReport() },
+      { id: 'whatsnew', group: 'Actions', label: 'What’s new', icon: Gift, keywords: 'changelog release notes version demo', run: openWhatsNew },
       ...(!user?.plus && !user?.is_admin
         ? [{ id: 'plus', group: 'Actions', label: 'Get Paula Plus', icon: Sparkles, keywords: 'upgrade', run: openPlus }]
         : []),
@@ -92,7 +97,27 @@ export function CommandPalette({ open, onClose, go, analyze }: Props) {
         },
       }))
     return [...base, ...recent]
-  }, [chats, create, go, openPlus, openReport, select, user])
+  }, [chats, create, go, openPlus, openReport, openWhatsNew, select, user])
+
+  const trending = useQuery({
+    queryKey: ['popular-tickers'],
+    queryFn: () =>
+      api
+        .get<{ tickers: { ticker: string; people: number; trending: boolean }[] }>('/api/tickers/popular?limit=8')
+        .then((r) => r.tickers),
+    staleTime: 60_000,
+  })
+  const trendingItems: Item[] = (trending.data ?? [])
+    .filter((t) => t.trending)
+    .slice(0, 5)
+    .map((t) => ({
+      id: `trend-${t.ticker}`,
+      group: 'Trending on Paula',
+      label: t.ticker,
+      hint: `${t.people} ${t.people === 1 ? 'person' : 'people'} this week`,
+      icon: TrendingUp,
+      run: () => analyze(t.ticker),
+    }))
 
   const q = query.trim().toLowerCase()
   const filtered = q
@@ -118,7 +143,7 @@ export function CommandPalette({ open, onClose, go, analyze }: Props) {
       run: () => analyze(sym),
     })
   }
-  const all = q ? [...tickerItems, ...filtered] : filtered
+  const all = q ? [...tickerItems, ...filtered] : [...filtered.filter((i) => i.group !== 'Recent chats'), ...trendingItems, ...filtered.filter((i) => i.group === 'Recent chats')]
 
   // Keep the highlighted row in view while arrowing through the list.
   useEffect(() => {

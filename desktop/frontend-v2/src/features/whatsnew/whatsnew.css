@@ -1,0 +1,233 @@
+.wn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.wn-release-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.wn-date {
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+}
+
+.wn-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.wn-highlights {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.wn-hl {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.wn-hl-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.wn-hl strong {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.wn-hl p {
+  margin: 2px 0 0;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.wn-demo-btn {
+  flex-shrink: 0;
+}
+
+.wn-changes {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.wn-older-label {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-dim);
+}
+
+.wn-older {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.wn-rel + .wn-rel {
+  border-top: 1px solid var(--border);
+}
+
+.wn-rel-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.wn-rel-head:hover {
+  background: var(--surface-2);
+}
+
+.wn-rel-v {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.wn-rel-chev {
+  margin-left: auto;
+  color: var(--text-dim);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.wn-rel-open .wn-rel-chev {
+  transform: rotate(180deg);
+}
+
+.wn-changes-older {
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-3) var(--space-6);
+  font-size: var(--text-xs);
+}
+
+.wn-foot {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+  text-align: center;
+}
+
+/* ── Before / after demo ── */
+.wn-demo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.wn-caption {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.ba {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1568 / 718;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface-2);
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.ba-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top left;
+  pointer-events: none;
+}
+
+.ba-before {
+  position: absolute;
+  inset: 0;
+}
+
+.ba-tag {
+  position: absolute;
+  top: var(--space-2);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: rgb(0 0 0 / 0.65);
+  color: #fff;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.ba-tag-before {
+  left: var(--space-2);
+}
+
+.ba-tag-after {
+  right: var(--space-2);
+}
+
+.ba-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.25);
+}
+
+.ba-handle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent);
+}
+
+.ba-knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #fff;
+  color: #111;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.35);
+}

@@ -4,6 +4,7 @@ Reuses the existing engine/auth/trading modules unchanged (see bridge.py).
 Runs on :4141 so it never collides with the original backend on :3141.
 """
 import asyncio
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -36,9 +37,14 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="Paula v2", default_response_class=SafeJSONResponse, lifespan=lifespan)
 
+# Local dev: any localhost port. Hosted: set ALLOWED_ORIGINS to the site's
+# URL(s), comma-separated (e.g. https://paula.vercel.app).
+_extra_origins = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5180", "http://127.0.0.1:5180"],
+    allow_origins=_extra_origins,
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -406,3 +406,23 @@
     display: none;
   }
 }
+
+.nav-new,
+.nav-version {
+  margin-left: auto;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+}
+
+.nav-new {
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.nav-version {
+  font-weight: 500;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}

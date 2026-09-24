@@ -20,6 +20,7 @@ from ..bridge import auth, engine
 from ..deps import current_user_optional, in_request_context, is_admin
 from ..models.chat import ChatRequest
 from ..services import chat_orchestrator as orch
+from ..services import popularity
 from ..ws import manager
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -120,6 +121,8 @@ async def chat(req: ChatRequest, request: Request, authorization: str = Header(N
 
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(_light_executor, in_request_context(engine.execute, intent, is_plus=is_plus))
+    if result and result.get("ok") and result.get("type") == "analysis" and result.get("ticker"):
+        popularity.record(result["ticker"], user_id=user_id or None, ip=_client_ip(request))
     return await orch.build_response(loop, user_msg, intent, result, chat_history, user, is_plus)
 
 

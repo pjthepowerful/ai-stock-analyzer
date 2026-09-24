@@ -1,5 +1,6 @@
 import {
   Bug,
+  Gift,
   CalendarDays,
   ChartCandlestick,
   LogOut,
@@ -15,7 +16,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react'
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { ChatScreen } from '../features/chat/ChatScreen'
 import { ReportSheet } from '../features/feedback/ReportSheet'
 import { PlusSheet } from '../features/plus/PlusSheet'
@@ -28,10 +29,23 @@ import { useSession } from '../lib/auth'
 import { ChatsProvider, useChats } from '../lib/chats'
 import { ChromeContext, useChrome, type Chrome } from '../lib/chrome'
 import { ToastProvider, useToast } from '../lib/toast'
+import { VERSION } from '../lib/changelog'
 import './shell.css'
 
 // Chat is the landing screen; the chart-heavy and owner-only screens load on
 // first visit so they don't weigh down the first paint.
+const loadWhatsNew = () => import('../features/whatsnew/WhatsNewSheet')
+const WhatsNewSheet = lazy(() => loadWhatsNew().then((m) => ({ default: m.WhatsNewSheet })))
+const SEEN_KEY = 'paula-seen-version'
+
+function unseenRelease(): boolean {
+  try {
+    return localStorage.getItem(SEEN_KEY) !== VERSION
+  } catch {
+    return false
+  }
+}
+
 const loadAdmin = () => import('../features/admin/AdminScreen')
 const loadAnalyze = () => import('../features/analyze/AnalyzeScreen')
 const loadEarnings = () => import('../features/earnings/EarningsScreen')
@@ -80,6 +94,32 @@ export function Shell() {
   const [palette, setPalette] = useState(false)
   const [analyzeReq, setAnalyzeReq] = useState<{ ticker: string; n: number } | null>(null)
   const [draft, setDraft] = useState<{ text: string; n: number } | null>(null)
+  const [whatsNew, setWhatsNew] = useState(false)
+  const [unseen, setUnseen] = useState(unseenRelease)
+
+  const openWhatsNew = useCallback(() => {
+    setWhatsNew(true)
+    setUnseen(false)
+    try {
+      localStorage.setItem(SEEN_KEY, VERSION)
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  // Show release notes once per new version (not over the sign-up welcome).
+  useEffect(() => {
+    if (!unseenRelease()) return
+    let welcoming = false
+    try {
+      welcoming = localStorage.getItem('paula-v2-welcome') === '1'
+    } catch {
+      /* ignore */
+    }
+    if (welcoming) return
+    const t = setTimeout(openWhatsNew, 1200)
+    return () => clearTimeout(t)
+  }, [openWhatsNew])
 
   useEffect(() => preloadScreens(!!user?.is_admin), [user?.is_admin])
 
@@ -119,6 +159,7 @@ export function Shell() {
     () => ({
       openPlus: () => setPlusOpen(true),
       openReport: (transcript) => setReport({ open: true, transcript }),
+      openWhatsNew,
       askPaula: (text) => {
         setDraft((d) => ({ text, n: (d?.n ?? 0) + 1 }))
         setView('chat')
@@ -131,7 +172,7 @@ export function Shell() {
         setDrawer(false)
       },
     }),
-    [],
+    [openWhatsNew],
   )
 
   function go(v: View) {
@@ -150,6 +191,7 @@ export function Shell() {
             <Sidebar
               view={view}
               go={go}
+              unseen={unseen}
               onClose={() => setDrawer(false)}
               onSearch={() => {
                 setDrawer(false)
@@ -190,6 +232,11 @@ export function Shell() {
 
         <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
         <WelcomeSheet />
+        {whatsNew && (
+          <Suspense fallback={null}>
+            <WhatsNewSheet open={whatsNew} onClose={() => setWhatsNew(false)} />
+          </Suspense>
+        )}
       </ToastProvider>
       <ReportSheet open={report.open} transcript={report.transcript} onClose={() => setReport({ open: false })} />
     </ChromeContext.Provider>
@@ -199,18 +246,20 @@ export function Shell() {
 function Sidebar({
   view,
   go,
+  unseen,
   onClose,
   onSearch,
 }: {
   view: View
   go: (v: View) => void
+  unseen: boolean
   onClose: () => void
   onSearch: () => void
 }) {
   const { user, isGuest, signOut } = useSession()
   const { chats, active, select, create, remove, restore, scan } = useChats()
   const toast = useToast()
-  const { openPlus, openReport } = useChrome()
+  const { openPlus, openReport, openWhatsNew } = useChrome()
 
   function newChat() {
     if (!create()) {
@@ -318,6 +367,11 @@ function Sidebar({
           <button className="nav-item" onClick={() => openReport()}>
             <Bug size={16} strokeWidth={1.8} />
             Report a problem
+          </button>
+          <button className="nav-item" onClick={openWhatsNew}>
+            <Gift size={16} strokeWidth={1.8} />
+            What’s new
+            {unseen ? <span className="nav-new">New</span> : <span className="nav-version">v{VERSION}</span>}
           </button>
         </nav>
 

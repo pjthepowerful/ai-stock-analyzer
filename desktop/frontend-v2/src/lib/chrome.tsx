@@ -9,6 +9,7 @@ export interface Chrome {
   analyze: (ticker: string) => void
   /** Switch to Chat with this text waiting in the message box. */
   askPaula: (text: string) => void
+  openWhatsNew: () => void
 }
 
 export const ChromeContext = createContext<Chrome | null>(null)

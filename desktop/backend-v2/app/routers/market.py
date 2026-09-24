@@ -2,10 +2,11 @@
 Market data router — quick lookups + account/positions. Calls the same
 engine.* functions the original backend uses; only the HTTP layer is new.
 """
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 
 from ..bridge import engine
 from ..deps import current_user_optional, current_user_required
+from ..services import popularity
 from ..services.ttl import TTLCache
 
 router = APIRouter(prefix="/api", tags=["market"])
@@ -62,8 +63,14 @@ class _NoData(Exception):
     pass
 
 
+@router.get("/tickers/popular")
+def popular_tickers(limit: int = 7):
+    """What people are actually looking up this week (see services/popularity)."""
+    return {"ok": True, "tickers": popularity.popular(max(1, min(limit, 20)))}
+
+
 @router.get("/analyze/{ticker}")
-def analyze_ticker(ticker: str):
+def analyze_ticker(ticker: str, request: Request, authorization: str = Header(None)):
     t = ticker.strip().upper()
     if not t or len(t) > 10 or not t.replace(".", "").replace("-", "").isalnum():
         raise HTTPException(422, "Not a valid ticker")
@@ -77,7 +84,10 @@ def analyze_ticker(ticker: str):
     try:
         # Quotes/signals barely move inside a minute; re-opening a ticker you
         # just viewed shouldn't redo every upstream call.
-        return {"ok": True, "data": _analyze_cache.get_or_set(t, build)}
+        data = _analyze_cache.get_or_set(t, build)
+        user = current_user_optional(authorization)
+        popularity.record(t, user_id=(user or {}).get("id"), ip=request.client.host if request.client else None)
+        return {"ok": True, "data": data}
     except _NoData:
         raise HTTPException(404, f"No data for {t}") from None
 
