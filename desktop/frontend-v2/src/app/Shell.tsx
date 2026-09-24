@@ -27,6 +27,7 @@ import type { ChatMessage } from '../lib/api'
 import { useSession } from '../lib/auth'
 import { ChatsProvider, useChats } from '../lib/chats'
 import { ChromeContext, useChrome, type Chrome } from '../lib/chrome'
+import { ToastProvider, useToast } from '../lib/toast'
 import './shell.css'
 
 // Chat is the landing screen; the chart-heavy and owner-only screens load on
@@ -100,6 +101,11 @@ export function Shell() {
     () => ({
       openPlus: () => setPlusOpen(true),
       openReport: (transcript) => setReport({ open: true, transcript }),
+      analyze: (ticker) => {
+        setAnalyzeReq((r) => ({ ticker: ticker.toUpperCase(), n: (r?.n ?? 0) + 1 }))
+        setView('analyze')
+        setDrawer(false)
+      },
     }),
     [],
   )
@@ -111,55 +117,54 @@ export function Shell() {
 
   return (
     <ChromeContext.Provider value={chrome}>
-      {/* Keyed per account so signing in/out swaps to that account's chats. */}
-      <ChatsProvider key={user ? `u${user.id}` : 'guest'}>
-        <div className={'app' + (drawer ? ' app-drawer-open' : '')}>
-          <Sidebar
-            view={view}
-            go={go}
-            onClose={() => setDrawer(false)}
-            onSearch={() => {
-              setDrawer(false)
-              setPalette(true)
-            }}
-          />
-          <div className="app-scrim" onClick={() => setDrawer(false)} />
+      <ToastProvider>
+        {/* Keyed per account so signing in/out swaps to that account's chats. */}
+        <ChatsProvider key={user ? `u${user.id}` : 'guest'}>
+          <div className={'app' + (drawer ? ' app-drawer-open' : '')}>
+            <Sidebar
+              view={view}
+              go={go}
+              onClose={() => setDrawer(false)}
+              onSearch={() => {
+                setDrawer(false)
+                setPalette(true)
+              }}
+            />
+            <div className="app-scrim" onClick={() => setDrawer(false)} />
 
-          <div className="app-main">
-            <header className="app-topbar">
-              <button className="btn btn-ghost btn-icon" onClick={() => setDrawer(true)} aria-label="Open menu">
-                <Menu size={18} />
-              </button>
-              <span className="app-topbar-title">{TITLES[view]}</span>
-            </header>
+            <div className="app-main">
+              <header className="app-topbar">
+                <button className="btn btn-ghost btn-icon" onClick={() => setDrawer(true)} aria-label="Open menu">
+                  <Menu size={18} />
+                </button>
+                <span className="app-topbar-title">{TITLES[view]}</span>
+              </header>
 
-            <main className="app-content">
-              <Suspense fallback={null}>
-                {view === 'chat' && <ChatScreen onNavigateAnalyze={() => go('analyze')} />}
-                {view === 'analyze' && <AnalyzeScreen request={analyzeReq} />}
-                {view === 'portfolio' && <PortfolioScreen />}
-                {view === 'earnings' && <EarningsScreen />}
-                {view === 'settings' && <SettingsScreen />}
-                {view === 'admin' && user?.is_admin && <AdminScreen />}
-              </Suspense>
-            </main>
+              <main className="app-content">
+                <Suspense fallback={null}>
+                  {view === 'chat' && <ChatScreen onNavigateAnalyze={() => go('analyze')} />}
+                  {view === 'analyze' && <AnalyzeScreen request={analyzeReq} />}
+                  {view === 'portfolio' && <PortfolioScreen />}
+                  {view === 'earnings' && <EarningsScreen />}
+                  {view === 'settings' && <SettingsScreen />}
+                  {view === 'admin' && user?.is_admin && <AdminScreen />}
+                </Suspense>
+              </main>
+            </div>
+            {/* Mounted only while open, so each opening starts fresh. */}
+            <CommandPalette
+              key={palette ? 'open' : 'closed'}
+              open={palette}
+              onClose={() => setPalette(false)}
+              go={go}
+              analyze={chrome.analyze}
+            />
           </div>
-          {/* Mounted only while open, so each opening starts fresh. */}
-          <CommandPalette
-            key={palette ? 'open' : 'closed'}
-            open={palette}
-            onClose={() => setPalette(false)}
-            go={go}
-            analyze={(ticker) => {
-              setAnalyzeReq((r) => ({ ticker, n: (r?.n ?? 0) + 1 }))
-              go('analyze')
-            }}
-          />
-        </div>
-      </ChatsProvider>
+        </ChatsProvider>
 
-      <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
-      <WelcomeSheet />
+        <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
+        <WelcomeSheet />
+      </ToastProvider>
       <ReportSheet open={report.open} transcript={report.transcript} onClose={() => setReport({ open: false })} />
     </ChromeContext.Provider>
   )
@@ -177,9 +182,9 @@ function Sidebar({
   onSearch: () => void
 }) {
   const { user, isGuest, signOut } = useSession()
-  const { chats, active, select, create, remove, scan } = useChats()
+  const { chats, active, select, create, remove, restore, scan } = useChats()
+  const toast = useToast()
   const { openPlus, openReport } = useChrome()
-  const [confirming, setConfirming] = useState<string | null>(null)
 
   function newChat() {
     if (!create()) {
@@ -232,40 +237,28 @@ function Sidebar({
           {chats.length === 0 && <li className="recent-empty">Your conversations will show up here.</li>}
           {chats.map((c) => (
             <li key={c.id} className={'recent-item' + (view === 'chat' && c.id === active?.id ? ' recent-item-on' : '')}>
-              {confirming === c.id ? (
-                <div className="recent-confirm">
-                  <span>Delete chat?</span>
-                  <button
-                    className="recent-yes"
-                    onClick={() => {
-                      remove(c.id)
-                      setConfirming(null)
-                    }}
-                  >
-                    Delete
-                  </button>
-                  <button className="recent-no" onClick={() => setConfirming(null)}>
-                    Keep
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <button
-                    className="recent-title"
-                    title={c.title}
-                    onClick={() => {
-                      select(c.id)
-                      go('chat')
-                    }}
-                  >
-                    {scan?.chatId === c.id && <span className="recent-live" aria-label="Scan running" />}
-                    {c.title}
-                  </button>
-                  <button className="recent-del" onClick={() => setConfirming(c.id)} aria-label={`Delete ${c.title}`}>
-                    <Trash2 size={13} />
-                  </button>
-                </>
-              )}
+              <button
+                className="recent-title"
+                title={c.title}
+                onClick={() => {
+                  select(c.id)
+                  go('chat')
+                }}
+              >
+                {scan?.chatId === c.id && <span className="recent-live" aria-label="Scan running" />}
+                {c.title}
+              </button>
+              <button
+                className="recent-del"
+                onClick={() => {
+                  const index = chats.findIndex((x) => x.id === c.id)
+                  remove(c.id)
+                  toast.show(`Deleted “${c.title}”`, { label: 'Undo', run: () => restore(c, index) })
+                }}
+                aria-label={`Delete ${c.title}`}
+              >
+                <Trash2 size={13} />
+              </button>
             </li>
           ))}
         </ul>

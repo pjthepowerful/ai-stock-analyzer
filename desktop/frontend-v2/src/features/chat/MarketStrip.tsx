@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../lib/api'
+import { useChrome } from '../../lib/chrome'
 
 interface Mover {
   ticker: string
@@ -27,6 +28,7 @@ function tone(n: number) {
 }
 
 export function MarketStrip() {
+  const { analyze } = useChrome()
   const q = useQuery({
     queryKey: ['market-overview'],
     queryFn: () => api.get<Overview>('/api/market/overview'),
@@ -53,10 +55,10 @@ export function MarketStrip() {
       )}
       <div className="mstrip-tape">
         {d.tape.map((t) => (
-          <span key={t.sym} className="mstrip-item">
+          <button key={t.sym} className="mstrip-item" onClick={() => analyze(t.sym)} title={`Analyze ${t.sym}`}>
             <span className="mstrip-sym">{t.sym}</span>
             <span className={'mono ' + tone(t.pct)}>{pct(t.pct)}</span>
-          </span>
+          </button>
         ))}
         {d.top_gainer && (
           <span className="mstrip-item">

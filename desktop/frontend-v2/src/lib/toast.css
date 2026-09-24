@@ -1,0 +1,73 @@
+.toasts {
+  position: fixed;
+  right: var(--space-5);
+  /* Top-right: the chat composer owns the bottom edge. */
+  top: var(--space-4);
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 260px;
+  max-width: 380px;
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  background: var(--text);
+  color: var(--bg);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+  font-size: var(--text-sm);
+  animation: toast-in var(--dur-slow) var(--ease-out);
+}
+
+.toast-msg {
+  flex: 1;
+}
+
+.toast-action {
+  border: none;
+  background: color-mix(in srgb, var(--bg) 16%, transparent);
+  color: var(--bg);
+  font: inherit;
+  font-weight: 600;
+  font-size: var(--text-xs);
+  height: 26px;
+  padding: 0 var(--space-3);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.toast-action:hover {
+  background: color-mix(in srgb, var(--bg) 26%, transparent);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+
+@media (max-width: 640px) {
+  .toasts {
+    left: var(--space-3);
+    right: var(--space-3);
+    top: 56px;
+  }
+
+  .toast {
+    max-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}

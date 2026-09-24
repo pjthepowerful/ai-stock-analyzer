@@ -5,6 +5,8 @@ import type { ChatMessage } from './api'
 export interface Chrome {
   openPlus: () => void
   openReport: (transcript?: ChatMessage[]) => void
+  /** Open a ticker in Analyze from anywhere in the app. */
+  analyze: (ticker: string) => void
 }
 
 export const ChromeContext = createContext<Chrome | null>(null)

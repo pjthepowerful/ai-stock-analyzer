@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api } from '../../lib/api'
+import { useChrome } from '../../lib/chrome'
 import { useWebSocket } from '../../lib/ws'
 
 interface UpcomingRow {
@@ -53,6 +54,7 @@ function when(ts?: number) {
 
 export function IdeasPanel() {
   const qc = useQueryClient()
+  const { analyze } = useChrome()
   const progress = useProgress()
   // Both rankings take ~a minute on a cold server cache, so they only run
   // when asked for; after that the server keeps them for 15 minutes.
@@ -107,7 +109,9 @@ export function IdeasPanel() {
             {upcoming.data.rows.map((r) => (
               <li key={r.ticker} className="ideas-row">
                 <div className="ideas-row-main">
-                  <span className="ideas-ticker">{r.ticker}</span>
+                  <button className="ticker-link" onClick={() => analyze(r.ticker)}>
+                    {r.ticker}
+                  </button>
                   <span className={'badge ' + (r.score >= 0.3 ? 'badge-green' : r.score <= -0.3 ? 'badge-red' : '')}>{r.lean}</span>
                   {r.next?.date_str && (
                     <span className="ideas-when">
@@ -151,7 +155,9 @@ export function IdeasPanel() {
             {drift.data.candidates.map((c) => (
               <li key={c.ticker} className="ideas-row">
                 <div className="ideas-row-main">
-                  <span className="ideas-ticker">{c.ticker}</span>
+                  <button className="ticker-link" onClick={() => analyze(c.ticker)}>
+                    {c.ticker}
+                  </button>
                   <span className={'badge ' + (c.buyable ? 'badge-green' : '')}>{c.buyable ? 'In window' : 'Watch'}</span>
                   {c.size.shares > 0 && (
                     <span className="ideas-when" title={c.size.note}>

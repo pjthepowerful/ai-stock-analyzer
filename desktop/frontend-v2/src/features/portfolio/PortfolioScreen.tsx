@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../lib/api'
+import { useChrome } from '../../lib/chrome'
 import { Performance } from './Performance'
 import './portfolio.css'
 
@@ -42,6 +43,7 @@ interface Benchmark {
 }
 
 export function PortfolioScreen() {
+  const { analyze } = useChrome()
   // Cached across tab switches (staleTime from the QueryClient defaults), so
   // coming back to Portfolio doesn't re-wait on four broker round trips.
   const accountQ = useQuery({
@@ -162,7 +164,11 @@ export function PortfolioScreen() {
                 <tbody>
                   {positions.map((p) => (
                     <tr key={p.ticker}>
-                      <td className="pos-sym">{p.ticker}</td>
+                      <td className="pos-sym">
+                        <button className="ticker-link" onClick={() => analyze(p.ticker)}>
+                          {p.ticker}
+                        </button>
+                      </td>
                       <td className="num">{p.qty}</td>
                       <td className="num">${p.avg_entry.toFixed(2)}</td>
                       <td className="num">${p.current_price.toFixed(2)}</td>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, ApiError } from '../../lib/api'
 import { useSession } from '../../lib/auth'
 import { useChrome } from '../../lib/chrome'
+import { useToast } from '../../lib/toast'
 import { ThemeSwitch } from '../../components/ThemeSwitch'
 import './settings.css'
 
@@ -30,6 +31,7 @@ interface UserSettings {
 export function SettingsScreen() {
   const { user, isGuest } = useSession()
   const { openPlus } = useChrome()
+  const toast = useToast()
   const [displayName, setDisplayName] = useState('')
   const [saved, setSaved] = useState(false)
   const [nameError, setNameError] = useState<string | null>(null)
@@ -54,6 +56,7 @@ export function SettingsScreen() {
       await api.post('/api/auth/settings', { display_name: displayName.trim() })
       setSaved(true)
       setTimeout(() => setSaved(false), 1500)
+      toast.show('Display name saved')
     } catch (e) {
       setNameError(e instanceof ApiError ? e.message : 'Could not save.')
     }
@@ -181,6 +184,7 @@ export function SettingsScreen() {
 }
 
 function AlpacaConnection({ connected, onChange }: { connected: boolean; onChange: (c: boolean) => void }) {
+  const toast = useToast()
   const [editing, setEditing] = useState(false)
   const [keyId, setKeyId] = useState('')
   const [secret, setSecret] = useState('')
@@ -202,6 +206,7 @@ function AlpacaConnection({ connected, onChange }: { connected: boolean; onChang
       setSecret('')
       setEditing(false)
       onChange(true)
+      toast.show('Alpaca account connected')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not connect.')
     } finally {
@@ -216,6 +221,7 @@ function AlpacaConnection({ connected, onChange }: { connected: boolean; onChang
       await api.del('/api/auth/connections/alpaca')
       setEquity(null)
       onChange(false)
+      toast.show('Alpaca account disconnected')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not disconnect.')
     } finally {

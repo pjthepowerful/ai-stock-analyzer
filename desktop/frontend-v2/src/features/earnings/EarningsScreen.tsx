@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { api } from '../../lib/api'
 import { useSession } from '../../lib/auth'
+import { useChrome } from '../../lib/chrome'
 import { useWebSocket } from '../../lib/ws'
 import { IdeasPanel } from './IdeasPanel'
 import './earnings.css'
@@ -57,6 +58,7 @@ function weekdayGrid(year: number, month: number): (number | null)[] {
 
 export function EarningsScreen() {
   const { user } = useSession()
+  const { analyze } = useChrome()
   const now = new Date()
   const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() + 1 })
   const [day, setDay] = useState<string | null>(null)
@@ -263,7 +265,11 @@ export function EarningsScreen() {
                       <tbody>
                         {dayQ.data.stocks.map((st) => (
                           <tr key={st.ticker}>
-                            <td className="earn-ticker">{st.ticker}</td>
+                            <td className="earn-ticker">
+                              <button className="ticker-link" onClick={() => analyze(st.ticker)}>
+                                {st.ticker}
+                              </button>
+                            </td>
                             <td className="earn-col-company text-dim">{st.company}</td>
                             <td className="num">{cap(st.market_cap)}</td>
                             <td>

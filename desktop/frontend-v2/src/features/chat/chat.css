@@ -407,6 +407,21 @@
   gap: 6px;
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  margin: 0 -4px;
+  border-radius: 5px;
+  font: inherit;
+  color: inherit;
+}
+
+button.mstrip-item {
+  cursor: pointer;
+}
+
+button.mstrip-item:hover {
+  background: var(--surface-2);
 }
 
 .mstrip-sym {

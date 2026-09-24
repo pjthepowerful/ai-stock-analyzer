@@ -426,3 +426,23 @@
     animation: none;
   }
 }
+
+/* A ticker that opens in Analyze. */
+.ticker-link {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.ticker-link:hover {
+  color: var(--accent-strong);
+  text-decoration-color: currentColor;
+}

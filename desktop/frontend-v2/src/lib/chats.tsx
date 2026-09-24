@@ -44,6 +44,8 @@ interface Chats {
   /** Returns false when the free-tier limit blocks a new chat. */
   create: () => boolean
   remove: (id: string) => void
+  /** Put a just-deleted chat back where it was (Undo). */
+  restore: (chat: Chat, index: number) => void
   append: (chatId: string, msg: StoredMessage) => void
   rename: (chatId: string, title: string) => void
   /** Makes sure there's an active chat to write into and returns its id. */
@@ -214,6 +216,19 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
     [activeId, commit, select],
   )
 
+  const restore = useCallback(
+    (chat: Chat, index: number) => {
+      commit((prev) => {
+        if (prev.some((c) => c.id === chat.id)) return prev
+        const next = [...prev]
+        next.splice(Math.min(index, next.length), 0, chat)
+        return next
+      })
+      select(chat.id)
+    },
+    [commit, select],
+  )
+
   const append = useCallback(
     (chatId: string, msg: StoredMessage) => {
       const stamped = { ...msg, time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) }
@@ -260,8 +275,8 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
   })
 
   const value = useMemo(
-    () => ({ scan, startScan, chats, active, select, create, remove, append, rename, ensureActive }),
-    [scan, startScan, chats, active, select, create, remove, append, rename, ensureActive],
+    () => ({ scan, startScan, chats, active, select, create, remove, restore, append, rename, ensureActive }),
+    [scan, startScan, chats, active, select, create, remove, restore, append, rename, ensureActive],
   )
 
   return <ChatsContext.Provider value={value}>{children}</ChatsContext.Provider>
