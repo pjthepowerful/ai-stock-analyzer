@@ -10,6 +10,7 @@ import {
 } from 'lightweight-charts'
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api'
+import { chartColors, useTheme, withAlpha } from '../lib/theme'
 import './Chart.css'
 
 interface ChartApiResponse {
@@ -55,30 +56,32 @@ export function Chart({ ticker, height = 320 }: { ticker: string; height?: numbe
   const chartRef = useRef<IChartApi | null>(null)
   const [period, setPeriod] = useState('1y')
   const [error, setError] = useState<string | null>(null)
+  const [theme] = useTheme()
   const [ohlc, setOhlc] = useState<{ o: number; h: number; l: number; c: number; chg: number; chgPct: number } | null>(null)
 
   useEffect(() => {
     if (!containerRef.current) return
     setError(null)
+    const c = chartColors()
 
     const chart = createChart(containerRef.current, {
       width: containerRef.current.clientWidth,
       height,
-      layout: { background: { color: 'transparent' }, textColor: '#5a6068', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
-      grid: { vertLines: { color: 'rgba(35,38,44,0.5)' }, horzLines: { color: 'rgba(35,38,44,0.5)' } },
+      layout: { background: { color: 'transparent' }, textColor: c.text, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
+      grid: { vertLines: { color: c.grid }, horzLines: { color: c.grid } },
       crosshair: { mode: CrosshairMode.Normal },
-      rightPriceScale: { borderColor: '#23262c' },
-      timeScale: { borderColor: '#23262c', timeVisible: period === '1mo' },
+      rightPriceScale: { borderColor: c.border },
+      timeScale: { borderColor: c.border, timeVisible: period === '1mo' },
     })
     chartRef.current = chart
 
     const candles: ISeriesApi<'Candlestick'> = chart.addSeries(CandlestickSeries, {
-      upColor: '#34d399',
-      downColor: '#f87171',
-      borderUpColor: '#34d399',
-      borderDownColor: '#f87171',
-      wickUpColor: '#34d399',
-      wickDownColor: '#f87171',
+      upColor: c.up,
+      downColor: c.down,
+      borderUpColor: c.up,
+      borderDownColor: c.down,
+      wickUpColor: c.up,
+      wickDownColor: c.down,
     })
     const volume = chart.addSeries(HistogramSeries, { priceFormat: { type: 'volume' }, priceScaleId: 'volume' })
     chart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } })
@@ -104,7 +107,7 @@ export function Chart({ ticker, height = 320 }: { ticker: string; height?: numbe
         const volData = dates.map((_, i) => ({
           time: times[i],
           value: vol[i],
-          color: close[i] >= open[i] ? 'rgba(52,211,153,0.25)' : 'rgba(248,113,113,0.25)',
+          color: withAlpha(close[i] >= open[i] ? c.up : c.down, 0.25),
         }))
 
         candles.setData(candleData)
@@ -112,12 +115,12 @@ export function Chart({ ticker, height = 320 }: { ticker: string; height?: numbe
 
         if (close.length >= 20) {
           const sma20 = calcSMA(close, 20)
-          const line = chart.addSeries(LineSeries, { color: '#fbbf24', lineWidth: 1, priceLineVisible: false, lastValueVisible: false })
+          const line = chart.addSeries(LineSeries, { color: c.sma, lineWidth: 1, priceLineVisible: false, lastValueVisible: false })
           line.setData(sma20.map((v, i) => ({ time: times[times.length - sma20.length + i], value: v })))
         }
         if (close.length >= 9) {
           const ema9 = calcEMA(close, 9)
-          const line = chart.addSeries(LineSeries, { color: '#818cf8', lineWidth: 1, priceLineVisible: false, lastValueVisible: false })
+          const line = chart.addSeries(LineSeries, { color: c.ema, lineWidth: 1, priceLineVisible: false, lastValueVisible: false })
           line.setData(ema9.map((v, i) => ({ time: times[times.length - ema9.length + i], value: v })))
         }
 
@@ -151,7 +154,7 @@ export function Chart({ ticker, height = 320 }: { ticker: string; height?: numbe
       chart.remove()
       chartRef.current = null
     }
-  }, [ticker, period, height])
+  }, [ticker, period, height, theme])
 
   return (
     <div className="pchart">

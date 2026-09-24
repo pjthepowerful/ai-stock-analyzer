@@ -9,7 +9,7 @@
 }
 
 .sheet::backdrop {
-  background: rgb(4 5 6 / 0.72);
+  background: var(--scrim);
 }
 
 .sheet[open] {

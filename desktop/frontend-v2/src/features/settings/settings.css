@@ -251,3 +251,30 @@
   color: var(--text-secondary);
   max-width: 420px;
 }
+
+.settings-seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.settings-seg-btn {
+  background: none;
+  border: none;
+  padding: var(--space-1) var(--space-4);
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.settings-seg-btn + .settings-seg-btn {
+  border-left: 1px solid var(--border);
+}
+
+.settings-seg-on {
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 600;
+}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, ApiError } from '../../lib/api'
 import { useSession } from '../../lib/auth'
 import { useChrome } from '../../lib/chrome'
+import { useTheme } from '../../lib/theme'
 import './settings.css'
 
 interface AutopilotMode {
@@ -76,6 +77,7 @@ export function SettingsScreen() {
     return (
       <div className="settings-screen">
         <h1 className="settings-title">Settings</h1>
+        <Appearance />
         <p className="settings-guest-note">Sign in to manage your account, connections, and autopilot preferences.</p>
       </div>
     )
@@ -84,6 +86,8 @@ export function SettingsScreen() {
   return (
     <div className="settings-screen">
       <h1 className="settings-title">Settings</h1>
+
+      <Appearance />
 
       <section className="settings-section">
         <h2 className="settings-section-title">Account</h2>
@@ -268,5 +272,30 @@ function AlpacaConnection({ connected, onChange }: { connected: boolean; onChang
       </div>
       {error && <div className="settings-diag-error">{error}</div>}
     </form>
+  )
+}
+
+function Appearance() {
+  const [theme, setTheme] = useTheme()
+  return (
+    <section className="settings-section">
+      <h2 className="settings-section-title">Appearance</h2>
+      <div className="settings-row">
+        <span className="settings-row-label">Theme</span>
+        <div className="settings-seg" role="radiogroup" aria-label="Theme">
+          {(['light', 'dark'] as const).map((t) => (
+            <button
+              key={t}
+              role="radio"
+              aria-checked={theme === t}
+              className={'settings-seg-btn' + (theme === t ? ' settings-seg-on' : '')}
+              onClick={() => setTheme(t)}
+            >
+              {t === 'light' ? 'Light' : 'Dark'}
+            </button>
+          ))}
+        </div>
+      </div>
+    </section>
   )
 }

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { AreaSeries, createChart, type UTCTimestamp } from 'lightweight-charts'
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../../lib/api'
+import { chartColors, useTheme, withAlpha } from '../../lib/theme'
 
 type Period = '1D' | '1W' | '1M' | '3M' | '6M' | '1A'
 const PERIODS: { id: Period; label: string }[] = [
@@ -125,25 +126,27 @@ export function Performance() {
 
 function EquityCurve({ points, up }: { points: PerformanceResponse['curve']; up: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
+  const [theme] = useTheme()
 
   useEffect(() => {
     const el = ref.current
     if (!el) return
+    const c = chartColors()
     const chart = createChart(el, {
       height: 220,
-      layout: { background: { color: 'transparent' }, textColor: '#5a6068', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
-      grid: { vertLines: { visible: false }, horzLines: { color: 'rgba(35,38,44,0.5)' } },
+      layout: { background: { color: 'transparent' }, textColor: c.text, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
+      grid: { vertLines: { visible: false }, horzLines: { color: c.grid } },
       rightPriceScale: { borderVisible: false },
       timeScale: { borderVisible: false, timeVisible: true },
       handleScroll: false,
       handleScale: false,
     })
-    const line = up ? '#34d399' : '#f87171'
+    const line = up ? c.up : c.down
     const series = chart.addSeries(AreaSeries, {
       lineColor: line,
       lineWidth: 2,
-      topColor: up ? 'rgba(52,211,153,0.18)' : 'rgba(248,113,113,0.18)',
-      bottomColor: 'rgba(0,0,0,0)',
+      topColor: withAlpha(line, 0.18),
+      bottomColor: withAlpha(line, 0),
       priceLineVisible: false,
     })
     // Alpaca can repeat a timestamp at session edges; the chart requires
@@ -162,7 +165,7 @@ function EquityCurve({ points, up }: { points: PerformanceResponse['curve']; up:
       ro.disconnect()
       chart.remove()
     }
-  }, [points, up])
+  }, [points, up, theme])
 
   return <div className="perf-chart" ref={ref} />
 }

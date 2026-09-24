@@ -1,14 +1,51 @@
 /* Paula v2 design tokens — "Confident Editorial Terminal"
-   Cool near-black base, one disciplined green accent, oversized display type
-   at emotional beats, tabular mono for every number, restrained radii,
-   motion only on real state changes. See the v2-rewrite plan for the
-   research (Perplexity Finance, Linear, Mercury, Raycast) behind these
-   choices. */
+   Warm paper by default (a dark theme is one switch away in Settings), one
+   disciplined green accent, oversized display type at emotional beats,
+   tabular mono for every number, restrained radii, motion only on real state
+   changes. Research behind these choices: Perplexity Finance, Linear,
+   Mercury, Raycast, FT. */
 
 /* Fonts are linked from index.html (preconnect + stylesheet) so the browser
    fetches them in parallel with the app instead of after this file parses. */
 
 :root {
+  color-scheme: light;
+
+  /* ── Color: warm paper, ink text, single accent ── */
+  --bg: #f7f5f0;
+  --surface: #ffffff;
+  --surface-2: #efece4;
+  --surface-3: #e7e3d9;
+  --border: #e2ddd2;
+  --border-strong: #cbc5b7;
+
+  --text: #16181b;
+  --text-secondary: #474c53;
+  --text-dim: #6b6f76;
+
+  --accent: #0f8a5f;          /* fills: buttons, active marks */
+  --accent-strong: #0b6b49;   /* accent used as text — darker for contrast */
+  --accent-ink: #ffffff;      /* text on an accent fill */
+
+  --positive: #0d7a50;
+  --negative: #c0362c;
+  --warning: #9a5a06;
+
+  --scrim: rgb(22 24 27 / 0.32);
+  --stripe: rgb(0 0 0 / 0.03);
+
+  /* Charts read these at draw time (see lib/theme.ts). */
+  --chart-text: #6b6f76;
+  --chart-grid: rgba(22, 24, 27, 0.07);
+  --chart-up: #12976a;
+  --chart-down: #d0453a;
+  --chart-sma: #b7791f;
+  --chart-ema: #5b5bd6;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
   /* ── Color: cool near-black, single accent ── */
   --bg: #08090b;
   --surface: #101216;
@@ -29,6 +66,18 @@
   --negative: #f87171;
   --warning: #fbbf24;
 
+  --scrim: rgb(4 5 6 / 0.72);
+  --stripe: rgb(255 255 255 / 0.015);
+
+  --chart-text: #5a6068;
+  --chart-grid: rgba(35, 38, 44, 0.5);
+  --chart-up: #34d399;
+  --chart-down: #f87171;
+  --chart-sma: #fbbf24;
+  --chart-ema: #818cf8;
+}
+
+:root {
   /* ── Type ── */
   --font-display: 'Bricolage Grotesque', 'Outfit', system-ui, sans-serif;
   --font-sans: 'Outfit', system-ui, sans-serif;
