@@ -43,7 +43,7 @@ interface Benchmark {
 }
 
 export function PortfolioScreen() {
-  const { analyze } = useChrome()
+  const { analyze, askPaula } = useChrome()
   // Cached across tab switches (staleTime from the QueryClient defaults), so
   // coming back to Portfolio doesn't re-wait on four broker round trips.
   const accountQ = useQuery({
@@ -148,7 +148,15 @@ export function PortfolioScreen() {
           </header>
           <div className="card-body-flush">
             {positions.length === 0 ? (
-              <p className="empty">No open positions.</p>
+              <div className="empty pos-empty">
+                <p>No open positions right now.</p>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => askPaula('What should I invest in right now? Give me your real take.')}
+                >
+                  Find a setup with Paula
+                </button>
+              </div>
             ) : (
               <table className="table">
                 <thead>

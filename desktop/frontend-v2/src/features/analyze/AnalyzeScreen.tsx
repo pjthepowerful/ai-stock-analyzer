@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import { Clock, Search } from 'lucide-react'
+import { Clock, MessageSquare, Search } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Chart } from '../../components/Chart'
 import { SignalCard, type AnalyzeData } from '../../components/SignalCard'
 import { api } from '../../lib/api'
+import { useChrome } from '../../lib/chrome'
 import { searchTickers } from '../../lib/tickers'
 import { ResearchPanel } from './ResearchPanel'
 import './analyze.css'
@@ -39,6 +40,7 @@ interface Props {
 }
 
 export function AnalyzeScreen({ request }: Props) {
+  const { askPaula } = useChrome()
   const [active, setActive] = useState<string | null>(request?.ticker ?? null)
   // A new request from elsewhere (command menu) replaces the current ticker.
   const [seenRequest, setSeenRequest] = useState(request)
@@ -90,6 +92,16 @@ export function AnalyzeScreen({ request }: Props) {
               <SignalCard data={result} />
             </div>
             <ResearchPanel ticker={result.ticker} />
+            <div className="analyze-ask">
+              <span>Want the reasoning behind this read?</span>
+              <button
+                className="btn btn-secondary"
+                onClick={() => askPaula(`What's your take on ${result.ticker} right now? Walk me through the setup.`)}
+              >
+                <MessageSquare size={15} />
+                Ask Paula about {result.ticker}
+              </button>
+            </div>
           </>
         ) : q.isFetching ? (
           <div className="analyze-grid">

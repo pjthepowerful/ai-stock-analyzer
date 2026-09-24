@@ -22,17 +22,24 @@ const PHRASES = [
 
 interface Props {
   onNavigateAnalyze: () => void
+  /** Text handed over from elsewhere (e.g. Analyze's "Ask Paula"). */
+  draft?: { text: string; n: number } | null
 }
 
 function fallbackTitle(text: string) {
   return text.length <= 30 ? text : text.slice(0, 28).trimEnd() + '…'
 }
 
-export function ChatScreen({ onNavigateAnalyze }: Props) {
+export function ChatScreen({ onNavigateAnalyze, draft }: Props) {
   const { user, isGuest } = useSession()
   const { openReport } = useChrome()
   const { active, append, rename, ensureActive, scan, startScan } = useChats()
-  const [input, setInput] = useState('')
+  const [input, setInput] = useState(draft?.text ?? '')
+  const [seenDraft, setSeenDraft] = useState(draft)
+  if (draft !== seenDraft) {
+    setSeenDraft(draft)
+    if (draft) setInput(draft.text)
+  }
   const [sendingChat, setSendingChat] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
 

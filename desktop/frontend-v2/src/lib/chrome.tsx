@@ -7,6 +7,8 @@ export interface Chrome {
   openReport: (transcript?: ChatMessage[]) => void
   /** Open a ticker in Analyze from anywhere in the app. */
   analyze: (ticker: string) => void
+  /** Switch to Chat with this text waiting in the message box. */
+  askPaula: (text: string) => void
 }
 
 export const ChromeContext = createContext<Chrome | null>(null)

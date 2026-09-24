@@ -79,6 +79,7 @@ export function Shell() {
   const [view, setView] = useState<View>('chat')
   const [palette, setPalette] = useState(false)
   const [analyzeReq, setAnalyzeReq] = useState<{ ticker: string; n: number } | null>(null)
+  const [draft, setDraft] = useState<{ text: string; n: number } | null>(null)
 
   useEffect(() => preloadScreens(!!user?.is_admin), [user?.is_admin])
 
@@ -118,7 +119,13 @@ export function Shell() {
     () => ({
       openPlus: () => setPlusOpen(true),
       openReport: (transcript) => setReport({ open: true, transcript }),
+      askPaula: (text) => {
+        setDraft((d) => ({ text, n: (d?.n ?? 0) + 1 }))
+        setView('chat')
+        setDrawer(false)
+      },
       analyze: (ticker) => {
+        setDraft(null)
         setAnalyzeReq((r) => ({ ticker: ticker.toUpperCase(), n: (r?.n ?? 0) + 1 }))
         setView('analyze')
         setDrawer(false)
@@ -130,6 +137,8 @@ export function Shell() {
   function go(v: View) {
     setView(v)
     setDrawer(false)
+    // A handed-over draft is one-shot: don't refill the box on a later visit.
+    if (v !== 'chat') setDraft(null)
   }
 
   return (
@@ -159,7 +168,7 @@ export function Shell() {
 
               <main className="app-content">
                 <Suspense fallback={null}>
-                  {view === 'chat' && <ChatScreen onNavigateAnalyze={() => go('analyze')} />}
+                  {view === 'chat' && <ChatScreen onNavigateAnalyze={() => go('analyze')} draft={draft} />}
                   {view === 'analyze' && <AnalyzeScreen request={analyzeReq} />}
                   {view === 'portfolio' && <PortfolioScreen />}
                   {view === 'earnings' && <EarningsScreen />}

@@ -30,3 +30,14 @@
 .warn {
   color: var(--warning);
 }
+
+.pos-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.pos-empty p {
+  margin: 0;
+}
