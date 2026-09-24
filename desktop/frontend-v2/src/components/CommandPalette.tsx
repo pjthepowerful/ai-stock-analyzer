@@ -213,6 +213,9 @@ export function CommandPalette({ open, onClose, go, analyze }: Props) {
           <span>
             <kbd className="kbd">↵</kbd> to open
           </span>
+          <span className="cmdk-foot-tip">
+            <kbd className="kbd">/</kbd> focuses the chat box or ticker search
+          </span>
         </div>
       </div>
     </div>

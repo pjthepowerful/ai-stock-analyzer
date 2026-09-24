@@ -141,6 +141,10 @@
   color: var(--text-dim);
 }
 
+.cmdk-foot-tip {
+  margin-left: auto;
+}
+
 .kbd {
   display: inline-grid;
   place-items: center;
@@ -162,5 +166,13 @@
   .cmdk,
   .cmdk-scrim {
     animation: none;
+  }
+}
+
+/* Keyboard hints mean nothing on touch screens. */
+@media (hover: none) {
+  .cmdk-foot,
+  .cmdk-search .kbd {
+    display: none;
   }
 }

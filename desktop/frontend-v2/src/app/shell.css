@@ -400,3 +400,9 @@
     background: var(--scrim);
   }
 }
+
+@media (hover: none) {
+  .sidebar-search .kbd {
+    display: none;
+  }
+}

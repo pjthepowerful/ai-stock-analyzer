@@ -82,12 +82,29 @@ export function Shell() {
 
   useEffect(() => preloadScreens(!!user?.is_admin), [user?.is_admin])
 
+  // Tab title follows the page, like "Portfolio · Paula".
+  useEffect(() => {
+    document.title = view === 'chat' ? 'Paula' : `${TITLES[view]} · Paula`
+  }, [view])
+
   // ⌘K / Ctrl+K anywhere opens the command menu.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         setPalette((p) => !p)
+        return
+      }
+      // "/" jumps to the page's main input (chat box or ticker search),
+      // unless you're already typing somewhere.
+      const el = e.target as HTMLElement
+      const typing = el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)
+      if (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey) {
+        const target = document.querySelector<HTMLElement>('.composer-input, .analyze-input')
+        if (target) {
+          e.preventDefault()
+          target.focus()
+        }
       }
     }
     window.addEventListener('keydown', onKey)
