@@ -7,7 +7,8 @@ import asyncio
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from .json_safe import SafeJSONResponse
@@ -18,6 +19,7 @@ from .routers import chart as chart_router
 from .routers import chat as chat_router
 from .routers import chats as chats_router
 from .routers import earnings as earnings_router
+from .routers import launch as launch_router
 from .routers import market as market_router
 from .routers import overview as overview_router
 from .routers import plus as plus_router
@@ -44,6 +46,15 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Paula v2", default_response_class=SafeJSONResponse, lifespan=lifespan)
+
+
+# Before the launch time, only the coming-soon page and the owner get through.
+# Registered before CORS so CORS (added last = outermost) still decorates it.
+@app.middleware("http")
+async def prelaunch_gate(request: Request, call_next):
+    if launch_router.prelaunch_blocked(request):
+        return JSONResponse({"detail": "Paula 5 isn't live yet.", "prelaunch": True}, status_code=503)
+    return await call_next(request)
 
 # Local dev: any localhost port. Hosted: the same Vercel deployments the
 # original backend allows (override with FRONTEND_ORIGIN_REGEX), plus any exact
@@ -77,6 +88,7 @@ app.include_router(plus_router.router)
 app.include_router(research_router.router)
 app.include_router(admin_router.router)
 app.include_router(strategy_router.router)
+app.include_router(launch_router.router)
 
 
 @app.get("/api/health")

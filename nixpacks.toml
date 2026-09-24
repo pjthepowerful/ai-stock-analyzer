@@ -4,4 +4,4 @@
 # FastAPI app is in desktop/backend (engine.py adds root to sys.path on import).
 
 [start]
-cmd = "cd desktop/backend && uvicorn server:app --host 0.0.0.0 --port $PORT"
+cmd = "cd desktop/backend-v2 && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
