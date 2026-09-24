@@ -72,6 +72,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     try {
       const res = await api.post<AuthResult>('/api/auth/signup', { username, email, password })
       if (res.token) {
+        // Shell shows a one-time welcome/thank-you after the first sign-up.
+        try {
+          localStorage.setItem('paula-v2-welcome', '1')
+        } catch {
+          /* ignore */
+        }
         setToken(res.token)
         setUser(res.user ?? null)
         setIsGuest(false)

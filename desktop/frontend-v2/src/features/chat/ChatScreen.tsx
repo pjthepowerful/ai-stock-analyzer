@@ -4,9 +4,21 @@ import { api, ApiError, type ChatMessage, type ChatResponse } from '../../lib/ap
 import { useSession } from '../../lib/auth'
 import { NEW_TITLE, useChats } from '../../lib/chats'
 import { useChrome } from '../../lib/chrome'
+import { Typewriter } from '../../components/Typewriter'
 import { MarketStrip } from './MarketStrip'
+import { Snapshot } from './Snapshot'
 import { MessageBubble } from './MessageBubble'
 import './chat.css'
+
+// Cycled under the greeting, as in the original app.
+const PHRASES = [
+  'What are we trading today?',
+  'What’s the play today?',
+  'Let’s find some setups.',
+  'What are we watching?',
+  'What’s on your radar?',
+  'Ready to make some moves?',
+]
 
 interface Props {
   onNavigateAnalyze: () => void
@@ -125,7 +137,10 @@ export function ChatScreen({ onNavigateAnalyze }: Props) {
                 {greeting}
                 {firstName && `, ${firstName}`}
               </h1>
-              <p className="chat-hello-sub">Ask about a stock, a setup, or your portfolio.</p>
+              <p className="chat-hello-sub">
+                <Typewriter phrases={PHRASES} />
+              </p>
+              <Snapshot />
               <div className="chat-suggest">
                 {suggestions.map(({ icon: Icon, title, desc, run }) => (
                   <button key={title} className="suggest" onClick={run} disabled={busy}>

@@ -15,6 +15,7 @@ from fastapi import APIRouter, Header, HTTPException
 from ..bridge import engine
 from ..deps import current_user_required, in_request_context
 from ..services.parallel import pmap
+from ..services.ttl import TTLCache
 from .earnings import _progress_emitter
 
 router = APIRouter(prefix="/api", tags=["research"])
@@ -167,18 +168,23 @@ def research_exposure(authorization: Optional[str] = Header(None)):
     return {"ok": True, **res.pdt_exposure(acct.get("equity"), engine.alpaca_positions() or [])}
 
 
+_single_cache = TTLCache(ttl=5 * 60)
+
+
 @router.get("/forecast/{ticker}")
 def forecast(ticker: str, authorization: Optional[str] = Header(None)):
     current_user_required(authorization)
     import forecast as fc
-    return {"ok": True, **fc.forecast(_clean(ticker))}
+    t = _clean(ticker)
+    return {"ok": True, **_single_cache.get_or_set(("forecast", t), lambda: fc.forecast(t))}
 
 
 @router.get("/earnings/{ticker}")
 def earnings(ticker: str, authorization: Optional[str] = Header(None)):
     current_user_required(authorization)
     import earnings as earn
-    return {"ok": True, **earn.snapshot(_clean(ticker))}
+    t = _clean(ticker)
+    return {"ok": True, **_single_cache.get_or_set(("earnings", t), lambda: earn.snapshot(t))}
 
 
 @router.get("/research/{ticker}")
@@ -189,6 +195,13 @@ def research(ticker: str, authorization: Optional[str] = Header(None)):
     t = _clean(ticker)
     acct = engine.alpaca_account() or {}
     held = {p["ticker"]: p for p in (engine.alpaca_positions() or []) if p.get("ticker")}
-    row = res.evaluate(t, price=(held.get(t) or {}).get("current_price"), equity=acct.get("equity"))
+    price = (held.get(t) or {}).get("current_price")
+    equity = acct.get("equity")
+    # Suggested size depends on the account, so it's part of the key.
+    row = _single_cache.get_or_set(
+        ("research", t, round(equity or 0), price),
+        lambda: res.evaluate(t, price=price, equity=equity),
+    )
+    row = dict(row)
 
     return {"ok": True, **_fix_sec_note(row)}

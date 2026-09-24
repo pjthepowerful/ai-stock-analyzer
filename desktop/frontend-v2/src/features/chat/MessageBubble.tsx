@@ -1,3 +1,5 @@
+import { Check, Copy } from 'lucide-react'
+import { useState } from 'react'
 import { SignalCard } from '../../components/SignalCard'
 import type { StoredMessage } from '../../lib/chats'
 import { useChrome } from '../../lib/chrome'
@@ -46,7 +48,32 @@ export function MessageBubble({ role, content, meta }: Props) {
             </button>
           </div>
         )}
+        <CopyButton text={content} />
       </div>
+    </div>
+  )
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <div className="msg-actions">
+      <button
+        className="msg-action"
+        onClick={() => {
+          navigator.clipboard
+            ?.writeText(text.replace(/\*\*/g, ''))
+            .then(() => {
+              setCopied(true)
+              setTimeout(() => setCopied(false), 1400)
+            })
+            .catch(() => {})
+        }}
+        aria-label={copied ? 'Copied' : 'Copy reply'}
+      >
+        {copied ? <Check size={13} /> : <Copy size={13} />}
+        {copied ? 'Copied' : 'Copy'}
+      </button>
     </div>
   )
 }

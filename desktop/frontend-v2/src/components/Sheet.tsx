@@ -43,7 +43,7 @@ export function Sheet({ open, onClose, title, children, width = 520 }: Props) {
     >
       <div className="sheet-inner">
         <header className="sheet-head">
-          <h2 className="sheet-title">{title}</h2>
+          {title ? <h2 className="sheet-title">{title}</h2> : <span />}
           <button className="btn btn-ghost btn-icon btn-sm" onClick={onClose} aria-label="Close">
             <X size={16} />
           </button>

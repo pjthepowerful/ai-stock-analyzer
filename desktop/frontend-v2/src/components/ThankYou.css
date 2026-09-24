@@ -1,0 +1,178 @@
+.ty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--space-2) 0 0;
+}
+
+.ty-mark {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  margin-bottom: var(--space-4);
+}
+
+.ty-check {
+  width: 64px;
+  height: 64px;
+}
+
+.ty-check-ring {
+  fill: color-mix(in srgb, var(--accent) 12%, transparent);
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: 151;
+  stroke-dashoffset: 151;
+  animation: ty-draw 0.6s var(--ease-out) forwards;
+}
+
+.ty-check-tick {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 36;
+  stroke-dashoffset: 36;
+  animation: ty-draw 0.35s 0.45s var(--ease-out) forwards;
+}
+
+@keyframes ty-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* A small burst of accent dots from behind the check. */
+.ty-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0;
+  transform: rotate(calc(var(--i) * 45deg)) translateY(0);
+  animation: ty-burst 0.7s 0.5s var(--ease-out) forwards;
+}
+
+.ty-dot:nth-child(even) {
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  background: var(--warning);
+}
+
+@keyframes ty-burst {
+  0% {
+    opacity: 1;
+    transform: rotate(calc(var(--i) * 45deg)) translateY(-20px);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(calc(var(--i) * 45deg)) translateY(-46px);
+  }
+}
+
+.ty-title {
+  margin: 0;
+  font-size: 1.375rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  animation: ty-rise var(--dur-slow) 0.2s var(--ease-out) both;
+}
+
+.ty-sub {
+  margin: var(--space-2) 0 0;
+  max-width: 36ch;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+  animation: ty-rise var(--dur-slow) 0.28s var(--ease-out) both;
+}
+
+.ty-rows {
+  list-style: none;
+  width: 100%;
+  margin: var(--space-5) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  text-align: left;
+}
+
+.ty-rows li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  animation: ty-rise var(--dur-slow) var(--ease-out) both;
+}
+
+.ty-rows li:nth-child(1) { animation-delay: 0.36s; }
+.ty-rows li:nth-child(2) { animation-delay: 0.42s; }
+.ty-rows li:nth-child(3) { animation-delay: 0.48s; }
+.ty-rows li:nth-child(4) { animation-delay: 0.54s; }
+
+.ty-row-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--accent);
+}
+
+.ty-rows strong {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.ty-rows small {
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+}
+
+.ty-action {
+  width: 100%;
+  margin-top: var(--space-5);
+}
+
+.ty-action .btn {
+  width: 100%;
+  height: 40px;
+}
+
+@keyframes ty-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ty-check-ring,
+  .ty-check-tick {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+
+  .ty-dot {
+    display: none;
+  }
+
+  .ty-title,
+  .ty-sub,
+  .ty-rows li {
+    animation: none;
+  }
+}

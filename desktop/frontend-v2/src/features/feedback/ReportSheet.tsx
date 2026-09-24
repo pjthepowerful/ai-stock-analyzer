@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Sheet } from '../../components/Sheet'
+import { ThankYou } from '../../components/ThankYou'
 import { api, ApiError, type ChatMessage } from '../../lib/api'
 import './feedback.css'
 
@@ -47,14 +48,19 @@ function ReportForm({ onClose, transcript }: Omit<Props, 'open'>) {
   }
 
   return sentId ? (
-    <div>
-      <p className="fb-sent">
-        Sent. Reference <span className="mono">{sentId}</span>.
-      </p>
-      <button className="btn btn-primary fb-submit" onClick={onClose}>
-        Done
-      </button>
-    </div>
+    <ThankYou
+      title="Thanks for the report"
+      subtitle={
+        <>
+          It’s with the team now — this is how Paula gets better. Reference <span className="mono">{sentId}</span>.
+        </>
+      }
+      action={
+        <button className="btn btn-primary" onClick={onClose}>
+          Back to Paula
+        </button>
+      }
+    />
   ) : (
     <>
       <textarea

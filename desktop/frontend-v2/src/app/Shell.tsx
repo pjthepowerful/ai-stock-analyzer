@@ -4,6 +4,7 @@ import {
   ChartCandlestick,
   LogOut,
   Menu,
+  Search,
   MessageSquare,
   Settings,
   ShieldCheck,
@@ -14,11 +15,14 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react'
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { ChatScreen } from '../features/chat/ChatScreen'
 import { ReportSheet } from '../features/feedback/ReportSheet'
 import { PlusSheet } from '../features/plus/PlusSheet'
+import { WelcomeSheet } from '../features/plus/WelcomeSheet'
 import { SettingsScreen } from '../features/settings/SettingsScreen'
+import { CommandPalette } from '../components/CommandPalette'
+import { ThemeSwitch } from '../components/ThemeSwitch'
 import type { ChatMessage } from '../lib/api'
 import { useSession } from '../lib/auth'
 import { ChatsProvider, useChats } from '../lib/chats'
@@ -27,14 +31,31 @@ import './shell.css'
 
 // Chat is the landing screen; the chart-heavy and owner-only screens load on
 // first visit so they don't weigh down the first paint.
-const AdminScreen = lazy(() => import('../features/admin/AdminScreen').then((m) => ({ default: m.AdminScreen })))
-const AnalyzeScreen = lazy(() => import('../features/analyze/AnalyzeScreen').then((m) => ({ default: m.AnalyzeScreen })))
-const EarningsScreen = lazy(() => import('../features/earnings/EarningsScreen').then((m) => ({ default: m.EarningsScreen })))
-const PortfolioScreen = lazy(() =>
-  import('../features/portfolio/PortfolioScreen').then((m) => ({ default: m.PortfolioScreen })),
-)
+const loadAdmin = () => import('../features/admin/AdminScreen')
+const loadAnalyze = () => import('../features/analyze/AnalyzeScreen')
+const loadEarnings = () => import('../features/earnings/EarningsScreen')
+const loadPortfolio = () => import('../features/portfolio/PortfolioScreen')
+const AdminScreen = lazy(() => loadAdmin().then((m) => ({ default: m.AdminScreen })))
+const AnalyzeScreen = lazy(() => loadAnalyze().then((m) => ({ default: m.AnalyzeScreen })))
+const EarningsScreen = lazy(() => loadEarnings().then((m) => ({ default: m.EarningsScreen })))
+const PortfolioScreen = lazy(() => loadPortfolio().then((m) => ({ default: m.PortfolioScreen })))
+
+// Once the first screen has painted and the browser is idle, fetch the other
+// screens' code so switching tabs never waits on a download.
+function preloadScreens(isAdmin: boolean) {
+  const run = () => {
+    void loadAnalyze()
+    void loadPortfolio()
+    void loadEarnings()
+    if (isAdmin) void loadAdmin()
+  }
+  if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 3000 })
+  else setTimeout(run, 1500)
+}
 
 type View = 'chat' | 'analyze' | 'portfolio' | 'earnings' | 'settings' | 'admin'
+
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 
 const PRIMARY: { id: View; label: string; icon: LucideIcon }[] = [
   { id: 'chat', label: 'Chat', icon: MessageSquare },
@@ -55,6 +76,22 @@ const TITLES: Record<View, string> = {
 export function Shell() {
   const { user } = useSession()
   const [view, setView] = useState<View>('chat')
+  const [palette, setPalette] = useState(false)
+  const [analyzeReq, setAnalyzeReq] = useState<{ ticker: string; n: number } | null>(null)
+
+  useEffect(() => preloadScreens(!!user?.is_admin), [user?.is_admin])
+
+  // ⌘K / Ctrl+K anywhere opens the command menu.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPalette((p) => !p)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
   const [drawer, setDrawer] = useState(false)
   const [plusOpen, setPlusOpen] = useState(false)
   const [report, setReport] = useState<{ open: boolean; transcript?: ChatMessage[] }>({ open: false })
@@ -77,7 +114,15 @@ export function Shell() {
       {/* Keyed per account so signing in/out swaps to that account's chats. */}
       <ChatsProvider key={user ? `u${user.id}` : 'guest'}>
         <div className={'app' + (drawer ? ' app-drawer-open' : '')}>
-          <Sidebar view={view} go={go} onClose={() => setDrawer(false)} />
+          <Sidebar
+            view={view}
+            go={go}
+            onClose={() => setDrawer(false)}
+            onSearch={() => {
+              setDrawer(false)
+              setPalette(true)
+            }}
+          />
           <div className="app-scrim" onClick={() => setDrawer(false)} />
 
           <div className="app-main">
@@ -91,7 +136,7 @@ export function Shell() {
             <main className="app-content">
               <Suspense fallback={null}>
                 {view === 'chat' && <ChatScreen onNavigateAnalyze={() => go('analyze')} />}
-                {view === 'analyze' && <AnalyzeScreen />}
+                {view === 'analyze' && <AnalyzeScreen request={analyzeReq} />}
                 {view === 'portfolio' && <PortfolioScreen />}
                 {view === 'earnings' && <EarningsScreen />}
                 {view === 'settings' && <SettingsScreen />}
@@ -99,16 +144,38 @@ export function Shell() {
               </Suspense>
             </main>
           </div>
+          {/* Mounted only while open, so each opening starts fresh. */}
+          <CommandPalette
+            key={palette ? 'open' : 'closed'}
+            open={palette}
+            onClose={() => setPalette(false)}
+            go={go}
+            analyze={(ticker) => {
+              setAnalyzeReq((r) => ({ ticker, n: (r?.n ?? 0) + 1 }))
+              go('analyze')
+            }}
+          />
         </div>
       </ChatsProvider>
 
       <PlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} />
+      <WelcomeSheet />
       <ReportSheet open={report.open} transcript={report.transcript} onClose={() => setReport({ open: false })} />
     </ChromeContext.Provider>
   )
 }
 
-function Sidebar({ view, go, onClose }: { view: View; go: (v: View) => void; onClose: () => void }) {
+function Sidebar({
+  view,
+  go,
+  onClose,
+  onSearch,
+}: {
+  view: View
+  go: (v: View) => void
+  onClose: () => void
+  onSearch: () => void
+}) {
   const { user, isGuest, signOut } = useSession()
   const { chats, active, select, create, remove, scan } = useChats()
   const { openPlus, openReport } = useChrome()
@@ -137,6 +204,12 @@ function Sidebar({ view, go, onClose }: { view: View; go: (v: View) => void; onC
       <button className="btn btn-secondary sidebar-new" onClick={newChat}>
         <SquarePen size={15} />
         New chat
+      </button>
+      <button className="sidebar-search" onClick={onSearch}>
+        <Search size={14} />
+        <span>Search…</span>
+        <kbd className="kbd">{isMac ? '⌘' : 'Ctrl'}</kbd>
+        <kbd className="kbd">K</kbd>
       </button>
 
       <nav className="nav">
@@ -228,6 +301,11 @@ function Sidebar({ view, go, onClose }: { view: View; go: (v: View) => void; onC
             Report a problem
           </button>
         </nav>
+
+        <div className="sidebar-theme">
+          <span className="sidebar-label">Theme</span>
+          <ThemeSwitch />
+        </div>
 
         <div className="account">
           <span className="account-avatar">{name.slice(0, 1).toUpperCase()}</span>

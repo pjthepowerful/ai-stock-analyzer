@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { ChartCandlestick, MessagesSquare, Wallet } from 'lucide-react'
 import { Sheet } from '../../components/Sheet'
+import { ThankYou } from '../../components/ThankYou'
 import { api, ApiError } from '../../lib/api'
 import { useSession } from '../../lib/auth'
 import './plus.css'
@@ -28,6 +30,12 @@ export function PlusSheet({ open, onClose }: Props) {
   const [plan, setPlan] = useState<Plan>('annual')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [thanked, setThanked] = useState(false)
+
+  function close() {
+    onClose()
+    setThanked(false)
+  }
 
   async function buy() {
     setBusy(true)
@@ -35,6 +43,7 @@ export function PlusSheet({ open, onClose }: Props) {
     try {
       await api.post('/api/plus/purchase', { plan })
       await refresh()
+      setThanked(true)
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Checkout failed — nothing was charged.')
     } finally {
@@ -43,11 +52,31 @@ export function PlusSheet({ open, onClose }: Props) {
   }
 
   return (
-    <Sheet open={open} onClose={onClose} title={user?.plus ? 'You have Plus' : 'Paula Plus'}>
-      {user?.plus ? (
+    <Sheet open={open} onClose={close} title={thanked ? '' : user?.plus ? 'You have Plus' : 'Paula Plus'}>
+      {thanked ? (
+        <ThankYou
+          title="Thank you — you’re on Plus"
+          subtitle={
+            <>
+              Your {PLANS[plan].label.toLowerCase()} plan is active{user?.username ? `, ${user.username.split(' ')[0]}` : ''}.
+              Everything below is unlocked now.
+            </>
+          }
+          rows={[
+            { icon: MessagesSquare, title: 'Unlimited messages', desc: 'No daily cap — ask as much as you like.' },
+            { icon: ChartCandlestick, title: 'The full signal', desc: 'Entry, stop, target and chart on every ticker.' },
+            { icon: Wallet, title: 'Your own broker', desc: 'Connect Alpaca in Settings → Connections.' },
+          ]}
+          action={
+            <button className="btn btn-primary" onClick={close}>
+              Start using Plus
+            </button>
+          }
+        />
+      ) : user?.plus ? (
         <div className="plus-done">
           <p className="plus-done-lede">Everything is unlocked on this account.</p>
-          <button className="btn btn-primary plus-cta" onClick={onClose}>
+          <button className="btn btn-primary plus-cta" onClick={close}>
             Back to Paula
           </button>
         </div>

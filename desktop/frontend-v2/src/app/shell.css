@@ -72,6 +72,35 @@
   width: 100%;
 }
 
+.sidebar-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 32px;
+  padding: 0 6px 0 var(--space-2);
+  border: none;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.sidebar-search:hover {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  color: var(--text-secondary);
+}
+
+.sidebar-search span {
+  flex: 1;
+  text-align: left;
+}
+
+.sidebar-search .kbd {
+  margin-right: 0;
+}
+
 .nav {
   display: flex;
   flex-direction: column;
@@ -293,6 +322,17 @@
 .plus-promo small {
   font-size: var(--text-xs);
   color: var(--text-dim);
+}
+
+.sidebar-theme {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0 0 var(--space-2);
+}
+
+.sidebar-theme .sidebar-label {
+  padding: 0;
 }
 
 .account {

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, ApiError } from '../../lib/api'
 import { useSession } from '../../lib/auth'
 import { useChrome } from '../../lib/chrome'
-import { useTheme } from '../../lib/theme'
+import { ThemeSwitch } from '../../components/ThemeSwitch'
 import './settings.css'
 
 interface AutopilotMode {
@@ -290,25 +290,12 @@ function AlpacaConnection({ connected, onChange }: { connected: boolean; onChang
 }
 
 function Appearance() {
-  const [theme, setTheme] = useTheme()
   return (
     <section className="settings-section">
       <h2 className="settings-section-title">Appearance</h2>
       <div className="settings-row">
         <span className="settings-row-label">Theme</span>
-        <div className="seg" role="radiogroup" aria-label="Theme">
-          {(['light', 'dark'] as const).map((t) => (
-            <button
-              key={t}
-              role="radio"
-              aria-checked={theme === t}
-              className={'seg-btn' + (theme === t ? ' seg-on' : '')}
-              onClick={() => setTheme(t)}
-            >
-              {t === 'light' ? 'Light' : 'Dark'}
-            </button>
-          ))}
-        </div>
+        <ThemeSwitch labels />
       </div>
     </section>
   )

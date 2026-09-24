@@ -1,35 +1,64 @@
 import { useEffect, useState } from 'react'
 
 export type Theme = 'light' | 'dark'
+/** What the person picked; 'system' follows the OS appearance. */
+export type ThemePref = Theme | 'system'
 
-// index.html applies the stored theme before first paint (no flash); this
-// module owns changing it afterwards.
+// index.html applies the stored preference before first paint (no flash);
+// this module owns changing it afterwards.
 const KEY = 'paula-v2-theme'
 const EVENT = 'paula-theme'
+const darkQuery = typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)') : null
 
+function readPref(): ThemePref {
+  try {
+    const v = localStorage.getItem(KEY)
+    return v === 'dark' || v === 'light' || v === 'system' ? v : 'light'
+  } catch {
+    return 'light'
+  }
+}
+
+function resolve(pref: ThemePref): Theme {
+  if (pref === 'system') return darkQuery?.matches ? 'dark' : 'light'
+  return pref
+}
+
+function apply(theme: Theme) {
+  if (theme === 'dark') document.documentElement.dataset.theme = 'dark'
+  else delete document.documentElement.dataset.theme
+  window.dispatchEvent(new Event(EVENT))
+}
+
+/** The theme actually on screen right now. */
 export function getTheme(): Theme {
   return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
 }
 
-export function setTheme(theme: Theme) {
-  if (theme === 'dark') document.documentElement.dataset.theme = 'dark'
-  else delete document.documentElement.dataset.theme
+export function setThemePref(pref: ThemePref) {
   try {
-    localStorage.setItem(KEY, theme)
+    localStorage.setItem(KEY, pref)
   } catch {
     /* private mode — the choice just won't persist */
   }
-  window.dispatchEvent(new Event(EVENT))
+  apply(resolve(pref))
 }
 
-export function useTheme(): [Theme, (t: Theme) => void] {
-  const [theme, setState] = useState<Theme>(getTheme)
+// Following the system: re-apply when the OS switches (e.g. at sunset).
+darkQuery?.addEventListener('change', () => {
+  if (readPref() === 'system') apply(resolve('system'))
+})
+
+/** [resolved theme on screen, the person's preference, setter]. Charts key
+ *  their redraw on the resolved theme. */
+export function useTheme(): [Theme, ThemePref, (p: ThemePref) => void] {
+  const [state, setState] = useState(() => ({ theme: getTheme(), pref: readPref() }))
   useEffect(() => {
-    const on = () => setState(getTheme())
+    const on = () => setState({ theme: getTheme(), pref: readPref() })
     window.addEventListener(EVENT, on)
     return () => window.removeEventListener(EVENT, on)
   }, [])
-  return [theme, setTheme]
+  return [state.theme, state.pref, setThemePref]
 }
 
 export interface ChartColors {

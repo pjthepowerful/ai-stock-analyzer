@@ -252,6 +252,10 @@
 }
 
 .seg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   height: 26px;
   padding: 0 var(--space-3);
   border: none;
@@ -266,6 +270,11 @@
 
 .seg-btn:hover {
   color: var(--text);
+}
+
+.seg-icons .seg-btn {
+  width: 28px;
+  padding: 0;
 }
 
 .seg-on {
@@ -369,5 +378,33 @@
 
   .grid-2 {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ── Loading skeleton ── */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--text) 5%, transparent), transparent);
+  animation: skeleton 1.3s ease-in-out infinite;
+}
+
+@keyframes skeleton {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
   }
 }

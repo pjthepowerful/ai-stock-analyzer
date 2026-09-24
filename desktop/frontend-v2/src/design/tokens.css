@@ -51,18 +51,18 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  /* ── Color: cool near-black, single accent ── */
-  --bg: #0b0c0e;
-  --sidebar: #08090b;
-  --surface: #121418;
-  --surface-2: #171a1f;
-  --surface-3: #1f2329;
-  --border: #23262c;
-  --border-strong: #33383f;
+  /* ── Color: soft graphite (not pure black), single accent ── */
+  --bg: #121315;
+  --sidebar: #0e0f11;
+  --surface: #1a1b1e;
+  --surface-2: #222326;
+  --surface-3: #2b2c30;
+  --border: #2c2e32;
+  --border-strong: #3c3f44;
 
-  --text: #f5f6f7;
-  --text-secondary: #9aa0a8;
-  --text-dim: #5a6068;
+  --text: #eceef0;
+  --text-secondary: #a8adb4;
+  --text-dim: #7d838b;
 
   --accent: #10b981;
   --accent-strong: #4ade80;
@@ -75,12 +75,12 @@
   --scrim: rgb(4 5 6 / 0.72);
   --stripe: rgb(255 255 255 / 0.015);
 
-  --shadow-card: none;
-  --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.5);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-pop: 0 12px 32px rgb(0 0 0 / 0.45);
   --focus: 0 0 0 3px rgb(16 185 129 / 0.25);
 
-  --chart-text: #5a6068;
-  --chart-grid: rgba(35, 38, 44, 0.5);
+  --chart-text: #7d838b;
+  --chart-grid: rgba(255, 255, 255, 0.06);
   --chart-up: #34d399;
   --chart-down: #f87171;
   --chart-sma: #fbbf24;
