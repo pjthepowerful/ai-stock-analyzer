@@ -126,6 +126,7 @@ export function ChatScreen({ onNavigateAnalyze, draft }: Props) {
             card,
             charts,
             model: res.model ? `Paula ${TIER_NAME[tier]} · ${res.model}` : undefined,
+            scanUpsell: res.scan_upsell || undefined,
           },
         })
       }

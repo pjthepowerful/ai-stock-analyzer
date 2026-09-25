@@ -206,6 +206,12 @@ def _scan_key(intent: dict, is_plus: bool) -> str:
     return json.dumps([shape, is_plus], sort_keys=True, default=str)
 
 
+def _split_scan_upsell(msg: str) -> tuple[str, bool]:
+    lines = msg.split("\n")
+    keep = [ln for ln in lines if "Paula Plus scans" not in ln]
+    return "\n".join(keep).rstrip(), len(keep) != len(lines)
+
+
 async def _start_scan(intent: dict, user_id: int, is_plus: bool):
     import time
 
@@ -217,7 +223,7 @@ async def _start_scan(intent: dict, user_id: int, is_plus: bool):
                 auth.save_chat(user_id, "assistant", hit[1])
             except Exception:
                 pass
-        return {"ok": True, "type": "chat", "message": hit[1], "cached_scan": True}
+        return {"ok": True, "type": "chat", "message": hit[1], "cached_scan": True, "scan_upsell": hit[2]}
 
     # Scan events go out on the shared broadcast channel; the id lets each
     # client pick out its own scan instead of taking whichever finishes first.
@@ -239,17 +245,20 @@ async def _start_scan(intent: dict, user_id: int, is_plus: bool):
             )
             msg_out = res.get("msg", "") if res and res.get("ok") else orch.friendly_error((res or {}).get("error", ""))
             msg_out = orch.humanize_labels(msg_out)
+            # The engine ends free scans with a bold "Paula Plus scans…" line;
+            # the app shows that as an upsell card with a button instead.
+            msg_out, upsell = _split_scan_upsell(msg_out)
             if res and res.get("ok") and msg_out:
                 import time as _t
 
-                _scan_cache[key] = (_t.time(), msg_out)
+                _scan_cache[key] = (_t.time(), msg_out, upsell)
             tickers_out = (res or {}).get("tickers", []) if res and res.get("ok") else []
             if user_id:
                 try:
                     auth.save_chat(user_id, "assistant", msg_out)
                 except Exception:
                     pass
-            await manager.broadcast("scan_result", {"scan_id": scan_id, "ok": bool(res and res.get("ok")), "message": msg_out, "tickers": tickers_out})
+            await manager.broadcast("scan_result", {"scan_id": scan_id, "ok": bool(res and res.get("ok")), "message": msg_out, "tickers": tickers_out, "scan_upsell": upsell})
         except asyncio.CancelledError:
             raise
         except asyncio.TimeoutError:

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Chart } from '../../components/Chart'
 import { SignalCard } from '../../components/SignalCard'
 import type { StoredMessage } from '../../lib/chats'
+import { useSession } from '../../lib/auth'
 import { useChrome } from '../../lib/chrome'
 import { formatMessage } from '../../lib/format'
 import { TradeConfirm } from './TradeConfirm'
@@ -16,6 +17,7 @@ interface Props {
 
 export function MessageBubble({ role, content, meta, onMeta }: Props) {
   const { openPlus } = useChrome()
+  const { user } = useSession()
 
   if (role === 'user') {
     return (
@@ -49,6 +51,14 @@ export function MessageBubble({ role, content, meta, onMeta }: Props) {
         {meta?.taste && (
           <div className="msg-upsell">
             <span>Entry, stop, target, chart and reasoning are part of Paula Plus.</span>
+            <button className="btn btn-secondary btn-sm" onClick={openPlus}>
+              See Plus
+            </button>
+          </div>
+        )}
+        {meta?.scanUpsell && !user?.plus && (
+          <div className="msg-upsell">
+            <span>This scan covered the ~100 most-liquid stocks. Plus scans all ~1,000 for more setups.</span>
             <button className="btn btn-secondary btn-sm" onClick={openPlus}>
               See Plus
             </button>

@@ -7238,7 +7238,7 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
                 msg.append("\n" + regime_line.strip())
             msg.append("\nNo clean setup is worth forcing  better to wait for one that lines up. "
                        "Ask me to scan again later, or I can analyze a specific ticker if you have one in mind.")
-            msg.append("\n**Based on my 21-factor signal engine  not financial advice.**")
+            msg.append("\n**Based on my 21-factor signal engine — not financial advice.**")
             if not is_plus:
                 msg.append("\n**Free scans cover the ~100 most-liquid stocks. Paula Plus scans the full ~1,000-name universe.**")
             return {"ok": True, "type": "analysis", "ticker": top[0]["ticker"],
@@ -7265,7 +7265,7 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
                              + (f" · {p['rr']:.1f}:1 reward-to-risk" if p.get('rr') else ""))
             lines.append("")
 
-        lines.append("**Based on my 21-factor signal engine  not financial advice. You make the call.**")
+        lines.append("**Based on my 21-factor signal engine — not financial advice. You make the call.**")
         if not is_plus:
             lines.append("\n**Free scans cover the ~100 most-liquid stocks. Paula Plus scans the full ~1,000-name universe for more setups.**")
         # Structured picks for programmatic consumers (the Co-Pilot). Same data

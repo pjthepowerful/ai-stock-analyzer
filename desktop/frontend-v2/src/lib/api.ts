@@ -117,4 +117,6 @@ export interface ChatResponse {
   quote?: { ticker: string; name?: string; price: number; change: number; change_pct: number } | null
   /** Label of the model that wrote the reply, when one did. */
   model?: string
+  /** A cached free scan: show the Plus full-scan upsell under it. */
+  scan_upsell?: boolean
 }

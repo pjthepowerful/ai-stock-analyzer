@@ -23,6 +23,8 @@ export interface StoredMessage {
     model?: string
     /** Small preview of an image the user attached (the full one isn't kept). */
     image?: string
+    /** A free scan — offer Plus's full-universe scan under it. */
+    scanUpsell?: boolean
   }
 }
 
@@ -317,7 +319,11 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
       if (scanTimer.current) clearTimeout(scanTimer.current)
       scanRef.current = null
       setScan(null)
-      append(mine.chatId, { role: 'assistant', content: String(e.data.message ?? '') })
+      append(mine.chatId, {
+        role: 'assistant',
+        content: String(e.data.message ?? ''),
+        meta: e.data.scan_upsell ? { scanUpsell: true } : undefined,
+      })
     }
   })
 
