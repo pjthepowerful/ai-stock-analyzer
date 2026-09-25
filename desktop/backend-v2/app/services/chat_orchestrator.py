@@ -319,6 +319,53 @@ async def _market_snapshot(loop) -> Optional[dict]:
         return None
 
 
+_CAL_Q = re.compile(r"\b(this week|next week|today|tonight|tomorrow|who reports|who's reporting|whos reporting|reporting|calendar|upcoming)\b", re.I)
+
+
+def _is_calendar_question(msg: str) -> bool:
+    m = msg.lower()
+    return "earning" in m and bool(_CAL_Q.search(m)) and not engine.find_all_tickers(msg, limit=1)
+
+
+def _earnings_calendar_snapshot() -> Optional[dict]:
+    """The next few trading days from Paula's own earnings calendar — the same
+    data as the Earnings screen, so chat and the calendar never disagree."""
+    try:
+        import earnings as earn
+        from datetime import timedelta
+
+        today = datetime.now(ZoneInfo("US/Eastern")).date()
+        days, d = [], today
+        while len(days) < 5:  # today + the next four weekdays
+            if d.weekday() < 5:
+                days.append(d)
+            d += timedelta(days=1)
+        months = {(x.year, x.month) for x in days}
+        dates: dict = {}
+        for y, mo in months:
+            dates.update(earn.calendar_month(y, mo).get("dates") or {})
+        out = {}
+        for x in days:
+            rows = dates.get(x.isoformat()) or []
+            big = sorted(rows, key=lambda r: r.get("market_cap") or 0, reverse=True)[:6]
+            out[x.strftime("%a %b %d")] = {
+                "count": len(rows),
+                "largest": [
+                    {"ticker": r.get("ticker"), "company": r.get("company"), "when": r.get("hour") or "time TBA",
+                     "eps_est": r.get("eps_estimate"), "mkt_cap_b": round((r.get("market_cap") or 0) / 1e9, 2)}
+                    for r in big
+                ],
+            }
+        if not any(v["count"] for v in out.values()):
+            return None
+        return {
+            "earnings_calendar": out,
+            "note": "Paula's own earnings calendar (same as the Earnings screen). Answer from THIS list, biggest names first; say the calendar has more in the Earnings tab. Don't add names that aren't here.",
+        }
+    except Exception:
+        return None
+
+
 async def _generic_reply(loop, user_msg: str, result: Optional[dict], chat_history: list) -> str:
     """Extract every ticker the CURRENT message names and price them, or fall
     through to a plain conversational answer — same logic as the original."""
@@ -347,6 +394,8 @@ async def _generic_reply(loop, user_msg: str, result: Optional[dict], chat_histo
     except Exception:
         pass
 
+    if not chat_data and _is_calendar_question(user_msg):
+        chat_data = await loop.run_in_executor(None, _earnings_calendar_snapshot) or {}
     # "How's the market today?" names no ticker, so nothing above attaches data.
     if not chat_data and _is_market_question(user_msg, result):
         chat_data = await _market_snapshot(loop) or {}
@@ -356,7 +405,7 @@ async def _generic_reply(loop, user_msg: str, result: Optional[dict], chat_histo
         umsg += "\n\n[Note: this is about a privately-held / pre-IPO company with no public ticker. Answer conversationally — explain its private status, any IPO/funding context, and how someone could get exposure. Do NOT say you lack data or look for a stock price.]"
 
     ml = user_msg.lower()
-    wants_news = any(w in ml for w in ["news", "latest", "happening", "headline", "earnings", "report", "announced", "update on", "what's going on", "whats going on", "why is", "why did", "catalyst", "recent", "today"])
+    wants_news = not chat_data.get("earnings_calendar") and any(w in ml for w in ["news", "latest", "happening", "headline", "earnings", "report", "announced", "update on", "what's going on", "whats going on", "why is", "why did", "catalyst", "recent", "today"])
     if wants_news and not (result and result.get("private_company")):
         try:
             nt = next((w for w in re.findall(r"\b([A-Z]{1,5})\b", user_msg) if w in KNOWN_TICKERS), None)
@@ -387,6 +436,8 @@ async def _fallback_reply(loop, user_msg: str, result: Optional[dict], chat_hist
                 fmsg += f"\n\n[LIVE WEB SEARCH — use this current info. Cite the publisher name as a markdown link only if a real http(s) URL is given:\n{wl}\n]"
         except Exception:
             pass
+    elif _is_calendar_question(user_msg) and (cal := await loop.run_in_executor(None, _earnings_calendar_snapshot)):
+        fall_data = cal
     else:
         try:
             cur = [t for t in re.findall(r"\b([A-Z]{1,5})\b", user_msg) if t in KNOWN_TICKERS]
