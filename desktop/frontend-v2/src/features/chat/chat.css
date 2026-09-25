@@ -686,6 +686,25 @@
   }
 }
 
+/* Phones: the chip sits too far right for a 360px menu, so the menu spans the
+   message box instead of hanging off the screen edge. */
+@media (max-width: 640px) {
+  .composer {
+    position: relative;
+  }
+
+  .model-pick {
+    position: static;
+  }
+
+  .model-menu {
+    left: 0;
+    right: 0;
+    width: auto;
+    max-width: none;
+  }
+}
+
 .model-item {
   display: flex;
   align-items: flex-start;
