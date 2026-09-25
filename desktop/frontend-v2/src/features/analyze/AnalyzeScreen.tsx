@@ -3,7 +3,7 @@ import { Clock, MessageSquare, Search, TrendingUp } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Chart } from '../../components/Chart'
 import { SignalCard, type AnalyzeData } from '../../components/SignalCard'
-import { api } from '../../lib/api'
+import { api, ApiError } from '../../lib/api'
 import { useChrome } from '../../lib/chrome'
 import { searchTickers } from '../../lib/tickers'
 import { KeyStats, type Fundamentals } from './KeyStats'
@@ -125,7 +125,13 @@ export function AnalyzeScreen({ request }: Props) {
           <TickerSearch onPick={lookup} busy={q.isFetching} autoFocus={!request} current={active} />
         </header>
 
-        {q.error && <p className="note-warn">{q.error.message}</p>}
+        {q.error && (
+          <p className="note-warn">
+            {q.error instanceof ApiError && q.error.status === 404
+              ? `Couldn’t find “${active}”. Check the symbol, or search by company name — e.g. “Apple”.`
+              : q.error.message}
+          </p>
+        )}
 
         {result ? (
           <>
