@@ -7,6 +7,7 @@ import { useChrome } from '../../lib/chrome'
 import { useWebSocket } from '../../lib/ws'
 import { IdeasPanel } from './IdeasPanel'
 import './earnings.css'
+import { SignUpGate } from '../../components/SignUpGate'
 
 interface CalRow {
   ticker: string
@@ -140,7 +141,7 @@ export function EarningsScreen() {
       <div className="page">
         <div className="page-inner">
           {head}
-          <p className="card empty">Sign in to see the earnings calendar and Paula’s read on each report.</p>
+          <SignUpGate text="The earnings calendar — who reports when, and Paula’s read on each — is free with an account." />
         </div>
       </div>
     )

@@ -1,0 +1,28 @@
+.signup-gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-5);
+  text-align: center;
+}
+
+.signup-gate-text {
+  max-width: 44ch;
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.signup-gate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.signup-gate-note {
+  margin: 0;
+  font-size: var(--text-2xs);
+  color: var(--text-dim);
+}

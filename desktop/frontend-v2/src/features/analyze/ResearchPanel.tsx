@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../lib/api'
 import { useSession } from '../../lib/auth'
+import { SignUpGate } from '../../components/SignUpGate'
 
 interface Forecast {
   score: number | null
@@ -56,7 +57,7 @@ export function ResearchPanel({ ticker }: { ticker: string }) {
 
   if (!enabled) {
     return (
-      <p className="card rp-signin">Sign in to see the earnings forecast, fundamentals and news for {ticker}.</p>
+      <SignUpGate className="rp-signin" text={`Create a free account to see the earnings forecast, fundamentals and news for ${ticker}.`} />
     )
   }
 

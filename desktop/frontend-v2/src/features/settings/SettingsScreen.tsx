@@ -6,6 +6,7 @@ import { useToast } from '../../lib/toast'
 import { ThemeSwitch } from '../../components/ThemeSwitch'
 import { AutopilotPanel } from './AutopilotPanel'
 import './settings.css'
+import { SignUpGate } from '../../components/SignUpGate'
 
 interface UserSettings {
   ok: boolean
@@ -53,7 +54,7 @@ export function SettingsScreen() {
           </div>
         </header>
         <Appearance />
-        <p className="card empty">Sign in to manage your account, connections, and autopilot preferences.</p>
+        <SignUpGate text="Create a free account to manage your profile, connect your broker and set up autopilot." />
         </div>
       </div>
     )
