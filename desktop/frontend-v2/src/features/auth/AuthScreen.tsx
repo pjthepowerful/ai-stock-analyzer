@@ -15,7 +15,16 @@ interface Props {
 
 export function AuthScreen({ ownerOnly = false, onBack }: Props = {}) {
   const { login, signup, continueAsGuest, error } = useSession()
-  const [mode, setMode] = useState<'login' | 'signup'>('login')
+  // "Create a free account" from guest chat lands straight on sign-up.
+  const [mode, setMode] = useState<'login' | 'signup'>(() => {
+    try {
+      const m = sessionStorage.getItem('paula-auth-mode')
+      sessionStorage.removeItem('paula-auth-mode')
+      return m === 'signup' && !ownerOnly ? 'signup' : 'login'
+    } catch {
+      return 'login'
+    }
+  })
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')

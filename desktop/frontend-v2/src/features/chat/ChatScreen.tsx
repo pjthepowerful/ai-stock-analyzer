@@ -1,4 +1,4 @@
-import { Activity, ArrowUp, ChartCandlestick, ImagePlus, Lightbulb, Wallet, X, type LucideIcon } from 'lucide-react'
+import { Activity, ArrowUp, CalendarDays, ChartCandlestick, ImagePlus, Lightbulb, Wallet, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { api, ApiError, FREE_DAILY_MESSAGES, type ChatMessage, type ChatResponse } from '../../lib/api'
 import { useSession } from '../../lib/auth'
@@ -36,7 +36,7 @@ function fallbackTitle(text: string) {
 }
 
 export function ChatScreen({ onNavigateAnalyze, draft }: Props) {
-  const { user, isGuest, refresh } = useSession()
+  const { user, isGuest, refresh, signOut } = useSession()
   const { openReport, openPlus } = useChrome()
   const { active, append, patchMeta, rename, ensureActive, scan, startScan } = useChats()
   const [input, setInput] = useState(draft?.text ?? '')
@@ -162,12 +162,20 @@ export function ChatScreen({ onNavigateAnalyze, draft }: Props) {
       desc: 'Signal, levels, chart and earnings for any ticker',
       run: onNavigateAnalyze,
     },
-    {
-      icon: Wallet,
-      title: 'How did I do today?',
-      desc: 'A recap of your positions and P&L',
-      run: () => send('How did we do today?'),
-    },
+    // Guests have no portfolio to recap; give them something that works.
+    isGuest
+      ? {
+          icon: CalendarDays,
+          title: 'Who reports earnings this week?',
+          desc: 'The names on the calendar and Paula’s read',
+          run: () => send('Who reports earnings this week?'),
+        }
+      : {
+          icon: Wallet,
+          title: 'How did I do today?',
+          desc: 'A recap of your positions and P&L',
+          run: () => send('How did we do today?'),
+        },
   ]
 
   return (
@@ -340,6 +348,25 @@ export function ChatScreen({ onNavigateAnalyze, draft }: Props) {
             <button className="composer-quota-cta" onClick={openPlus}>
               Get unlimited with Plus
             </button>
+          </p>
+        ) : isGuest ? (
+          // Logged-out nudge, as ChatGPT does: quiet, one click to sign up.
+          <p className="composer-hint composer-quota">
+            Chatting as a guest{' · '}
+            <button
+              className="composer-quota-cta"
+              onClick={() => {
+                try {
+                  sessionStorage.setItem('paula-auth-mode', 'signup')
+                } catch {
+                  /* lands on sign-in instead */
+                }
+                signOut()
+              }}
+            >
+              Create a free account
+            </button>{' '}
+            to save your chats
           </p>
         ) : (
           <p className="composer-hint">Paula can be wrong. No order is placed until you confirm it.</p>
