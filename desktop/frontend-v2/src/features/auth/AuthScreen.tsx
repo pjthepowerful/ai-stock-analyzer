@@ -47,6 +47,24 @@ export function AuthScreen({ ownerOnly = false, onBack }: Props = {}) {
           <ThemeSwitch />
         </header>
 
+        {/* Phones don't get the preview panel, so say what Paula is up front. */}
+        {!ownerOnly && (
+          <div className="auth-pitch">
+            <p className="auth-pitch-tag">Know before you trade.</p>
+            <ul>
+              <li>
+                <Lightbulb size={15} strokeWidth={1.8} /> Market scans that only surface setups clearing the full bar
+              </li>
+              <li>
+                <ChartCandlestick size={15} strokeWidth={1.8} /> Signal, levels and a chart for any ticker — or send a screenshot
+              </li>
+              <li>
+                <CalendarDays size={15} strokeWidth={1.8} /> Earnings calendar with a read on every report
+              </li>
+            </ul>
+          </div>
+        )}
+
         <form className="auth-form" onSubmit={handleSubmit}>
           <div className="auth-heading">
             <h1>{signingUp ? 'Create your account' : 'Welcome back'}</h1>

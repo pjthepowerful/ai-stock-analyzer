@@ -303,6 +303,65 @@
   }
 
   .auth-side {
+    min-height: 100dvh;
     padding: var(--space-4);
   }
+
+  /* Pitch first, form right under it — no empty band above the fold. */
+  .auth-side .auth-pitch {
+    display: block;
+  }
+
+  .auth-form {
+    margin: 0 auto;
+    padding-top: var(--space-5);
+  }
+
+  /* The pitch is the headline here; the form title steps down. */
+  .auth-heading h1 {
+    font-size: 1.25rem;
+  }
+
+  .auth-legal {
+    margin-top: auto;
+  }
+}
+
+.auth-pitch {
+  display: none;
+  width: 100%;
+  max-width: 360px;
+  margin: var(--space-6) auto 0;
+}
+
+.auth-pitch-tag {
+  margin: 0 0 var(--space-3);
+  font-size: 1.875rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.auth-pitch ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.auth-pitch li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.auth-pitch li svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--accent);
 }
