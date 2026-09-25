@@ -8,6 +8,25 @@
   padding: var(--space-4) var(--space-5) var(--space-2);
 }
 
+.settings-jump {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: calc(-1 * var(--space-2)) 0 var(--space-4);
+  padding: var(--space-2) 0;
+  background: var(--bg);
+}
+
+.settings-jump .seg {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+/* Land section headings below the sticky bar when jumped to. */
+.settings-anchor {
+  scroll-margin-top: 64px;
+}
+
 .settings-section-title {
   font-size: var(--text-base);
   font-weight: 600;

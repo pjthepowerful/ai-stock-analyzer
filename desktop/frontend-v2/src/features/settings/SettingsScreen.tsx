@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, ApiError } from '../../lib/api'
 import { useSession } from '../../lib/auth'
 import { useChrome } from '../../lib/chrome'
@@ -69,9 +69,20 @@ export function SettingsScreen() {
         </div>
       </header>
 
-      <Appearance />
+      <SectionNav
+        sections={[
+          ['appearance', 'Appearance'],
+          ['account', 'Account'],
+          ...(user?.can_autopilot ? ([['autopilot', 'Autopilot']] as [string, string][]) : []),
+          ['connections', 'Connections'],
+        ]}
+      />
 
-      <section className="settings-section">
+      <div id="settings-appearance" className="settings-anchor">
+        <Appearance />
+      </div>
+
+      <section id="settings-account" className="settings-section settings-anchor">
         <h2 className="settings-section-title">Account</h2>
         <div className="settings-row">
           <span className="settings-row-label">Email</span>
@@ -100,9 +111,13 @@ export function SettingsScreen() {
         </div>
       </section>
 
-      {user?.can_autopilot && <AutopilotPanel />}
+      {user?.can_autopilot && (
+        <div id="settings-autopilot" className="settings-anchor">
+          <AutopilotPanel />
+        </div>
+      )}
 
-      <section className="settings-section">
+      <section id="settings-connections" className="settings-section settings-anchor">
         <h2 className="settings-section-title">Connections</h2>
         {user?.plus || user?.is_admin ? (
           <AlpacaConnection connected={alpacaConnected} onChange={setAlpacaConnected} />
@@ -239,5 +254,55 @@ function Appearance() {
         <ThemeSwitch labels />
       </div>
     </section>
+  )
+}
+
+/** Sticky jump bar over the long settings page (as Linear and Vercel do),
+ *  highlighting whichever section is on screen. */
+function SectionNav({ sections }: { sections: [string, string][] }) {
+  const [active, setActive] = useState(sections[0][0])
+  const navRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    const root = navRef.current?.closest('.page') ?? null
+    const els = sections.map(([id]) => document.getElementById(`settings-${id}`)).filter(Boolean) as HTMLElement[]
+    const io = new IntersectionObserver(
+      (entries) => {
+        const top = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]
+        if (top) setActive(top.target.id.replace('settings-', ''))
+      },
+      // A section counts as current once it reaches the top third of the page.
+      { root, rootMargin: '-15% 0px -60% 0px' },
+    )
+    els.forEach((el) => io.observe(el))
+    // A short last section never reaches the trigger line; at the bottom, it's the current one.
+    const onScroll = () => {
+      if (root && root.scrollTop + root.clientHeight >= root.scrollHeight - 4) setActive(sections[sections.length - 1][0])
+    }
+    root?.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      io.disconnect()
+      root?.removeEventListener('scroll', onScroll)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the list is rebuilt each render; its ids are what matter
+  }, [sections.map(([id]) => id).join()])
+
+  return (
+    <nav className="settings-jump" ref={navRef} aria-label="Settings sections">
+      <div className="seg">
+        {sections.map(([id, label]) => (
+          <button
+            key={id}
+            className={'seg-btn' + (active === id ? ' seg-on' : '')}
+            onClick={() => {
+              setActive(id)
+              document.getElementById(`settings-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </nav>
   )
 }
