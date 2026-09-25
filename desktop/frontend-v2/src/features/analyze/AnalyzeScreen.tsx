@@ -88,6 +88,32 @@ export function AnalyzeScreen({ request }: Props) {
   const result = q.data ?? null
   const recent = result ? [] : readRecent()
 
+  // Price and day move on every chip, so you can see what's moving before
+  // you pick (as Perplexity Finance and Robinhood do). One batched call.
+  const chipSymbols = [...new Set([...recent, ...quick.map((p) => p.ticker)])].sort()
+  const moves = useQuery({
+    queryKey: ['chip-quotes', chipSymbols.join(',')],
+    queryFn: () =>
+      api
+        .get<{ quotes: { sym: string; price: number; pct: number }[] }>(
+          `/api/market/quotes?symbols=${chipSymbols.join(',')}`,
+        )
+        .then((r) => new Map(r.quotes.map((x) => [x.sym, x]))),
+    enabled: !result && chipSymbols.length > 0,
+    staleTime: 60_000,
+  })
+  const move = (t: string) => {
+    const m = moves.data?.get(t)
+    if (!m) return null
+    const cls = m.pct > 0 ? 'chip-up' : m.pct < 0 ? 'chip-down' : ''
+    return (
+      <span className={'chip-move ' + cls}>
+        {m.pct > 0 ? '+' : ''}
+        {m.pct.toFixed(2)}%
+      </span>
+    )
+  }
+
   return (
     <div className="page">
       <div className="page-inner">
@@ -138,6 +164,7 @@ export function AnalyzeScreen({ request }: Props) {
                   {recent.map((t) => (
                     <button key={t} className="btn btn-secondary btn-sm" onClick={() => lookup(t)}>
                       {t}
+                      {move(t)}
                     </button>
                   ))}
                 </div>
@@ -162,6 +189,7 @@ export function AnalyzeScreen({ request }: Props) {
                 >
                   {p.trending && <TrendingUp size={12} />}
                   {p.ticker}
+                  {move(p.ticker)}
                 </button>
               ))}
             </div>

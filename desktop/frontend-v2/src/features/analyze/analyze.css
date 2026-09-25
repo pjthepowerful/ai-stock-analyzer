@@ -47,6 +47,23 @@
   margin-top: var(--space-4);
 }
 
+.chip-move {
+  margin-left: 2px;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.chip-up {
+  color: var(--positive);
+}
+
+.chip-down {
+  color: var(--negative);
+}
+
 /* ── Research cards ── */
 .rp {
   display: grid;

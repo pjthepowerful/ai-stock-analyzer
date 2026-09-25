@@ -11,6 +11,7 @@ import warnings
 from fastapi import APIRouter
 
 from ..bridge import engine
+from ..services.ttl import TTLCache
 
 router = APIRouter(prefix="/api/market", tags=["market"])
 
@@ -48,13 +49,18 @@ def _movers() -> tuple[dict | None, dict | None]:
 
 
 def _tape() -> list[dict]:
+    return _daily_moves(TAPE_SYMBOLS)
+
+
+def _daily_moves(symbols: list[str]) -> list[dict]:
+    """Last close and day % move for each symbol, in one Yahoo download."""
     import yfinance as yf
 
     out = []
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        data = yf.download(TAPE_SYMBOLS, period="5d", interval="1d", progress=False, group_by="ticker", threads=True)
-    for s in TAPE_SYMBOLS:
+        data = yf.download(symbols, period="5d", interval="1d", progress=False, group_by="ticker", threads=True)
+    for s in symbols:
         try:
             closes = data[s]["Close"].dropna()
             if len(closes) >= 2:
@@ -63,6 +69,19 @@ def _tape() -> list[dict]:
         except Exception:
             continue
     return out
+
+
+_quotes_cache = TTLCache(TTL, max_items=256)
+
+
+@router.get("/quotes")
+def quotes(symbols: str = ""):
+    """Price and day move for a handful of tickers (Analyze's quick-pick chips)."""
+    syms = sorted({s.strip().upper() for s in symbols.split(",") if s.strip().isalnum() and len(s.strip()) <= 6})[:16]
+    if not syms:
+        return {"ok": True, "quotes": []}
+    rows = _quotes_cache.get_or_set(tuple(syms), lambda: _safe(lambda: _daily_moves(syms), []))
+    return {"ok": True, "quotes": rows}
 
 
 def _safe(fn, default):
