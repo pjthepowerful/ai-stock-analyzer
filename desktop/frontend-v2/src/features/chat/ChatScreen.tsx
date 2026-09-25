@@ -192,10 +192,8 @@ export function ChatScreen({ onNavigateAnalyze, draft }: Props) {
               {sending && (
                 <div className="msg msg-assistant">
                   <span className="msg-avatar">P</span>
-                  <div className="msg-thinking" aria-label="Paula is thinking">
-                    <span />
-                    <span />
-                    <span />
+                  <div className="msg-thinking" role="status">
+                    <span className="msg-thinking-text">Paula {TIER_NAME[tier]} is thinking…</span>
                   </div>
                 </div>
               )}

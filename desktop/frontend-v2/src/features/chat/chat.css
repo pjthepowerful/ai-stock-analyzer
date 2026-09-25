@@ -197,36 +197,35 @@
   border-radius: var(--radius-md);
 }
 
+/* A shimmering label, as ChatGPT and Claude.ai do, instead of bare dots. */
 .msg-thinking {
-  display: flex;
-  gap: 4px;
-  padding-top: 10px;
+  padding-top: 5px;
 }
 
-.msg-thinking span {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--text-dim);
-  animation: thinking 1s ease-in-out infinite;
+.msg-thinking-text {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: transparent;
+  background: linear-gradient(90deg, var(--text-dim) 0%, var(--text-dim) 40%, var(--text) 50%, var(--text-dim) 60%, var(--text-dim) 100%);
+  background-size: 250% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: thinking-shimmer 1.6s linear infinite;
 }
 
-.msg-thinking span:nth-child(2) {
-  animation-delay: 0.15s;
-}
-
-.msg-thinking span:nth-child(3) {
-  animation-delay: 0.3s;
-}
-
-@keyframes thinking {
-  0%,
-  80%,
-  100% {
-    opacity: 0.25;
+@keyframes thinking-shimmer {
+  from {
+    background-position: 100% 0;
   }
-  40% {
-    opacity: 1;
+  to {
+    background-position: 0% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg-thinking-text {
+    animation: none;
+    color: var(--text-dim);
   }
 }
 
