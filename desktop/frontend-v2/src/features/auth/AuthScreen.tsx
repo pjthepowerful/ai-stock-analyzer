@@ -5,9 +5,15 @@ import { Typewriter } from '../../components/Typewriter'
 import { useSession } from '../../lib/auth'
 import './auth.css'
 
-const TAGLINES = ['Every trade, reasoned through.', 'Setups that clear the bar.', 'Your market, explained.']
+const TAGLINES = ['Know before you trade.', 'Every trade, reasoned through.', 'Setups that clear the bar.', 'Your market, explained.']
 
-export function AuthScreen() {
+interface Props {
+  /** Maintenance mode's owner door: sign in only — no guest, no sign-up. */
+  ownerOnly?: boolean
+  onBack?: () => void
+}
+
+export function AuthScreen({ ownerOnly = false, onBack }: Props = {}) {
   const { login, signup, continueAsGuest, error } = useSession()
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [email, setEmail] = useState('')
@@ -106,20 +112,31 @@ export function AuthScreen() {
             {busy ? (signingUp ? 'Creating account…' : 'Signing in…') : signingUp ? 'Create account' : 'Sign in'}
           </button>
 
-          <div className="auth-divider">
-            <span>or</span>
-          </div>
+          {ownerOnly ? (
+            <p className="auth-switch">
+              Paula is in maintenance — only the owner can sign in.{' '}
+              <button type="button" onClick={onBack}>
+                Back
+              </button>
+            </p>
+          ) : (
+            <>
+            <div className="auth-divider">
+              <span>or</span>
+            </div>
 
-          <button type="button" className="btn btn-secondary auth-submit" onClick={continueAsGuest}>
-            Continue as guest
-          </button>
-
-          <p className="auth-switch">
-            {signingUp ? 'Already have an account?' : 'New to Paula?'}{' '}
-            <button type="button" onClick={() => setMode(signingUp ? 'login' : 'signup')}>
-              {signingUp ? 'Sign in' : 'Create an account'}
+            <button type="button" className="btn btn-secondary auth-submit" onClick={continueAsGuest}>
+              Continue as guest
             </button>
-          </p>
+
+            <p className="auth-switch">
+              {signingUp ? 'Already have an account?' : 'New to Paula?'}{' '}
+              <button type="button" onClick={() => setMode(signingUp ? 'login' : 'signup')}>
+                {signingUp ? 'Sign in' : 'Create an account'}
+              </button>
+            </p>
+            </>
+          )}
         </form>
 
         <p className="auth-legal">Paper trading only. Paula is research, not financial advice.</p>

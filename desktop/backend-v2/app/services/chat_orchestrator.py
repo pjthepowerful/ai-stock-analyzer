@@ -61,13 +61,32 @@ def friendly_error(err: str) -> str:
 
 def _ai_unavailable(raw: str) -> str:
     e = raw.lower()
-    if "invalid api key" in e or "invalid_api_key" in e or "401" in e:
+    if "api key" in e or "api_key" in e or "401" in e or "403" in e:
         return ("Paula's language model isn't reachable right now — the server's AI key was "
                 "rejected. Stock data and charts still work in Analyze; chat answers will be "
                 "back once the key is fixed.")
     if "rate" in e or "429" in e:
         return "Paula's AI is rate-limited at the moment. Give it a minute and ask again."
     return "Paula couldn't generate an answer just now. Try again in a moment."
+
+
+# Engine labels the model sometimes repeats verbatim ("the market flags it as
+# strong_sell"). Say them the way a person would.
+_LABELS = {
+    "strong_sell": "strong sell", "strong_buy": "strong buy",
+    "strong_bull": "strongly bullish", "strong_bear": "strongly bearish",
+    "risk_off": "risk-off", "risk_on": "risk-on", "safe_to_buy": "safe to buy",
+    "not_safe": "not safe", "no_trade": "no trade", "buy_the_dip": "buy the dip",
+}
+_LABEL_RE = re.compile(r"`?\b(" + "|".join(_LABELS) + r")\b`?", re.IGNORECASE)
+
+
+def humanize_labels(text: str) -> str:
+    def _repl(m: re.Match) -> str:
+        word = _LABELS[m.group(1).lower()]
+        # Keep an all-caps label emphatic ("STRONG_SELL" -> "STRONG SELL").
+        return word.upper() if m.group(1).isupper() else word
+    return _LABEL_RE.sub(_repl, text) if text else text
 
 
 def _quote(result: Optional[dict]) -> Optional[dict]:
@@ -215,6 +234,9 @@ async def build_response(
     if ai_failed:
         print(f"[chat] LLM failure: {resp[:200]}", flush=True)
         resp = _ai_unavailable(resp)
+
+    if isinstance(resp, str):
+        resp = humanize_labels(resp)
 
     # Price-hallucination guard on the final text, mirroring the original.
     if resp and result:

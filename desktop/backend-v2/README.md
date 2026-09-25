@@ -32,7 +32,9 @@ Read from `desktop/backend/.env` (or a `backend-v2/.env` override):
 | Variable | Needed for |
 | --- | --- |
 | `JWT_SECRET` | Stable logins across restarts; also keys the encryption of stored broker keys. |
-| `GROQ_API_KEY` | Chat answers. Market scans and analysis cards work without it. |
+| `OPENROUTER_API_KEY` | Chat answers via OpenRouter (key from openrouter.ai/keys). First in the chain when set. Defaults to `google/gemini-3.8-flash` (fast calls: `openai/gpt-6-luna`); override with `OPENROUTER_MODEL` / `OPENROUTER_MODEL_FAST`. |
+| `GEMINI_API_KEY` | Google Gemini's free tier (aistudio.google.com). Tried after OpenRouter. Models: `GEMINI_MODEL` / `GEMINI_MODEL_FAST`. |
+| `GROQ_API_KEY` | Groq, the last fallback. Every provider with a key is tried in order OpenRouter → Gemini → Groq, so a rate limit or outage on one moves the request to the next. `LLM_PROVIDER=openrouter\|gemini\|groq` pins one. Market scans and analysis cards work without any key. |
 | `POLYGON_API_KEY`, `ALPACA_KEY_ID`, `ALPACA_SECRET` | Market data and the shared paper account. |
 | `SEC_USER_AGENT` | Company fundamentals. The SEC returns 403 unless this includes a contact email, e.g. `Paula you@example.com`. |
 | `TRUST_PROXY=1` | Only when deployed behind a reverse proxy: lets the guest message limit use `X-Forwarded-For`. Leave unset locally, or the header can be spoofed. |

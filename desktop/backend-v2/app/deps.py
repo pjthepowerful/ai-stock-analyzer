@@ -12,7 +12,37 @@ from fastapi import Header, HTTPException
 from .bridge import auth, engine
 
 
+# Accounts that may use the shared (env) Alpaca account: autopilot, orders
+# without their own keys. Everyone else only ever sees their own broker.
+AUTOPILOT_EMAILS = {"parjan.d@icloud.com", "pinakin.d@moftmail.com"}
+
+# engine falls back to the shared env account whenever no per-request creds
+# are set. Anyone not allowed that account gets these placeholder creds
+# instead, so every account/position/order call fails like "not connected"
+# rather than quietly showing (or trading) the owner's account. Market data
+# never goes through these headers, so it's unaffected.
+_NO_BROKER = "not-connected"
+
+
+def can_autopilot(user: Optional[dict]) -> bool:
+    return bool(user) and (user.get("email") or "").lower() in AUTOPILOT_EMAILS
+
+
+def _own_creds(user_id: int) -> dict:
+    try:
+        c = auth.get_user_alpaca_creds(user_id) or {}
+    except Exception:
+        return {}
+    return c if c.get("key_id") and c.get("secret") else {}
+
+
+def has_broker(user: Optional[dict]) -> bool:
+    """Signed in with their own Alpaca keys, or allowed the shared account."""
+    return bool(user) and (can_autopilot(user) or bool(_own_creds(user["id"])))
+
+
 def _resolve_user(authorization: Optional[str]) -> Optional[dict]:
+    engine.set_alpaca_creds(_NO_BROKER, _NO_BROKER)
     if not authorization:
         return None
     token = authorization.replace("Bearer ", "").strip()
@@ -22,20 +52,22 @@ def _resolve_user(authorization: Optional[str]) -> Optional[dict]:
     if not user:
         return None
     # Fetch a fresh email (older JWTs may lack it) and apply this user's own
-    # Alpaca creds for the request, exactly like the original backend does.
+    # Alpaca creds for the request.
     try:
         db = auth._get_db()
-        row = db.execute("SELECT email FROM users WHERE id = ?", (user["id"],)).fetchone()
+        try:
+            row = db.execute("SELECT email FROM users WHERE id = ?", (user["id"],)).fetchone()
+        finally:
+            db.close()
         if row and row["email"]:
             user["email"] = row["email"]
-        db.close()
     except Exception:
         pass
-    try:
-        creds = auth.get_user_alpaca_creds(user["id"])
-        engine.set_alpaca_creds(creds.get("key_id"), creds.get("secret"))
-    except Exception:
-        engine.set_alpaca_creds(None, None)
+    creds = _own_creds(user["id"])
+    if creds:
+        engine.set_alpaca_creds(creds["key_id"], creds["secret"])
+    elif can_autopilot(user):
+        engine.set_alpaca_creds(None, None)   # the shared account is theirs
     return user
 
 
@@ -57,6 +89,13 @@ ADMIN_EMAIL = "parjan.d@icloud.com"
 
 def is_admin(user: Optional[dict]) -> bool:
     return bool(user) and (user.get("email") or "").lower() == ADMIN_EMAIL
+
+
+def broker_user_required(authorization: Optional[str] = Header(None)) -> dict:
+    user = current_user_required(authorization)
+    if not has_broker(user):
+        raise HTTPException(status_code=403, detail="Connect your Alpaca account in Settings to see your portfolio.")
+    return user
 
 
 def admin_required(authorization: Optional[str] = Header(None)) -> dict:

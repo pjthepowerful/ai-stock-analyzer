@@ -14,13 +14,14 @@ type Listener = (e: WsEvent) => void
 // listener, reconnects while anyone is listening, and closes with the last.
 const listeners = new Set<Listener>()
 let socket: WebSocket | null = null
-let pingTimer: ReturnType<typeof setInterval> | null = null
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 
 function connect() {
   if (socket || listeners.size === 0) return
   const ws = new WebSocket(WS_URL)
   socket = ws
+  // Per socket: an old socket closing late must not stop the new one's pings.
+  let pingTimer: ReturnType<typeof setInterval> | null = null
   ws.onopen = () => {
     pingTimer = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }))
@@ -39,7 +40,8 @@ function connect() {
   ws.onclose = () => {
     if (pingTimer) clearInterval(pingTimer)
     pingTimer = null
-    if (socket === ws) socket = null
+    if (socket !== ws) return // replaced already; the current socket handles retries
+    socket = null
     if (listeners.size > 0) retryTimer = setTimeout(connect, 3000)
   }
 }

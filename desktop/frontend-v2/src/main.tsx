@@ -6,6 +6,9 @@ import './design/ui.css'
 import App from './app/App'
 import { LaunchGate } from './features/launch/LaunchGate'
 import { SessionProvider } from './lib/auth'
+import { installFocusMode } from './lib/focusMode'
+
+installFocusMode()
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -52,3 +52,32 @@
 .maint-door:hover {
   color: var(--text-secondary);
 }
+
+.maint-eta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-5) 0 0;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text);
+}
+
+.maint-eta-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: maint-pulse 1.8s ease-in-out infinite;
+}
+
+.maint-eta-at {
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+@keyframes maint-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}

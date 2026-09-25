@@ -12,11 +12,10 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from ..bridge import auth, engine
-from ..deps import current_user_required, in_request_context
+from ..bridge import engine
+from ..deps import current_user_required, has_broker, in_request_context
 from ..services.trade_log import log_trade
 from ..ws import manager
-from .autopilot import can_autopilot
 
 router = APIRouter(prefix="/api/trade", tags=["trade"])
 
@@ -29,14 +28,6 @@ class TradeRequest(BaseModel):
     smart: bool = False
     sell_all: bool = False
     cover_all: bool = False
-
-
-def _has_own_keys(user_id: int) -> bool:
-    try:
-        c = auth.get_user_alpaca_creds(user_id)
-        return bool(c.get("key_id") and c.get("secret"))
-    except Exception:
-        return False
 
 
 def _clean_error(msg: str) -> str:
@@ -91,7 +82,7 @@ def _place(req: TradeRequest) -> dict:
 @router.post("/execute")
 async def execute(req: TradeRequest, authorization: str = Header(None)):
     user = current_user_required(authorization)   # also applies the user's own broker keys
-    if not (_has_own_keys(user["id"]) or can_autopilot(user)):
+    if not has_broker(user):
         raise HTTPException(403, "Connect your Alpaca account in Settings to place orders.")
 
     req.ticker = req.ticker.strip().upper()

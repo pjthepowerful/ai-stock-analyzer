@@ -192,6 +192,10 @@
   max-width: 460px;
 }
 
+.admin-maint .admin-maint-eta {
+  max-width: 220px;
+}
+
 .admin-maint-label {
   display: block;
   font-size: var(--text-xs);

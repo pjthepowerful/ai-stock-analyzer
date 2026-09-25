@@ -303,10 +303,23 @@ def get_mode(key: str) -> dict:
     return MODES.get(k, _STRICT)
 
 
+def get_active_mode(key: str) -> dict:
+    """get_mode() plus the owner's customizations (strategy_custom.py). What
+    the live cycle trades with; get_mode() stays the shipped defaults."""
+    mode = get_mode(key)
+    try:
+        import strategy_custom
+        return strategy_custom.apply_smallcap(mode, mode["key"])
+    except Exception as e:
+        print(f"[smallcap] custom settings ignored: {e!r}", flush=True)
+        return mode
+
+
 def mode_summary() -> list[dict]:
     """Compact descriptor list for the UI's mode picker."""
     out = []
-    for k, m in MODES.items():
+    for k in MODES:
+        m = get_active_mode(k)   # the numbers it will actually trade with
         out.append({
             "key": k,
             "label": m["label"],
@@ -982,11 +995,10 @@ def catalyst_grade(ticker: str) -> dict:
         if not heads:
             return out
         out["headline"] = heads[0].get("title", "")[:140]
-        key = os.environ.get("GROQ_API_KEY", "")
+        key = _t()._llm_key()
         if not key:
             return {**out, "grade": "unknown"}
-        from groq import Groq
-        client = Groq(api_key=key)
+        client = _t().Groq(api_key=key)
         text = "\n".join(f"- {h.get('title','')} ({h.get('publisher','')})" for h in heads)
         resp = client.chat.completions.create(
             model=_t().GROQ_MODEL_PRIMARY,
@@ -1862,7 +1874,7 @@ def run(mode_key: str = "strict", dry_run: bool = False, skip_market_check: bool
     trading them. Alerts run through this path rather than a parallel scanner, so
     an alert can never describe a setup the autopilot wouldn't itself take."""
     t = _t()
-    mode = get_mode(mode_key)
+    mode = get_active_mode(mode_key)
     log = [f"**Mode: {mode['label']}** — {mode['tagline']}"]
     now = _now_et()
     state = _load_state()

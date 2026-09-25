@@ -1,5 +1,6 @@
 import { Check, Copy } from 'lucide-react'
 import { useState } from 'react'
+import { Chart } from '../../components/Chart'
 import { SignalCard } from '../../components/SignalCard'
 import type { StoredMessage } from '../../lib/chats'
 import { useChrome } from '../../lib/chrome'
@@ -43,6 +44,7 @@ export function MessageBubble({ role, content, meta, onMeta }: Props) {
             <SignalCard data={meta.card} />
           </div>
         )}
+        {meta?.charts && meta.charts.length > 0 && <ChatCharts tickers={meta.charts} />}
         {meta?.taste && (
           <div className="msg-upsell">
             <span>Entry, stop, target, chart and reasoning are part of Paula Plus.</span>
@@ -59,13 +61,39 @@ export function MessageBubble({ role, content, meta, onMeta }: Props) {
             </button>
           </div>
         )}
-        <CopyButton text={content} />
+        <CopyButton text={content} model={meta?.model} />
       </div>
     </div>
   )
 }
 
-function CopyButton({ text }: { text: string }) {
+/** One chart under the reply; several analyzed stocks get a picker. */
+function ChatCharts({ tickers }: { tickers: string[] }) {
+  const [picked, setPicked] = useState(tickers[0])
+  const current = tickers.includes(picked) ? picked : tickers[0]
+  return (
+    <div className="msg-chart">
+      {tickers.length > 1 && (
+        <div className="seg msg-chart-pick" role="tablist" aria-label="Chart">
+          {tickers.map((t) => (
+            <button
+              key={t}
+              className={'seg-btn' + (t === current ? ' seg-on' : '')}
+              role="tab"
+              aria-selected={t === current}
+              onClick={() => setPicked(t)}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
+      <Chart ticker={current} height={300} />
+    </div>
+  )
+}
+
+function CopyButton({ text, model }: { text: string; model?: string }) {
   const [copied, setCopied] = useState(false)
   return (
     <div className="msg-actions">
@@ -85,6 +113,7 @@ function CopyButton({ text }: { text: string }) {
         {copied ? <Check size={13} /> : <Copy size={13} />}
         {copied ? 'Copied' : 'Copy'}
       </button>
+      {model && <span className="msg-model">{model}</span>}
     </div>
   )
 }

@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Header, HTTPException
 
 from ..bridge import engine
-from ..deps import current_user_required, in_request_context
+from ..deps import current_user_required, has_broker, in_request_context
 from ..services.parallel import pmap
 from ..services.ttl import TTLCache
 from .earnings import _progress_emitter
@@ -28,7 +28,8 @@ def _clean(ticker: str) -> str:
     return t
 
 
-_SEC_BLOCKED = "SEC lookup blocked — set SEC_USER_AGENT in the backend .env to include a contact email"
+# Shown to people; the fix (SEC_USER_AGENT with a contact email) goes to the log.
+_SEC_BLOCKED = "SEC filings aren't available right now."
 
 
 def _fix_sec_note(row: dict) -> dict:
@@ -39,6 +40,7 @@ def _fix_sec_note(row: dict) -> dict:
 
     fund = row.get("fundamentals") or {}
     if not fund.get("available") and not getattr(res, "_CIK_CACHE", None):
+        print("[research] SEC refused the ticker map — set SEC_USER_AGENT to include a contact email", flush=True)
         fund["reason"] = _SEC_BLOCKED
         row["fundamental_notes"] = [_SEC_BLOCKED]
     return row
@@ -122,11 +124,14 @@ async def _build_upcoming(days: int, limit: int) -> dict:
 async def research_candidates(limit: int = 12, fresh: bool = False, authorization: Optional[str] = Header(None)):
     """Names inside a post-earnings drift window (already reported), ranked.
     Nothing forward-looking is a candidate: there's no drift before a print."""
-    current_user_required(authorization)
+    user = current_user_required(authorization)
     limit = max(1, min(limit, 30))
+    # The ranking folds in the caller's held positions and equity, so it's
+    # cached per broker account — never handed to someone else.
+    key = ("candidates", limit, user["id"] if has_broker(user) else 0)
     if fresh:
-        _rank_cache.pop(("candidates", limit), None)
-    return await _cached(("candidates", limit), lambda: _build_candidates(limit))
+        _rank_cache.pop(key, None)
+    return await _cached(key, lambda: _build_candidates(limit))
 
 
 async def _build_candidates(limit: int) -> dict:

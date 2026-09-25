@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { api } from '../../lib/api'
+import { api, ApiError } from '../../lib/api'
 import { useChrome } from '../../lib/chrome'
 import { Performance } from './Performance'
 import './portfolio.css'
@@ -69,7 +69,12 @@ export function PortfolioScreen() {
   const positions = positionsQ.data ?? []
   const benchmark = benchmarkQ.data ?? null
   const exposure = exposureQ.data ?? null
-  const error = accountQ.error ? 'Could not reach your brokerage account.' : null
+  // 403 = no broker connected; say so instead of "couldn't reach".
+  const error = accountQ.error
+    ? accountQ.error instanceof ApiError && accountQ.error.status === 403
+      ? accountQ.error.message
+      : 'Could not reach your brokerage account.'
+    : null
 
   const signedPct = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(2)}%`
   const tone = (n: number) => (n > 0 ? 'positive' : n < 0 ? 'negative' : '')

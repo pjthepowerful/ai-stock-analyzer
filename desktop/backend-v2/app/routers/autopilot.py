@@ -9,17 +9,11 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from ..bridge import engine, read_strategy_mode
-from ..deps import current_user_optional, current_user_required
+from ..deps import can_autopilot, current_user_optional, current_user_required
 from ..services import autopilot_runner as runner
 from ..ws import manager
 
 router = APIRouter(prefix="/api/autopilot", tags=["autopilot"])
-
-AUTOPILOT_EMAILS = {"parjan.d@icloud.com", "pinakin.d@moftmail.com"}
-
-
-def can_autopilot(user: dict | None) -> bool:
-    return bool(user) and user.get("email", "").lower() in AUTOPILOT_EMAILS
 
 
 def _require_autopilot(authorization: str | None) -> dict:
@@ -90,6 +84,62 @@ async def set_mode(req: ModeRequest, authorization: str = Header(None)):
     return {"ok": True, "mode": mode}
 
 
+# ── Custom strategy settings ────────────────────────────────────────────
+
+def _custom_view(mode: str) -> dict:
+    import strategy_custom as sc
+
+    defaults = sc.defaults(mode)
+    values = sc.load(mode)
+    return {
+        "ok": True,
+        "mode": mode,
+        "knobs": [
+            {**k, "default": defaults.get(k["key"]), "value": values.get(k["key"], defaults.get(k["key"])),
+             "custom": k["key"] in values}
+            for k in sc.knobs(mode)
+        ],
+    }
+
+
+def _custom_mode(mode: str) -> str:
+    import strategy_custom as sc
+
+    mode = (mode or "").lower().strip()
+    if mode not in sc.MODES:
+        raise HTTPException(400, f"Unknown mode {mode!r}")
+    return mode
+
+
+@router.get("/custom")
+def get_custom(mode: str, authorization: str = Header(None)):
+    _require_autopilot(authorization)
+    return _custom_view(_custom_mode(mode))
+
+
+class CustomRequest(BaseModel):
+    mode: str
+    # key -> new value; null resets that setting to the strategy's default.
+    values: dict
+
+
+@router.put("/custom")
+async def put_custom(req: CustomRequest, authorization: str = Header(None)):
+    """Applies from the next cycle. Allowed while running: these change how
+    new trades are picked and sized, not which mode owns open positions."""
+    import strategy_custom as sc
+
+    user = _require_autopilot(authorization)
+    mode = _custom_mode(req.mode)
+    try:
+        sc.save(mode, req.values)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from None
+    print(f"[autopilot] {user.get('email')} changed {mode} settings: {req.values}", flush=True)
+    await manager.broadcast("autopilot", {"kind": "settings_changed", "running": runner.is_running()})
+    return _custom_view(mode)
+
+
 @router.get("/modes")
 def modes():
     current = "core"
@@ -124,7 +174,7 @@ def diagnostics(authorization: str = Header(None)):
         "mode": mode,
         "keys": {
             "polygon": bool(os.environ.get("POLYGON_API_KEY")),
-            "groq": bool(os.environ.get("GROQ_API_KEY")),
+            "llm": bool(engine._llm_key()),
             "alpaca": bool(os.environ.get("ALPACA_KEY_ID")),
         },
     }

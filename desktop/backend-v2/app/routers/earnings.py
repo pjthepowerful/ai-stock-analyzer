@@ -45,11 +45,16 @@ def calendar_day(date: str, authorization: str = Header(None)):
     since it needs current price/cap, not the cached build."""
     current_user_required(authorization)
     try:
+        datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        # Also keeps junk strings out of _day_cache.
+        raise HTTPException(422, "date must be YYYY-MM-DD") from None
+    try:
         import earnings as earn
         import smallcap_pullback as scp
 
         mode_key = read_strategy_mode()
-        mode = scp.get_mode(mode_key) if mode_key in ("strict", "intense") else None
+        mode = scp.get_active_mode(mode_key) if mode_key in ("strict", "intense") else None
 
         key = (date, mode_key)
         hit = _day_cache.get(key)

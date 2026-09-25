@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { api, ApiError, setToken, type AuthResult, type AuthUser, type MeResponse } from './api'
 
@@ -26,6 +27,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // Only a stored token needs a round-trip before we know who you are.
   const [loading, setLoading] = useState(() => !!localStorage.getItem('paula-v2-token'))
   const [error, setError] = useState<string | null>(null)
+  // Cached queries (account, positions, …) aren't keyed by user; drop them
+  // whenever the person changes so nobody sees the last account's numbers.
+  const qc = useQueryClient()
 
   useEffect(() => {
     if (!localStorage.getItem('paula-v2-token')) return
@@ -55,6 +59,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     try {
       const res = await api.post<AuthResult>('/api/auth/login', { email, password })
       if (res.token) {
+        qc.clear()
         setToken(res.token)
         setUser(res.user ?? null)
         setIsGuest(false)
@@ -78,6 +83,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         } catch {
           /* ignore */
         }
+        qc.clear()
         setToken(res.token)
         setUser(res.user ?? null)
         setIsGuest(false)
@@ -96,6 +102,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }
 
   function signOut() {
+    qc.clear()
     setToken(null)
     localStorage.removeItem(GUEST_KEY)
     setUser(null)

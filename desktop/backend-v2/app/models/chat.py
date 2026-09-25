@@ -11,6 +11,7 @@ class ChatHistoryItem(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     history: Optional[list[ChatHistoryItem]] = None
+    model: Optional[str] = None  # "smart" | "fast" — the composer's model picker
 
 
 class ChatResponse(BaseModel):

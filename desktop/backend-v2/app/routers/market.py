@@ -5,7 +5,7 @@ engine.* functions the original backend uses; only the HTTP layer is new.
 from fastapi import APIRouter, Header, HTTPException, Request
 
 from ..bridge import engine
-from ..deps import current_user_optional, current_user_required
+from ..deps import broker_user_required, current_user_optional
 from ..services import popularity
 from ..services.ttl import TTLCache
 
@@ -37,7 +37,7 @@ def quick_lookup(ticker: str):
 
 @router.get("/account")
 def get_account(authorization: str = Header(None)):
-    current_user_optional(authorization)  # applies per-user Alpaca creds
+    broker_user_required(authorization)  # applies per-user Alpaca creds
     acc = engine.alpaca_account()
     if not acc:
         raise HTTPException(502, "Couldn't reach your brokerage account. Check Alpaca keys in Settings.")
@@ -46,13 +46,13 @@ def get_account(authorization: str = Header(None)):
 
 @router.get("/positions")
 def get_positions(authorization: str = Header(None)):
-    current_user_optional(authorization)
+    broker_user_required(authorization)
     return {"ok": True, "data": engine.alpaca_positions()}
 
 
 @router.get("/orders")
 def get_orders(status: str = "open", limit: int = 10, authorization: str = Header(None)):
-    current_user_optional(authorization)
+    broker_user_required(authorization)
     return {"ok": True, "data": engine.alpaca_orders(status=status, limit=limit)}
 
 
@@ -94,7 +94,7 @@ def analyze_ticker(ticker: str, request: Request, authorization: str = Header(No
 
 @router.get("/portfolio/benchmark")
 def portfolio_benchmark(period: str = "1M", authorization: str = Header(None)):
-    current_user_optional(authorization)
+    broker_user_required(authorization)
     hist = engine.alpaca_portfolio_history(period=period)
     if not hist or not hist.get("equity"):
         raise HTTPException(404, "No portfolio history yet. Place some trades first.")
@@ -154,7 +154,7 @@ def portfolio_performance(period: str = "1M", authorization: str = Header(None))
 
     import requests
 
-    current_user_required(authorization)
+    broker_user_required(authorization)
     if period not in _PERIOD_DAYS:
         raise HTTPException(422, f"period must be one of {', '.join(_PERIOD_DAYS)}")
 

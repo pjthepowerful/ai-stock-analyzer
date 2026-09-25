@@ -6,12 +6,13 @@ import { SignalCard, type AnalyzeData } from '../../components/SignalCard'
 import { api } from '../../lib/api'
 import { useChrome } from '../../lib/chrome'
 import { searchTickers } from '../../lib/tickers'
+import { KeyStats, type Fundamentals } from './KeyStats'
 import { ResearchPanel } from './ResearchPanel'
 import './analyze.css'
 
 interface AnalyzeApiResponse {
   ok: boolean
-  data?: AnalyzeData
+  data?: AnalyzeData & Fundamentals
 }
 
 const FALLBACK = ['AAPL', 'NVDA', 'MSFT', 'TSLA', 'AMZN', 'META', 'SPY']
@@ -106,6 +107,7 @@ export function AnalyzeScreen({ request }: Props) {
               <Chart ticker={result.ticker} height={380} />
               <SignalCard data={result} />
             </div>
+            <KeyStats data={result} />
             <ResearchPanel ticker={result.ticker} />
             <div className="analyze-ask">
               <span>Want the reasoning behind this read?</span>

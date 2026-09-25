@@ -5,6 +5,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { api, ApiError } from '../../lib/api'
 import { useToast } from '../../lib/toast'
 import { useWebSocket } from '../../lib/ws'
+import { StrategySettings } from './StrategySettings'
 
 interface AutopilotMode {
   key: string
@@ -204,6 +205,18 @@ export function AutopilotPanel() {
             ))}
           </div>
         </>
+      )}
+
+      {modes.data && (
+        <StrategySettings
+          // The original core engine only shows up while it's the active one.
+          modes={[
+            ...modes.data.modes.map((m) => ({ key: m.key, label: m.label })),
+            ...(current === 'core' ? [{ key: 'core', label: 'Original' }] : []),
+          ]}
+          current={current}
+          running={running}
+        />
       )}
 
       {recent.length > 0 && (

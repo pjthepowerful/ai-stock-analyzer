@@ -47,6 +47,23 @@
   background: color-mix(in srgb, var(--bg) 26%, transparent);
 }
 
+/* The inverted look only works on the light theme — in dark it turns into a
+   bright white box. Use a raised dark surface there instead. */
+:root[data-theme='dark'] .toast {
+  background: var(--surface-3);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+}
+
+:root[data-theme='dark'] .toast-action {
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  color: var(--text);
+}
+
+:root[data-theme='dark'] .toast-action:hover {
+  background: color-mix(in srgb, var(--text) 20%, transparent);
+}
+
 @keyframes toast-in {
   from {
     opacity: 0;

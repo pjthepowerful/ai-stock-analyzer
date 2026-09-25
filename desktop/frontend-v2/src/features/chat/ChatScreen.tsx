@@ -5,9 +5,9 @@ import { useSession } from '../../lib/auth'
 import { NEW_TITLE, useChats } from '../../lib/chats'
 import { useChrome } from '../../lib/chrome'
 import { Typewriter } from '../../components/Typewriter'
-import { MarketStrip } from './MarketStrip'
 import { Snapshot } from './Snapshot'
 import { MessageBubble } from './MessageBubble'
+import { loadTier, ModelPicker, TIER_NAME, type ModelTier } from './ModelPicker'
 import { describeTrade } from './TradeConfirm'
 import './chat.css'
 
@@ -27,6 +27,9 @@ interface Props {
   draft?: { text: string; n: number } | null
 }
 
+// Reply types that are about specific stocks, so a chart belongs with them.
+const CHART_TYPES = new Set(['analysis', 'compare', 'list'])
+
 function fallbackTitle(text: string) {
   return text.length <= 30 ? text : text.slice(0, 28).trimEnd() + '…'
 }
@@ -42,6 +45,7 @@ export function ChatScreen({ onNavigateAnalyze, draft }: Props) {
     if (draft) setInput(draft.text)
   }
   const [sendingChat, setSendingChat] = useState<string | null>(null)
+  const [tier, setTier] = useState<ModelTier>(loadTier)
   const listRef = useRef<HTMLDivElement>(null)
 
   const messages = active?.messages ?? []
@@ -81,7 +85,7 @@ export function ChatScreen({ onNavigateAnalyze, draft }: Props) {
     if (isFirst && (active?.title ?? NEW_TITLE) === NEW_TITLE) void nameChat(chatId, trimmed)
 
     try {
-      const res = await api.post<ChatResponse>('/api/chat', { message: trimmed, history })
+      const res = await api.post<ChatResponse>('/api/chat', { message: trimmed, history, model: tier })
       if (res.type === 'scan_started') {
         startScan(chatId, res.scan_id ?? '')
       } else if (res.type === 'confirm_trade' && res.trade) {
@@ -92,10 +96,20 @@ export function ChatScreen({ onNavigateAnalyze, draft }: Props) {
         })
       } else {
         const card = res.trade_signal && res.quote ? { ...res.quote, signal: res.trade_signal } : undefined
+        // Stock analyses get a chart; the free "taste" keeps charts for Plus.
+        const analyzed = CHART_TYPES.has(res.type) && !res.taste
+        const tickers = (res.tickers?.length ? res.tickers : res.ticker ? [res.ticker] : []).filter(Boolean)
+        const charts = analyzed && tickers.length ? tickers.slice(0, 6) : undefined
         append(chatId, {
           role: 'assistant',
           content: res.message,
-          meta: { taste: res.taste, limitReached: res.limit_reached, card },
+          meta: {
+            taste: res.taste,
+            limitReached: res.limit_reached,
+            card,
+            charts,
+            model: res.model ? `Paula ${TIER_NAME[tier]} · ${res.model}` : undefined,
+          },
         })
       }
     } catch (e) {
@@ -140,8 +154,6 @@ export function ChatScreen({ onNavigateAnalyze, draft }: Props) {
 
   return (
     <div className="chat">
-      <MarketStrip />
-
       <div className="chat-scroll" ref={listRef}>
         <div className="chat-column">
           {messages.length === 0 ? (
@@ -243,9 +255,12 @@ export function ChatScreen({ onNavigateAnalyze, draft }: Props) {
             placeholder="Message Paula…"
             disabled={busy}
           />
-          <button className="composer-send" type="submit" disabled={busy || !input.trim()} aria-label="Send">
-            <ArrowUp size={16} strokeWidth={2.2} />
-          </button>
+          <div className="composer-bar">
+            <ModelPicker value={tier} onChange={setTier} />
+            <button className="composer-send" type="submit" disabled={busy || !input.trim()} aria-label="Send">
+              <ArrowUp size={16} strokeWidth={2.2} />
+            </button>
+          </div>
         </form>
         <p className="composer-hint">Paula can be wrong. No order is placed until you confirm it.</p>
       </div>

@@ -15,7 +15,7 @@ interface Stats {
   active_7d: number
   total_messages: number
   open_reports: number
-  maintenance: { on: boolean; message: string }
+  maintenance: { on: boolean; message: string; eta?: number | null }
 }
 
 interface AdminUser {
@@ -375,19 +375,23 @@ function ReportDetail({ id, onDelete, deleting }: { id: string; onDelete: () => 
 
 // ── Maintenance ──────────────────────────────────────────────────────────
 
-function MaintenancePanel({ current }: { current: { on: boolean; message: string } }) {
+function MaintenancePanel({ current }: { current: { on: boolean; message: string; eta?: number | null } }) {
   const qc = useQueryClient()
   const [message, setMessage] = useState(current.message)
+  const [eta, setEta] = useState(() =>
+    current.eta ? String(Math.max(0, Math.round((current.eta * 1000 - Date.now()) / 60_000))) : '30',
+  )
 
   const save = useMutation({
-    mutationFn: (on: boolean) => api.post('/api/admin/maintenance', { on, message }),
+    mutationFn: (on: boolean) =>
+      api.post('/api/admin/maintenance', { on, message, eta_minutes: Number(eta) || null }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'stats'] }),
   })
 
   return (
     <section className="card admin-panel admin-maint">
       <p className="admin-dim">
-        Takes the app offline for everyone except you. Open sessions flip instantly over the websocket.
+        Takes the app offline for everyone except you — the server refuses their requests too. Open sessions flip instantly, and users see a countdown if you set one.
       </p>
       <label className="admin-maint-label" htmlFor="maint-msg">
         Message shown to users
@@ -400,6 +404,18 @@ function MaintenancePanel({ current }: { current: { on: boolean; message: string
         maxLength={300}
         onChange={(e) => setMessage(e.target.value)}
       />
+      <label className="admin-maint-label" htmlFor="maint-eta">
+        Back in
+      </label>
+      <select id="maint-eta" className="input admin-filter admin-maint-eta" value={eta} onChange={(e) => setEta(e.target.value)}>
+        <option value="0">No estimate</option>
+        {[10, 15, 30, 45, 60, 120, 240].map((m) => (
+          <option key={m} value={String(m)}>
+            {m < 60 ? `${m} minutes` : `${m / 60} hour${m === 60 ? '' : 's'}`}
+          </option>
+        ))}
+        {!['0', '10', '15', '30', '45', '60', '120', '240'].includes(eta) && <option value={eta}>{eta} minutes (current)</option>}
+      </select>
       <div className="admin-maint-actions">
         {current.on ? (
           <>
@@ -407,7 +423,7 @@ function MaintenancePanel({ current }: { current: { on: boolean; message: string
               Bring the app back
             </button>
             <button className="admin-link" disabled={save.isPending} onClick={() => save.mutate(true)}>
-              update message
+              update message and time
             </button>
           </>
         ) : (

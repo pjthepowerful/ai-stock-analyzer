@@ -111,4 +111,6 @@ export interface ChatResponse {
   scan_id?: string
   trade_signal?: Signal | null
   quote?: { ticker: string; name?: string; price: number; change: number; change_pct: number } | null
+  /** Label of the model that wrote the reply, when one did. */
+  model?: string
 }

@@ -14,9 +14,13 @@ export interface StoredMessage {
     taste?: boolean
     limitReached?: boolean
     card?: AnalyzeData
+    /** Tickers this reply analyzed — shown as a chart, with a picker if several. */
+    charts?: string[]
     trade?: TradeIntent
     tradeState?: 'pending' | 'placing' | 'done' | 'failed' | 'cancelled'
     tradeResult?: string
+    /** Model that wrote the reply, e.g. "Gemini 3.8 Flash". */
+    model?: string
   }
 }
 
@@ -276,10 +280,29 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
   // started it after you switch chats or tabs.
   const [scan, setScan] = useState<ScanState | null>(null)
   const scanRef = useRef<{ chatId: string; scanId: string } | null>(null)
-  const startScan = useCallback((chatId: string, scanId: string) => {
-    scanRef.current = { chatId, scanId }
-    setScan({ chatId, scanId, pct: 0, label: 'Starting…' })
-  }, [])
+  const scanTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const startScan = useCallback(
+    (chatId: string, scanId: string) => {
+      scanRef.current = { chatId, scanId }
+      setScan({ chatId, scanId, pct: 0, label: 'Starting…' })
+      // The server gives up at 4 minutes and says so over the socket. If the
+      // socket dropped that message, don't leave the chat scanning forever.
+      if (scanTimer.current) clearTimeout(scanTimer.current)
+      scanTimer.current = setTimeout(() => {
+        if (scanRef.current?.scanId !== scanId) return
+        scanRef.current = null
+        setScan(null)
+        append(chatId, { role: 'assistant', content: 'The scan didn’t come back — try asking again.' })
+      }, 5 * 60_000)
+    },
+    [append],
+  )
+  useEffect(
+    () => () => {
+      if (scanTimer.current) clearTimeout(scanTimer.current)
+    },
+    [],
+  )
 
   useWebSocket((e) => {
     // Scan events are broadcast to every client; only act on our own scan.
@@ -289,6 +312,7 @@ export function ChatsProvider({ children }: { children: ReactNode }) {
       setScan((s) => (s ? { ...s, pct: Number(e.data.pct ?? 0), label: String(e.data.label ?? '') } : s))
     }
     if (e.event === 'scan_result') {
+      if (scanTimer.current) clearTimeout(scanTimer.current)
       scanRef.current = null
       setScan(null)
       append(mine.chatId, { role: 'assistant', content: String(e.data.message ?? '') })

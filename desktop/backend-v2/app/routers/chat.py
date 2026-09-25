@@ -98,6 +98,12 @@ async def chat(req: ChatRequest, request: Request, authorization: str = Header(N
             "message": "That's the 3 free guest messages for today. Create a free account to keep going.",
         }
 
+    # Contextvars reach the executor threads via in_request_context, so the
+    # engine's LLM calls see the picked tier and report back what answered.
+    engine.LLM_TIER.set("fast" if req.model == "fast" else "smart")
+    used: dict = {}
+    engine.LLM_USED.set(used)
+
     if user:
         auth.save_chat(user_id, "user", user_msg)
 
@@ -111,7 +117,13 @@ async def chat(req: ChatRequest, request: Request, authorization: str = Header(N
         chat_history = []
     chat_history.append({"role": "user", "content": user_msg})
 
-    intent = engine.route(user_msg, history=chat_history[:-1])
+    # route() can call the LLM to classify a message; keep that off the event
+    # loop so one slow classification doesn't stall every other request.
+    loop = asyncio.get_running_loop()
+    intent = await loop.run_in_executor(
+        _light_executor, in_request_context(engine.route, user_msg, history=chat_history[:-1])
+    )
+    used.clear()  # classifying isn't answering; only credit the model that writes the reply
 
     if intent.get("type") in ("autopilot", "stop_autopilot"):
         from ..services import autopilot_runner
@@ -141,11 +153,19 @@ async def chat(req: ChatRequest, request: Request, authorization: str = Header(N
     if intent.get("type") == "stock_ideas":
         return await _start_scan(intent, user_id, is_plus)
 
-    loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(_light_executor, in_request_context(engine.execute, intent, is_plus=is_plus))
     if result and result.get("ok") and result.get("type") == "analysis" and result.get("ticker"):
         popularity.record(result["ticker"], user_id=user_id or None, ip=_client_ip(request))
-    return await orch.build_response(loop, user_msg, intent, result, chat_history, user, is_plus)
+    out = await orch.build_response(loop, user_msg, intent, result, chat_history, user, is_plus)
+    if used and isinstance(out, dict):
+        out["model"] = used.get("label")
+    return out
+
+
+@router.get("/models")
+def models():
+    """Tiers for the composer's model picker."""
+    return {"ok": True, "configured": bool(engine._llm_key()), "tiers": engine.llm_tiers()}
 
 
 # A market scan takes ~15s and reads the same universe for everyone, so an
@@ -194,6 +214,7 @@ async def _start_scan(intent: dict, user_id: int, is_plus: bool):
                 timeout=240,
             )
             msg_out = res.get("msg", "") if res and res.get("ok") else orch.friendly_error((res or {}).get("error", ""))
+            msg_out = orch.humanize_labels(msg_out)
             if res and res.get("ok") and msg_out:
                 import time as _t
 

@@ -147,10 +147,24 @@
     color var(--dur-fast) var(--ease-out);
 }
 
-.btn:focus-visible,
-.input:focus-visible,
-.seg-btn:focus-visible,
-.nav-item:focus-visible {
+/* Focus rings are for keyboard navigation only. Chrome treats any key press
+   (even Shift) as keyboard use and rings whatever was last clicked, so
+   lib/focusMode.ts sets data-kbd on <html> only after Tab or arrow keys. */
+:focus,
+:focus-visible {
+  outline: none;
+}
+
+html[data-kbd] :focus-visible:not(input, textarea, select, [contenteditable]) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+html[data-kbd] .btn:focus-visible,
+html[data-kbd] .input:focus-visible,
+html[data-kbd] .seg-btn:focus-visible,
+html[data-kbd] .nav-item:focus-visible {
   outline: none;
   box-shadow: var(--focus);
 }

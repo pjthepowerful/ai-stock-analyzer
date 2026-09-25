@@ -12,7 +12,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from groq import Groq
+from groq import Groq as _GroqSDK
 
 
 from dotenv import load_dotenv
@@ -38,11 +38,206 @@ import requests
 #
 # Note: GPT-OSS models return chain-of-thought in a separate `reasoning` field,
 # so `.content` stays clean. _groq_text() strips any that leaks through anyway.
-GROQ_MODEL_PRIMARY = os.environ.get("GROQ_MODEL_PRIMARY", "openai/gpt-oss-120b")
-GROQ_MODEL_FAST = os.environ.get("GROQ_MODEL_FAST", "openai/gpt-oss-20b")
+#
+# ── Provider chain ──
+# Every provider with a key is tried in order: OpenRouter (the better model),
+# then Gemini, then Groq. A failure on one — rate limit, outage, bad key — moves
+# the same request to the next, so Groq stays as the last-resort fallback.
+# LLM_PROVIDER=openrouter|gemini|groq pins a single provider. Each provider has
+# a primary and a fast model; call sites ask for GROQ_MODEL_PRIMARY or
+# GROQ_MODEL_FAST and the chain maps that to the tier on each provider. The
+# names keep their GROQ_ prefix so no call site had to change.
+_PROVIDERS = {
+    "openrouter": {
+        "key": "OPENROUTER_API_KEY",
+        "base": "https://openrouter.ai/api/v1",
+        "primary": ("OPENROUTER_MODEL", "google/gemini-3.8-flash"),
+        "fast": ("OPENROUTER_MODEL_FAST", "openai/gpt-6-luna"),
+        # Keep thinking short: it eats max_tokens and slows replies.
+        "extra": {"reasoning": {"effort": "low", "exclude": True}},
+    },
+    "gemini": {
+        "key": "GEMINI_API_KEY",
+        "base": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "primary": ("GEMINI_MODEL", "gemini-3.8-flash"),
+        "fast": ("GEMINI_MODEL_FAST", "gemini-3.5-flash-lite"),
+        "extra": {"reasoning_effort": "minimal"},
+    },
+    "groq": {
+        "key": "GROQ_API_KEY",
+        "base": None,  # official SDK
+        "primary": ("GROQ_MODEL_PRIMARY", "openai/gpt-oss-120b"),
+        "fast": ("GROQ_MODEL_FAST", "openai/gpt-oss-20b"),
+        "extra": {},
+    },
+}
+
+
+def _llm_chain() -> list[str]:
+    """Providers to try, in order, that have a key set."""
+    forced = (os.environ.get("LLM_PROVIDER") or "").strip().lower()
+    names = [forced] if forced in _PROVIDERS else list(_PROVIDERS)
+    return [n for n in names if os.environ.get(_PROVIDERS[n]["key"])]
+
+
+def _llm_provider() -> str:
+    chain = _llm_chain()
+    return chain[0] if chain else "groq"
+
+
+def _llm_key() -> str:
+    """Key of the first provider in the chain ("" when none is configured)."""
+    return os.environ.get(_PROVIDERS[_llm_provider()]["key"], "")
+
+
+def _provider_model(name: str, tier: str) -> str:
+    env, default = _PROVIDERS[name][tier]
+    # LLM_MODEL / LLM_MODEL_FAST override whichever provider leads the chain.
+    if name == _llm_provider():
+        over = os.environ.get("LLM_MODEL" if tier == "primary" else "LLM_MODEL_FAST")
+        if over:
+            return over
+    return os.environ.get(env) or default
+
+
+# Per-request choices, set by the web backend: which tier the user picked
+# ("smart" or "fast"), and a dict the chain fills with the model that answered.
+import contextvars as _cv
+LLM_TIER = _cv.ContextVar("llm_tier", default="smart")
+LLM_USED = _cv.ContextVar("llm_used", default=None)
+
+
+def llm_label(model: str) -> str:
+    """'google/gemini-3.8-flash' -> 'Gemini 3.8 Flash'."""
+    name = model.split("/")[-1].split(":")[0]
+    words = []
+    for w in name.replace("_", "-").split("-"):
+        if not w:
+            continue
+        low = w.lower()
+        if re.fullmatch(r"\d+(\.\d+)?b", low):
+            words.append(low[:-1] + "B")  # parameter counts: 120b -> 120B
+        else:
+            words.append({"gpt": "GPT", "oss": "OSS", "glm": "GLM", "deepseek": "DeepSeek"}.get(low, w if any(c.isdigit() for c in w) else w.capitalize()))
+    return re.sub(r"^GPT (\d)", r"GPT-\1", " ".join(words))
+
+
+def llm_tiers() -> list[dict]:
+    """What the model picker shows: each tier's model on the first provider."""
+    lead = _llm_provider()
+    return [{"id": t, "model": m, "label": llm_label(m), "provider": lead}
+            for t, m in (("smart", _provider_model(lead, "primary")), ("fast", _provider_model(lead, "fast")))]
+
+
+GROQ_MODEL_PRIMARY = os.environ.get("LLM_MODEL") or _provider_model(_llm_provider(), "primary")
+GROQ_MODEL_FAST = os.environ.get("LLM_MODEL_FAST") or _provider_model(_llm_provider(), "fast")
 # Ordered fallback: a 429 on the big model drops to the small one, which has its
 # own rate bucket, then retries the big one once more.
 GROQ_MODELS = [GROQ_MODEL_PRIMARY, GROQ_MODEL_FAST, GROQ_MODEL_PRIMARY]
+
+
+class _Obj:
+    def __init__(self, **kw):
+        self.__dict__.update(kw)
+
+
+class _OpenAICompatClient:
+    """Just enough of the Groq/OpenAI client surface (chat.completions.create,
+    plain or stream=True) for the call sites in this repo, over plain HTTP."""
+
+    def __init__(self, api_key: str, base_url: str, extra: dict | None = None):
+        self._key, self._base = api_key, base_url.rstrip("/")
+        self._extra = extra or {}
+        self.chat = _Obj(completions=_Obj(create=self._create))
+
+    def _post(self, body: dict, stream: bool):
+        headers = {"Authorization": f"Bearer {self._key}", "X-Title": "Paula"}
+        r = requests.post(f"{self._base}/chat/completions", json=body, stream=stream, timeout=60, headers=headers)
+        if r.status_code == 400 and any(k in body for k in self._extra):
+            # Some models don't take the thinking control — ask again without it.
+            body = {k: v for k, v in body.items() if k not in self._extra}
+            r = requests.post(f"{self._base}/chat/completions", json=body, stream=stream, timeout=60, headers=headers)
+        if r.status_code != 200:
+            # Status first: callers look for "429" / "401" in the message.
+            raise RuntimeError(f"{r.status_code} {r.text[:300]}")
+        return r
+
+    def _create(self, model: str, messages: list, stream: bool = False, **kw):
+        body = {**self._extra, "model": model, "messages": messages,
+                **{k: v for k, v in kw.items() if v is not None}}
+        if stream:
+            body["stream"] = True
+            return self._stream(self._post(body, stream=True))
+        data = self._post(body, stream=False).json()
+        choices = [_Obj(message=_Obj(content=(c.get("message") or {}).get("content") or ""))
+                   for c in data.get("choices") or []]
+        return _Obj(choices=choices)
+
+    @staticmethod
+    def _stream(r):
+        for line in r.iter_lines(decode_unicode=True):
+            if not line or not line.startswith("data:"):
+                continue
+            payload = line[5:].strip()
+            if payload == "[DONE]":
+                break
+            try:
+                c = json.loads(payload)["choices"][0]
+            except Exception:
+                continue
+            yield _Obj(choices=[_Obj(delta=_Obj(content=(c.get("delta") or {}).get("content")))])
+
+
+def _provider_client(name: str):
+    cfg = _PROVIDERS[name]
+    key = os.environ.get(cfg["key"], "")
+    if cfg["base"] is None:
+        return _GroqSDK(api_key=key)
+    return _OpenAICompatClient(key, cfg["base"], cfg["extra"])
+
+
+class _ChainClient:
+    """Tries each configured provider in turn with the same request."""
+
+    def __init__(self, chain: list[str]):
+        self._chain = chain
+        self.chat = _Obj(completions=_Obj(create=self._create))
+
+    def _tier(self, model: str) -> str | None:
+        if model == GROQ_MODEL_FAST or any(model == _provider_model(n, "fast") for n in _PROVIDERS):
+            return "fast"
+        if model == GROQ_MODEL_PRIMARY or any(model == _provider_model(n, "primary") for n in _PROVIDERS):
+            return "primary"
+        return None
+
+    def _create(self, model: str, messages: list, **kw):
+        tier = self._tier(model)
+        if tier == "primary" and LLM_TIER.get() == "fast":
+            tier = "fast"
+        last = None
+        for i, name in enumerate(self._chain):
+            if tier is None and i > 0:
+                break  # an explicit model id only means something to the first provider
+            m = model if tier is None else _provider_model(name, tier)
+            try:
+                # Streams fail on connect (inside create), so a dead provider
+                # falls through here before any text reaches the user.
+                out = _provider_client(name).chat.completions.create(model=m, messages=messages, **kw)
+                used = LLM_USED.get()
+                if used is not None:
+                    used.update(model=m, label=llm_label(m), provider=name)
+                return out
+            except Exception as e:
+                last = e
+                if i < len(self._chain) - 1:
+                    _log.warning("LLM %s (%s) failed, trying %s: %s", name, m, self._chain[i + 1], str(e)[:160])
+        raise last or RuntimeError("401 no LLM provider key set")
+
+
+def Groq(api_key: str | None = None, **kw):
+    """Chat client over the provider chain (name kept for the call sites)."""
+    return _ChainClient(_llm_chain() or ["groq"])
+
 
 _THINK_RE = re.compile(r"<think>.*?</think>\s*", re.DOTALL | re.IGNORECASE)
 
@@ -3169,11 +3364,10 @@ def _ai_news_analysis(ticker: str) -> dict:
         if not headlines:
             return {**basic, "ai_summary": "", "ai_score": 0, "macro_risk": False}
 
-        key = os.environ.get("GROQ_API_KEY", "")
+        key = _llm_key()
         if not key:
             return {**basic, "ai_summary": "", "ai_score": 0, "macro_risk": False}
 
-        from groq import Groq
         client = Groq(api_key=key)
 
         headline_text = "\n".join([f"- {h['title']} ({h.get('publisher', '')})" for h in headlines])
@@ -3617,13 +3811,12 @@ def _llm_scan_category(msg: str):
     plays' -> tech, 'recession-proof names' -> value, 'green energy' -> energy.
     Returns a valid category or None (caller keeps 'all')."""
     try:
-        key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
+        key = _llm_key()
     except Exception:
-        key = os.environ.get("GROQ_API_KEY")
+        key = _llm_key()
     if not key:
         return None
     try:
-        from groq import Groq
         client = Groq(api_key=key)
         sys_prompt = (
             "A user asked a stock-screening app to find stocks. Pick the SINGLE "
@@ -3663,13 +3856,12 @@ def _llm_classify_intent(msg: str, history: list = None) -> dict | None:
     (must exist / return data) before it's trusted — the model proposes, the
     market validates. Restricted to SAFE, non-destructive intents."""
     try:
-        key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
+        key = _llm_key()
     except Exception:
-        key = os.environ.get("GROQ_API_KEY")
+        key = _llm_key()
     if not key:
         return None
     try:
-        from groq import Groq
         client = Groq(api_key=key)
         # Give the model a little recent context for referential resolution.
         ctx = ""
@@ -5246,7 +5438,7 @@ def save_autopilot_config(updates: dict) -> dict:
     return current
 
 
-def load_autopilot_config() -> dict:
+def load_autopilot_config(apply_custom: bool = True) -> dict:
     """Load autopilot config from disk, apply the SWING override, and persist.
     Single source of truth used by both the autopilot loop and the dashboard so
     the displayed config can never drift back to stale day-trade values."""
@@ -5328,7 +5520,19 @@ def load_autopilot_config() -> dict:
         cfg_path.write_text(json.dumps(params, indent=2))
     except Exception:
         pass
-    return params
+    # The owner's own settings go on last, so none of the forcing above can
+    # undo them. Applied to the returned copy only: the file keeps the
+    # engine's values, so "reset to default" really goes back to them.
+    return _apply_custom_core(params) if apply_custom else params
+
+
+def _apply_custom_core(params: dict) -> dict:
+    try:
+        import strategy_custom
+        return strategy_custom.apply_core(params)
+    except Exception as e:
+        print(f"[autopilot] custom settings ignored: {e!r}", flush=True)
+        return params
 
 
 def autopilot_entries_today() -> set:
@@ -5424,12 +5628,18 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
 
     # ── AUTO-TUNER: Load params from config, adjust daily based on performance ──
     import json, os, pathlib
-    CONFIG_PATH = pathlib.Path(__file__).parent / "autopilot_config.json"
+    # The same file load_autopilot_config() reads (the persistent volume when
+    # one is mounted) — writing next to this module lost every tune on Railway.
+    CONFIG_PATH = autopilot_cfg_path()
 
     # Load config via the shared loader (applies SWING override + persists, so
     # the live loop and the dashboard always agree and can't drift to stale
-    # day-trade values).
-    params = load_autopilot_config()
+    # day-trade values). Tuned WITHOUT the owner's settings so they never get
+    # baked into the file; those are applied after tuning, below.
+    params = load_autopilot_config(apply_custom=False)
+    _custom = _apply_custom_core({})
+    if _custom.get("AUTO_TUNE") is False:
+        params["last_tuned"] = today   # owner turned the tuner off
 
     # ── Daily auto-tune: review yesterday's trades and adjust ──
     # PROVEN FLOORS (backtest: 33% WR, +$58, profitable):
@@ -5528,6 +5738,13 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
                 CONFIG_PATH.write_text(json.dumps(params, indent=2))
         except Exception as e:
             log.append(f"Auto-tune skipped: {str(e)[:60]}")
+
+    params = _apply_custom_core(params)
+    _named = [k.replace("_", " ").lower() for k in _custom if k != "AUTO_TUNE"]
+    if _named:
+        log.append("Using your custom settings: " + ", ".join(_named))
+    if _custom.get("AUTO_TUNE") is False:
+        log.append("Auto-tune is off")
 
     # Apply params
     MAX_POSITIONS = params["MAX_POSITIONS"]
@@ -7438,9 +7655,9 @@ def _scrub_trade_levels_for_llm(stock_data: dict | None) -> dict | None:
 
 
 def ai_response(user_msg: str, stock_data: dict | None, history: list, market: str) -> str:
-    key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
+    key = _llm_key()
     if not key:
-        return "Set `GROQ_API_KEY` in Streamlit secrets or environment."
+        return "AI error: no model key set — add OPENROUTER_API_KEY (or GEMINI_API_KEY / GROQ_API_KEY)."
 
     system = f"""You're Paula  a sharp, knowledgeable trading assistant who genuinely enjoys helping people understand the market. You're approachable and warm, but you know your stuff. Think of yourself as a really smart friend who happens to be great at trading. Today is {datetime.now(ZoneInfo("US/Eastern")).strftime("%A, %B %d, %Y")}. Market: {market}. {_market_status_line()}
 
@@ -7593,9 +7810,9 @@ RESPONSE LENGTH by request type:
 
 def ai_response_stream(user_msg: str, stock_data: dict | None, history: list, market: str):
     """Streaming version  yields text chunks as they come from Groq."""
-    key = os.environ.get("GROQ_API_KEY", "")
+    key = _llm_key()
     if not key:
-        yield "AI not configured  set GROQ_API_KEY."
+        yield "AI not configured — set OPENROUTER_API_KEY (or GEMINI_API_KEY / GROQ_API_KEY)."
         return
 
     system = f"""You're Paula  a sharp, knowledgeable trading assistant. Today is {datetime.now(ZoneInfo("US/Eastern")).strftime("%A, %B %d, %Y")}. Market: {market}. {_market_status_line()}

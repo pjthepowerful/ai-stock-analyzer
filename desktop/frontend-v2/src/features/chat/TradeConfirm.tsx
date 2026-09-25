@@ -1,5 +1,6 @@
 import { Check, X } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useRef } from 'react'
 import { api, ApiError, type TradeIntent } from '../../lib/api'
 import type { StoredMessage } from '../../lib/chats'
 
@@ -36,7 +37,12 @@ export function TradeConfirm({ trade, state = 'pending', result, onChange }: Pro
   const qc = useQueryClient()
   const danger = trade.action === 'close_all' || trade.action === 'cancel_orders'
 
+  // Real money path: a double click must never send the order twice.
+  const sent = useRef(false)
+
   async function confirm() {
+    if (sent.current) return
+    sent.current = true
     onChange({ tradeState: 'placing' })
     try {
       const res = await api.post<{ ok: boolean; message?: string; error?: string }>('/api/trade/execute', trade)

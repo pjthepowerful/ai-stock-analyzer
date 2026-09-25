@@ -42,3 +42,7 @@ desktop/backend/smallcap_ab_log.json
 desktop/backend/autopilot_state.json
 autopilot_config.json
 desktop/backend/autopilot_config.json
+
+# Owner strategy customizations (live on the data volume in production)
+strategy_custom.json
+strategy_custom.tmp

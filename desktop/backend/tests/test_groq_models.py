@@ -59,6 +59,8 @@ def test_models_come_from_one_definition():
 def test_constants_are_env_overridable():
     import importlib
     os.environ["GROQ_MODEL_PRIMARY"] = "test/override-model"
+    saved = os.environ.get("LLM_PROVIDER")
+    os.environ["LLM_PROVIDER"] = "groq"
     try:
         import trading
         importlib.reload(trading)
@@ -66,6 +68,10 @@ def test_constants_are_env_overridable():
         assert trading.GROQ_MODELS[0] == "test/override-model"
     finally:
         os.environ.pop("GROQ_MODEL_PRIMARY", None)
+        if saved is None:
+            os.environ.pop("LLM_PROVIDER", None)
+        else:
+            os.environ["LLM_PROVIDER"] = saved
         import trading
         importlib.reload(trading)
 
@@ -111,3 +117,30 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def test_chain_falls_back_to_groq_on_the_same_tier(monkeypatch):
+    """OpenRouter failing must hand the request to Groq, asking Groq for its
+    own model of the same tier — not OpenRouter's model id."""
+    import trading
+    monkeypatch.setenv("OPENROUTER_API_KEY", "x")
+    monkeypatch.setenv("GROQ_API_KEY", "y")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    calls = []
+
+    class _Fake:
+        def __init__(self, name):
+            self.chat = trading._Obj(completions=trading._Obj(create=lambda model, **kw: self._go(name, model)))
+
+        def _go(self, name, model):
+            calls.append((name, model))
+            if name == "openrouter":
+                raise RuntimeError("503 upstream down")
+            return "ok"
+
+    monkeypatch.setattr(trading, "_provider_client", _Fake)
+    out = trading.Groq().chat.completions.create(model=trading.GROQ_MODEL_FAST, messages=[])
+    assert out == "ok"
+    assert [c[0] for c in calls] == ["openrouter", "groq"]
+    assert calls[1][1] == trading._provider_model("groq", "fast")

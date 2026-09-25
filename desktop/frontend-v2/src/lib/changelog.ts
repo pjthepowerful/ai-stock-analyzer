@@ -2,8 +2,8 @@
 // (patch = fix, minor = feature, major = big release) and add an entry here.
 // Entries with a `demo` get a Before / After button in What's new.
 
-export const VERSION = '5.0.0'
-export const VERSION_DATE = 'September 23, 2026'
+export const VERSION = '5.1.0'
+export const VERSION_DATE = 'September 24, 2026'
 
 export interface Demo {
   before: string
@@ -27,8 +27,25 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
-    v: '5.0.0',
+    v: '5.1.0',
     d: VERSION_DATE,
+    title: 'A smarter model',
+    highlights: [
+      {
+        title: 'Meet Prism and Pulse',
+        desc: 'Chat runs on a stronger model now. Paula Prism sees every angle for analysis and trade ideas; Paula Pulse gives you a quick read. Switch in the message box — each reply shows which one wrote it.',
+      },
+    ],
+    changes: [
+      'If the main model is busy or down, Paula moves your message to a backup model instead of failing.',
+      'A new, faster launch video, centered on every screen.',
+      'Maintenance mode now shows when Paula will be back, and can’t be skipped.',
+      'No more stray highlight boxes after clicking — focus rings only show when you navigate with the keyboard.',
+    ],
+  },
+  {
+    v: '5.0.0',
+    d: 'September 23, 2026',
     title: 'A whole new Paula',
     highlights: [
       {

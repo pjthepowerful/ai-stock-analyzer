@@ -56,6 +56,13 @@ async def prelaunch_gate(request: Request, call_next):
         return JSONResponse({"detail": "Paula 5 isn't live yet.", "prelaunch": True}, status_code=503)
     return await call_next(request)
 
+
+@app.middleware("http")
+async def maintenance_gate(request: Request, call_next):
+    if admin_router.maintenance_blocked(request):
+        return JSONResponse({"detail": "Paula is down for maintenance.", "maintenance": True}, status_code=503)
+    return await call_next(request)
+
 # Local dev: any localhost port. Hosted: the same Vercel deployments the
 # original backend allows (override with FRONTEND_ORIGIN_REGEX), plus any exact
 # URLs in ALLOWED_ORIGINS, comma-separated.
@@ -101,8 +108,15 @@ async def ws_endpoint(ws: WebSocket):
     await manager.connect(ws)
     try:
         while True:
-            msg = await ws.receive_json()
-            if msg.get("type") == "ping":
+            try:
+                msg = await ws.receive_json()
+            except ValueError:
+                continue  # a malformed frame shouldn't drop the connection
+            if isinstance(msg, dict) and msg.get("type") == "ping":
                 await ws.send_json({"event": "pong"})
     except WebSocketDisconnect:
+        pass
+    finally:
+        # Any other failure too — a dead socket left in the list would be
+        # retried on every broadcast.
         manager.disconnect(ws)

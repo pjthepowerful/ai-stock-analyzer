@@ -21,6 +21,7 @@ Differences from the original, all on purpose:
   hourly/milestone phone pings. Trade, error and start/stop pings are kept.
 """
 import asyncio
+import contextvars
 import json
 import os
 import time
@@ -137,13 +138,18 @@ async def _loop() -> None:
                 creds = None
 
             def _run():
-                # Executor threads don't inherit per-request creds, so apply
-                # the OWNER's keys here — autopilot trades their account.
-                if creds:
-                    engine.set_alpaca_creds(creds.get("key_id"), creds.get("secret"))
+                # Apply the OWNER's keys (None = the shared account) — autopilot
+                # trades their account. Set on every run: a stale value from
+                # an earlier cycle must never decide which account trades.
+                c = creds or {}
+                engine.set_alpaca_creds(c.get("key_id"), c.get("secret"))
                 return engine.run_autopilot()
 
-            result = await asyncio.get_running_loop().run_in_executor(None, _run) or {}
+            # A fresh context, so these creds can't stick to the worker thread
+            # and leak into whatever else that thread runs later.
+            result = await asyncio.get_running_loop().run_in_executor(
+                None, contextvars.Context().run, _run
+            ) or {}
             buys, sells, shorts = (result.get(k, 0) or 0 for k in ("buys", "sells", "shorts"))
             await _emit(
                 "cycle",

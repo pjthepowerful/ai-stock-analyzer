@@ -5,7 +5,6 @@ original app uses, so a chat started in either app shows up in the other.
 Shape: {"chats": [{id, title, created, messages: [{role, content, time?}]}],
         "updated_at": <ms epoch>}
 """
-import os
 from typing import Optional
 
 from fastapi import APIRouter, Header
@@ -59,30 +58,22 @@ def chat_title(req: TitleRequest, authorization: Optional[str] = Header(None)):
     current_user_required(authorization)
     msg = req.message.strip()
     fallback = msg if len(msg) <= 30 else msg[:28].rstrip() + "…"
-    key = os.environ.get("GROQ_API_KEY")
-    if not key or not msg:
+    if not engine._llm_key() or not msg:
         return {"ok": True, "title": fallback or "New chat"}
     try:
-        import requests
-        resp = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {key}"},
-            json={
-                "model": engine.GROQ_MODEL_PRIMARY,
-                "messages": [
-                    {"role": "system", "content": _TITLE_PROMPT},
-                    {"role": "user", "content": msg[:100]},
-                ],
-                "max_tokens": 10,
-                "temperature": 0.1,
-            },
-            timeout=4,
+        resp = engine.Groq().chat.completions.create(
+            model=engine.GROQ_MODEL_FAST,
+            messages=[
+                {"role": "system", "content": _TITLE_PROMPT},
+                {"role": "user", "content": msg[:100]},
+            ],
+            max_tokens=16,
+            temperature=0.1,
         )
-        if resp.status_code == 200:
-            title = resp.json()["choices"][0]["message"]["content"].strip()
-            title = title.split("\n")[0].strip().strip("\"'").rstrip(".")
-            if title and len(title.split()) <= 8 and len(title) <= 40:
-                return {"ok": True, "title": title}
+        title = (resp.choices[0].message.content or "").strip()
+        title = title.split("\n")[0].strip().strip("\"'").rstrip(".")
+        if title and len(title.split()) <= 8 and len(title) <= 40:
+            return {"ok": True, "title": title}
     except Exception:
         pass
     return {"ok": True, "title": fallback}

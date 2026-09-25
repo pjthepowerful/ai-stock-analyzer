@@ -22,7 +22,7 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from ..bridge import auth
-from ..deps import admin_required, current_user_optional
+from ..deps import admin_required, current_user_optional, is_admin
 from ..ws import manager
 
 router = APIRouter(tags=["admin"])
@@ -56,6 +56,41 @@ def _maint_state() -> dict:
             return json.load(f)
     except Exception:
         return {"on": False, "message": ""}
+
+
+# What still answers during maintenance: the status itself, and what the
+# owner needs to sign in and turn it back off. Everything else is refused
+# server-side, so skipping the screen in the browser gets you nothing.
+_OPEN_IN_MAINTENANCE = (
+    "/api/maintenance",
+    "/api/health",
+    "/api/launch",
+    "/api/auth/login",
+    "/api/auth/verify-code",
+    "/api/auth/resend-code",
+    "/api/auth/me",
+)
+_maint_cache: tuple[float, dict] = (0.0, {})
+
+
+def maintenance_blocked(request) -> bool:
+    """True when this request should get the 'down for maintenance' answer."""
+    global _maint_cache
+    if request.method == "OPTIONS":
+        return False
+    path = request.url.path
+    if not path.startswith("/api/") or path.startswith(_OPEN_IN_MAINTENANCE):
+        return False
+    import time as _time
+
+    # Read the file at most once a second, not on every request.
+    at, state = _maint_cache
+    if _time.time() - at > 1:
+        state = _maint_state()
+        _maint_cache = (_time.time(), state)
+    if not state.get("on"):
+        return False
+    return not is_admin(current_user_optional(request.headers.get("authorization")))
 
 
 # ── Public ──────────────────────────────────────────────────────────────────
@@ -239,12 +274,20 @@ def delete_report(report_id: str, authorization: Optional[str] = Header(None)):
 class MaintenanceRequest(BaseModel):
     on: bool
     message: str = ""
+    eta_minutes: Optional[int] = None  # shown as a countdown on the maintenance screen
 
 
 @router.post("/api/admin/maintenance")
 async def set_maintenance(req: MaintenanceRequest, authorization: Optional[str] = Header(None)):
     admin_required(authorization)
-    state = {"on": req.on, "message": req.message.strip()[:300]}
+    global _maint_cache
+    eta = None
+    if req.on and req.eta_minutes and 0 < req.eta_minutes <= 7 * 24 * 60:
+        import time as _time
+
+        eta = _time.time() + req.eta_minutes * 60
+    state = {"on": req.on, "message": req.message.strip()[:300], "eta": eta}
+    _maint_cache = (0.0, {})
 
     def _write():
         with open(_MAINT_FILE, "w") as f:
