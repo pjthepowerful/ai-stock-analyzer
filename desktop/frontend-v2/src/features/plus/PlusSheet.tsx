@@ -26,7 +26,7 @@ interface Props {
 }
 
 export function PlusSheet({ open, onClose }: Props) {
-  const { user, isGuest, refresh } = useSession()
+  const { user, isGuest, refresh, signOut } = useSession()
   const [plan, setPlan] = useState<Plan>('annual')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -111,7 +111,23 @@ export function PlusSheet({ open, onClose }: Props) {
           </div>
 
           {isGuest ? (
-            <p className="plus-fine">Create an account first — Plus is tied to your login.</p>
+            <>
+              <button
+                className="btn btn-primary plus-cta"
+                onClick={() => {
+                  try {
+                    sessionStorage.setItem('paula-auth-mode', 'signup')
+                  } catch {
+                    /* lands on sign-in */
+                  }
+                  close()
+                  signOut()
+                }}
+              >
+                Create a free account to continue
+              </button>
+              <p className="plus-fine">Plus is tied to your login — sign up, then upgrade in one tap.</p>
+            </>
           ) : (
             <>
               <button className="btn btn-primary plus-cta" onClick={buy} disabled={busy}>

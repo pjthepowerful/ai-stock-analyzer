@@ -141,7 +141,13 @@ export function CommandPalette({ open, onClose, go, analyze }: Props) {
       run: () => analyze(sym),
     })
   }
-  const all = q ? [...tickerItems, ...filtered] : [...filtered.filter((i) => i.group !== 'Recent chats'), ...trendingItems, ...filtered.filter((i) => i.group === 'Recent chats')]
+  // A command whose name has a word starting with the query ("plus" → "Get
+  // Paula Plus") beats a ticker that happens to share the letters, as in
+  // Linear's and Raycast's menus. From 3 letters, so short symbols stay first.
+  const wordHit = (i: Item) => q.length >= 3 && i.label.toLowerCase().split(/\s+/).some((w) => w.startsWith(q))
+  const all = q
+    ? [...filtered.filter(wordHit), ...tickerItems, ...filtered.filter((i) => !wordHit(i))]
+    : [...filtered.filter((i) => i.group !== 'Recent chats'), ...trendingItems, ...filtered.filter((i) => i.group === 'Recent chats')]
 
   // Keep the highlighted row in view while arrowing through the list.
   useEffect(() => {
