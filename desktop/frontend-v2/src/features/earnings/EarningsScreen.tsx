@@ -197,7 +197,10 @@ export function EarningsScreen() {
                       {w}
                     </div>
                   ))}
-                  {cells.map((d, i) => {
+                  {(() => {
+                    // Busiest day this month sets the scale for each day's bar.
+                    const peak = Math.max(1, ...Object.values(month.data?.dates ?? {}).map((r) => r.length))
+                    return cells.map((d, i) => {
                     if (d == null) return <div key={`x${i}`} className="earn-cell earn-cell-pad" />
                     const key = iso(ym.y, ym.m, d)
                     const rows = month.data?.dates[key] ?? []
@@ -209,12 +212,16 @@ export function EarningsScreen() {
                           'earn-cell' +
                           (key === day ? ' earn-cell-on' : '') +
                           (key === todayIso ? ' earn-cell-today' : '') +
+                          (key < todayIso ? ' earn-cell-past' : '') +
                           (rows.length ? '' : ' earn-cell-empty')
                         }
                         onClick={() => rows.length && setDay(key)}
                         disabled={!rows.length}
                       >
-                        <span className="earn-cell-d">{d}</span>
+                        <span className="earn-cell-top">
+                          <span className="earn-cell-d">{d}</span>
+                          {key === todayIso && <span className="earn-cell-today-word">Today</span>}
+                        </span>
                         {rows.length > 0 && (
                           <>
                             <span className="earn-cell-tickers">{biggest.map((r) => r.ticker).join(' · ')}</span>
@@ -222,11 +229,15 @@ export function EarningsScreen() {
                               {rows.length}
                               <span className="earn-cell-count-word"> reporting</span>
                             </span>
+                            <span className="earn-cell-heat" aria-hidden>
+                              <span style={{ width: `${Math.max(8, (rows.length / peak) * 100)}%` }} />
+                            </span>
                           </>
                         )}
                       </button>
                     )
-                  })}
+                  })
+                  })()}
                 </div>
               </div>
             </section>

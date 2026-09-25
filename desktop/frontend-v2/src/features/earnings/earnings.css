@@ -93,6 +93,48 @@
   font-weight: 600;
 }
 
+.earn-cell-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.earn-cell-today-word {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.earn-cell-today:not(.earn-cell-on) {
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface));
+}
+
+/* Past days step back so the week ahead reads first (as in Google Calendar). */
+.earn-cell-past .earn-cell-d,
+.earn-cell-past .earn-cell-tickers {
+  color: var(--text-dim);
+}
+
+.earn-cell-past .earn-cell-heat > span {
+  opacity: 0.4;
+}
+
+/* How busy the day is next to the month's busiest. */
+.earn-cell-heat {
+  width: 100%;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.earn-cell-heat > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
 .earn-cell-empty .earn-cell-d {
   color: var(--text-dim);
 }
