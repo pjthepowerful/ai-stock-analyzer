@@ -259,6 +259,15 @@ function Sidebar({
   onSearch: () => void
 }) {
   const { user, isGuest, signOut } = useSession()
+  // Out of guest mode onto the auth screen, opened on the form they picked.
+  function leaveGuest(mode: 'signup' | 'login') {
+    try {
+      sessionStorage.setItem('paula-auth-mode', mode)
+    } catch {
+      /* lands on sign-in */
+    }
+    signOut()
+  }
   const { chats, active, select, create, remove, restore, scan } = useChats()
   const toast = useToast()
   const { openPlus, openReport, openWhatsNew } = useChrome()
@@ -342,7 +351,21 @@ function Sidebar({
       </div>
 
       <div className="sidebar-foot">
-        {!user?.plus && !user?.is_admin && (
+        {isGuest ? (
+          // Logged-out sidebar, as ChatGPT does it: why sign up, and both doors.
+          <div className="guest-promo">
+            <strong>Save your chats and get the calendar</strong>
+            <small>A free account keeps your history, unlocks earnings and research, and syncs across devices.</small>
+            <div className="guest-promo-actions">
+              <button className="btn btn-primary btn-sm" onClick={() => leaveGuest('signup')}>
+                Sign up free
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={() => leaveGuest('login')}>
+                Log in
+              </button>
+            </div>
+          </div>
+        ) : !user?.plus && !user?.is_admin && (
           <button className="plus-promo" onClick={openPlus}>
             <Sparkles size={15} />
             <span>
