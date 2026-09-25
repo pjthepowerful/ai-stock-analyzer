@@ -237,3 +237,30 @@
     border-top: 1px solid var(--border);
   }
 }
+
+/* Reasons fold on phones only; wider screens always show them all. */
+.sig-note-more {
+  display: none;
+  list-style: none;
+}
+
+.sig-note-more button {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .sig-notes:not(.sig-notes-all) .sig-note-extra {
+    display: none;
+  }
+
+  .sig-note-more {
+    display: block;
+  }
+}

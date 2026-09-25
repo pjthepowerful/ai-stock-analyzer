@@ -1,4 +1,5 @@
 import { Check, TriangleAlert } from 'lucide-react'
+import { useState } from 'react'
 import './SignalCard.css'
 
 export interface TradeLevels {
@@ -52,6 +53,11 @@ export function SignalCard({ data }: { data: AnalyzeData }) {
   // Factor scores are small signed integers; scale bars to the largest so
   // they're readable, growing left (bearish) or right (bullish) of center.
   const maxAbs = Math.max(1, ...factors.map(([, v]) => Math.abs(v)))
+  // On phones the reasons fold to the top few (warnings always show) so the
+  // levels and chart aren't two screens down — Robinhood's "Show more".
+  const [allNotes, setAllNotes] = useState(false)
+  const FOLD = 3
+  const hidden = Math.max(0, signal.signals.length - FOLD)
 
   return (
     <div className="signal-card card">
@@ -108,9 +114,9 @@ export function SignalCard({ data }: { data: AnalyzeData }) {
       </div>
 
       {(signal.signals.length > 0 || signal.warnings.length > 0) && (
-        <ul className="sig-notes">
-          {signal.signals.map((s) => (
-            <li className="sig-note sig-note-good" key={s}>
+        <ul className={'sig-notes' + (allNotes ? ' sig-notes-all' : '')}>
+          {signal.signals.map((s, i) => (
+            <li className={'sig-note sig-note-good' + (i >= FOLD ? ' sig-note-extra' : '')} key={s}>
               <Check size={14} strokeWidth={2.2} />
               {s}
             </li>
@@ -121,6 +127,13 @@ export function SignalCard({ data }: { data: AnalyzeData }) {
               {w}
             </li>
           ))}
+          {hidden > 0 && !allNotes && (
+            <li className="sig-note-more">
+              <button type="button" onClick={() => setAllNotes(true)}>
+                Show {hidden} more reason{hidden === 1 ? '' : 's'}
+              </button>
+            </li>
+          )}
         </ul>
       )}
 
