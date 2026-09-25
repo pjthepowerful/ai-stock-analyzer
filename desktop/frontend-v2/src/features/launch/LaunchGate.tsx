@@ -14,10 +14,12 @@ interface LaunchStatus {
 }
 
 const VIDEO_SEEN = 'paula5-launch-video-seen'
+export const OWNER_PREVIEW = 'paula5-owner-preview'
 
-function videoSeen() {
+// Stored per launch time, so a redone launch plays the video for everyone again.
+function videoSeen(launchAt: number | null) {
   try {
-    return localStorage.getItem(VIDEO_SEEN) === '1'
+    return localStorage.getItem(VIDEO_SEEN) === String(launchAt ?? '')
   } catch {
     return true
   }
@@ -28,7 +30,14 @@ function videoSeen() {
 export function LaunchGate({ children }: { children: ReactNode }) {
   const qc = useQueryClient()
   const { user } = useSession()
-  const [preview, setPreview] = useState(false)
+  // The owner keeps using the app while a relaunch they set from Admin counts down.
+  const [preview, setPreview] = useState(() => {
+    try {
+      return sessionStorage.getItem(OWNER_PREVIEW) === '1'
+    } catch {
+      return false
+    }
+  })
   const [sawGate, setSawGate] = useState(false)
   const [videoDone, setVideoDone] = useState(false)
 
@@ -59,7 +68,7 @@ export function LaunchGate({ children }: { children: ReactNode }) {
 
   // Launch video: for anyone who watched the countdown, and once for
   // everyone else arriving after launch.
-  const playVideo = !!status?.live && !videoDone && (sawGate || !videoSeen())
+  const playVideo = !!status?.live && !videoDone && (sawGate || !videoSeen(status.launch_at))
 
   if (!status) return q.isError ? <>{children}</> : null
   if (gated && status.launch_at) {
@@ -77,7 +86,7 @@ export function LaunchGate({ children }: { children: ReactNode }) {
       <LaunchVideo
         onDone={() => {
           try {
-            localStorage.setItem(VIDEO_SEEN, '1')
+            localStorage.setItem(VIDEO_SEEN, String(status.launch_at ?? ''))
           } catch {
             /* ignore */
           }

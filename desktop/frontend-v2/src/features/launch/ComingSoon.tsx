@@ -23,7 +23,7 @@ function parts(ms: number) {
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
-function whenLabel(at: number) {
+export function whenLabel(at: number) {
   return new Date(at * 1000).toLocaleString(undefined, {
     timeZone: CT,
     weekday: 'long',
@@ -91,7 +91,7 @@ function Unit({ n, label }: { n: number; label: string }) {
 
 // ── Owner controls: admin sign-in → launch phrase → timer ──────────────────
 
-function toLocalInput(at: number) {
+export function toLocalInput(at: number) {
   // datetime-local in Central time, e.g. 2026-09-24T20:00
   const f = new Intl.DateTimeFormat('en-CA', {
     timeZone: CT,
@@ -106,7 +106,7 @@ function toLocalInput(at: number) {
   return `${g('year')}-${g('month')}-${g('day')}T${g('hour')}:${g('minute')}`
 }
 
-function fromLocalInput(v: string): number {
+export function fromLocalInput(v: string): number {
   // Interpret the typed wall-clock time as Central, whatever the device's zone.
   const guess = new Date(v + ':00Z').getTime()
   const asCt = new Date(new Date(guess).toLocaleString('en-US', { timeZone: CT })).getTime()

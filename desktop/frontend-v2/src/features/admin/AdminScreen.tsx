@@ -6,6 +6,7 @@ import { useToast } from '../../lib/toast'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { StrategyPanel } from './StrategyPanel'
 import { LaunchVideo } from '../launch/LaunchVideo'
+import { LaunchPanel } from './LaunchPanel'
 import { Play } from 'lucide-react'
 import './admin.css'
 
@@ -44,7 +45,7 @@ interface FullReport extends ReportSummary {
   url: string
 }
 
-type Tab = 'users' | 'reports' | 'strategy' | 'maintenance'
+type Tab = 'users' | 'reports' | 'strategy' | 'maintenance' | 'launch'
 
 function ago(iso: string | null): string {
   if (!iso) return '—'
@@ -87,14 +88,14 @@ export function AdminScreen() {
         <header className="page-head">
           <div>
             <h1 className="page-title">Admin</h1>
-            <p className="page-sub">Users, reports, strategy health and maintenance</p>
+            <p className="page-sub">Users, reports, strategy health, maintenance and launch</p>
           </div>
           <button className="btn btn-secondary btn-sm" onClick={() => setLaunchVideo(true)}>
             <Play size={13} />
             Preview launch video
           </button>
           <div className="seg" role="tablist" aria-label="Section">
-            {(['users', 'reports', 'strategy', 'maintenance'] as Tab[]).map((t) => (
+            {(['users', 'reports', 'strategy', 'maintenance', 'launch'] as Tab[]).map((t) => (
               <button
                 key={t}
                 role="tab"
@@ -123,6 +124,7 @@ export function AdminScreen() {
         {tab === 'users' && <UsersPanel />}
         {tab === 'reports' && <ReportsPanel />}
         {tab === 'strategy' && <StrategyPanel />}
+        {tab === 'launch' && <LaunchPanel />}
         {tab === 'maintenance' && s && (
           // Keyed so the draft message resets whenever the saved state changes.
           <MaintenancePanel key={`${s.maintenance.on}:${s.maintenance.message}`} current={s.maintenance} />

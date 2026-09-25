@@ -210,6 +210,73 @@
   gap: var(--space-3);
 }
 
+/* Launch */
+.admin-launch {
+  padding: var(--space-4) var(--space-5) var(--space-5);
+}
+
+.admin-launch-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  margin-bottom: var(--space-2);
+}
+
+.admin-launch-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--positive);
+}
+
+.admin-launch-dot-wait {
+  background: var(--warning, #f59e0b);
+  animation: maint-pulse 1.8s ease-in-out infinite;
+}
+
+.admin-launch-quick,
+.admin-launch-row,
+.admin-launch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.admin-launch .admin-filter {
+  margin: 0 0 var(--space-3);
+  max-width: 460px;
+}
+
+.admin-launch-row .admin-filter {
+  margin: 0;
+  max-width: 260px;
+}
+
+.admin-launch-actions {
+  margin-top: var(--space-5);
+}
+
+.admin-launch .admin-error {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.admin-launch-done {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-sm);
+  color: var(--positive);
+}
+
+@keyframes maint-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
 /* Strategy */
 .strat {
   display: flex;
