@@ -291,6 +291,34 @@ async def build_response(
     return response
 
 
+_MARKET_Q = re.compile(
+    r"\b(the market|markets|stock market|the tape|s&p|nasdaq|dow|indexes|indices|wall street|market today|market doing|market looking)\b",
+    re.I,
+)
+
+
+def _is_market_question(msg: str, result: Optional[dict]) -> bool:
+    if result and result.get("type") in ("market", "market_regime"):
+        return True
+    return bool(_MARKET_Q.search(msg))
+
+
+async def _market_snapshot(loop) -> Optional[dict]:
+    """The live snapshot the market strip shows (regime, index moves, VIX, top
+    movers; cached 60s), shaped as chat data. Without it the model has nothing
+    to answer a broad market question with and asks for a ticker instead."""
+    try:
+        from ..routers import overview as _ov
+
+        snap = await loop.run_in_executor(None, _ov.overview)
+        return {
+            "market_snapshot": {k: snap.get(k) for k in ("regime", "safe_to_buy", "reason", "spy", "vix", "rsi", "top_gainer", "top_loser", "tape")},
+            "note": "Live market snapshot — answer the user's market question from THESE numbers (index moves, regime, VIX, movers). Use them exactly.",
+        }
+    except Exception:
+        return None
+
+
 async def _generic_reply(loop, user_msg: str, result: Optional[dict], chat_history: list) -> str:
     """Extract every ticker the CURRENT message names and price them, or fall
     through to a plain conversational answer — same logic as the original."""
@@ -318,6 +346,10 @@ async def _generic_reply(loop, user_msg: str, result: Optional[dict], chat_histo
                     chat_data = engine.fetch_full(valid[0]) or {}
     except Exception:
         pass
+
+    # "How's the market today?" names no ticker, so nothing above attaches data.
+    if not chat_data and _is_market_question(user_msg, result):
+        chat_data = await _market_snapshot(loop) or {}
 
     umsg = user_msg
     if result and result.get("private_company"):
@@ -379,5 +411,7 @@ async def _fallback_reply(loop, user_msg: str, result: Optional[dict], chat_hist
                     fmsg += f"\n\n[LIVE WEB SEARCH — use this current info. Cite the publisher name as a markdown link only if a real http(s) URL is given:\n{wl}\n]"
         except Exception:
             pass
+        if fall_data is None and _is_market_question(user_msg, result):
+            fall_data = await _market_snapshot(loop)
 
     return await loop.run_in_executor(None, in_request_context(engine.ai_response), fmsg, fall_data, chat_history, "US")
