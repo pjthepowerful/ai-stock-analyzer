@@ -21,6 +21,8 @@ export interface StoredMessage {
     tradeResult?: string
     /** Model that wrote the reply, e.g. "Gemini 3.8 Flash". */
     model?: string
+    /** Small preview of an image the user attached (the full one isn't kept). */
+    image?: string
   }
 }
 

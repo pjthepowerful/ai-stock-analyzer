@@ -114,6 +114,7 @@ from trading import (
     LLM_TIER,
     LLM_USED,
     llm_tiers,
+    ai_image_response,
     load_autopilot_config,
     save_autopilot_config,
     autopilot_cfg_path,

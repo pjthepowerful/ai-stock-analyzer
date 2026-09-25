@@ -12,6 +12,7 @@ class ChatRequest(BaseModel):
     message: str
     history: Optional[list[ChatHistoryItem]] = None
     model: Optional[str] = None  # "smart" | "fast" — the composer's model picker
+    image: Optional[str] = None  # data:image/...;base64,... — a chart or screen to read
 
 
 class ChatResponse(BaseModel):

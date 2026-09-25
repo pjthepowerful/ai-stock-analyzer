@@ -1,9 +1,10 @@
-import { Activity, ArrowUp, ChartCandlestick, Lightbulb, Wallet, type LucideIcon } from 'lucide-react'
+import { Activity, ArrowUp, ChartCandlestick, ImagePlus, Lightbulb, Wallet, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { api, ApiError, type ChatMessage, type ChatResponse } from '../../lib/api'
+import { api, ApiError, FREE_DAILY_MESSAGES, type ChatMessage, type ChatResponse } from '../../lib/api'
 import { useSession } from '../../lib/auth'
 import { NEW_TITLE, useChats } from '../../lib/chats'
 import { useChrome } from '../../lib/chrome'
+import { shrinkImage } from '../../lib/image'
 import { Typewriter } from '../../components/Typewriter'
 import { Snapshot } from './Snapshot'
 import { MessageBubble } from './MessageBubble'
@@ -35,8 +36,8 @@ function fallbackTitle(text: string) {
 }
 
 export function ChatScreen({ onNavigateAnalyze, draft }: Props) {
-  const { user, isGuest } = useSession()
-  const { openReport } = useChrome()
+  const { user, isGuest, refresh } = useSession()
+  const { openReport, openPlus } = useChrome()
   const { active, append, patchMeta, rename, ensureActive, scan, startScan } = useChats()
   const [input, setInput] = useState(draft?.text ?? '')
   const [seenDraft, setSeenDraft] = useState(draft)
@@ -46,6 +47,20 @@ export function ChatScreen({ onNavigateAnalyze, draft }: Props) {
   }
   const [sendingChat, setSendingChat] = useState<string | null>(null)
   const [tier, setTier] = useState<ModelTier>(loadTier)
+  // An attached chart or screenshot: the upload copy and a small preview.
+  const [image, setImage] = useState<{ full: string; thumb: string } | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  async function attach(file: File | null | undefined) {
+    if (!file || !file.type.startsWith('image/')) return
+    try {
+      const [full, thumb] = await Promise.all([shrinkImage(file), shrinkImage(file, 360, 0.7)])
+      setImage({ full, thumb })
+    } catch {
+      /* not a readable image — ignore */
+    }
+  }
   const listRef = useRef<HTMLDivElement>(null)
 
   const messages = active?.messages ?? []
@@ -73,19 +88,21 @@ export function ChatScreen({ onNavigateAnalyze, draft }: Props) {
   }
 
   async function send(text: string) {
-    const trimmed = text.trim()
+    const pic = image
+    const trimmed = text.trim() || (pic ? 'What do you see in this image?' : '')
     if (!trimmed || sendingChat) return
     const chatId = ensureActive()
     const history: ChatMessage[] = messages.map((m) => ({ role: m.role, content: m.content }))
     const isFirst = messages.length === 0
 
     setInput('')
+    setImage(null)
     setSendingChat(chatId)
-    append(chatId, { role: 'user', content: trimmed })
+    append(chatId, { role: 'user', content: trimmed, meta: pic ? { image: pic.thumb } : undefined })
     if (isFirst && (active?.title ?? NEW_TITLE) === NEW_TITLE) void nameChat(chatId, trimmed)
 
     try {
-      const res = await api.post<ChatResponse>('/api/chat', { message: trimmed, history, model: tier })
+      const res = await api.post<ChatResponse>('/api/chat', { message: trimmed, history, model: tier, image: pic?.full })
       if (res.type === 'scan_started') {
         startScan(chatId, res.scan_id ?? '')
       } else if (res.type === 'confirm_trade' && res.trade) {
@@ -117,6 +134,7 @@ export function ChatScreen({ onNavigateAnalyze, draft }: Props) {
       append(chatId, { role: 'assistant', content: msg })
     } finally {
       setSendingChat(null)
+      if (user && !user.plus && !user.is_admin) void refresh()
     }
   }
 
@@ -228,12 +246,32 @@ export function ChatScreen({ onNavigateAnalyze, draft }: Props) {
 
       <div className="composer-wrap">
         <form
-          className="composer"
+          className={'composer' + (dragging ? ' composer-drop' : '')}
           onSubmit={(e) => {
             e.preventDefault()
             send(input)
           }}
+          onDragOver={(e) => {
+            if (e.dataTransfer.types.includes('Files')) {
+              e.preventDefault()
+              setDragging(true)
+            }
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault()
+            setDragging(false)
+            void attach(e.dataTransfer.files[0])
+          }}
         >
+          {image && (
+            <div className="composer-attach">
+              <img src={image.thumb} alt="Attached image" />
+              <button type="button" className="composer-attach-x" onClick={() => setImage(null)} aria-label="Remove image">
+                <X size={12} strokeWidth={2.4} />
+              </button>
+            </div>
+          )}
           <textarea
             className="composer-input"
             value={input}
@@ -250,17 +288,62 @@ export function ChatScreen({ onNavigateAnalyze, draft }: Props) {
                 send(input)
               }
             }}
-            placeholder="Message Paula…"
+            onPaste={(e) => {
+              const file = [...e.clipboardData.files].find((f) => f.type.startsWith('image/'))
+              if (file) {
+                e.preventDefault()
+                void attach(file)
+              }
+            }}
+            placeholder={image ? 'Ask about this image…' : 'Message Paula…'}
             disabled={busy}
           />
           <div className="composer-bar">
-            <ModelPicker value={tier} onChange={setTier} />
-            <button className="composer-send" type="submit" disabled={busy || !input.trim()} aria-label="Send">
+            <div className="composer-tools">
+              <button
+                type="button"
+                className="composer-tool"
+                onClick={() => fileRef.current?.click()}
+                aria-label="Attach an image"
+                title="Attach a chart or screenshot"
+              >
+                <ImagePlus size={16} strokeWidth={1.9} />
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                hidden
+                onChange={(e) => {
+                  void attach(e.target.files?.[0])
+                  e.target.value = ''
+                }}
+              />
+              <ModelPicker value={tier} onChange={setTier} />
+            </div>
+            <button className="composer-send" type="submit" disabled={busy || (!input.trim() && !image)} aria-label="Send">
               <ArrowUp size={16} strokeWidth={2.2} />
             </button>
           </div>
         </form>
-        <p className="composer-hint">Paula can be wrong. No order is placed until you confirm it.</p>
+        {user && !user.plus && !user.is_admin ? (
+          // Free-tier line, as ChatGPT and Claude show it: what's left today
+          // and a one-click way to lift the cap.
+          <p className="composer-hint composer-quota">
+            {(() => {
+              const left = Math.max(0, FREE_DAILY_MESSAGES - (user.messages_today ?? 0))
+              return left > 0
+                ? `${left} of ${FREE_DAILY_MESSAGES} free messages left today`
+                : 'You’ve used today’s free messages'
+            })()}
+            {' · '}
+            <button className="composer-quota-cta" onClick={openPlus}>
+              Get unlimited with Plus
+            </button>
+          </p>
+        ) : (
+          <p className="composer-hint">Paula can be wrong. No order is placed until you confirm it.</p>
+        )}
       </div>
     </div>
   )

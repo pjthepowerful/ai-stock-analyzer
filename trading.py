@@ -214,8 +214,14 @@ class _ChainClient:
         tier = self._tier(model)
         if tier == "primary" and LLM_TIER.get() == "fast":
             tier = "fast"
+        # Messages with image parts need a vision model; Groq's GPT-OSS pair
+        # can't read images, so those requests only go to the others.
+        has_image = any(isinstance(m.get("content"), list) for m in messages)
+        chain = [n for n in self._chain if not (has_image and n == "groq")]
+        if not chain:
+            raise RuntimeError("400 image reading needs OPENROUTER_API_KEY or GEMINI_API_KEY")
         last = None
-        for i, name in enumerate(self._chain):
+        for i, name in enumerate(chain):
             if tier is None and i > 0:
                 break  # an explicit model id only means something to the first provider
             m = model if tier is None else _provider_model(name, tier)
@@ -229,8 +235,8 @@ class _ChainClient:
                 return out
             except Exception as e:
                 last = e
-                if i < len(self._chain) - 1:
-                    _log.warning("LLM %s (%s) failed, trying %s: %s", name, m, self._chain[i + 1], str(e)[:160])
+                if i < len(chain) - 1:
+                    _log.warning("LLM %s (%s) failed, trying %s: %s", name, m, chain[i + 1], str(e)[:160])
         raise last or RuntimeError("401 no LLM provider key set")
 
 
@@ -7883,6 +7889,41 @@ FACTUAL RULES (never break these):
                 return
             yield f" AI error: {str(e)[:120]}"
             return
+
+
+def ai_image_response(user_msg: str, image_data_url: str, history: list) -> str:
+    """Paula's read on an image the user attached — usually a chart screenshot,
+    a positions screen or a headline. Needs a vision model (OpenRouter/Gemini)."""
+    system = f"""You're Paula, a sharp trading assistant. Today is {datetime.now(ZoneInfo("US/Eastern")).strftime("%A, %B %d, %Y")}. {_market_status_line()}
+
+The user attached an image. Work out what it is (a price chart, a broker or portfolio screen, a news headline, an earnings table…) and give your read on it.
+
+For a chart: name the ticker and timeframe if they're visible; describe the trend, the key support and resistance levels you can actually read off the axis, any clear pattern, and what volume or indicators shown are saying; then say what you'd watch next and what would change your mind.
+For a positions or account screen: summarize what's there — biggest winners and losers, concentration, anything that stands out.
+For anything else finance-related: pull out the facts that matter for a trader.
+If it isn't finance-related, say so briefly and offer to help with a chart instead.
+
+RULES: Only state numbers you can read in the image — never invent prices or levels. If something is too small or blurry to read, say so. This is analysis, not a guarantee; don't tell the user to buy or sell with certainty.
+
+{PAULA_VOICE}"""
+    messages = [{"role": "system", "content": system}]
+    for h in (history or [])[-8:]:
+        messages.append({"role": h.get("role", "user"), "content": str(h.get("content", ""))[:800]})
+    messages.append({"role": "user", "content": [
+        {"type": "text", "text": user_msg or "What do you see in this image?"},
+        {"type": "image_url", "image_url": {"url": image_data_url}},
+    ]})
+    try:
+        resp = Groq().chat.completions.create(model=GROQ_MODEL_PRIMARY, messages=messages, max_tokens=900, temperature=0.3)
+        return _groq_text(resp) or "I couldn't read anything useful from that image — try a sharper screenshot."
+    except Exception as e:
+        msg = str(e)
+        if "image reading needs" in msg:
+            return "Image reading isn't set up on this server yet — it needs an OpenRouter or Gemini key."
+        _log.warning("image read failed: %s", msg[:300])
+        if "429" in msg or "rate limit" in msg.lower() or "rate_limit" in msg.lower():
+            return "Paula's AI is busy right now (rate limit). Give it a few seconds and try again."
+        return f"AI error reading the image: {msg[:120]}"
 
 
 # ── UI ───────────────────────────────────────────────────────────────────────

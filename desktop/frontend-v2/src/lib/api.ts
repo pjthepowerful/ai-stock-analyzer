@@ -64,7 +64,11 @@ export interface AuthUser {
   can_autopilot?: boolean
   /** Note from the team when Plus was gifted (from /api/auth/me). */
   gift_msg?: string
+  /** Chat messages sent today — free accounts get FREE_DAILY_MESSAGES. */
+  messages_today?: number
 }
+
+export const FREE_DAILY_MESSAGES = 3
 
 export interface MeResponse {
   ok: boolean

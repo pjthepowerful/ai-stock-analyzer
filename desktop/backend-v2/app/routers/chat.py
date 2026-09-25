@@ -80,6 +80,8 @@ def _guest_over_limit(ip: str) -> bool:
 @router.post("")
 async def chat(req: ChatRequest, request: Request, authorization: str = Header(None)):
     user_msg = req.message.strip()
+    if not user_msg and req.image:
+        user_msg = "What do you see in this image?"
     if not user_msg:
         return {"ok": False, "error": "Empty message"}
 
@@ -116,6 +118,9 @@ async def chat(req: ChatRequest, request: Request, authorization: str = Header(N
         # user_id 0, so one guest's conversation would leak into another's.
         chat_history = []
     chat_history.append({"role": "user", "content": user_msg})
+
+    if req.image:
+        return await _image_reply(req.image, user_msg, chat_history, user_id, used)
 
     # route() can call the LLM to classify a message; keep that off the event
     # loop so one slow classification doesn't stall every other request.
@@ -158,6 +163,25 @@ async def chat(req: ChatRequest, request: Request, authorization: str = Header(N
         popularity.record(result["ticker"], user_id=user_id or None, ip=_client_ip(request))
     out = await orch.build_response(loop, user_msg, intent, result, chat_history, user, is_plus)
     if used and isinstance(out, dict):
+        out["model"] = used.get("label")
+    return out
+
+
+_IMAGE_PREFIXES = ("data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,")
+_MAX_IMAGE_CHARS = 4_000_000  # ~3 MB of image; the browser shrinks it well under this
+
+
+async def _image_reply(image: str, user_msg: str, chat_history: list, user_id: int, used: dict):
+    if not image.startswith(_IMAGE_PREFIXES) or len(image) > _MAX_IMAGE_CHARS:
+        return {"ok": True, "type": "chat", "message": "That image didn't come through — try a PNG or JPEG screenshot under a few MB."}
+    loop = asyncio.get_running_loop()
+    reply = await loop.run_in_executor(
+        _light_executor, in_request_context(engine.ai_image_response, user_msg, image, chat_history[:-1])
+    )
+    if user_id:
+        auth.save_chat(user_id, "assistant", reply)
+    out = {"ok": True, "type": "chat", "message": reply}
+    if used:
         out["model"] = used.get("label")
     return out
 

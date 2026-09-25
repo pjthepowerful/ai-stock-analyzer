@@ -2,7 +2,7 @@
 // (patch = fix, minor = feature, major = big release) and add an entry here.
 // Entries with a `demo` get a Before / After button in What's new.
 
-export const VERSION = '5.1.0'
+export const VERSION = '5.2.0'
 export const VERSION_DATE = 'September 24, 2026'
 
 export interface Demo {
@@ -26,6 +26,22 @@ export interface Release {
 }
 
 export const RELEASES: Release[] = [
+  {
+    v: '5.2.0',
+    d: VERSION_DATE,
+    title: 'Paula can see',
+    highlights: [
+      {
+        title: 'Send Paula a chart',
+        desc: 'Attach a screenshot — a chart, your positions, a headline — with the image button, or just paste or drag it into the message box. Paula reads the levels off the chart and gives you her take.',
+      },
+    ],
+    changes: [
+      'Earnings calendar: past days fade back, today is marked, and a bar shows how busy each day is.',
+      'Analyze: the quick-pick tickers show today’s move.',
+      'Free accounts see how many messages are left today.',
+    ],
+  },
   {
     v: '5.1.0',
     d: VERSION_DATE,

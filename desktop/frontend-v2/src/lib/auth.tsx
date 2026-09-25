@@ -35,7 +35,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (!localStorage.getItem('paula-v2-token')) return
     api
       .get<MeResponse>('/api/auth/me')
-      .then((res) => setUser({ ...res.user, gift_msg: res.gift_msg }))
+      .then((res) => setUser({ ...res.user, gift_msg: res.gift_msg, messages_today: res.messages_today }))
       .catch((e) => {
         // Only a rejected token means signed out. A backend that's restarting
         // or unreachable shouldn't throw away a perfectly good login.
@@ -48,7 +48,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   async function refresh() {
     try {
       const res = await api.get<MeResponse>('/api/auth/me')
-      setUser({ ...res.user, gift_msg: res.gift_msg })
+      setUser({ ...res.user, gift_msg: res.gift_msg, messages_today: res.messages_today })
     } catch {
       /* keep the current user; a transient failure shouldn't sign anyone out */
     }

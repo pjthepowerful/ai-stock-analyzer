@@ -20,6 +20,7 @@ export function MessageBubble({ role, content, meta, onMeta }: Props) {
   if (role === 'user') {
     return (
       <div className="msg msg-user">
+        {meta?.image && <img className="msg-user-image" src={meta.image} alt="Attached image" />}
         <p className="msg-user-text">{content}</p>
       </div>
     )

@@ -110,7 +110,9 @@
 }
 
 .msg-user {
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0;
 }
 
 .msg-user-text {
@@ -314,6 +316,88 @@
 
 .composer-input::placeholder {
   color: var(--text-dim);
+}
+
+.composer-drop {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent), var(--shadow-pop);
+}
+
+.composer-attach {
+  position: relative;
+  align-self: flex-start;
+  margin-bottom: var(--space-1);
+}
+
+.composer-attach img {
+  display: block;
+  height: 64px;
+  max-width: 160px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.composer-attach-x {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.composer-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.composer-tool {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.composer-tool:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.msg-user .msg-user-image {
+  display: block;
+  max-width: 240px;
+  max-height: 180px;
+  margin-bottom: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  object-fit: cover;
+}
+
+.composer-quota-cta {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent-text, var(--accent));
+  cursor: pointer;
+}
+
+.composer-quota-cta:hover {
+  text-decoration: underline;
 }
 
 .composer-bar {
