@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api, ApiError } from '../../lib/api'
+import { SignUpGate } from '../../components/SignUpGate'
+import { useSession } from '../../lib/auth'
 import { useChrome } from '../../lib/chrome'
 import { Performance } from './Performance'
 import './portfolio.css'
@@ -44,23 +46,30 @@ interface Benchmark {
 
 export function PortfolioScreen() {
   const { analyze, askPaula } = useChrome()
+  const { user } = useSession()
+  // Guests have no account: don't fire broker calls that can only fail.
+  const enabled = !!user
   // Cached across tab switches (staleTime from the QueryClient defaults), so
   // coming back to Portfolio doesn't re-wait on four broker round trips.
   const accountQ = useQuery({
     queryKey: ['account'],
+    enabled,
     queryFn: () => api.get<{ ok: boolean; data: Account }>('/api/account').then((r) => r.data),
   })
   const positionsQ = useQuery({
     queryKey: ['positions'],
+    enabled,
     queryFn: () => api.get<{ ok: boolean; data: Position[] }>('/api/positions').then((r) => r.data),
   })
   const benchmarkQ = useQuery({
     queryKey: ['benchmark'],
+    enabled,
     queryFn: () => api.get<Benchmark>('/api/portfolio/benchmark'),
     retry: false,
   })
   const exposureQ = useQuery({
     queryKey: ['exposure'],
+    enabled,
     queryFn: () => api.get<Exposure>('/api/research/exposure'),
     retry: false,
   })
@@ -79,15 +88,30 @@ export function PortfolioScreen() {
   const signedPct = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(2)}%`
   const tone = (n: number) => (n > 0 ? 'positive' : n < 0 ? 'negative' : '')
 
+  const head = (
+    <header className="page-head">
+      <div>
+        <h1 className="page-title">Portfolio</h1>
+        <p className="page-sub">Your Alpaca paper account</p>
+      </div>
+    </header>
+  )
+
+  if (!user) {
+    return (
+      <div className="page">
+        <div className="page-inner">
+          {head}
+          <SignUpGate text="Track a paper portfolio — equity, returns against the S&P 500 and every position — with a free account." />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="page">
       <div className="page-inner">
-        <header className="page-head">
-          <div>
-            <h1 className="page-title">Portfolio</h1>
-            <p className="page-sub">Your Alpaca paper account</p>
-          </div>
-        </header>
+        {head}
 
         {error && <p className="note-warn">{error}</p>}
 
