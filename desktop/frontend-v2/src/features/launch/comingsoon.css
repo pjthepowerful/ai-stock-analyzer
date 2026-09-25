@@ -394,3 +394,14 @@
   font: 500 0.8rem 'Geist', system-ui, sans-serif;
   cursor: pointer;
 }
+
+.cs-btn-ghost {
+  margin-top: 12px;
+  background: var(--o-c2);
+  border: 1px solid var(--o-brd);
+  color: var(--o-wh);
+}
+
+.cs-btn-ghost:hover {
+  border-color: var(--o-grn);
+}

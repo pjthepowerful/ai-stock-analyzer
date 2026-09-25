@@ -4,6 +4,7 @@ import { api } from '../../lib/api'
 import { useSession } from '../../lib/auth'
 import { useWebSocket } from '../../lib/ws'
 import { ComingSoon } from './ComingSoon'
+import { LaunchVideo } from './LaunchVideo'
 
 interface LaunchStatus {
   ok: boolean
@@ -86,15 +87,4 @@ export function LaunchGate({ children }: { children: ReactNode }) {
     )
   }
   return <>{children}</>
-}
-
-function LaunchVideo({ onDone }: { onDone: () => void }) {
-  return (
-    <div className="lv">
-      <video src="/launch/paula5.mp4" autoPlay muted playsInline onEnded={onDone} onError={onDone} />
-      <button className="lv-skip" onClick={onDone}>
-        Skip →
-      </button>
-    </div>
-  )
 }

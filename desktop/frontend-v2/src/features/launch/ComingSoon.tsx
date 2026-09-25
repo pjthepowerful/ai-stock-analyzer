@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError } from '../../lib/api'
 import { useSession } from '../../lib/auth'
+import { LaunchVideo } from './LaunchVideo'
 import './comingsoon.css'
 
 interface Props {
@@ -134,6 +135,7 @@ function TeamPanel({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [draft, setDraft] = useState(() => toLocalInput(launchAt))
+  const [video, setVideo] = useState(false)
   const [confirmNow, setConfirmNow] = useState(false)
 
   const step = !user?.is_admin ? 'login' : !unlocked ? 'phrase' : 'panel'
@@ -241,6 +243,9 @@ function TeamPanel({
                 Launch now…
               </button>
             )}
+            <button className="cs-btn cs-btn-ghost" onClick={() => setVideo(true)}>
+              ▶ Preview launch video
+            </button>
             <button className="cs-link" onClick={onPreview}>
               Preview Paula 5 (only you) →
             </button>
@@ -249,6 +254,7 @@ function TeamPanel({
 
         {error && <p className="cs-err">{error}</p>}
       </div>
+      {video && <LaunchVideo onDone={() => setVideo(false)} />}
     </div>
   )
 }

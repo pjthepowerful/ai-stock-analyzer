@@ -5,6 +5,8 @@ import { useSession } from '../../lib/auth'
 import { useToast } from '../../lib/toast'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { StrategyPanel } from './StrategyPanel'
+import { LaunchVideo } from '../launch/LaunchVideo'
+import { Play } from 'lucide-react'
 import './admin.css'
 
 interface Stats {
@@ -62,6 +64,7 @@ function ago(iso: string | null): string {
 
 export function AdminScreen() {
   const [tab, setTab] = useState<Tab>('users')
+  const [launchVideo, setLaunchVideo] = useState(false)
   const stats = useQuery({
     queryKey: ['admin', 'stats'],
     queryFn: () => api.get<Stats>('/api/admin/stats'),
@@ -86,6 +89,10 @@ export function AdminScreen() {
             <h1 className="page-title">Admin</h1>
             <p className="page-sub">Users, reports, strategy health and maintenance</p>
           </div>
+          <button className="btn btn-secondary btn-sm" onClick={() => setLaunchVideo(true)}>
+            <Play size={13} />
+            Preview launch video
+          </button>
           <div className="seg" role="tablist" aria-label="Section">
             {(['users', 'reports', 'strategy', 'maintenance'] as Tab[]).map((t) => (
               <button
@@ -121,6 +128,7 @@ export function AdminScreen() {
           <MaintenancePanel key={`${s.maintenance.on}:${s.maintenance.message}`} current={s.maintenance} />
         )}
       </div>
+      {launchVideo && <LaunchVideo onDone={() => setLaunchVideo(false)} />}
     </div>
   )
 }
