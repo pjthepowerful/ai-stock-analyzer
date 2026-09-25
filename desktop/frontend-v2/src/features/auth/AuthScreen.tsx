@@ -105,10 +105,12 @@ export function AuthScreen({ ownerOnly = false, onBack }: Props = {}) {
               required
             />
           </label>
-          <label className="auth-field">
-            <span>Password</span>
+          <div className="auth-field">
+            <label htmlFor="auth-password">Password</label>
             <span className="auth-pass">
               <input
+                id="auth-password"
+                aria-describedby={signingUp ? 'auth-password-hint' : undefined}
                 className="input"
                 type={show ? 'text' : 'password'}
                 value={password}
@@ -126,8 +128,12 @@ export function AuthScreen({ ownerOnly = false, onBack }: Props = {}) {
                 {show ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
             </span>
-            {signingUp && <small className="auth-hint">At least 6 characters.</small>}
-          </label>
+            {signingUp && (
+              <small id="auth-password-hint" className="auth-hint">
+                At least 6 characters.
+              </small>
+            )}
+          </div>
 
           {error && (
             <p className="auth-error" role="alert">
