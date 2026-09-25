@@ -17,7 +17,7 @@ interface Props {
 
 export function MessageBubble({ role, content, meta, onMeta }: Props) {
   const { openPlus } = useChrome()
-  const { user } = useSession()
+  const { user, isGuest, signOut } = useSession()
 
   if (role === 'user') {
     return (
@@ -64,14 +64,33 @@ export function MessageBubble({ role, content, meta, onMeta }: Props) {
             </button>
           </div>
         )}
-        {meta?.limitReached && (
-          <div className="msg-upsell">
-            <span>You’ve hit today’s free message limit.</span>
-            <button className="btn btn-secondary btn-sm" onClick={openPlus}>
-              Go unlimited
-            </button>
-          </div>
-        )}
+        {meta?.limitReached &&
+          (isGuest ? (
+            // Guests: the next step is an account, not Plus — straight to sign-up.
+            <div className="msg-upsell">
+              <span>A free account gets you more messages today and saves your chats.</span>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  try {
+                    sessionStorage.setItem('paula-auth-mode', 'signup')
+                  } catch {
+                    /* lands on sign-in */
+                  }
+                  signOut()
+                }}
+              >
+                Create a free account
+              </button>
+            </div>
+          ) : (
+            <div className="msg-upsell">
+              <span>You’ve hit today’s free message limit.</span>
+              <button className="btn btn-secondary btn-sm" onClick={openPlus}>
+                Go unlimited
+              </button>
+            </div>
+          ))}
         <CopyButton text={content} model={meta?.model} />
       </div>
     </div>
