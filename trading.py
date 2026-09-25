@@ -4036,6 +4036,32 @@ def _named_ticker_override(msg: str):
     return {"type": "analyze", "ticker": tks[0], "market": "US", "_original_msg": msg}
 
 
+_JARGON = {
+    "RSI", "MACD", "EMA", "SMA", "VWAP", "ATR", "OBV", "ADX", "CCI", "MFI", "BB", "PE", "EPS", "PEG",
+    "ROI", "ROE", "ROA", "EBITDA", "FCF", "DCF", "IPO", "ETF", "ETFS", "CPI", "PPI", "GDP", "FOMC", "FED",
+    "YTD", "ATH", "ATL", "DCA", "CAGR", "NAV", "APY", "APR", "IV", "OTM", "ITM", "ATM", "DTE", "PDT",
+    "FOMO", "HODL", "SPAC", "REIT", "BETA", "ALPHA", "DELTA", "GAMMA", "THETA", "VEGA", "FLOAT", "SHORT",
+}
+_EDU_CUES = (
+    "what is", "what's", "whats", "what are", "what does", "what do", "explain", "define", "definition",
+    "meaning", "mean", "how does", "how do", "how is", "measure", "calculated", "formula", "teach",
+    "difference between", "tell me about", "what's a", "what is a", "understand",
+)
+
+
+def _is_jargon_question(msg: str) -> bool:
+    m = msg.lower()
+    if not any(c in m for c in _EDU_CUES):
+        return False
+    if "$" in msg or re.search(r"\b(stock|shares|ticker|company|price of|analy[sz]e|chart of)\b", m):
+        return False
+    words = re.findall(r"\b([A-Za-z]{1,6})\b", msg)
+    tickerish = [w.upper() for w in words if w.upper() in ALL_US_TICKERS and (w.isupper() or len(w) >= 3)]
+    jargon = [w.upper() for w in words if w.upper() in _JARGON and (w.isupper() or len(w) >= 4)]
+    # Every ticker-looking word is jargon, and there's at least one.
+    return bool(jargon) and all(t in _JARGON for t in tickerish)
+
+
 def route(msg: str, history: list = None) -> dict:
     # Quoted lines (the user highlighted part of a prior reply and is asking
     # ABOUT it) are context, not commands. Strip them before routing so words
@@ -4106,6 +4132,13 @@ def route(msg: str, history: list = None) -> dict:
     # data (e.g. "SpaceX IPO?" must not pull AAPL from earlier in the chat).
     if _mentions_private_company(m):
         return {"type": "chat", "private_company": True, "market": "US"}
+
+    # ── Trading jargon that doubles as a ticker ──
+    # "Explain what RSI measures" is about the indicator, not Rush Street
+    # Interactive (RSI). A how/what/explain question whose only ticker-shaped
+    # words are jargon is a plain answer. "$RSI" or "RSI stock" still analyze.
+    if _is_jargon_question(msg):
+        return {"type": "chat", "market": "US"}
 
     # ── Earnings calendar ── ("when does NVDA report earnings", "Netflix earnings date")
     if "earnings" in m and any(w in m for w in ["when", "date", "next", "report", "reporting", "calendar", "upcoming"]):

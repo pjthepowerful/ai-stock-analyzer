@@ -22,6 +22,20 @@ def test_greetings_are_chat():
         assert route(g)["type"] == "chat", g
 
 
+# ── Jargon that is also a ticker ────────────────────────────────────────────
+def test_indicator_questions_are_chat_not_a_stock():
+    # RSI is also Rush Street Interactive; asking what RSI measures is not a lookup.
+    for q in ("Explain what RSI measures in two sentences.", "what is MACD", "What does ATR mean",
+              "How is EPS calculated?", "what's the difference between EMA and SMA"):
+        assert route(q)["type"] == "chat", q
+
+
+def test_jargon_ticker_still_analyzes_when_asked_as_a_stock():
+    for q in ("analyze RSI", "$RSI", "RSI stock"):
+        assert route(q)["type"] != "chat", q
+    assert trading._is_jargon_question("explain RSI on NVDA") is False
+
+
 # ── Buy parsing ───────────────────────────────────────────────────────────────
 def test_buy_plain():
     r = route("buy NVDA")
