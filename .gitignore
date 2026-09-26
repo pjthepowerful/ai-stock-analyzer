@@ -49,4 +49,3 @@ strategy_custom.tmp
 intraday_cache/
 lab_runs/
 intraday_state.json
-intraday_crypto_state.json
