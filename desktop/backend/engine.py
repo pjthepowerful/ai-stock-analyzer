@@ -158,7 +158,16 @@ from smallcap_pullback import (
     run as run_smallcap_autopilot,
 )
 
-STRATEGY_MODES = ["core"] + list(SMALLCAP_MODES.keys())
+# Research-backed day-trading modes (intraday_modes.py), each the live twin of
+# a strategy that passed intraday_backtest.py out of sample.
+from intraday_modes import MODES as INTRADAY_MODES, mode_summary as intraday_mode_summary
+
+STRATEGY_MODES = ["core"] + list(SMALLCAP_MODES.keys()) + list(INTRADAY_MODES.keys())
+
+
+def strategy_mode_summary() -> list[dict]:
+    """Every selectable autopilot mode, for the picker."""
+    return intraday_mode_summary() + smallcap_mode_summary()
 
 print("✅ Paula engine loaded (Streamlit-free)")
 print(f"   Strategy modes available: {', '.join(STRATEGY_MODES)}")

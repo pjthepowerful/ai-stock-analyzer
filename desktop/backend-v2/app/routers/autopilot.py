@@ -149,7 +149,7 @@ def modes():
         pass
     mode_list = []
     try:
-        mode_list = engine.smallcap_mode_summary()
+        mode_list = engine.strategy_mode_summary()
     except Exception:
         pass
     return {"ok": True, "current": current, "modes": mode_list}

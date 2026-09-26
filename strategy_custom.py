@@ -14,6 +14,7 @@ them. An empty file means every mode runs exactly its shipped defaults.
 Engine hooks:
   smallcap_pullback.get_active_mode()  -> apply_smallcap()
   trading.load_autopilot_config()      -> apply_core()
+  intraday_modes.get_mode()            -> apply_intraday()
 """
 import json
 import os
@@ -129,10 +130,29 @@ _CORE_KNOBS = [
              "values above still win."},
 ]
 
-MODES = ("strict", "intense", "core")
+# Index momentum (intraday_modes.py). Ranges stay inside what was backtested:
+# leverage above 2x doubled the drawdown for little extra return.
+_MOMENTUM_KNOBS = [
+    {"key": "MAX_LEVERAGE", "group": "Risk & sizing", "label": "Most leverage", "type": "num",
+     "min": 0.5, "max": 2, "step": 0.25, "unit": "x",
+     "help": "Position size as a multiple of the account, on the calmest days. Busier days size down."},
+    {"key": "TARGET_VOL", "group": "Risk & sizing", "label": "Daily risk target", "type": "pct",
+     "min": 0.005, "max": 0.03, "step": 0.0025,
+     "help": "Sizes each day so a normal move is about this share of the account."},
+    {"key": "DAILY_LOSS_LIMIT", "group": "Risk & sizing", "label": "Daily loss limit", "type": "pct",
+     "min": 0.005, "max": 0.06, "step": 0.0025},
+    {"key": "LONG_ONLY", "group": "What it trades", "label": "Long only (no shorts)", "type": "bool",
+     "help": "Backtest: long only returned less (≈11%/yr vs ≈20%) but with a smaller worst drawdown (−6% vs −10%)."},
+    {"key": "FLATTEN_AT", "group": "Timing", "label": "Close everything at", "type": "time",
+     "min": "14:00", "max": "15:55"},
+]
+
+MODES = ("strict", "intense", "core", "momentum")
 
 
 def knobs(mode: str) -> list[dict]:
+    if mode == "momentum":
+        return list(_MOMENTUM_KNOBS)
     base = _CORE_KNOBS if mode == "core" else _SMALLCAP_KNOBS
     return [k for k in base if mode in k.get("modes", MODES)]
 
@@ -230,6 +250,8 @@ def _coerce(spec: dict, val):
 def _check_combined(mode: str, v: dict) -> None:
     """Rules that involve two knobs. Uses the mode's defaults for whichever
     side isn't customized."""
+    if mode == "momentum":
+        return
     d = defaults(mode)
     g = lambda k: v.get(k, d.get(k))  # noqa: E731
     if mode == "core":
@@ -253,6 +275,12 @@ def _check_combined(mode: str, v: dict) -> None:
 # ── Defaults (what each knob is when not customized) ─────────────────────
 
 def defaults(mode: str) -> dict:
+    if mode == "momentum":
+        import intraday_modes
+        m = intraday_modes.MODES["momentum"]
+        out = {k["key"]: m.get(k["key"]) for k in _MOMENTUM_KNOBS if k["key"] in m}
+        out["LONG_ONLY"] = m["SIDES"] == "long"
+        return out
     if mode == "core":
         import trading
         base = trading.load_autopilot_config(apply_custom=False)
@@ -319,3 +347,17 @@ def apply_core(params: dict) -> dict:
             continue
         p[k] = v
     return p
+
+
+def apply_intraday(mode: dict, key: str) -> dict:
+    """An intraday_modes mode dict with this owner's overrides applied (a copy)."""
+    o = load(key)
+    if not o:
+        return mode
+    m = dict(mode)
+    for k, v in o.items():
+        if k == "LONG_ONLY":
+            m["SIDES"] = "long" if v else "both"
+        else:
+            m[k] = v
+    return m

@@ -2,6 +2,7 @@ import {
   Bug,
   Gift,
   CalendarDays,
+  FlaskConical,
   ChartCandlestick,
   LogOut,
   Menu,
@@ -51,25 +52,28 @@ const loadAdmin = () => import('../features/admin/AdminScreen')
 const loadAnalyze = () => import('../features/analyze/AnalyzeScreen')
 const loadEarnings = () => import('../features/earnings/EarningsScreen')
 const loadPortfolio = () => import('../features/portfolio/PortfolioScreen')
+const loadLab = () => import('../features/lab/LabScreen')
 const AdminScreen = lazy(() => loadAdmin().then((m) => ({ default: m.AdminScreen })))
 const AnalyzeScreen = lazy(() => loadAnalyze().then((m) => ({ default: m.AnalyzeScreen })))
 const EarningsScreen = lazy(() => loadEarnings().then((m) => ({ default: m.EarningsScreen })))
 const PortfolioScreen = lazy(() => loadPortfolio().then((m) => ({ default: m.PortfolioScreen })))
+const LabScreen = lazy(() => loadLab().then((m) => ({ default: m.LabScreen })))
 
 // Once the first screen has painted and the browser is idle, fetch the other
 // screens' code so switching tabs never waits on a download.
-function preloadScreens(isAdmin: boolean) {
+function preloadScreens(isAdmin: boolean, canLab: boolean) {
   const run = () => {
     void loadAnalyze()
     void loadPortfolio()
     void loadEarnings()
     if (isAdmin) void loadAdmin()
+    if (canLab) void loadLab()
   }
   if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 3000 })
   else setTimeout(run, 1500)
 }
 
-type View = 'chat' | 'analyze' | 'portfolio' | 'earnings' | 'settings' | 'admin'
+type View = 'chat' | 'analyze' | 'portfolio' | 'earnings' | 'lab' | 'settings' | 'admin'
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 
@@ -80,11 +84,15 @@ const PRIMARY: { id: View; label: string; icon: LucideIcon }[] = [
   { id: 'earnings', label: 'Earnings', icon: CalendarDays },
 ]
 
+// Owner tools: only the accounts that can run autopilot see these.
+const LAB_NAV: typeof PRIMARY = [{ id: 'lab', label: 'Backtest lab', icon: FlaskConical }]
+
 const TITLES: Record<View, string> = {
   chat: 'Chat',
   analyze: 'Analyze',
   portfolio: 'Portfolio',
   earnings: 'Earnings',
+  lab: 'Backtest lab',
   settings: 'Settings',
   admin: 'Admin',
 }
@@ -122,7 +130,7 @@ export function Shell() {
     return () => clearTimeout(t)
   }, [openWhatsNew])
 
-  useEffect(() => preloadScreens(!!user?.is_admin), [user?.is_admin])
+  useEffect(() => preloadScreens(!!user?.is_admin, !!user?.can_autopilot), [user?.is_admin, user?.can_autopilot])
 
   // Tab title follows the page, like "Portfolio · Paula".
   useEffect(() => {
@@ -215,6 +223,7 @@ export function Shell() {
                   {view === 'analyze' && <AnalyzeScreen request={analyzeReq} />}
                   {view === 'portfolio' && <PortfolioScreen />}
                   {view === 'earnings' && <EarningsScreen />}
+                  {view === 'lab' && user?.can_autopilot && <LabScreen />}
                   {view === 'settings' && <SettingsScreen />}
                   {view === 'admin' && user?.is_admin && <AdminScreen />}
                 </Suspense>
@@ -304,7 +313,7 @@ function Sidebar({
       </button>
 
       <nav className="nav">
-        {PRIMARY.map(({ id, label, icon: Icon }) => (
+        {[...PRIMARY, ...(user?.can_autopilot ? LAB_NAV : [])].map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             className={'nav-item' + (view === id ? ' nav-item-on' : '')}

@@ -46,3 +46,6 @@ desktop/backend/autopilot_config.json
 # Owner strategy customizations (live on the data volume in production)
 strategy_custom.json
 strategy_custom.tmp
+intraday_cache/
+lab_runs/
+intraday_state.json

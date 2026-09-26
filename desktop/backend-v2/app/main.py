@@ -19,6 +19,7 @@ from .routers import chart as chart_router
 from .routers import chat as chat_router
 from .routers import chats as chats_router
 from .routers import earnings as earnings_router
+from .routers import lab as lab_router
 from .routers import launch as launch_router
 from .routers import market as market_router
 from .routers import overview as overview_router
@@ -96,6 +97,7 @@ app.include_router(research_router.router)
 app.include_router(admin_router.router)
 app.include_router(strategy_router.router)
 app.include_router(launch_router.router)
+app.include_router(lab_router.router)
 
 
 @app.get("/api/health")

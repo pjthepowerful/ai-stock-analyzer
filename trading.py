@@ -5628,6 +5628,10 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
         _mode = "core"
     if _mode != "core":
         try:
+            import intraday_modes
+            if _mode in intraday_modes.MODES:
+                return intraday_modes.run(_mode, dry_run=dry_run,
+                                          skip_market_check=skip_market_check)
             import smallcap_pullback
             return smallcap_pullback.run(_mode, dry_run=dry_run,
                                          skip_market_check=skip_market_check)
@@ -5635,7 +5639,7 @@ def run_autopilot(skip_market_check: bool = False, dry_run: bool = False) -> dic
             # Never silently fall through to a different strategy than the one
             # selected — trading the wrong system is worse than trading none.
             return {"ok": False, "buys": 0, "sells": 0, "mode": _mode,
-                    "log": [f"Small-cap engine ({_mode}) failed to run: {str(e)[:200]}",
+                    "log": [f"Strategy engine ({_mode}) failed to run: {str(e)[:200]}",
                             "Autopilot did NOT fall back to the core strategy — "
                             "switch modes deliberately or fix the error."]}
 

@@ -11,10 +11,14 @@ interface AutopilotMode {
   key: string
   label: string
   tagline: string
-  risk_per_trade: number
+  risk_per_trade: number | null
   max_positions: number
   daily_loss_limit: number
-  rvol_min: number
+  rvol_min: number | null
+  /** Modes that don't fit the risk/RVOL template describe themselves. */
+  stats?: string
+  /** Backtest behind the mode (intraday_backtest.py), shown on the card. */
+  evidence?: { period: string; sharpe: number; cagr_pct: number; max_dd_pct: number; oos_sharpe: number; oos_from: string }
 }
 
 interface ModesResponse {
@@ -198,9 +202,18 @@ export function AutopilotPanel() {
                 </div>
                 <p className="settings-mode-tagline">{m.tagline}</p>
                 <div className="settings-mode-stats mono">
-                  risk {(m.risk_per_trade * 100).toFixed(1)}% · max {m.max_positions} positions · daily loss limit{' '}
-                  {(m.daily_loss_limit * 100).toFixed(0)}% · RVOL ≥ {m.rvol_min}
+                  {m.stats ??
+                    `risk ${((m.risk_per_trade ?? 0) * 100).toFixed(1)}% · max ${m.max_positions} positions · daily loss limit ${(
+                      m.daily_loss_limit * 100
+                    ).toFixed(0)}% · RVOL ≥ ${m.rvol_min}`}
                 </div>
+                {m.evidence && (
+                  <div className="settings-mode-evidence">
+                    Backtest {m.evidence.period}: {m.evidence.cagr_pct.toFixed(0)}%/yr · Sharpe {m.evidence.sharpe.toFixed(2)} · worst
+                    drawdown {m.evidence.max_dd_pct.toFixed(0)}% · since {m.evidence.oos_from} (out of sample) Sharpe{' '}
+                    {m.evidence.oos_sharpe.toFixed(2)}
+                  </div>
+                )}
               </button>
             ))}
           </div>
@@ -255,11 +268,17 @@ export function AutopilotPanel() {
                 The next time autopilot runs it trades with <strong>{pending.label}</strong> instead of{' '}
                 <strong>{currentLabel}</strong>.
               </p>
-              <p>
-                {pending.label} risks {(pending.risk_per_trade * 100).toFixed(1)}% per trade, holds up to{' '}
-                {pending.max_positions} positions and stops for the day at a{' '}
-                {(pending.daily_loss_limit * 100).toFixed(0)}% loss.
-              </p>
+              {pending.risk_per_trade != null ? (
+                <p>
+                  {pending.label} risks {(pending.risk_per_trade * 100).toFixed(1)}% per trade, holds up to{' '}
+                  {pending.max_positions} positions and stops for the day at a{' '}
+                  {(pending.daily_loss_limit * 100).toFixed(0)}% loss.
+                </p>
+              ) : (
+                <p>
+                  {pending.label}: {pending.stats}. It is flat by the close every day.
+                </p>
+              )}
             </>
           )
         }
