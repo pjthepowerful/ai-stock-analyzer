@@ -39,6 +39,14 @@ interface Activity {
   shorts?: number
 }
 
+interface CryptoResponse {
+  ok: boolean
+  on: boolean
+  label: string
+  tagline: string
+  stats: string
+}
+
 interface StatusResponse {
   ok: boolean
   running: boolean
@@ -89,6 +97,26 @@ export function AutopilotPanel() {
     queryKey: ['autopilot-modes'],
     queryFn: () => api.get<ModesResponse>('/api/autopilot/modes'),
   })
+
+  const crypto = useQuery({
+    queryKey: ['autopilot-crypto'],
+    queryFn: () => api.get<CryptoResponse>('/api/autopilot/crypto'),
+  })
+  const [cryptoBusy, setCryptoBusy] = useState(false)
+
+  async function toggleCrypto() {
+    if (!crypto.data) return
+    const on = !crypto.data.on
+    setCryptoBusy(true)
+    try {
+      qc.setQueryData(['autopilot-crypto'], await api.post<CryptoResponse>('/api/autopilot/crypto', { on }))
+      toast.show(on ? 'Crypto trading on' : 'Crypto trading off')
+    } catch (e) {
+      toast.show(e instanceof ApiError ? e.message : 'Could not change crypto.')
+    } finally {
+      setCryptoBusy(false)
+    }
+  }
 
   useWebSocket((e) => {
     if (e.event === 'autopilot') void qc.invalidateQueries({ queryKey: ['autopilot-status'] })
@@ -167,7 +195,7 @@ export function AutopilotPanel() {
             <strong>{status.isLoading ? 'Checking…' : running ? 'Running' : 'Off'}</strong>
             <p className="settings-section-note">
               {running
-                ? 'Scanning every 5 minutes while the market is open, on your Alpaca paper account.'
+                ? 'Scanning every 5 minutes while the market is open (crypto around the clock), on your Alpaca paper account.'
                 : 'When on, Paula scans and places paper trades on its own, even with this tab closed.'}
             </p>
           </div>
@@ -218,6 +246,31 @@ export function AutopilotPanel() {
             ))}
           </div>
         </>
+      )}
+
+      {crypto.data && (
+        <div className="ap-crypto">
+          <div>
+            <div className="settings-mode-head">
+              <span className="settings-mode-label">{crypto.data.label}</span>
+              <span className="settings-mode-badge">24/7 · not backtested</span>
+            </div>
+            <p className="settings-mode-tagline">
+              {crypto.data.tagline} Runs alongside the strategy above whenever autopilot is on.
+            </p>
+            <div className="settings-mode-stats mono">{crypto.data.stats}</div>
+          </div>
+          <button
+            className={'strat-switch' + (crypto.data.on ? ' strat-switch-on' : '')}
+            role="switch"
+            aria-checked={crypto.data.on}
+            aria-label="Trade crypto"
+            onClick={toggleCrypto}
+            disabled={cryptoBusy}
+          >
+            <span />
+          </button>
+        </div>
       )}
 
       {modes.data && (

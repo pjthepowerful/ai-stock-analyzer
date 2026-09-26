@@ -533,3 +533,19 @@ input[type='time'].strat-input {
     justify-content: flex-start;
   }
 }
+
+.ap-crypto {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 12px 0 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.ap-crypto .strat-switch {
+  flex: none;
+  margin-top: 2px;
+}

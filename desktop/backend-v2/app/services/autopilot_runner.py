@@ -119,8 +119,95 @@ async def _notify(title: str, message: str, priority: str = "default") -> None:
 
 # ── Loop ─────────────────────────────────────────────────────────────────
 
+def _owner_creds() -> dict:
+    try:
+        if _owner_id:
+            return auth.get_user_alpaca_creds(_owner_id) or {}
+    except Exception:
+        pass
+    return {}
+
+
+async def _run_as_owner(fn):
+    """Run fn in a worker thread with the OWNER's Alpaca keys applied (none =
+    the shared account), in a fresh context so the keys can't stick to the
+    thread and leak into whatever else it runs later."""
+    c = _owner_creds()
+
+    def _run():
+        engine.set_alpaca_creds(c.get("key_id"), c.get("secret"))
+        return fn()
+
+    return await asyncio.get_running_loop().run_in_executor(None, contextvars.Context().run, _run) or {}
+
+
+async def _crypto_cycle() -> None:
+    """Crypto trades around the clock, next to whichever stock mode runs.
+    Only calls out when a half-hour decision (or the flatten) is due."""
+    import intraday_crypto
+    if not intraday_crypto.enabled() or not intraday_crypto.due():
+        return
+    try:
+        result = await _run_as_owner(intraday_crypto.run)
+    except Exception as e:
+        err = f"crypto: {str(e)[:180]}"
+        print(f"[autopilot] {err}", flush=True)
+        await _emit("error", error=err)
+        return
+    await _report(result)
+
+
+async def _report(result: dict) -> None:
+    buys, sells, shorts = (result.get(k, 0) or 0 for k in ("buys", "sells", "shorts"))
+    await _emit(
+        "cycle",
+        ok=bool(result.get("ok", True)),
+        mode=result.get("mode"),
+        scanned=result.get("scanned", 0),
+        opportunities=result.get("opportunities", 0),
+        buys=buys,
+        sells=sells,
+        shorts=shorts,
+        log=(result.get("log") or [])[-30:],
+        error=result.get("error"),
+    )
+
+    # High-conviction alerts, once per ticker per day.
+    today = date.today().isoformat()
+    for k in [k for k, v in _alerted_today.items() if v != today]:
+        _alerted_today.pop(k, None)
+    for a in result.get("alerts") or []:
+        t = a.get("ticker")
+        if t and _alerted_today.get(t) != today:
+            _alerted_today[t] = today
+            await manager.broadcast("alert", {"ticker": t, "score": a.get("score"), "rr": a.get("rr")})
+
+    if buys or sells or shorts:
+        entries = result.get("entries") or []
+        for e in entries:
+            log_trade("buy", e.get("ticker", "?"), qty=e.get("qty", 0), price=e.get("entry", 0),
+                      extra={"source": "autopilot", "stop": e.get("stop")})
+        if not entries:
+            log_trade("autopilot", "-", extra={"source": "autopilot", "buys": buys,
+                                               "sells": sells, "shorts": shorts})
+        if entries:
+            detail = " · ".join(
+                f"{e['ticker']} {e.get('qty', '')}@${e.get('entry', 0):.2f} stop ${e.get('stop', 0):.2f}"
+                for e in entries[:4]
+            )
+            title = "Bought " + ", ".join(e["ticker"] for e in entries[:3])
+        else:
+            detail = ", ".join(
+                s for s in (f"{buys} bought" if buys else "", f"{shorts} shorted" if shorts else "",
+                            f"{sells} closed" if sells else "") if s
+            )
+            title = "Paula trade"
+        await _notify(title, detail)
+
+
 async def _loop() -> None:
     while True:
+        await _crypto_cycle()
         try:
             is_open, status_msg = engine._market_is_open()
             if not is_open:
@@ -130,71 +217,7 @@ async def _loop() -> None:
                 await asyncio.sleep(CLOSED_POLL_SECONDS)
                 continue
 
-            creds = None
-            try:
-                if _owner_id:
-                    creds = auth.get_user_alpaca_creds(_owner_id)
-            except Exception:
-                creds = None
-
-            def _run():
-                # Apply the OWNER's keys (None = the shared account) — autopilot
-                # trades their account. Set on every run: a stale value from
-                # an earlier cycle must never decide which account trades.
-                c = creds or {}
-                engine.set_alpaca_creds(c.get("key_id"), c.get("secret"))
-                return engine.run_autopilot()
-
-            # A fresh context, so these creds can't stick to the worker thread
-            # and leak into whatever else that thread runs later.
-            result = await asyncio.get_running_loop().run_in_executor(
-                None, contextvars.Context().run, _run
-            ) or {}
-            buys, sells, shorts = (result.get(k, 0) or 0 for k in ("buys", "sells", "shorts"))
-            await _emit(
-                "cycle",
-                ok=bool(result.get("ok", True)),
-                mode=result.get("mode"),
-                scanned=result.get("scanned", 0),
-                opportunities=result.get("opportunities", 0),
-                buys=buys,
-                sells=sells,
-                shorts=shorts,
-                log=(result.get("log") or [])[-30:],
-                error=result.get("error"),
-            )
-
-            # High-conviction alerts, once per ticker per day.
-            today = date.today().isoformat()
-            for k in [k for k, v in _alerted_today.items() if v != today]:
-                _alerted_today.pop(k, None)
-            for a in result.get("alerts") or []:
-                t = a.get("ticker")
-                if t and _alerted_today.get(t) != today:
-                    _alerted_today[t] = today
-                    await manager.broadcast("alert", {"ticker": t, "score": a.get("score"), "rr": a.get("rr")})
-
-            if buys or sells or shorts:
-                entries = result.get("entries") or []
-                for e in entries:
-                    log_trade("buy", e.get("ticker", "?"), qty=e.get("qty", 0), price=e.get("entry", 0),
-                              extra={"source": "autopilot", "stop": e.get("stop")})
-                if not entries:
-                    log_trade("autopilot", "-", extra={"source": "autopilot", "buys": buys,
-                                                       "sells": sells, "shorts": shorts})
-                if entries:
-                    detail = " · ".join(
-                        f"{e['ticker']} {e.get('qty', '')}@${e.get('entry', 0):.2f} stop ${e.get('stop', 0):.2f}"
-                        for e in entries[:4]
-                    )
-                    title = "Bought " + ", ".join(e["ticker"] for e in entries[:3])
-                else:
-                    detail = ", ".join(
-                        s for s in (f"{buys} bought" if buys else "", f"{shorts} shorted" if shorts else "",
-                                    f"{sells} closed" if sells else "") if s
-                    )
-                    title = "Paula trade"
-                await _notify(title, detail)
+            await _report(await _run_as_owner(engine.run_autopilot))
 
         except asyncio.CancelledError:
             raise
@@ -255,7 +278,7 @@ async def start(owner: dict) -> bool:
     _task = _spawn()
     _save_state(True, _owner_id)
     await _emit("started", by=owner.get("email"))
-    await _notify("Autopilot started", "Paula is scanning for trades every 5 minutes")
+    await _notify("Autopilot started", "Paula is scanning for trades every 5 minutes (crypto around the clock)")
     return True
 
 

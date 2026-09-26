@@ -84,6 +84,43 @@ async def set_mode(req: ModeRequest, authorization: str = Header(None)):
     return {"ok": True, "mode": mode}
 
 
+# ── Crypto (runs next to the stock mode, around the clock) ──────────────
+
+class CryptoRequest(BaseModel):
+    on: bool
+
+
+@router.get("/crypto")
+def get_crypto(authorization: str = Header(None)):
+    import intraday_crypto as ic
+
+    _require_autopilot(authorization)
+    m = ic.MODE
+    return {
+        "ok": True,
+        "on": ic.enabled(),
+        "label": m["label"],
+        "tagline": m["tagline"],
+        "stats": f"{', '.join(m['SYMBOLS'])} · long only · up to {m['ALLOCATION']:.0%} of the account · "
+                 f"daily loss limit {m['DAILY_LOSS_LIMIT']:.0%}",
+    }
+
+
+@router.post("/crypto")
+async def set_crypto(req: CryptoRequest, authorization: str = Header(None)):
+    """Allowed while running. Turning it off stops new crypto entries; coins it
+    already holds keep their stop-limit and are no longer managed, so close
+    them by hand if you want out right away."""
+    user = _require_autopilot(authorization)
+    try:
+        engine.save_autopilot_config({"CRYPTO_ENABLED": bool(req.on)})
+    except Exception as e:
+        raise HTTPException(500, f"Could not save: {str(e)[:120]}")
+    print(f"[autopilot] {user.get('email')} turned crypto {'on' if req.on else 'off'}", flush=True)
+    await manager.broadcast("autopilot", {"kind": "settings_changed", "running": runner.is_running()})
+    return get_crypto(authorization)
+
+
 # ── Custom strategy settings ────────────────────────────────────────────
 
 def _custom_view(mode: str) -> dict:
