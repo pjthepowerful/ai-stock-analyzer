@@ -1,33 +1,29 @@
 """
-Crypto trend trading for Paula's autopilot: a 24/7 breakout system across every
-non-stablecoin token Alpaca lists, running alongside whichever stock mode is on.
+Crypto day trading for Paula's autopilot: the index-momentum rules from
+intraday_modes.py ("noise area" breakout + VWAP trail) applied to BTC and ETH.
 
-    Entry  (checked on the hour):   last 5-min close > highest high of the prior 72 hours
-    Exit   (checked every 15 min):  last 5-min close < lowest low of the prior 24 hours
+It runs alongside whichever stock mode is selected, around the clock, because
+crypto never closes. Differences from the QQQ mode, all forced by the market:
 
-Positions carry across days — crypto never closes, so there's no end-of-day
-flatten. Long only, no leverage (Alpaca crypto can't be shorted or margined).
-Each token gets an equal slice of ALLOCATION of the account.
+  • the "day" is the UTC day: its 00:00 bar is the open, and positions are
+    flattened at FLATTEN_AT UTC so nothing carries into the next day's band
+  • long only, no leverage (Alpaca crypto can't be shorted or bought on margin)
+  • at most ALLOCATION of the account in crypto, split evenly across symbols,
+    sized down on volatile days (TARGET_VOL / recent daily volatility)
+  • its own daily loss limit, counted on crypto P&L only
+  • the disaster stop is a stop-limit (Alpaca crypto has no plain stop orders)
 
-Why these rules (scratch backtest, 5-min Alpaca bars, 32 tokens, Mar–Sep 2026,
-0.25% fee + 0.05% slippage per side, rules picked on the first 90 days):
-  • the earlier UTC-day "noise area" port lost 38–97% after fees; faster checks lost more
-  • this system: first 90 days −4.1% (max drawdown −6.5%) while buy-and-hold lost 19.3%;
-    last 90 days (untouched) +15.2% (max drawdown −6.5%) while buy-and-hold made 69.2%
-  • checking entries every 5 min instead of hourly doubled the trades and the drawdown
-So it's a trend filter: it sidesteps most of a falling market and lags a rising one.
-Research: crypto time-series momentum is well documented; cross-sectional is weak.
+NOT backtested: the owner asked for it live on the paper account before a
+backtest. Treat its results as the experiment.
 
-A GTC stop-limit sits CATASTROPHE_STOP below each entry so an outage can't
-leave a position unbounded; the 24h-low exit is the real one.
-
-State (which coins this mode bought) lives in intraday_crypto_state.json.
+State lives in intraday_crypto_state.json next to the database.
 """
 from __future__ import annotations
 
 import json
 import os
 import pathlib
+import statistics
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -39,23 +35,20 @@ _STATE_DIR = pathlib.Path(os.environ.get("DB_DIR", str(_HERE / "desktop" / "back
 STATE_FILE = _STATE_DIR / "intraday_crypto_state.json"
 _BARS_URL = "https://data.alpaca.markets/v1beta3/crypto/us/bars"
 
-# Stablecoins and gold don't trend; they'd only pay fees.
-_EXCLUDE = {"USDT/USD", "USDC/USD", "USDG/USD", "PAXG/USD", "DAI/USD"}
-
 MODE = {
     "key": "crypto",
-    "label": "Crypto trend",
-    "tagline": "Buys any listed token that breaks its 72-hour high; sells when it breaks its 24-hour low. 24/7.",
-    "ENTRY_HOURS": 72,
-    "EXIT_HOURS": 24,
-    "ENTRY_EVERY": 60,           # minutes
-    "EXIT_EVERY": 15,            # minutes
-    "ALLOCATION": 0.25,          # most of the account in crypto, split evenly per token
-    "CATASTROPHE_STOP": 0.15,    # resting stop-limit this far under entry
-    "STOP_LIMIT_SLIP": 0.02,
-    "MIN_NOTIONAL": 10.0,
-    "EVIDENCE": {"period": "Mar–Sep 2026", "first_half_pct": -4.1, "second_half_pct": 15.2,
-                 "max_dd_pct": -6.5, "buy_hold_first_pct": -19.3, "buy_hold_second_pct": 69.2},
+    "label": "Crypto momentum",
+    "tagline": "Buys BTC/ETH when they break above their normal daily range; trails VWAP; flat by 23:50 UTC.",
+    "SYMBOLS": ["BTC/USD", "ETH/USD"],
+    "LOOKBACK": 14,
+    "BAND_MULT": 1.0,
+    "TARGET_VOL": 0.03,          # crypto's calm-day daily vol; busier days size down
+    "ALLOCATION": 0.25,          # most of the account in crypto at once
+    "CHECK_EVERY": 30,
+    "FLATTEN_AT": "23:50",       # UTC
+    "DAILY_LOSS_LIMIT": 0.01,    # of account equity, crypto P&L only
+    "STOP_LIMIT_SLIP": 0.01,     # stop-limit's limit sits this far past the stop
+    "EVIDENCE": None,
 }
 
 
@@ -78,12 +71,13 @@ def _pos_symbol(sym: str) -> str:
 # ── State ────────────────────────────────────────────────────────────────
 
 def _load_state() -> dict:
+    today = datetime.now(UTC).date().isoformat()
     try:
         st = json.loads(STATE_FILE.read_text())
     except Exception:
         st = {}
-    st.setdefault("positions", {})
-    st.setdefault("last_slot", None)
+    if st.get("day") != today:
+        st = {"day": today, "slots": [], "positions": {}, "realized": 0.0, "halted": False}
     return st
 
 
@@ -91,77 +85,88 @@ def _save_state(st: dict) -> None:
     if st.get("_dry"):
         return
     try:
-        STATE_FILE.write_text(json.dumps({k: v for k, v in st.items() if not k.startswith("_")}, default=str))
+        STATE_FILE.write_text(json.dumps(st, default=str))
     except Exception as e:
         print(f"[crypto] could not save state: {e}", flush=True)
 
 
-def _slot(now: datetime) -> str:
-    m = now.minute - now.minute % MODE["EXIT_EVERY"]
-    return now.replace(minute=m, second=0, microsecond=0).isoformat()
-
-
-def due(now: datetime | None = None) -> bool:
-    """Cheap check (no API calls): has a new 15-minute slot started?"""
-    return _load_state().get("last_slot") != _slot(now or datetime.now(UTC))
-
-
 # ── Market data ──────────────────────────────────────────────────────────
 
-_universe_cache: dict = {"at": 0.0, "symbols": []}
+_hist_cache: dict = {}
 
 
-def universe() -> list[str]:
-    """Every tradable USD crypto pair on Alpaca, minus stablecoins. Refreshed daily."""
-    if time.time() - _universe_cache["at"] < 86400 and _universe_cache["symbols"]:
-        return _universe_cache["symbols"]
-    t = _t()
-    r = requests.get(f"{t.ALPACA_BASE}/v2/assets", headers=t._alpaca_headers(),
-                     params={"asset_class": "crypto", "status": "active"}, timeout=15)
-    r.raise_for_status()
-    syms = sorted(a["symbol"] for a in r.json()
-                  if a.get("tradable") and a["symbol"].endswith("/USD") and a["symbol"] not in _EXCLUDE)
-    _universe_cache.update(at=time.time(), symbols=syms)
-    return syms
-
-
-def _bars(symbols: list[str], start: datetime) -> dict[str, list]:
-    """5-min bars for many symbols at once: {sym: [[ts, o, h, l, c, v], ...]}."""
+def _bars(sym: str, start: datetime, end: datetime | None = None) -> list:
     h = _t()._alpaca_headers()
     h.pop("Content-Type", None)
-    params = {"symbols": ",".join(symbols), "timeframe": "5Min",
-              "start": start.isoformat().replace("+00:00", "Z"), "limit": 10000, "sort": "asc"}
-    out: dict[str, list] = {}
-    for _ in range(20):
-        r = requests.get(_BARS_URL, headers=h, params=params, timeout=30)
+    params = {"symbols": sym, "timeframe": "1Min", "start": start.isoformat().replace("+00:00", "Z"),
+              "limit": 10000, "sort": "asc"}
+    if end:
+        params["end"] = end.isoformat().replace("+00:00", "Z")
+    out, token = [], None
+    for _ in range(10):
+        if token:
+            params["page_token"] = token
+        r = requests.get(_BARS_URL, headers=h, params=params, timeout=20)
         r.raise_for_status()
         j = r.json()
-        for sym, bs in (j.get("bars") or {}).items():
-            out.setdefault(sym, []).extend(
-                [int(datetime.fromisoformat(b["t"].replace("Z", "+00:00")).timestamp()),
-                 b["o"], b["h"], b["l"], b["c"], b["v"]] for b in bs)
-        if not j.get("next_page_token"):
+        for b in (j.get("bars") or {}).get(sym) or []:
+            out.append([int(datetime.fromisoformat(b["t"].replace("Z", "+00:00")).timestamp()),
+                        b["o"], b["h"], b["l"], b["c"], b["v"], b.get("vw", b["c"])])
+        token = j.get("next_page_token")
+        if not token:
             break
-        params["page_token"] = j["next_page_token"]
     return out
 
 
-def levels(bars: list, now_ts: int) -> dict | None:
-    """Breakout levels from CLOSED 5-min bars: the last close, the prior-72h
-    high and prior-24h low (both excluding that last bar)."""
-    closed = [b for b in bars if b[0] + 300 <= now_ts]
-    if len(closed) < 2:
-        return None
-    last = closed[-1]
-    prior = closed[:-1]
-    hi_from = last[0] - MODE["ENTRY_HOURS"] * 3600
-    lo_from = last[0] - MODE["EXIT_HOURS"] * 3600
-    hi_bars = [b for b in prior if b[0] >= hi_from]
-    lo_bars = [b for b in prior if b[0] >= lo_from]
-    # Need most of the window, or a thin/new listing looks like a breakout.
-    if len(hi_bars) < MODE["ENTRY_HOURS"] * 12 * 0.6 or not lo_bars:
-        return None
-    return {"px": last[4], "high": max(b[2] for b in hi_bars), "low": min(b[3] for b in lo_bars)}
+def _minute(ts: int) -> int:
+    d = datetime.fromtimestamp(ts, UTC)
+    return d.hour * 60 + d.minute
+
+
+def _history(sym: str, lookback: int) -> tuple[list[dict], list[float]]:
+    """Per-minute |move from the UTC open| for the last `lookback` UTC days,
+    and those days' closes. Cached for the day."""
+    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    key = (sym, today.date().isoformat(), lookback)
+    if key in _hist_cache:
+        return _hist_cache[key]
+    bars = _bars(sym, today - timedelta(days=lookback + 1), today)
+    days: dict[str, list] = {}
+    for b in bars:
+        days.setdefault(datetime.fromtimestamp(b[0], UTC).date().isoformat(), []).append(b)
+    full = [d for d in sorted(days) if len(days[d]) >= 1000][-(lookback + 1):]
+    moves = []
+    for d in full[-lookback:]:
+        o = days[d][0][1]
+        mv, last = {}, 0.0
+        by_min = {_minute(b[0]): abs(b[4] / o - 1) for b in days[d]}
+        for m in range(1440):          # carry the last move over minutes with no trade
+            last = by_min.get(m, last)
+            mv[m] = last
+        moves.append(mv)
+    closes = [days[d][-1][4] for d in full]
+    _hist_cache.clear()
+    _hist_cache[key] = (moves, closes)
+    return moves, closes
+
+
+def noise_levels(mode: dict, today_open: float, minute_index: int,
+                 moves: list[dict], closes: list[float]) -> dict:
+    sig = [m[minute_index] for m in moves if minute_index in m]
+    sigma = (sum(sig) / len(sig)) * mode["BAND_MULT"] if sig else None
+    rets = [closes[i] / closes[i - 1] - 1 for i in range(1, len(closes))]
+    dvol = statistics.pstdev(rets) if len(rets) > 2 else 0.04
+    scale = min(1.0, mode["TARGET_VOL"] / dvol) if dvol else 1.0
+    if sigma is None:
+        return {"sigma": None, "scale": scale}
+    prev_close = closes[-1] if closes else today_open
+    return {
+        "sigma": sigma,
+        "upper": max(today_open, prev_close) * (1 + sigma),
+        "lower": min(today_open, prev_close) * (1 - sigma),
+        "scale": scale,
+        "dvol": dvol,
+    }
 
 
 # ── Orders ───────────────────────────────────────────────────────────────
@@ -195,7 +200,7 @@ def _cancel_orders(sym: str) -> None:
     t = _t()
     try:
         r = requests.get(f"{t.ALPACA_BASE}/v2/orders", headers=t._alpaca_headers(),
-                         params={"status": "open", "limit": 500}, timeout=10)
+                         params={"status": "open", "limit": 200}, timeout=10)
         for o in (r.json() if r.ok else []):
             if o.get("symbol") in (sym, _pos_symbol(sym)):
                 requests.delete(f"{t.ALPACA_BASE}/v2/orders/{o['id']}", headers=t._alpaca_headers(), timeout=10)
@@ -215,9 +220,9 @@ def _close(sym: str) -> dict:
         return {"ok": False, "error": str(e)[:160]}
 
 
-def _open(sym: str, notional: float, px: float) -> dict:
-    """Market buy by dollar amount, then a GTC catastrophe stop-limit on what
-    actually filled (Alpaca takes its fee in the coin, so the fill is a bit under)."""
+def _open(mode: dict, sym: str, notional: float, disaster_stop: float) -> dict:
+    """Market buy by dollar amount, then a GTC stop-limit on what actually
+    filled (Alpaca takes its fee in the coin, so the fill is a bit under)."""
     res = _order({"symbol": sym, "notional": f"{notional:.2f}", "side": "buy",
                   "type": "market", "time_in_force": "gtc"})
     if not res["ok"]:
@@ -232,38 +237,46 @@ def _open(sym: str, notional: float, px: float) -> dict:
                 break
         except Exception:
             pass
-    stop = px * (1 - MODE["CATASTROPHE_STOP"])
-    res["stop"] = stop
     res["stop_ok"] = False
     if qty:
-        s = _order({"symbol": sym, "qty": str(qty), "side": "sell", "type": "stop_limit",
-                    "stop_price": _fmt_price(stop), "limit_price": _fmt_price(stop * (1 - MODE["STOP_LIMIT_SLIP"])),
-                    "time_in_force": "gtc"})
-        res["stop_ok"] = s["ok"]
-        res["stop_error"] = s.get("error")
+        stop = _order({"symbol": sym, "qty": str(qty), "side": "sell", "type": "stop_limit",
+                       "stop_price": f"{disaster_stop:.2f}",
+                       "limit_price": f"{disaster_stop * (1 - mode['STOP_LIMIT_SLIP']):.2f}",
+                       "time_in_force": "gtc"})
+        res["stop_ok"] = stop["ok"]
+        res["stop_error"] = stop.get("error")
     return res
-
-
-def _fmt_price(p: float) -> str:
-    # Sub-cent tokens (PEPE, SHIB, BONK) need more than 2 decimals.
-    return f"{p:.2f}" if p >= 1 else f"{p:.8f}".rstrip("0")
-
-
-def _fmt_px(p: float) -> str:
-    return f"${p:,.2f}" if p >= 1 else f"${p:.8f}".rstrip("0")
 
 
 # ── The cycle ────────────────────────────────────────────────────────────
 
+def _slot(mode: dict, now: datetime) -> int:
+    mins = now.hour * 60 + now.minute
+    return mins - mins % mode["CHECK_EVERY"]
+
+
+def due(now: datetime | None = None) -> bool:
+    """Cheap check (no API calls): is a half-hour decision or the flatten due?"""
+    mode = MODE
+    now = now or datetime.now(UTC)
+    st = _load_state()
+    fh, fm = map(int, mode["FLATTEN_AT"].split(":"))
+    if (now.hour, now.minute) >= (fh, fm):
+        return bool(st.get("positions"))
+    s = _slot(mode, now)
+    return s >= 30 and s not in st["slots"]
+
+
 def run(dry_run: bool = False) -> dict:
     t = _t()
+    mode = MODE
+    log = [f"**{mode['label']}** — {mode['tagline']}"]
+    out = {"ok": True, "log": log, "buys": 0, "sells": 0, "shorts": 0, "mode": "crypto",
+           "scanned": len(mode["SYMBOLS"]), "entries": []}
     now = datetime.now(UTC)
     st = _load_state()
     if dry_run:
         st["_dry"] = True
-    entries_due = now.minute < MODE["EXIT_EVERY"]     # the slot that starts on the hour
-    log = [f"**{MODE['label']}** — {'entries + exits' if entries_due else 'exit check'}"]
-    out = {"ok": True, "log": log, "buys": 0, "sells": 0, "shorts": 0, "mode": "crypto", "entries": []}
 
     account = t.alpaca_account()
     if not account:
@@ -271,77 +284,98 @@ def run(dry_run: bool = False) -> dict:
     equity = float(account["equity"])
     try:
         held = _positions()
-        syms = universe()
     except Exception as e:
-        return {**out, "ok": False, "log": log + [f"Alpaca unavailable: {str(e)[:120]}"]}
+        return {**out, "ok": False, "log": log + [f"Positions unavailable: {str(e)[:120]}"]}
 
-    mine = st["positions"]
+    mine = st.setdefault("positions", {})
     for sym in list(mine):
         if sym not in held:
-            log.append(f"{sym} position is gone (catastrophe stop filled or closed by hand).")
+            log.append(f"{sym} position is gone (stop filled or closed by hand).")
             mine.pop(sym)
 
-    check = sorted(set(mine) | (set(syms) if entries_due else set()))
-    out["scanned"] = len(check)
-    if not check:
-        st["last_slot"] = _slot(now)
-        _save_state(st)
-        log.append("Nothing held; next entry check on the hour.")
-        return out
-    try:
-        bars = _bars(check, now - timedelta(hours=MODE["ENTRY_HOURS"] + 1))
-    except Exception as e:
-        return {**out, "ok": False, "log": log + [f"Market data unavailable: {str(e)[:120]}"]}
-    st["last_slot"] = _slot(now)
-
-    # Exits first.
-    for sym in list(mine):
-        lv = levels(bars.get(sym) or [], int(now.timestamp()))
-        if not lv or lv["px"] >= lv["low"]:
-            continue
-        pl = float(held[sym].get("unrealized_pl", 0) or 0)
+    def close(sym: str, why: str) -> None:
+        p = held.get(sym) or {}
         if not dry_run:
             res = _close(sym)
             if not res["ok"]:
-                log.append(f"⚠️ Could not sell {sym}: {res['error']}")
-                continue
-        mine.pop(sym)
+                log.append(f"⚠️ Could not close {sym}: {res['error']}")
+                return
+        st["realized"] = st.get("realized", 0.0) + float(p.get("unrealized_pl", 0) or 0)
+        mine.pop(sym, None)
         out["sells"] += 1
-        log.append(f"📤 **Sold {sym}** @ ~{_fmt_px(lv['px'])} — broke its 24-hour low {_fmt_px(lv['low'])} "
-                   f"({'+' if pl >= 0 else '−'}${abs(pl):,.2f}).")
+        log.append(f"📤 **Sold {sym}** — {why}")
 
-    if entries_due:
-        slice_ = equity * MODE["ALLOCATION"] / max(1, len(syms))
-        cash = float(account.get("non_marginable_buying_power", 0) or 0)
-        breakouts = []
-        for sym in syms:
-            if sym in mine or sym in held:
-                continue
-            lv = levels(bars.get(sym) or [], int(now.timestamp()))
-            if lv and lv["px"] > lv["high"]:
-                breakouts.append((lv["px"] / lv["high"] - 1, sym, lv))
-        for _, sym, lv in sorted(breakouts, reverse=True):
-            notional = min(slice_, cash * 0.95)
-            if notional < MODE["MIN_NOTIONAL"]:
+    # ── Flat by the end of the UTC day ───────────────────────────────────
+    fh, fm = map(int, mode["FLATTEN_AT"].split(":"))
+    if (now.hour, now.minute) >= (fh, fm):
+        for sym in list(mine):
+            close(sym, f"{mode['FLATTEN_AT']} UTC rail; never holds into the next day.")
+        if not mine:
+            log.append("Flat for the day.")
+        _save_state(st)
+        return out
+
+    # ── Crypto-only daily loss limit ─────────────────────────────────────
+    open_pl = sum(float(held[s].get("unrealized_pl", 0) or 0) for s in mine if s in held)
+    day_pl = st.get("realized", 0.0) + open_pl
+    if equity and day_pl / equity <= -mode["DAILY_LOSS_LIMIT"] and not st.get("halted"):
+        st["halted"] = True
+        for sym in list(mine):
+            close(sym, "crypto daily loss limit hit.")
+        log.append(f"🛑 **Crypto loss limit hit** (${day_pl:,.0f}). Done until 00:00 UTC.")
+
+    slot = _slot(mode, now)
+    if slot < 30 or (slot in st["slots"] and not dry_run):
+        _save_state(st)
+        return out
+    st["slots"].append(slot)
+    out["decided"] = True
+
+    per_symbol = equity * mode["ALLOCATION"] / len(mode["SYMBOLS"])
+    today0 = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    for sym in mode["SYMBOLS"]:
+        try:
+            bars = _bars(sym, today0)
+            moves, closes = _history(sym, mode["LOOKBACK"])
+        except Exception as e:
+            log.append(f"{sym}: market data unavailable ({str(e)[:100]})")
+            continue
+        decision = [b for b in bars if _minute(b[0]) < slot]
+        if len(decision) < 20 or len(moves) < mode["LOOKBACK"] // 2:
+            log.append(f"{sym}: not enough bars yet to judge today's range.")
+            continue
+        today_open = bars[0][1]
+        px = decision[-1][4]
+        lv = noise_levels(mode, today_open, slot - 1, moves, closes)
+        if lv["sigma"] is None:
+            continue
+        pv = sum(b[6] * b[5] for b in decision)
+        vv = sum(b[5] for b in decision)
+        vwap = pv / vv if vv else px
+        log.append(f"{sym} ${px:,.2f} · range ${lv['lower']:,.2f}–${lv['upper']:,.2f} · VWAP ${vwap:,.2f}")
+
+        if sym in mine and px < max(lv["upper"], vwap):
+            close(sym, "back inside its range / below VWAP.")
+        elif sym not in mine and sym in held:
+            log.append(f"ℹ️ {sym} is held but wasn't bought by this mode — leaving it alone.")
+        elif sym not in mine and not st.get("halted") and px > lv["upper"]:
+            cash = float(account.get("non_marginable_buying_power", equity) or 0)
+            notional = min(per_symbol * lv["scale"], cash * 0.95)
+            if notional < 10:
                 log.append(f"{sym}: broke out but only ${cash:,.0f} cash free — skipped.")
                 continue
-            res = {"ok": True, "stop_ok": True, "stop": lv["px"] * (1 - MODE["CATASTROPHE_STOP"])} \
-                if dry_run else _open(sym, notional, lv["px"])
+            res = {"ok": True, "stop_ok": True} if dry_run else _open(mode, sym, notional, lv["lower"])
             if res["ok"]:
-                cash -= notional
-                mine[sym] = {"notional": round(notional, 2), "entry": lv["px"], "at": now.isoformat()}
+                mine[sym] = {"notional": round(notional, 2), "entry": px, "at": now.isoformat()}
                 out["buys"] += 1
-                out["entries"].append({"ticker": sym, "qty": notional / lv["px"], "entry": lv["px"],
-                                       "stop": res["stop"]})
-                log.append(f"📥 **Bought ${notional:,.0f} of {sym}** @ ~{_fmt_px(lv['px'])} — above its "
-                           f"72-hour high {_fmt_px(lv['high'])}."
-                           + ("" if res.get("stop_ok") else f" ⚠️ Safety stop not placed: {res.get('stop_error')}"))
+                out["entries"].append({"ticker": sym, "qty": round(notional / px, 6), "entry": px,
+                                       "stop": lv["lower"]})
+                log.append(f"📥 **Bought ${notional:,.0f} of {sym}** @ ~${px:,.2f} ({lv['scale']:.2f}x size) — "
+                           f"broke above its normal range. Disaster stop ${lv['lower']:,.2f}."
+                           + ("" if res.get("stop_ok") else f" ⚠️ Stop not placed: {res.get('stop_error')}"))
             else:
                 log.append(f"⚠️ {sym} order rejected: {res.get('error')}")
-        if not breakouts:
-            log.append(f"No breakouts across {len(syms)} tokens.")
-
-    if mine:
-        log.append("Holding " + ", ".join(sorted(mine)) + ".")
+        elif sym not in mine:
+            log.append(f"{sym}: inside its normal range — no trade.")
     _save_state(st)
     return out

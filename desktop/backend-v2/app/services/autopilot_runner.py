@@ -143,7 +143,7 @@ async def _run_as_owner(fn):
 
 async def _crypto_cycle() -> None:
     """Crypto trades around the clock, next to whichever stock mode runs.
-    Only calls out when a new 15-minute slot has started."""
+    Only calls out when a half-hour decision (or the flatten) is due."""
     import intraday_crypto
     if not intraday_crypto.enabled() or not intraday_crypto.due():
         return
@@ -192,7 +192,7 @@ async def _report(result: dict) -> None:
                                                "sells": sells, "shorts": shorts})
         if entries:
             detail = " · ".join(
-                f"{e['ticker']} {e.get('qty', 0):.6g}@${e.get('entry', 0):.6g} stop ${e.get('stop', 0):.6g}"
+                f"{e['ticker']} {e.get('qty', '')}@${e.get('entry', 0):.2f} stop ${e.get('stop', 0):.2f}"
                 for e in entries[:4]
             )
             title = "Bought " + ", ".join(e["ticker"] for e in entries[:3])

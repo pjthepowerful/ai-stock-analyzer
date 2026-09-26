@@ -96,22 +96,13 @@ def get_crypto(authorization: str = Header(None)):
 
     _require_autopilot(authorization)
     m = ic.MODE
-    try:
-        n = len(ic.universe())
-    except Exception:
-        n = None
-    e = m["EVIDENCE"]
     return {
         "ok": True,
         "on": ic.enabled(),
         "label": m["label"],
         "tagline": m["tagline"],
-        "stats": f"{n or 'all'} tokens · long only · up to {m['ALLOCATION']:.0%} of the account · "
-                 f"entries hourly, exits every {m['EXIT_EVERY']} min",
-        "evidence": f"Backtest {e['period']}: falling half {e['first_half_pct']:+.1f}% (holding "
-                    f"{e['buy_hold_first_pct']:+.1f}%), rising half {e['second_half_pct']:+.1f}% (holding "
-                    f"{e['buy_hold_second_pct']:+.1f}%), worst drawdown {e['max_dd_pct']:.1f}%. "
-                    "Cuts losses in downtrends, lags uptrends.",
+        "stats": f"{', '.join(m['SYMBOLS'])} · long only · up to {m['ALLOCATION']:.0%} of the account · "
+                 f"daily loss limit {m['DAILY_LOSS_LIMIT']:.0%}",
     }
 
 

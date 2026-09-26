@@ -45,7 +45,6 @@ interface CryptoResponse {
   label: string
   tagline: string
   stats: string
-  evidence?: string
 }
 
 interface StatusResponse {
@@ -254,13 +253,12 @@ export function AutopilotPanel() {
           <div>
             <div className="settings-mode-head">
               <span className="settings-mode-label">{crypto.data.label}</span>
-              <span className="settings-mode-badge">24/7</span>
+              <span className="settings-mode-badge">24/7 · not backtested</span>
             </div>
             <p className="settings-mode-tagline">
               {crypto.data.tagline} Runs alongside the strategy above whenever autopilot is on.
             </p>
             <div className="settings-mode-stats mono">{crypto.data.stats}</div>
-            {crypto.data.evidence && <div className="settings-mode-evidence">{crypto.data.evidence}</div>}
           </div>
           <button
             className={'strat-switch' + (crypto.data.on ? ' strat-switch-on' : '')}
