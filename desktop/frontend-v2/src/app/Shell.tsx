@@ -61,13 +61,15 @@ const LabScreen = lazy(() => loadLab().then((m) => ({ default: m.LabScreen })))
 
 // Once the first screen has painted and the browser is idle, fetch the other
 // screens' code so switching tabs never waits on a download.
-function preloadScreens(isAdmin: boolean, canLab: boolean) {
+function preloadScreens(isAdmin: boolean) {
   const run = () => {
     void loadAnalyze()
     void loadPortfolio()
     void loadEarnings()
-    if (isAdmin) void loadAdmin()
-    if (canLab) void loadLab()
+    if (isAdmin) {
+      void loadAdmin()
+      void loadLab()
+    }
   }
   if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 3000 })
   else setTimeout(run, 1500)
@@ -84,7 +86,7 @@ const PRIMARY: { id: View; label: string; icon: LucideIcon }[] = [
   { id: 'earnings', label: 'Earnings', icon: CalendarDays },
 ]
 
-// Owner tools: only the accounts that can run autopilot see these.
+// Admin-only tools.
 const LAB_NAV: typeof PRIMARY = [{ id: 'lab', label: 'Backtest lab', icon: FlaskConical }]
 
 const TITLES: Record<View, string> = {
@@ -130,7 +132,7 @@ export function Shell() {
     return () => clearTimeout(t)
   }, [openWhatsNew])
 
-  useEffect(() => preloadScreens(!!user?.is_admin, !!user?.can_autopilot), [user?.is_admin, user?.can_autopilot])
+  useEffect(() => preloadScreens(!!user?.is_admin), [user?.is_admin])
 
   // Tab title follows the page, like "Portfolio · Paula".
   useEffect(() => {
@@ -223,7 +225,7 @@ export function Shell() {
                   {view === 'analyze' && <AnalyzeScreen request={analyzeReq} />}
                   {view === 'portfolio' && <PortfolioScreen />}
                   {view === 'earnings' && <EarningsScreen />}
-                  {view === 'lab' && user?.can_autopilot && <LabScreen />}
+                  {view === 'lab' && user?.is_admin && <LabScreen />}
                   {view === 'settings' && <SettingsScreen />}
                   {view === 'admin' && user?.is_admin && <AdminScreen />}
                 </Suspense>
@@ -313,7 +315,7 @@ function Sidebar({
       </button>
 
       <nav className="nav">
-        {[...PRIMARY, ...(user?.can_autopilot ? LAB_NAV : [])].map(({ id, label, icon: Icon }) => (
+        {[...PRIMARY, ...(user?.is_admin ? LAB_NAV : [])].map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             className={'nav-item' + (view === id ? ' nav-item-on' : '')}

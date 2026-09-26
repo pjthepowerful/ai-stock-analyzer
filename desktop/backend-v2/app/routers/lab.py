@@ -4,7 +4,7 @@ Backtest Lab: replay a day-trading strategy on historical 1-minute bars
 
 Runs are background jobs — one at a time, because they share the Alpaca data
 rate limit — and each finished run is saved under DB_DIR/lab_runs so the list
-survives restarts. Limited to the accounts allowed to run autopilot: runs use
+survives restarts. Admin only: runs use
 the owner's market-data keys, and nothing here places an order.
 """
 import asyncio
@@ -19,7 +19,7 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from ..bridge import auth
-from ..deps import can_autopilot, current_user_required
+from ..deps import current_user_required, is_admin
 
 router = APIRouter(prefix="/api/lab", tags=["lab"])
 
@@ -34,8 +34,8 @@ _job: dict = {"id": None, "status": "idle", "progress": None, "error": None, "re
 
 def _require(authorization: Optional[str]) -> dict:
     user = current_user_required(authorization)
-    if not can_autopilot(user):
-        raise HTTPException(403, "The backtest lab is limited to autopilot accounts")
+    if not is_admin(user):
+        raise HTTPException(403, "The backtest lab is admin only")
     return user
 
 
