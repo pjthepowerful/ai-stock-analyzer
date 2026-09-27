@@ -263,6 +263,114 @@
   white-space: nowrap;
 }
 
+/* ── Trade plan (entry / stop / targets) ── */
+.plan {
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.plan-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.plan-level {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.plan-label {
+  font-size: var(--text-2xs);
+  color: var(--text-dim);
+}
+
+.plan-value {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-sub {
+  font-size: var(--text-2xs);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-pos {
+  color: var(--positive);
+}
+
+.plan-neg {
+  color: var(--negative);
+}
+
+.plan-bar {
+  display: flex;
+  height: 4px;
+  margin: var(--space-2) 0;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  gap: 2px;
+}
+
+.plan-bar-risk {
+  background: var(--negative);
+  opacity: 0.7;
+}
+
+.plan-bar-reward {
+  flex: 1;
+  background: var(--positive);
+  opacity: 0.7;
+}
+
+.plan-meta,
+.plan-warn,
+.plan-note {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+.plan-warn {
+  color: var(--warning);
+}
+
+.plan-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-inline b {
+  font-weight: 600;
+}
+
+.plan-side {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.plan-gap {
+  color: var(--warning);
+}
+
+@media (max-width: 520px) {
+  .plan-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 900px) {
   .ideas {
     grid-template-columns: minmax(0, 1fr);

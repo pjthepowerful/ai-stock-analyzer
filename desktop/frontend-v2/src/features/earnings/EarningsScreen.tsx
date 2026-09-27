@@ -6,6 +6,7 @@ import { useSession } from '../../lib/auth'
 import { useChrome } from '../../lib/chrome'
 import { useWebSocket } from '../../lib/ws'
 import { IdeasPanel } from './IdeasPanel'
+import { type Plan, TradePlanInline } from './TradePlan'
 import './earnings.css'
 import { SignUpGate } from '../../components/SignUpGate'
 
@@ -30,6 +31,7 @@ interface MonthResponse {
 interface DayStock extends CalRow {
   verdict: 'candidate' | 'watch' | 'blocked' | 'fade' | 'skip' | 'stale' | string
   reason: string
+  plan?: Plan
 }
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
@@ -292,6 +294,7 @@ export function EarningsScreen() {
                             <td>
                               <span className={'badge ' + verdictBadge(st.verdict)}>{st.verdict}</span>
                               <span className="earn-reason">{st.reason}</span>
+                              <TradePlanInline plan={st.plan} />
                             </td>
                           </tr>
                         ))}

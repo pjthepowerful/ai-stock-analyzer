@@ -56,6 +56,7 @@ def calendar_day(date: str, authorization: str = Header(None)):
     try:
         import earnings as earn
         import smallcap_pullback as scp
+        import trade_plan as tp
 
         mode_key = read_strategy_mode()
         mode = scp.get_active_mode(mode_key) if mode_key in ("strict", "intense") else None
@@ -70,7 +71,12 @@ def calendar_day(date: str, authorization: str = Header(None)):
 
         # One verdict per name, each a few network calls — run them
         # concurrently instead of one after another.
-        verdicts = pmap(lambda r: {**r, **earn.verdict(r["ticker"], mode)}, rows[:40])
+        def scored(r):
+            v = {**r, **earn.verdict(r["ticker"], mode)}
+            v["plan"] = tp.plan(v["ticker"], tp.side_for(v.get("verdict")), next_report=v.get("next"))
+            return v
+
+        verdicts = pmap(scored, rows[:40])
         out = list(verdicts)
         order = {"candidate": 0, "watch": 1, "blocked": 2, "fade": 3, "skip": 4, "stale": 5}
         out.sort(key=lambda x: (order.get(x.get("verdict"), 9), x["ticker"]))

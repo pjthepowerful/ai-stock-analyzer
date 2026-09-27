@@ -358,9 +358,21 @@ def _earnings_calendar_snapshot() -> Optional[dict]:
             }
         if not any(v["count"] for v in out.values()):
             return None
+        # Entry/stop/targets for the two biggest names each day — the same
+        # levels the Earnings screen shows.
+        import trade_plan as tp
+        from .parallel import pmap
+
+        picks = [r for v in out.values() for r in v["largest"][:2]]
+        for r, p in zip(picks, pmap(lambda r: tp.plan(r["ticker"]), picks)):
+            if p.get("available"):
+                r["trade_plan"] = {k: p.get(k) for k in ("entry", "stop", "stop_pct", "targets", "earnings_move_pct")}
         return {
             "earnings_calendar": out,
-            "note": "Paula's own earnings calendar (same as the Earnings screen). Answer from THIS list, biggest names first; say the calendar has more in the Earnings tab. Don't add names that aren't here.",
+            "note": ("Paula's own earnings calendar (same as the Earnings screen). Answer from THIS list, biggest names first; "
+                     "say the calendar has more in the Earnings tab. Don't add names that aren't here. Where a name has a "
+                     "trade_plan, give its entry, stop loss and targets, and warn that a stop does not protect through the "
+                     "earnings gap when earnings_move_pct is bigger than stop_pct."),
         }
     except Exception:
         return None

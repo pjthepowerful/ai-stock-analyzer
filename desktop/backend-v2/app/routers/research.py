@@ -85,6 +85,20 @@ def _calendar_names(start, end) -> list[str]:
     return list(dict.fromkeys(names))
 
 
+def _with_plans(rows: list[dict], side, equity=None) -> list[dict]:
+    """Attach an entry/stop/targets plan to each ranked row (only the few
+    that made the cut, so it adds one price-history call per shown name)."""
+    import research as res
+    import trade_plan as tp
+
+    def one(r):
+        r["plan"] = tp.plan(r["ticker"], side(r), equity=equity, next_report=r.get("next"),
+                            max_dollars=res.POSITION_MAX_USD if equity else None)
+        return r
+
+    return pmap(one, rows)
+
+
 # Fixed paths first: /forecast/{ticker} and /research/{ticker} would
 # otherwise capture "upcoming" and "candidates" as tickers.
 
@@ -114,7 +128,7 @@ async def _build_upcoming(days: int, limit: int) -> dict:
     def ranked():
         rows = pmap(fc.forecast, names[:40], progress=emit)
         rows.sort(key=lambda r: r["score"], reverse=True)
-        return rows[:limit]
+        return _with_plans(rows[:limit], lambda r: "short" if r["score"] <= -0.3 else "long")
 
     rows = await loop.run_in_executor(None, in_request_context(ranked))
     return {"ok": True, "rows": rows, "scanned": min(len(names), 40)}
@@ -156,7 +170,7 @@ async def _build_candidates(limit: int) -> dict:
             progress=emit,
         )
         rows.sort(key=lambda r: r["score"], reverse=True)
-        return rows[:limit]
+        return _with_plans(rows[:limit], lambda r: "long", equity=acct.get("equity"))
 
     rows = await loop.run_in_executor(None, in_request_context(ranked))
     return {"ok": True, "candidates": [_fix_sec_note(r) for r in rows], "scanned": min(len(names), 60), "equity": acct.get("equity")}

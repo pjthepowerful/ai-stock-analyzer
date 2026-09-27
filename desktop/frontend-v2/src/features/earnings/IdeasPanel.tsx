@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { api } from '../../lib/api'
 import { useChrome } from '../../lib/chrome'
 import { useWebSocket } from '../../lib/ws'
+import { type Plan, TradePlan } from './TradePlan'
 
 interface UpcomingRow {
   ticker: string
@@ -11,6 +12,7 @@ interface UpcomingRow {
   lean: string
   stock_lean: string | null
   evidence: string[]
+  plan?: Plan
 }
 
 interface Candidate {
@@ -21,6 +23,7 @@ interface Candidate {
   buyable: boolean
   fundamental_notes: string[]
   news: { headline: string; url: string }[]
+  plan?: Plan
 }
 
 interface Ranked<T> {
@@ -83,7 +86,7 @@ export function IdeasPanel() {
   return (
     <div className="ideas">
       <p className="ideas-disclaimer">
-        Research, not orders. Nothing here trades — autopilot never holds through an earnings report.
+        Research, not orders. Nothing here trades — autopilot never holds through an earnings report. Stops and targets come from each stock’s own daily range; a stop can’t protect through an earnings gap.
       </p>
 
       <section className="card">
@@ -126,6 +129,7 @@ export function IdeasPanel() {
                     <li key={e}>{e}</li>
                   ))}
                 </ul>
+                <TradePlan plan={r.plan} />
               </li>
             ))}
           </ol>
@@ -167,6 +171,7 @@ export function IdeasPanel() {
                 </div>
                 <p className="ideas-evidence-line">{c.drift.note}</p>
                 {c.news[0] && <p className="ideas-news">{c.news[0].headline}</p>}
+                <TradePlan plan={c.plan} />
               </li>
             ))}
           </ol>
