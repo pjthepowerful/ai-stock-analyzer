@@ -2,8 +2,8 @@
 // (patch = fix, minor = feature, major = big release) and add an entry here.
 // Entries with a `demo` get a Before / After button in What's new.
 
-export const VERSION = '5.2.0'
-export const VERSION_DATE = 'September 24, 2026'
+export const VERSION = '5.3.0'
+export const VERSION_DATE = 'September 26, 2026'
 
 export interface Demo {
   before: string
@@ -27,8 +27,26 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
-    v: '5.2.0',
+    v: '5.3.0',
     d: VERSION_DATE,
+    title: 'Scrub the chart',
+    highlights: [
+      {
+        title: 'Hover to go back in time',
+        desc: 'Move across any chart and the numbers follow: the price chart shows that day and your return since the start of the range; the Performance chart shows what your account was worth then.',
+      },
+    ],
+    changes: [
+      'Paula now matches your device’s light or dark setting until you pick one.',
+      'The earnings calendar keeps itself up to date — no more “stale”.',
+      'The market tile says when the market is closed.',
+      'Recent chats stay visible on shorter screens, and chart range buttons fit on phones.',
+      'Portfolio chart prices read as dollars.',
+    ],
+  },
+  {
+    v: '5.2.0',
+    d: 'September 24, 2026',
     title: 'Paula can see',
     highlights: [
       {
@@ -44,7 +62,7 @@ export const RELEASES: Release[] = [
   },
   {
     v: '5.1.0',
-    d: VERSION_DATE,
+    d: 'September 24, 2026',
     title: 'A smarter model',
     highlights: [
       {
