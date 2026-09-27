@@ -34,6 +34,52 @@ const PERIODS: [string, string][] = [
   ['5y', '5Y'],
 ]
 
+const PERIOD_NAMES: Record<string, string> = {
+  '1mo': 'past month',
+  '3mo': 'past 3 months',
+  '6mo': 'past 6 months',
+  '1y': 'past year',
+  '5y': 'past 5 years',
+}
+
+interface Legend {
+  date: string
+  o: number
+  h: number
+  l: number
+  c: number
+  chg: number
+  chgPct: number
+  /** Return from the first bar of the period to this bar. */
+  fromStartPct: number
+  hovering: boolean
+}
+
+function legendAt(d: NonNullable<ChartApiResponse['data']>, i: number, hovering: boolean): Legend {
+  const prev = i > 0 ? d.close[i - 1] : d.close[i]
+  const first = d.close[0]
+  return {
+    date: d.dates[i].split(' ')[0],
+    o: d.open[i],
+    h: d.high[i],
+    l: d.low[i],
+    c: d.close[i],
+    chg: d.close[i] - prev,
+    chgPct: prev ? ((d.close[i] - prev) / prev) * 100 : 0,
+    fromStartPct: first ? ((d.close[i] - first) / first) * 100 : 0,
+    hovering,
+  }
+}
+
+function fmtDate(iso: string): string {
+  const d = new Date(iso + 'T12:00:00')
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+const signed = (n: number, digits = 2) => (n >= 0 ? '+' : '') + n.toFixed(digits)
+
 function calcSMA(data: number[], period: number): number[] {
   const r: number[] = []
   for (let i = period - 1; i < data.length; i++) {
@@ -57,7 +103,7 @@ export function Chart({ ticker, height = 320 }: { ticker: string; height?: numbe
   const [period, setPeriod] = useState('1y')
   const [error, setError] = useState<string | null>(null)
   const [theme] = useTheme()
-  const [ohlc, setOhlc] = useState<{ o: number; h: number; l: number; c: number; chg: number; chgPct: number } | null>(null)
+  const [ohlc, setOhlc] = useState<Legend | null>(null)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -68,7 +114,7 @@ export function Chart({ ticker, height = 320 }: { ticker: string; height?: numbe
       width: containerRef.current.clientWidth,
       // Shorter on phones so the chart doesn't fill the whole screen.
       height: Math.min(height, Math.max(220, Math.round(containerRef.current.clientWidth * 0.72))),
-      layout: { background: { color: 'transparent' }, textColor: c.text, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
+      layout: { background: { color: 'transparent' }, textColor: c.text, fontFamily: "'Geist Mono', ui-monospace, monospace", fontSize: 11 },
       grid: { vertLines: { color: c.grid }, horzLines: { color: c.grid } },
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: c.border },
@@ -127,18 +173,21 @@ export function Chart({ ticker, height = 320 }: { ticker: string; height?: numbe
 
         chart.timeScale().fitContent()
 
+        // The legend follows the crosshair (TradingView) and the period
+        // return scrubs with it (Robinhood); leaving the chart snaps back to
+        // the latest bar.
+        const data = res.data
         const last = close.length - 1
-        if (last >= 0) {
-          const prev = last > 0 ? close[last - 1] : close[last]
-          setOhlc({
-            o: open[last],
-            h: high[last],
-            l: low[last],
-            c: close[last],
-            chg: close[last] - prev,
-            chgPct: prev ? ((close[last] - prev) / prev) * 100 : 0,
-          })
-        }
+        const index = new Map(times.map((t, i) => [String(t), i]))
+        if (last >= 0) setOhlc(legendAt(data, last, false))
+        chart.subscribeCrosshairMove((param) => {
+          const i = param.time !== undefined ? index.get(String(param.time)) : undefined
+          if (i === undefined || !param.point) {
+            if (last >= 0) setOhlc(legendAt(data, last, false))
+            return
+          }
+          setOhlc(legendAt(data, i, true))
+        })
       })
       .catch(() => {
         if (!cancelled) setError('Could not load chart data.')
@@ -162,14 +211,21 @@ export function Chart({ ticker, height = 320 }: { ticker: string; height?: numbe
       <div className="pchart-head">
         <span className="pchart-sym">{ticker}</span>
         {ohlc && (
-          <span className="pchart-ohlc mono">
-            O {ohlc.o.toFixed(2)} H {ohlc.h.toFixed(2)} L {ohlc.l.toFixed(2)} C{' '}
-            <b className={ohlc.chg >= 0 ? 'positive' : 'negative'}>{ohlc.c.toFixed(2)}</b>{' '}
-            <span className={ohlc.chg >= 0 ? 'positive' : 'negative'}>
-              {ohlc.chg >= 0 ? '+' : ''}
-              {ohlc.chg.toFixed(2)} ({ohlc.chgPct.toFixed(2)}%)
+          <>
+            <span className={'pchart-return mono ' + (ohlc.fromStartPct >= 0 ? 'positive' : 'negative')}>
+              {signed(ohlc.fromStartPct)}%
+              <span className="pchart-return-label">
+                {ohlc.hovering ? `to ${fmtDate(ohlc.date)}` : PERIOD_NAMES[period]}
+              </span>
             </span>
-          </span>
+            <span className="pchart-ohlc mono">
+              O {ohlc.o.toFixed(2)} H {ohlc.h.toFixed(2)} L {ohlc.l.toFixed(2)} C{' '}
+              <b className={ohlc.chg >= 0 ? 'positive' : 'negative'}>{ohlc.c.toFixed(2)}</b>{' '}
+              <span className={ohlc.chg >= 0 ? 'positive' : 'negative'}>
+                {signed(ohlc.chg)} ({signed(ohlc.chgPct)}%)
+              </span>
+            </span>
+          </>
         )}
         <div className="pchart-spacer" />
         <div className="seg">
