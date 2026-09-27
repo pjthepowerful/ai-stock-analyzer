@@ -25,7 +25,9 @@ _day_cache: dict[tuple, tuple[float, dict]] = {}
 
 
 @router.get("/calendar/month")
-def calendar_month(year: int = 0, month: int = 0, authorization: str = Header(None)):
+async def calendar_month(year: int = 0, month: int = 0, authorization: str = Header(None)):
+    """A stale calendar starts rebuilding itself in the background the moment
+    someone looks at it, so nobody has to know about the Rebuild button."""
     current_user_required(authorization)
     now = datetime.now(ZoneInfo("US/Eastern"))
     y = year or now.year
@@ -34,9 +36,11 @@ def calendar_month(year: int = 0, month: int = 0, authorization: str = Header(No
         import earnings as earn
 
         data = earn.calendar_month(y, m)
-        return {"ok": True, "year": y, "month": m, **data}
     except Exception as e:
         raise HTTPException(502, str(e)[:200])
+    if data.get("stale"):
+        _start_build()
+    return {"ok": True, "year": y, "month": m, **data, "building": _building()}
 
 
 @router.get("/calendar/day")
@@ -101,14 +105,16 @@ def _progress_emitter(channel: str, loop: asyncio.AbstractEventLoop):
     return _cb
 
 
-@router.post("/calendar/refresh")
-async def refresh_calendar(authorization: str = Header(None)):
-    global _cal_build_task
-    current_user_required(authorization)
-    if _cal_build_task and not _cal_build_task.done():
-        return {"ok": True, "status": "already building"}
+def _building() -> bool:
+    return _cal_build_task is not None and not _cal_build_task.done()
 
-    loop = asyncio.get_event_loop()
+
+def _start_build() -> bool:
+    """Kick off a background calendar build; False if one is already running."""
+    global _cal_build_task
+    if _building():
+        return False
+    loop = asyncio.get_running_loop()
 
     async def _build():
         try:
@@ -134,4 +140,10 @@ async def refresh_calendar(authorization: str = Header(None)):
             print(f"[earnings] calendar build failed: {e!r}", flush=True)
 
     _cal_build_task = asyncio.ensure_future(_build())
-    return {"ok": True, "status": "building"}
+    return True
+
+
+@router.post("/calendar/refresh")
+async def refresh_calendar(authorization: str = Header(None)):
+    current_user_required(authorization)
+    return {"ok": True, "status": "building" if _start_build() else "already building"}

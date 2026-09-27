@@ -23,6 +23,8 @@ interface MonthResponse {
   dates: Record<string, CalRow[]>
   built_at: string | null
   stale: boolean
+  /** The server started a rebuild (it does when the calendar is stale). */
+  building?: boolean
 }
 
 interface DayStock extends CalRow {
@@ -93,6 +95,7 @@ export function EarningsScreen() {
     queryFn: () => api.get<MonthResponse>(`/api/earnings/calendar/month?year=${ym.y}&month=${ym.m}`),
     enabled: !!user,
   })
+  const updating = !!building || !!month.data?.building
   const dayQ = useQuery({
     queryKey: ['earnings-day', day],
     queryFn: () => api.get<{ stocks: DayStock[] }>(`/api/earnings/calendar/day?date=${day}`),
@@ -161,9 +164,11 @@ export function EarningsScreen() {
                 <div>
                   <h2 className="card-title">{label}</h2>
                   <p className="card-desc">
-                    {month.data?.built_at
-                      ? `Calendar built ${new Date(month.data.built_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}${month.data.stale ? ' · stale' : ''}`
-                      : 'Loading…'}
+                    {updating
+                      ? 'Updating the calendar…'
+                      : month.data?.built_at
+                        ? `Updated ${new Date(month.data.built_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`
+                        : 'Loading…'}
                   </p>
                 </div>
                 <div className="page-actions">
@@ -179,10 +184,10 @@ export function EarningsScreen() {
                   <button className="btn btn-secondary btn-sm btn-icon" onClick={() => shift(1)} aria-label="Next month">
                     <ChevronRight size={15} />
                   </button>
-                  <button className="btn btn-ghost btn-sm" onClick={rebuild} disabled={!!building}>
-                    <RefreshCw size={13} className={building ? 'spin' : undefined} />
-                    {building
-                      ? building.total
+                  <button className="btn btn-ghost btn-sm" onClick={rebuild} disabled={updating}>
+                    <RefreshCw size={13} className={updating ? 'spin' : undefined} />
+                    {updating
+                      ? building?.total
                         ? `${Math.round((building.done / building.total) * 100)}%`
                         : 'Rebuilding'
                       : 'Rebuild'}
