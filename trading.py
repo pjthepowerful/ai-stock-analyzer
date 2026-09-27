@@ -524,6 +524,9 @@ def _find_ticker(text: str) -> tuple[str | None, str]:
     # user actually typed them in CAPS (so "so much" doesn't match SO, but "SO"
     # does) — lowercase common words are almost never a ticker reference.
     us_set = ALL_US_TICKERS
+    # An indicator that's also a ticker ("the RSI on AAPL") only counts if
+    # nothing else in the message is a ticker; "$RSI" always means the stock.
+    jargon_hit = None
     for word in text.split():
         up = word.upper()
         clean = re.sub(r"[^A-Z]", "", up)
@@ -535,6 +538,11 @@ def _find_ticker(text: str) -> tuple[str | None, str]:
             continue
         if clean in _INDIA_TICKERS:
             return clean, "India"
+        if clean in _JARGON and not word.startswith("$"):
+            # Accepted on the same terms as any other word below.
+            if not jargon_hit and (clean in us_set or (typed_caps and len(clean) >= 3)):
+                jargon_hit = clean
+            continue
         if clean in us_set:
             return clean, "US"
         # An explicitly-typed 3-5 letter UPPERCASE symbol is authoritative even if
@@ -544,6 +552,8 @@ def _find_ticker(text: str) -> tuple[str | None, str]:
         # stock is far worse than saying "no data for COF".
         if typed_caps and 3 <= len(clean) <= 5:
             return clean, "US"
+    if jargon_hit:
+        return jargon_hit, "US"
     # 2.5) Common misspellings, typos, voice recognition, and aliases
     ALIASES = _TICKER_ALIASES
     for word in text.lower().split():
