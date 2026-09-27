@@ -40,9 +40,17 @@ const loadWhatsNew = () => import('../features/whatsnew/WhatsNewSheet')
 const WhatsNewSheet = lazy(() => loadWhatsNew().then((m) => ({ default: m.WhatsNewSheet })))
 const SEEN_KEY = 'paula-seen-version'
 
+/** A release this browser hasn't seen yet. A first visit has nothing to
+ *  compare against, so it's marked current instead of greeting a newcomer
+ *  with release notes (Linear/ChatGPT only show them to returning users). */
 function unseenRelease(): boolean {
   try {
-    return localStorage.getItem(SEEN_KEY) !== VERSION
+    const seen = localStorage.getItem(SEEN_KEY)
+    if (seen === null) {
+      localStorage.setItem(SEEN_KEY, VERSION)
+      return false
+    }
+    return seen !== VERSION
   } catch {
     return false
   }

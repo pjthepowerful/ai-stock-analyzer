@@ -67,7 +67,23 @@
     display: none;
   }
 
+  /* Ticker + return on one row, the period picker full width under it
+     (Robinhood's phone layout) so 1Y/5Y never fall off the edge. */
   .pchart-head {
-    justify-content: space-between;
+    flex-wrap: wrap;
+    row-gap: var(--space-2);
+  }
+
+  .pchart-spacer {
+    display: none;
+  }
+
+  .pchart-head .seg {
+    display: flex;
+    width: 100%;
+  }
+
+  .pchart-head .seg-btn {
+    flex: 1;
   }
 }
