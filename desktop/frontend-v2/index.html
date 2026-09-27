@@ -17,12 +17,15 @@
     <script>
       // Apply the saved theme before first paint so there's no flash.
       try {
-        // Black is the default; only an explicit Light (or System in light
-        // mode) opts out.
+        // An explicit Light/Dark wins; otherwise follow the device.
         var t = localStorage.getItem('paula-theme')
-        var light = t === 'light'
-        if (!light) document.documentElement.dataset.theme = 'dark'
-      } catch (e) {}
+        var dark = t === 'dark' || (t !== 'light' && window.matchMedia &&
+          window.matchMedia('(prefers-color-scheme: dark)').matches)
+        if (dark) document.documentElement.dataset.theme = 'dark'
+      } catch (e) {
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.dataset.theme = 'dark'
+      }
     </script>
     <style>
       html,body{background:#f7f6f3;margin:0}

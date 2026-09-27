@@ -3,19 +3,26 @@ import { useEffect, useState } from 'react'
 export type Theme = 'light' | 'dark'
 export type ThemePref = Theme
 
-// index.html applies the stored preference before first paint (no flash);
-// this module owns changing it afterwards.
-// New key for v5: everyone starts on the new black default once. A stored
-// 'system' (offered in early 5.0 builds) now reads as dark.
+// index.html applies the theme before first paint (no flash); this module
+// owns changing it afterwards. Until someone picks Light or Dark, Paula
+// follows the device (there's no visible "System" option — it's just the
+// default). A stored 'system' from early 5.0 builds counts as no choice.
 const KEY = 'paula-theme'
 const EVENT = 'paula-theme'
+const DARK_MQ = '(prefers-color-scheme: dark)'
 
-function readPref(): ThemePref {
+/** The explicit choice, or null when following the device. */
+function readPref(): Theme | null {
   try {
-    return localStorage.getItem(KEY) === 'light' ? 'light' : 'dark'
+    const v = localStorage.getItem(KEY)
+    return v === 'light' || v === 'dark' ? v : null
   } catch {
-    return 'dark'
+    return null
   }
+}
+
+function systemTheme(): Theme {
+  return window.matchMedia?.(DARK_MQ).matches ? 'dark' : 'light'
 }
 
 function apply(theme: Theme) {
@@ -23,6 +30,11 @@ function apply(theme: Theme) {
   else delete document.documentElement.dataset.theme
   window.dispatchEvent(new Event(EVENT))
 }
+
+// Follow the device live while no choice has been made.
+window.matchMedia?.(DARK_MQ).addEventListener?.('change', () => {
+  if (!readPref()) apply(systemTheme())
+})
 
 /** The theme actually on screen right now. */
 export function getTheme(): Theme {
@@ -38,16 +50,17 @@ export function setThemePref(pref: ThemePref) {
   apply(pref)
 }
 
-/** [resolved theme on screen, the person's preference, setter]. Charts key
- *  their redraw on the resolved theme. */
+/** [theme on screen, the switch's selection (same thing — following the
+ *  device just selects whichever it resolved to), setter]. Charts key their
+ *  redraw on the theme. */
 export function useTheme(): [Theme, ThemePref, (p: ThemePref) => void] {
-  const [state, setState] = useState(() => ({ theme: getTheme(), pref: readPref() }))
+  const [theme, setTheme] = useState(getTheme)
   useEffect(() => {
-    const on = () => setState({ theme: getTheme(), pref: readPref() })
+    const on = () => setTheme(getTheme())
     window.addEventListener(EVENT, on)
     return () => window.removeEventListener(EVENT, on)
   }, [])
-  return [state.theme, state.pref, setThemePref]
+  return [theme, theme, setThemePref]
 }
 
 export interface ChartColors {
