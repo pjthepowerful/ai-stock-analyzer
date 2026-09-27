@@ -69,3 +69,19 @@ export function formatMessage(raw: string): string {
     .replace(/\n/g, '<br/>')
   return s
 }
+
+/** Regular US session (Mon–Fri 9:30–16:00 New York time). Holidays aren't
+ *  known here, so on one this still says open; it's only used for labels. */
+export function usMarketOpen(now = new Date()): boolean {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    weekday: 'short',
+    hour: 'numeric',
+    minute: 'numeric',
+    hourCycle: 'h23',
+  }).formatToParts(now)
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? ''
+  if (get('weekday') === 'Sat' || get('weekday') === 'Sun') return false
+  const mins = Number(get('hour')) * 60 + Number(get('minute'))
+  return mins >= 9 * 60 + 30 && mins < 16 * 60
+}

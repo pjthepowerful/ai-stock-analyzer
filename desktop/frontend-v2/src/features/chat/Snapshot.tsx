@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../lib/api'
 import { useSession } from '../../lib/auth'
+import { usMarketOpen } from '../../lib/format'
 
 interface Account {
   equity: number
@@ -54,7 +55,9 @@ export function Snapshot() {
         </span>
       </div>
       <div className="snap-cell">
-        <span className="snap-label">Market</span>
+        <span className="snap-label" title={usMarketOpen() ? undefined : 'Change as of the last close'}>
+          Market{usMarketOpen() ? '' : ' · closed'}
+        </span>
         <span className={'snap-value ' + (spy == null ? '' : spy >= 0 ? 'positive' : 'negative')}>
           {spy == null ? '—' : `SPY ${spy >= 0 ? '+' : '−'}${Math.abs(spy).toFixed(2)}%`}
         </span>

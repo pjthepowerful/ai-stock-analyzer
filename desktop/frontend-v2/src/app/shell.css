@@ -37,9 +37,18 @@
   flex-direction: column;
   gap: var(--space-3);
   min-height: 0;
+  /* Short windows scroll the whole sidebar instead of squeezing the chat
+     list down to one row (ChatGPT/Linear do the same). */
+  overflow-y: auto;
+  scrollbar-width: thin;
   padding: var(--space-3);
   background: var(--sidebar);
   border-right: 1px solid var(--border);
+}
+
+/* Only the chat list flexes; everything else keeps its natural size. */
+.sidebar > :not(.sidebar-section) {
+  flex-shrink: 0;
 }
 
 .sidebar-brand {
@@ -147,7 +156,8 @@
 
 .sidebar-section {
   flex: 1;
-  min-height: 0;
+  /* Room for the label and ~4 chats before the sidebar starts scrolling. */
+  min-height: 150px;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
