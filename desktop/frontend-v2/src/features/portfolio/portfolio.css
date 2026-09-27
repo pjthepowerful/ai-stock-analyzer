@@ -41,3 +41,21 @@
 .pos-empty p {
   margin: 0;
 }
+
+/* Performance header while scrubbing the chart */
+.perf-scrub {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.perf-scrub-value {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.perf-scrub-when {
+  color: var(--text-dim);
+}

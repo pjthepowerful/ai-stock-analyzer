@@ -41,6 +41,21 @@ function money(n: number) {
   return `${r > 0 ? '+' : '−'}$${Math.abs(r).toLocaleString()}`
 }
 
+/** Points closer than a day apart are intraday (1D/1W); longer ranges are
+ *  one point per day, stamped at UTC midnight. */
+function isIntraday(points: PerformanceResponse['curve']) {
+  return points.length > 1 && points[1].ts - points[0].ts < 86400
+}
+
+/** When a curve point is, at the precision its range needs. Daily points are
+ *  read in UTC so midnight doesn't slide back to the previous evening. */
+function whenLabel(ts: number, intraday: boolean) {
+  const d = new Date(ts * 1000)
+  return intraday
+    ? d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+}
+
 function tone(n: number) {
   const r = Math.round(n)
   return r > 0 ? 'positive' : r < 0 ? 'negative' : ''
@@ -54,10 +69,14 @@ export function Performance() {
   })
 
   const curve = perf.data?.curve ?? []
+  // Hovering the chart scrubs the header to that point (Robinhood).
+  const [hover, setHover] = useState<number | null>(null)
   const first = curve[0]?.equity
   const last = curve[curve.length - 1]?.equity
+  const shown = hover != null ? curve[hover] : undefined
   const change = first && last ? last - first : null
   const changePct = first && change != null ? (change / first) * 100 : null
+  const hoverChange = first && shown ? shown.equity - first : null
 
   return (
     <>
@@ -65,11 +84,20 @@ export function Performance() {
         <header className="card-head">
           <div>
             <h2 className="card-title">Performance</h2>
-            <p className={'card-desc ' + (change != null ? tone(change) : '')}>
-              {change != null && changePct != null
-                ? `${money(change)} (${change >= 0 ? '+' : ''}${changePct.toFixed(2)}%) over this range`
-                : 'Account value over time'}
-            </p>
+            {shown && hoverChange != null && first ? (
+              <p className={'card-desc perf-scrub ' + tone(hoverChange)}>
+                <span className="perf-scrub-value">${shown.equity.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                {money(hoverChange)} ({hoverChange >= 0 ? '+' : ''}
+                {((hoverChange / first) * 100).toFixed(2)}%)
+                <span className="perf-scrub-when">{whenLabel(shown.ts, isIntraday(curve))}</span>
+              </p>
+            ) : (
+              <p className={'card-desc ' + (change != null ? tone(change) : '')}>
+                {change != null && changePct != null
+                  ? `${money(change)} (${change >= 0 ? '+' : ''}${changePct.toFixed(2)}%) over this range`
+                  : 'Account value over time'}
+              </p>
+            )}
           </div>
           <div className="seg" role="tablist" aria-label="Range">
             {PERIODS.map((p) => (
@@ -93,7 +121,7 @@ export function Performance() {
               {perf.error ? perf.error.message : 'Not enough history for this range yet.'}
             </div>
           ) : (
-            <EquityCurve points={curve} up={(change ?? 0) >= 0} />
+            <EquityCurve points={curve} up={(change ?? 0) >= 0} onHover={setHover} />
           )}
         </div>
       </section>
@@ -138,9 +166,22 @@ export function Performance() {
   )
 }
 
-function EquityCurve({ points, up }: { points: PerformanceResponse['curve']; up: boolean }) {
+function EquityCurve({
+  points,
+  up,
+  onHover,
+}: {
+  points: PerformanceResponse['curve']
+  up: boolean
+  onHover: (index: number | null) => void
+}) {
   const ref = useRef<HTMLDivElement>(null)
   const [theme] = useTheme()
+  // Kept in a ref so a new callback doesn't rebuild the chart.
+  const hoverRef = useRef(onHover)
+  useEffect(() => {
+    hoverRef.current = onHover
+  }, [onHover])
 
   useEffect(() => {
     const el = ref.current
@@ -148,10 +189,11 @@ function EquityCurve({ points, up }: { points: PerformanceResponse['curve']; up:
     const c = chartColors()
     const chart = createChart(el, {
       height: 240,
-      layout: { background: { color: 'transparent' }, textColor: c.text, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
+      layout: { background: { color: 'transparent' }, textColor: c.text, fontFamily: "'Geist Mono', ui-monospace, monospace", fontSize: 11 },
+      localization: { priceFormatter: (v: number) => '$' + Math.round(v).toLocaleString() },
       grid: { vertLines: { visible: false }, horzLines: { color: c.grid } },
       rightPriceScale: { borderVisible: false },
-      timeScale: { borderVisible: false, timeVisible: true },
+      timeScale: { borderVisible: false, timeVisible: isIntraday(points) },
       handleScroll: false,
       handleScale: false,
     })
@@ -173,11 +215,18 @@ function EquityCurve({ points, up }: { points: PerformanceResponse['curve']; up:
     )
     chart.timeScale().fitContent()
 
+    const index = new Map(points.map((p, i) => [p.ts, i]))
+    chart.subscribeCrosshairMove((param) => {
+      const i = param.time !== undefined && param.point ? index.get(param.time as number) : undefined
+      hoverRef.current(i ?? null)
+    })
+
     const ro = new ResizeObserver(() => chart.applyOptions({ width: el.clientWidth }))
     ro.observe(el)
     return () => {
       ro.disconnect()
       chart.remove()
+      hoverRef.current(null)
     }
   }, [points, up, theme])
 
