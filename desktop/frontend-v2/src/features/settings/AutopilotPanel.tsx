@@ -37,6 +37,9 @@ interface Activity {
   buys?: number
   sells?: number
   shorts?: number
+  mode?: string
+  /** The cycle's decision log (markdown-ish, newest step last). */
+  log?: string[]
 }
 
 interface StatusResponse {
@@ -67,9 +70,21 @@ function describe(a: Activity): string {
         a.shorts ? `${a.shorts} shorted` : '',
         a.sells ? `${a.sells} closed` : '',
       ].filter(Boolean)
-      return `Scanned ${a.scanned ?? 0}, ${a.opportunities ?? 0} setups` + (trades.length ? ` · ${trades.join(', ')}` : '')
+      if (trades.length) return trades.join(', ')
+      // The last step of the log says what the cycle decided ("Inside its
+      // normal range — no trade.", "Next check at 10:30 ET."); counts are
+      // the fallback for modes that don't log one.
+      const last = logLines(a).at(-1)
+      return last ?? `Scanned ${a.scanned ?? 0}, ${a.opportunities ?? 0} setups`
     }
   }
+}
+
+/** Log lines worth reading: markdown bold stripped, the mode banner dropped. */
+function logLines(a: Activity): string[] {
+  return (a.log ?? [])
+    .map((l) => l.replace(/\*\*/g, '').trim())
+    .filter((l) => l && !/^Mode:/i.test(l))
 }
 
 export function AutopilotPanel() {
@@ -236,14 +251,38 @@ export function AutopilotPanel() {
         <div className="ap-activity">
           <p className="settings-section-note">Recent activity</p>
           <ul>
-            {recent.slice(0, 8).map((a, i) => (
-              <li key={i} className={a.kind === 'error' ? 'ap-error' : undefined}>
+            {recent.slice(0, 8).map((a, i) => {
+              const time = (
                 <span className="mono ap-time">
                   {new Date(a.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                 </span>
-                {describe(a)}
-              </li>
-            ))}
+              )
+              const lines = logLines(a)
+              // A cycle with more to say expands to its full decision log
+              // (GitHub Actions / Vercel run-list pattern).
+              return (
+                <li key={i} className={a.kind === 'error' ? 'ap-error' : undefined}>
+                  {a.kind === 'cycle' && lines.length > 1 ? (
+                    <details className="ap-details">
+                      <summary>
+                        {time}
+                        {describe(a)}
+                      </summary>
+                      <ol className="ap-log">
+                        {lines.map((l, j) => (
+                          <li key={j}>{l}</li>
+                        ))}
+                      </ol>
+                    </details>
+                  ) : (
+                    <>
+                      {time}
+                      {describe(a)}
+                    </>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}
