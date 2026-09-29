@@ -189,7 +189,16 @@ async def _image_reply(image: str, user_msg: str, chat_history: list, user_id: i
 @router.get("/models")
 def models():
     """Tiers for the composer's model picker."""
-    return {"ok": True, "configured": bool(engine._llm_key()), "tiers": engine.llm_tiers()}
+    import os
+
+    # Which providers have a key, in the order they're tried — yes/no only,
+    # never the key. Lets a deploy be checked without opening the host's env.
+    import trading
+
+    chain = trading._llm_chain()
+    providers = [{"name": n, "configured": bool(os.environ.get(cfg["key"])), "order": (chain.index(n) + 1) if n in chain else None}
+                 for n, cfg in trading._PROVIDERS.items()]
+    return {"ok": True, "configured": bool(engine._llm_key()), "tiers": engine.llm_tiers(), "providers": providers}
 
 
 # A market scan takes ~15s and reads the same universe for everyone, so an
