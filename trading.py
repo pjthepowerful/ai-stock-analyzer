@@ -225,18 +225,33 @@ class _ChainClient:
             if tier is None and i > 0:
                 break  # an explicit model id only means something to the first provider
             m = model if tier is None else _provider_model(name, tier)
-            try:
-                # Streams fail on connect (inside create), so a dead provider
-                # falls through here before any text reaches the user.
-                out = _provider_client(name).chat.completions.create(model=m, messages=messages, **kw)
-                used = LLM_USED.get()
-                if used is not None:
-                    used.update(model=m, label=llm_label(m), provider=name)
-                return out
-            except Exception as e:
-                last = e
-                if i < len(chain) - 1:
-                    _log.warning("LLM %s (%s) failed, trying %s: %s", name, m, chain[i + 1], str(e)[:160])
+            # A busy or quota-capped model (429/503, free tiers especially)
+            # usually still has room on the same provider's smaller model.
+            models = [m]
+            if tier == "primary" and _provider_model(name, "fast") != m:
+                models.append(_provider_model(name, "fast"))
+            for j, mm in enumerate(models):
+                try:
+                    # Streams fail on connect (inside create), so a dead provider
+                    # falls through here before any text reaches the user.
+                    out = _provider_client(name).chat.completions.create(model=mm, messages=messages, **kw)
+                    used = LLM_USED.get()
+                    if used is not None:
+                        used.update(model=mm, label=llm_label(mm), provider=name)
+                    return out
+                except Exception as e:
+                    # Keep the most telling failure: a busy provider's 429/503
+                    # beats a later provider's dead key, so the user isn't told
+                    # "the key was rejected" when the real problem is load.
+                    if last is None or not re.match(r"\s*(?:Error code:\s*)?(429|503|402)", str(last)):
+                        last = e
+                    busy = bool(re.match(r"\s*(?:Error code:\s*)?(429|503|500|502|504)", str(e)))
+                    if busy and j < len(models) - 1:
+                        _log.warning("LLM %s (%s) busy, trying %s: %s", name, mm, models[j + 1], str(e)[:160])
+                        continue
+                    if i < len(chain) - 1:
+                        _log.warning("LLM %s (%s) failed, trying %s: %s", name, mm, chain[i + 1], str(e)[:160])
+                    break
         raise last or RuntimeError("401 no LLM provider key set")
 
 
@@ -7700,7 +7715,11 @@ def _scrub_trade_levels_for_llm(stock_data: dict | None) -> dict | None:
         if t2 and abs(float(t2) - float(t1)) > 0.01:
             plan += f" (second target ${t2})"
         if rr:
-            plan += f" · about {rr}:1 risk-reward"
+            try:
+                _rr = f"{round(float(rr), 1):g}"
+            except Exception:
+                _rr = str(rr)
+            plan += f" · risk-reward about {_rr} to 1"
         # Spell out the target relationship explicitly. The model tends to repeat
         # the entry as the target when entry == current price; naming the target
         # as the profit exit and its direction relative to entry prevents that.
