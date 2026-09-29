@@ -46,6 +46,21 @@ function actionClass(action: string): string {
   return ''
 }
 
+/** Which way the levels point. A stop above the entry is a short: without
+ *  saying so, "Stop $67 · Target $43" on a $61 stock reads as swapped. */
+function levelsSide(t: TradeLevels): 'long' | 'short' {
+  return t.stop_loss > t.entry ? 'short' : 'long'
+}
+
+function levelsCaption(action: string, side: 'long' | 'short'): string {
+  if (action.includes('BUY')) return 'Long setup · stop below entry, target above'
+  if (action.includes('SELL'))
+    return 'Short-side levels · for a short the stop is above and the target below. Holding it long? This signal says exit, not add.'
+  return side === 'short'
+    ? 'No trade signal · indicative short-side levels (stop above, target below)'
+    : 'No trade signal · indicative levels only'
+}
+
 export function SignalCard({ data }: { data: AnalyzeData }) {
   const { signal } = data
   const up = data.change >= 0
@@ -137,25 +152,28 @@ export function SignalCard({ data }: { data: AnalyzeData }) {
         </ul>
       )}
 
-      {signal.trade && (
-        <dl className="sig-trade">
-          <div>
-            <dt>Entry</dt>
-            <dd>${signal.trade.entry.toFixed(2)}</dd>
-          </div>
-          <div>
-            <dt>Stop</dt>
-            <dd className="negative">${signal.trade.stop_loss.toFixed(2)}</dd>
-          </div>
-          <div>
-            <dt>Target</dt>
-            <dd className="positive">${signal.trade.target_1.toFixed(2)}</dd>
-          </div>
-          <div>
-            <dt>R:R</dt>
-            <dd>{signal.trade.risk_reward.toFixed(1)}:1</dd>
-          </div>
-        </dl>
+      {signal.trade && signal.trade.entry > 0 && (
+        <>
+          <p className="sig-trade-side">{levelsCaption(signal.action, levelsSide(signal.trade))}</p>
+          <dl className="sig-trade">
+            <div>
+              <dt>{levelsSide(signal.trade) === 'short' ? 'Short entry' : 'Entry'}</dt>
+              <dd>${signal.trade.entry.toFixed(2)}</dd>
+            </div>
+            <div>
+              <dt>Stop loss</dt>
+              <dd className="negative">${signal.trade.stop_loss.toFixed(2)}</dd>
+            </div>
+            <div>
+              <dt>{levelsSide(signal.trade) === 'short' ? 'Cover target' : 'Profit target'}</dt>
+              <dd className="positive">${signal.trade.target_1.toFixed(2)}</dd>
+            </div>
+            <div>
+              <dt>R:R</dt>
+              <dd>{signal.trade.risk_reward.toFixed(1)}:1</dd>
+            </div>
+          </dl>
+        </>
       )}
     </div>
   )

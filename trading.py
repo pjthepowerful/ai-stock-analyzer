@@ -483,7 +483,9 @@ _TICKER_ALIASES = {
     "broadcom": "AVGO", "avgo": "AVGO",
     "jpmorgan": "JPM", "jpm": "JPM", "jp morgan": "JPM",
     "goldman": "GS", "goldman sachs": "GS",
-    "berkshire": "BRK-B",
+    "berkshire": "BRK-B", "brkb": "BRK-B", "brk": "BRK-B",
+    # Circle Internet (USDC) — a bare "circle" search otherwise lands on CCCT.
+    "circle": "CRCL", "crcl": "CRCL",
 }
 
 
@@ -524,6 +526,12 @@ def _find_ticker(text: str) -> tuple[str | None, str]:
     # user actually typed them in CAPS (so "so much" doesn't match SO, but "SO"
     # does) — lowercase common words are almost never a ticker reference.
     us_set = ALL_US_TICKERS
+    # Share classes ("BRK.B", "brk-b", "BF/B"): Yahoo spells them with a dash.
+    # Stripping the separator turned BRK.B into BRKB, which has no data.
+    for mcls in re.finditer(r"(?<![\w$.])\$?([A-Za-z]{1,4})[.\-/]([A-Za-z])\b", text):
+        cand = f"{mcls.group(1).upper()}-{mcls.group(2).upper()}"
+        if cand in us_set or mcls.group(0).lstrip("$").isupper():
+            return cand, "US"
     # An indicator that's also a ticker ("the RSI on AAPL") only counts if
     # nothing else in the message is a ticker; "$RSI" always means the stock.
     jargon_hit = None
@@ -3079,7 +3087,17 @@ def generate_trade_signal(data: dict) -> dict:
 # ── Data fetching ────────────────────────────────────────────────────────────
 
 @st.cache_data(ttl=120)
+def _yahoo_symbol(ticker: str) -> str:
+    """Yahoo spells share classes with a dash (BRK-B); people and Polygon use a
+    dot. Exchange suffixes (.NS/.BO) keep theirs."""
+    t = (ticker or "").strip().upper()
+    if re.fullmatch(r"[A-Z]{1,5}\.[A-Z]", t):
+        return t.replace(".", "-")
+    return t
+
+
 def fetch_price(ticker: str) -> dict | None:
+    ticker = _yahoo_symbol(ticker)
     # ── yfinance ──
     # .info is the richest source but ALSO the most aggressively rate-limited
     # endpoint yfinance has. When several tickers are fetched back-to-back, Yahoo
@@ -3699,6 +3717,7 @@ def fetch_scan(ticker: str) -> dict | None:
 _FULL_CACHE = {}  # ticker -> (timestamp, data)  short TTL so analyze tab & chat agree
 
 def fetch_full(ticker: str) -> dict | None:
+    ticker = _yahoo_symbol(ticker)
     # Serve a recent cached result so two independent calls for the same ticker
     # (e.g. the Analyze tab and a chat analysis moments apart) return identical
     # data  and therefore identical scores. 60s TTL keeps it fresh enough.
@@ -3718,6 +3737,7 @@ def fetch_full(ticker: str) -> dict | None:
 
 
 def _fetch_full_uncached(ticker: str) -> dict | None:
+    ticker = _yahoo_symbol(ticker)
     basic = fetch_price(ticker)
     if not basic:
         return None
@@ -3739,13 +3759,23 @@ def _fetch_full_uncached(ticker: str) -> dict | None:
         news = []
         try:
             for n in (stk.news or [])[:5]:
-                news.append({"title": n.get("title", ""), "publisher": n.get("publisher", "")})
+                c = n.get("content") if isinstance(n.get("content"), dict) else n
+                title = c.get("title") or ""
+                if not title:
+                    continue
+                pub = (c.get("provider") or {}).get("displayName") if isinstance(c.get("provider"), dict) else c.get("publisher")
+                when = c.get("pubDate") or c.get("displayTime") or ""
+                if not when and n.get("providerPublishTime"):
+                    when = datetime.fromtimestamp(int(n["providerPublishTime"]), ZoneInfo("UTC")).isoformat()
+                news.append({"title": title, "publisher": pub or "", "date": str(when)[:10]})
         except Exception:
             pass
         return {
             **basic, "ticker": ticker.replace(".NS", ""), "full_ticker": ticker,
             "history_days": int(len(hist)) if hist is not None else 0,
             "stale_days": int(stale_days),
+            "last_bar_date": (str(hist.index[-1])[:10] if hist is not None and not hist.empty else None),
+            "quote_time": datetime.now(ZoneInfo("US/Eastern")).strftime("%Y-%m-%d %H:%M ET"),
             "delisted": bool(stale_days > 5),
             "peg_ratio": info.get("pegRatio"), "roe": info.get("returnOnEquity"),
             "profit_margin": info.get("profitMargins"),
@@ -4393,7 +4423,9 @@ def route(msg: str, history: list = None) -> dict:
             "how ", "should i", "does this", "do you think", "mean", "tell me",
             "is it a good", "is this a good", "worth", "thoughts", "opinion",
             "would you", "can you explain", "help me understand", "break down",
+            "good buy", "a buy", "good time", "right time", "buy zone", "buy point", "entry", "worth buying",
         ])
+        or bool(re.match(r"^\s*(is|are|was|can|could|will|does|do|did|should|would|when|where|which|who|how|what)\b", m))
     )
     # But an explicit imperative like "yes buy it" / "go ahead and buy 5 AAPL"
     # should still work  only treat as a question when there's no clear command lead.
@@ -7664,11 +7696,11 @@ def _scrub_trade_levels_for_llm(stock_data: dict | None) -> dict | None:
         t1 = tr.get("target", tr.get("target_1", 0))
         t2 = tr.get("target_2", 0)
         rr = tr.get("risk_reward", tr.get("rr", 0))
-        plan = f"Entry ${e} · Stop ${s} · Target ${t1}"
+        plan = f"Entry ${e} · Stop loss ${s} (the exit if it goes wrong) · Profit target ${t1}"
         if t2 and abs(float(t2) - float(t1)) > 0.01:
-            plan += f"(then ${t2})"
+            plan += f" (second target ${t2})"
         if rr:
-            plan += f"· about {rr}:1 risk-reward"
+            plan += f" · about {rr}:1 risk-reward"
         # Spell out the target relationship explicitly. The model tends to repeat
         # the entry as the target when entry == current price; naming the target
         # as the profit exit and its direction relative to entry prevents that.
@@ -7676,11 +7708,13 @@ def _scrub_trade_levels_for_llm(stock_data: dict | None) -> dict | None:
             _dir = "ABOVE" if float(t1) > float(e) else "BELOW"
         except Exception:
             _dir = "away from"
+        _sdir = "BELOW" if _dir == "ABOVE" else "ABOVE"
         sd["trade_plan"] = (
             "USE THESE EXACT LEVELS — do not recompute. " + plan
-            + f". The profit target is ${t1} (the exit for gains, {_dir} the entry ${e}); "
-            + f"the entry is ${e}. These are DIFFERENT numbers — never write the target "
-            + "as equal to the entry or the current price."
+            + f". The STOP LOSS is ${s} ({_sdir} the entry — where you get out to cap the loss). "
+            + f"The PROFIT TARGET is ${t1} ({_dir} the entry — where you take gains). "
+            + f"The entry is ${e}, the current price. These are three DIFFERENT numbers — never swap the stop "
+            + "and the target, and never write the stop or the target as the entry or the current price."
         )
         # Remove the raw numeric level fields so the model can't accidentally grab
         # the wrong one (e.g. echo the entry as the target). The clean sentence
@@ -7690,6 +7724,14 @@ def _scrub_trade_levels_for_llm(stock_data: dict | None) -> dict | None:
             if isinstance(sd.get("trade"), dict):
                 sd["trade"].pop(k, None)
 
+    # Wall Street's price targets are not Paula's trade target. Renamed so the
+    # model can't pass the analyst consensus off as the profit target.
+    for _k, _nk in (("target_price", "analyst_consensus_price_target"),
+                    ("target_high", "analyst_highest_price_target"),
+                    ("target_low", "analyst_lowest_price_target")):
+        if _k in sd:
+            sd[_nk] = sd.pop(_k)
+
     if not plan_ok:
         # strip every level field anywhere in the payload
         for k in ("entry", "stop", "stop_loss", "target", "target_1", "target_2", "risk_reward", "rr", "risk_pct"):
@@ -7698,8 +7740,12 @@ def _scrub_trade_levels_for_llm(stock_data: dict | None) -> dict | None:
                 sd["trade"].pop(k, None)
         # also remove support/resistance arrays  the LLM repurposes them as fake
         # "targets"/"stops" when asked directly ("target and stop loss for QCOM").
-        for k in ("supports", "resistances", "support_levels", "resistance_levels", "support", "resistance"):
+        _sr = ("supports", "resistances", "support_levels", "resistance_levels", "support", "resistance")
+        for k in _sr:
             sd.pop(k, None)
+        if isinstance(sd.get("technicals"), dict):
+            for k in _sr:
+                sd["technicals"].pop(k, None)
         sd["trade_plan"] = ("NONE  this is not an actionable BUY setup. There is NO entry, stop, or target. "
                             "If the user asks for a target or stop, tell them there is no trade setup here and "
                             "why (e.g. downtrend / HOLD), and do NOT invent or derive any price level from support, "
@@ -7763,7 +7809,7 @@ CHAT HISTORY:
 - If the user says "what about that one?"  refer to the last stock discussed.
 - If they say "buy it"  they mean the last ticker mentioned.
 - Remember what you've already told them and don't repeat yourself.
-- If a price was mentioned earlier in the conversation, you CAN reference it.
+- Prices and levels in EARLIER messages can be out of date (a saved chat may be days old). When LIVE DATA is attached, it is the only source for price, change, entry, stop and target — use it even if an earlier message said something different, and never repeat an old level. Only mention an earlier price when no live data is attached, and say it was from earlier in the chat.
 - If the user says "rewrite" or "above you said"  look at previous messages.
 
 BANNED PHRASES (NEVER say these  they make you sound broken):

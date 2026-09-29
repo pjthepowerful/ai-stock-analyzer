@@ -146,16 +146,76 @@ def _fmt_web_result(w: dict) -> str:
     return base + (f" (source: {dom})" if dom else "")
 
 
-def _fix_prices(text: str, real_price: float, min_diff: float = 0.20) -> str:
+def _known_numbers(data, out: Optional[set] = None, depth: int = 0) -> set:
+    """Every number in the data the model was given — prices, levels, SMAs,
+    52-week range, analyst targets. A dollar figure that matches one of these
+    came from the data, not from the model's memory."""
+    out = set() if out is None else out
+    if depth > 6:
+        return out
+    if isinstance(data, bool):
+        return out
+    if isinstance(data, (int, float)):
+        if data == data and abs(data) > 0:
+            out.add(float(data))
+    elif isinstance(data, str):
+        for m in re.finditer(r"\$?(\d{1,6}(?:,\d{3})*(?:\.\d+)?)", data):
+            try:
+                out.add(float(m.group(1).replace(",", "")))
+            except ValueError:
+                pass
+    elif isinstance(data, dict):
+        for v in data.values():
+            _known_numbers(v, out, depth + 1)
+    elif isinstance(data, (list, tuple)):
+        for v in data:
+            _known_numbers(v, out, depth + 1)
+    return out
+
+
+# Words just before a dollar figure that mean it's a level, a range end or a
+# hypothetical — never the stock's current price.
+_LEVEL_WORDS = re.compile(
+    r"(stop|target|entry|enter|exit|support|resistance|level|high|low|sma|ema|ma\b|vwap|average|"
+    r"floor|ceiling|breakout|break|above|below|under|over|toward|towards|to\b|from|between|near|around|"
+    r"back to|pullback|pull back|drops?|falls?|rises?|hits?|reach|if\b|trim|profit|loss|cover|risk|"
+    r"per share|range|analyst|consensus|objective|was\b|were\b|ago|last|previous|prior|close[ds]?\b|open(?:ed)?\b|"
+    r"bought|sold|paid|cost|basis|avg|worth)",
+    re.I,
+)
+# Words that do mean "this is the current price" — the only claim worth fixing.
+_PRICE_WORDS = re.compile(r"(\bat|currently|price is|price of|last price|quoted|trading|trades)\s*(?:about|around|roughly)?\s*$", re.I)
+
+
+def _fix_prices(text: str, real_price: float, min_diff: float = 0.20, known: Optional[set] = None) -> str:
+    """Correct a hallucinated CURRENT price (usually a stale one from the
+    model's training data) to the live one.
+
+    It must only touch figures stated as the current price. The old version
+    rewrote every dollar figure far from the price, so a real target 30% up
+    or a stop 10% down came out as the current price."""
+    known = known or set()
+
+    def _is_known(x: float) -> bool:
+        return any(abs(x - k) <= max(0.011, abs(k) * 0.005) for k in known)
+
     def _repl(match):
         try:
             mentioned = float(match.group(1).replace(",", ""))
-            if mentioned > 1 and abs(mentioned - real_price) / real_price > min_diff:
-                return f"${real_price:.2f}"
-        except Exception:
-            pass
-        return match.group(0)
-    return re.sub(r"\$(\d{1,5}(?:,\d{3})*\.?\d{0,2})", _repl, text)
+        except ValueError:
+            return match.group(0)
+        if mentioned <= 1 or abs(mentioned - real_price) / real_price <= min_diff or _is_known(mentioned):
+            return match.group(0)
+        # "$3.2B", "$450 million", "$20%": sizes and amounts, not prices.
+        tail = text[match.end():match.end() + 12].lower()
+        if re.match(r"\s*(b|m|k|t|bn|mm|billion|million|thousand|trillion|%)\b", tail):
+            return match.group(0)
+        before = text[max(0, match.start() - 40):match.start()]
+        if not _PRICE_WORDS.search(before) or _LEVEL_WORDS.search(before[-18:]):
+            return match.group(0)
+        return f"${real_price:,.2f}"
+
+    return re.sub(r"\$(\d{1,6}(?:,\d{3})*(?:\.\d{1,2})?)", _repl, text)
 
 
 async def build_response(
@@ -204,7 +264,7 @@ async def build_response(
                 resp = ai_text
                 price = data.get("price", 0) if data else 0
                 if price and ticker:
-                    resp = _fix_prices(resp, price)
+                    resp = _fix_prices(resp, price, known=_known_numbers([data, result.get("signal_data")]))
 
         elif rtype == "position_size":
             resp = await loop.run_in_executor(None, in_request_context(engine.ai_response), user_msg, {"position_size": result.get("data", {})}, chat_history, "US")
@@ -243,7 +303,7 @@ async def build_response(
         rd = result.get("data") or {}
         real_price = rd.get("price", 0) if isinstance(rd, dict) else 0
         if real_price and real_price > 0:
-            resp = _fix_prices(resp, real_price, min_diff=0.25)
+            resp = _fix_prices(resp, real_price, min_diff=0.25, known=_known_numbers([rd, result.get("signal_data")]))
 
     if not ai_failed:
         chat_history.append({"role": "assistant", "content": resp})
@@ -366,7 +426,7 @@ def _earnings_calendar_snapshot() -> Optional[dict]:
         picks = [r for v in out.values() for r in v["largest"][:2]]
         for r, p in zip(picks, pmap(lambda r: tp.plan(r["ticker"]), picks)):
             if p.get("available"):
-                r["trade_plan"] = {k: p.get(k) for k in ("entry", "stop", "stop_pct", "targets", "earnings_move_pct")}
+                r["trade_plan"] = {k: p.get(k) for k in ("side", "entry", "stop", "stop_pct", "targets", "earnings_move_pct")}
         return {
             "earnings_calendar": out,
             "note": ("Paula's own earnings calendar (same as the Earnings screen). Answer from THIS list, biggest names first; "
@@ -376,6 +436,20 @@ def _earnings_calendar_snapshot() -> Optional[dict]:
         }
     except Exception:
         return None
+
+
+def _tickers_in(msg: str) -> list[str]:
+    """Every stock the message names — company name, ticker in any case, or
+    alias. The old check only knew a hard-coded ~110 symbols, so any other
+    name got no live data and the model answered from memory (old prices) or
+    said it had no data."""
+    try:
+        found = engine.find_all_tickers(msg, limit=5)
+    except Exception:
+        found = []
+    if not found:
+        found = [t for t in re.findall(r"\b([A-Z]{1,5})\b", msg) if t in KNOWN_TICKERS]
+    return found
 
 
 async def _generic_reply(loop, user_msg: str, result: Optional[dict], chat_history: list) -> str:
@@ -420,7 +494,7 @@ async def _generic_reply(loop, user_msg: str, result: Optional[dict], chat_histo
     wants_news = not chat_data.get("earnings_calendar") and any(w in ml for w in ["news", "latest", "happening", "headline", "earnings", "report", "announced", "update on", "what's going on", "whats going on", "why is", "why did", "catalyst", "recent", "today"])
     if wants_news and not (result and result.get("private_company")):
         try:
-            nt = next((w for w in re.findall(r"\b([A-Z]{1,5})\b", user_msg) if w in KNOWN_TICKERS), None)
+            nt = next(iter(_tickers_in(user_msg)), None)
             news = engine.fetch_news(nt, limit=5)
             if news:
                 lines = "\n".join(f"- ({n['date']}) {n['title']} — {n['publisher']}: {n['summary']}" for n in news)
@@ -452,7 +526,7 @@ async def _fallback_reply(loop, user_msg: str, result: Optional[dict], chat_hist
         fall_data = cal
     else:
         try:
-            cur = [t for t in re.findall(r"\b([A-Z]{1,5})\b", user_msg) if t in KNOWN_TICKERS]
+            cur = _tickers_in(user_msg)
             if cur:
                 fall_data = engine.fetch_full(cur[0])
             is_news = any(w in fl for w in ["news", "latest", "happening", "headline", "earnings", "why is", "why did", "catalyst", "recent", "update"])
