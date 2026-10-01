@@ -38,6 +38,16 @@ _fake._update_stop_order = lambda *a, **k: {"ok": True}
 sys.modules.setdefault("trading", _fake)
 
 import smallcap_pullback as scp  # noqa: E402
+import pytest  # noqa: E402
+
+
+# setdefault above is a no-op when another test file already imported the real
+# trading.py (via engine), and then these tests would run against the live
+# market/account code. Point smallcap's lazy trading handle at the stub for
+# every test here; fake_market() does the same for callers in other files.
+@pytest.fixture(autouse=True)
+def _use_fake_trading(monkeypatch):
+    monkeypatch.setattr(scp, "_t", lambda: _fake)
 
 ET = scp.ET
 STRICT = scp.get_mode("strict")
@@ -850,6 +860,7 @@ def fake_market(tickers=("ABCD", "WXYZ"), setup_grade=80, buy_ok=True):
            "atr5": 0.09, "pdh": 4.85, "pdl": 4.2, "prev_close": 4.03, "pmh": 4.95,
            "orh": 4.98, "orl": 4.6, "hod": 5.10, "hvn": 4.97, "now": None}
 
+    _stub("_t", lambda: _fake)
     _stub("time_adjusted_rvol", lambda t, now=None: 6.5)
     _stub("float_and_cap", lambda t: (30e6, 100e6))
     _stub("dollar_volume_today", lambda t, now=None: (20e6, 60e6))
