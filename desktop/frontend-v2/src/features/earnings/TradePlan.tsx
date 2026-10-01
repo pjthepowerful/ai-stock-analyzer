@@ -1,6 +1,9 @@
 export interface Plan {
   available: boolean
   side: 'long' | 'short'
+  /** 'bearish' when the earnings read leans down: same buyer's levels, not a buy. */
+  lean?: 'bearish'
+  lean_note?: string
   note?: string
   entry?: number
   stop?: number
@@ -31,7 +34,7 @@ export function TradePlanInline({ plan }: { plan?: Plan }) {
   if (!plan?.available || plan.entry == null || plan.stop == null || !plan.targets) return null
   return (
     <span className="plan-inline" title={plan.warning ?? plan.basis}>
-      {plan.side === 'short' && <span className="plan-side">Short</span>}
+      {plan.lean === 'bearish' && <span className="plan-side">Not a buy</span>}
       <span>
         Stop <b className="plan-neg">{usd(plan.stop)}</b>
       </span>
@@ -56,15 +59,16 @@ export function TradePlan({ plan }: { plan?: Plan }) {
     return plan.note ? <p className="plan-note">No levels — {plan.note}</p> : null
   }
   const { entry, stop, targets } = plan
-  const rs = plan.target_r ?? [2, 3]
+  const rs = plan.target_r ?? [3, 5]
   const risk = Math.abs(entry - stop)
   const reward = Math.abs(targets[targets.length - 1] - entry)
   const riskShare = (risk / (risk + reward)) * 100
 
   return (
     <div className="plan">
+      {plan.lean_note && <p className="plan-warn">{plan.lean_note}</p>}
       <div className="plan-grid">
-        <Level label={plan.side === 'short' ? 'Short entry' : 'Entry'} value={usd(entry)} sub="last close" />
+        <Level label="Entry" value={usd(entry)} sub="live price" />
         <Level label="Stop loss" value={usd(stop)} sub={pct(entry, stop)} tone="neg" />
         {targets.map((t, i) => (
           <Level key={i} label={`Target ${i + 1}`} value={usd(t)} sub={`${pct(entry, t)} · ${rs[i]}R`} tone="pos" />
@@ -77,7 +81,7 @@ export function TradePlan({ plan }: { plan?: Plan }) {
       <p className="plan-meta">
         Stop is {plan.basis}.
         {plan.resistance != null &&
-          ` ${plan.side === 'short' ? 'Support' : 'Resistance'} at ${usd(plan.resistance)} (60-day ${plan.side === 'short' ? 'low' : 'high'}) comes before target 1.`}
+          ` Resistance at ${usd(plan.resistance)} (60-day high) comes before target 1.`}
         {plan.shares != null && plan.shares > 0 && ` ~${plan.shares} sh risks ${usd(plan.risk_dollars ?? 0)} (${plan.size_note}).`}
       </p>
       {plan.warning ? (

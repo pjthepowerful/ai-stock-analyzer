@@ -426,7 +426,7 @@ def _earnings_calendar_snapshot() -> Optional[dict]:
         picks = [r for v in out.values() for r in v["largest"][:2]]
         for r, p in zip(picks, pmap(lambda r: tp.plan(r["ticker"]), picks)):
             if p.get("available"):
-                r["trade_plan"] = {k: p.get(k) for k in ("side", "entry", "stop", "stop_pct", "targets", "earnings_move_pct")}
+                r["trade_plan"] = {k: p.get(k) for k in ("lean", "entry", "stop", "stop_pct", "targets", "earnings_move_pct")}
         return {
             "earnings_calendar": out,
             "note": ("Paula's own earnings calendar (same as the Earnings screen). Answer from THIS list, biggest names first; "

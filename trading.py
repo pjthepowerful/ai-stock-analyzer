@@ -3047,10 +3047,10 @@ def generate_trade_signal(data: dict) -> dict:
     _pe, _ps, _pt1, _pt2, _pr, _prp = _long_levels()
     plan = {
         "side": "long",
-        "entry": round(_pe, 2), "stop_loss": round(_ps, 2),
-        "target_1": _pt1, "target_2": _pt2,
-        "risk_reward": round((_pt1 - _pe) / _pr, 2) if _pr > 0 else 0,
-        "risk_pct": _prp, "atr": round(atr, 2),
+        "entry": round(float(_pe), 2), "stop_loss": round(float(_ps), 2),
+        "target_1": round(float(_pt1), 2), "target_2": round(float(_pt2), 2),
+        "risk_reward": round(float((_pt1 - _pe) / _pr), 2) if _pr > 0 else 0,
+        "risk_pct": float(_prp), "atr": round(float(atr), 2),
     }
 
     # Sub-scores for visual cards (0-100 scale)

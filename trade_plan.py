@@ -2,9 +2,10 @@
 Trade plan for an earnings idea — entry, stop loss, targets, size.
 
 Every earnings screen answers "is this worth looking at"; this answers "and if
-I take it, where am I wrong". Levels come from the stock's own daily range
-(ATR) and its recent swing low, not a flat percentage, so a sleepy utility and
-a biotech get stops that fit how they actually move.
+I take it, where am I wrong". Entry, stop and targets come from the main signal
+engine (trading.generate_trade_signal's buyer's plan), so they match Analyze,
+chat and scans for the same ticker. This module adds what's specific to
+earnings: the typical earnings-day move, gap warnings and risk-based size.
 
 The one thing a stop cannot do is protect through an earnings gap: the stock
 opens past it and the order fills wherever the market is. So every plan also
@@ -21,11 +22,8 @@ import threading
 import time
 
 ATR_DAYS = 14
-ATR_STOP_MULT = float(os.environ.get("PLAN_ATR_STOP_MULT", 2.0))
-SWING_DAYS = 10
 # Account risk per idea: lose this fraction of equity if the stop fills.
 RISK_PCT = float(os.environ.get("PLAN_RISK_PCT", 0.01))
-TARGET_R = (2.0, 3.0)
 GAP_WARN_DAYS = 30
 
 _BARS_TTL = 15 * 60
@@ -93,6 +91,25 @@ def earnings_moves(ticker: str, df=None) -> list[float]:
     return moves[:8]
 
 
+def _engine_levels(ticker: str) -> dict | None:
+    """The buyer's plan from the main signal engine, on live data."""
+    try:
+        import sys
+        if "trading" not in sys.modules:
+            import engine  # noqa: F401  installs the streamlit shim trading.py needs
+        import trading
+        d = trading.fetch_full(ticker)
+        if not d or not d.get("price"):
+            return None
+        sig = trading.generate_trade_signal(d)
+        p = sig.get("plan")
+        if not p or not (p["stop_loss"] < p["entry"] < p["target_1"]):
+            return None
+        return {**p, "action": sig.get("action"), "score": sig.get("score")}
+    except Exception:
+        return None
+
+
 def _money(x: float) -> str:
     return f"${x:,.2f}"
 
@@ -105,39 +122,39 @@ def plan(ticker: str, side: str = "long", equity: float | None = None,
     days_away / date_str) — pass it when the caller already has it.
     Never raises; `available: False` with a `note` when there's no data.
     """
-    side = "short" if side == "short" else "long"
+    # Plans are always shown from the buyer's side (stop below, targets above).
+    # A bearish idea keeps those levels and says it leans bearish instead of
+    # flipping to a short plan whose stop sits above its target.
+    bearish = side == "short"
+    side = "long"
     out = {"available": False, "side": side, "note": ""}
     df = _bars(ticker)
     if df is None:
         out["note"] = "no price history to set levels from"
         return out
     try:
-        entry = float(df["Close"].iloc[-1])
-        atr = _atr(df)
-        if not atr or entry <= 0:
+        # Levels come from the SAME engine as Analyze, chat and scans
+        # (generate_trade_signal's buyer's plan on live fetch_full data), so a
+        # ticker shows one entry/stop/target everywhere in the app.
+        lv = _engine_levels(ticker)
+        if not lv:
+            out["note"] = "not enough price history to set levels"
+            return out
+        entry, stop = lv["entry"], lv["stop_loss"]
+        atr = lv.get("atr") or _atr(df) or 0
+        sign = 1
+        risk = abs(entry - stop)
+        if risk <= 0:
             out["note"] = "not enough price history to measure its range"
             return out
-        sign = 1 if side == "long" else -1
-
-        # Stop: under the recent swing low (over the swing high for a short)
-        # when that's a sensible distance away, else 2× ATR. A swing point
-        # closer than 1 ATR is inside normal noise and would get tagged by an
-        # ordinary day; one further than the ATR stop risks too much.
-        atr_stop = entry - sign * ATR_STOP_MULT * atr
-        recent = df.tail(SWING_DAYS)
-        swing = (float(recent["Low"].min()) - 0.25 * atr) if side == "long" \
-            else (float(recent["High"].max()) + 0.25 * atr)
-        dist_swing = sign * (entry - swing)
-        if atr <= dist_swing <= ATR_STOP_MULT * atr:
-            stop = swing
-            basis = f"just {'under' if side == 'long' else 'over'} the {SWING_DAYS}-day swing {'low' if side == 'long' else 'high'}"
-        else:
-            stop = atr_stop
-            basis = f"{ATR_STOP_MULT:g}× its average daily range ({_money(atr)})"
-        risk = abs(entry - stop)
-        targets = [entry + sign * r * risk for r in TARGET_R]
-        if side == "short" and targets[-1] <= 0:
-            targets = [max(t, 0.01) for t in targets]
+        targets = [lv["target_1"], lv["target_2"]]
+        target_r = [round((t - entry) / risk, 1) for t in targets]
+        basis = ("set by Paula's signal engine, the same levels as Analyze: under support "
+                 "or about 2× its daily range, kept 3–10% away")
+        if bearish:
+            out["lean"] = "bearish"
+            out["lean_note"] = ("The read leans bearish, so this isn't a buy. These are the levels "
+                                "for anyone who holds it or buys anyway.")
 
         out.update({
             "available": True,
@@ -145,11 +162,13 @@ def plan(ticker: str, side: str = "long", equity: float | None = None,
             "stop": round(stop, 2),
             "stop_pct": round(risk / entry * 100, 1),
             "targets": [round(t, 2) for t in targets],
-            "target_r": list(TARGET_R),
+            "target_r": target_r,
             "risk_per_share": round(risk, 2),
             "atr": round(atr, 2),
-            "atr_pct": round(atr / entry * 100, 1),
+            "atr_pct": round(atr / entry * 100, 1) if atr else None,
             "basis": basis,
+            "action": lv.get("action"),
+            "score": lv.get("score"),
         })
 
         # Nearest overhead resistance (support for a short) inside the first
@@ -190,7 +209,7 @@ def plan(ticker: str, side: str = "long", equity: float | None = None,
                 out["warning"] = (f"Reports {when}. A stop doesn't protect through the report — "
                                   f"it can open past it.")
     except Exception as e:
-        out = {"available": False, "side": side, "note": f"couldn't build levels ({type(e).__name__})"}
+        out = {"available": False, "side": "long", "note": f"couldn't build levels ({type(e).__name__})"}
     return out
 
 
@@ -204,7 +223,8 @@ def summary(p: dict) -> str:
     if not p.get("available"):
         return ""
     t = p["targets"]
-    s = (f"{p['side']} plan: entry ~{_money(p['entry'])}, stop {_money(p['stop'])} ({p['stop_pct']}% away), "
+    lean = " (leans bearish, not a buy)" if p.get("lean") == "bearish" else ""
+    s = (f"plan{lean}: entry ~{_money(p['entry'])}, stop {_money(p['stop'])} ({p['stop_pct']}% away), "
          f"targets {_money(t[0])} / {_money(t[1])}")
     if p.get("earnings_move_pct"):
         s += f"; typical earnings move ±{p['earnings_move_pct']}%"
