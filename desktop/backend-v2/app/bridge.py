@@ -35,6 +35,19 @@ try:
 except Exception as e:
     print(f"[bridge] dotenv not loaded: {e}", flush=True)
 
+# yfinance looks up each ticker's timezone with an extra request and caches it
+# on disk. Keep that cache on the persistent volume (DB_DIR on Railway) so a
+# redeploy doesn't start a scan with hundreds of extra Yahoo calls.
+try:
+    import yfinance as _yf
+    _db_dir = os.environ.get("DB_DIR")
+    if _db_dir:
+        _tz_dir = os.path.join(_db_dir, "yf-tz-cache")
+        os.makedirs(_tz_dir, exist_ok=True)
+        _yf.set_tz_cache_location(_tz_dir)
+except Exception as e:
+    print(f"[bridge] yfinance tz cache not moved: {e}", flush=True)
+
 import engine   # noqa: E402  (must come after sys.path/env setup above)
 import auth     # noqa: E402
 

@@ -31,6 +31,9 @@ export interface AnalyzeData {
   change: number
   change_pct: number
   signal: Signal
+  /** 'yahoo' = live quote; 'polygon_close' = a daily close dated quote_date. */
+  quote_source?: string
+  quote_date?: string
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -93,6 +96,9 @@ export function SignalCard({ data }: { data: AnalyzeData }) {
             {Math.abs(data.change).toFixed(2)} ({up ? '+' : '−'}
             {Math.abs(data.change_pct).toFixed(2)}%)
           </span>
+          {data.quote_source === 'polygon_close' && data.quote_date && (
+            <span className="sig-asof">Last close {data.quote_date} · live quote unavailable</span>
+          )}
         </div>
       </div>
 

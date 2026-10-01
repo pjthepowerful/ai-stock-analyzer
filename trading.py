@@ -1103,7 +1103,6 @@ def alpaca_positions() -> list[dict]:
         return []
 
 
-@st.cache_data(ttl=300)
 def trade_track_record(days: int = 30) -> dict:
     """Build a track record from recently CLOSED Alpaca orders so the AI can give
     advice grounded in the user's actual results, not generic platitudes.
@@ -3175,6 +3174,7 @@ def fetch_price(ticker: str) -> dict | None:
             "sector": info.get("sector"),
             "target_price": info.get("targetMeanPrice"),
             "recommendation": info.get("recommendationKey"),
+            "quote_source": "yahoo",
         }
 
     # Fallback: Polygon API. Free tier is 5 req/min, so under load the first call
@@ -3202,8 +3202,13 @@ def fetch_price(ticker: str) -> dict | None:
                     if results:
                         price = results[-1].get("c", 0)
                         prev = results[-2].get("c", price) if len(results) >= 2 else price
+                        # Daily aggregates only: this is a CLOSE, possibly a day
+                        # old (no bar for today until after the close). Date it
+                        # so nothing presents it as a live quote.
+                        _qd = _dt.utcfromtimestamp(results[-1].get("t", 0) / 1000).strftime("%Y-%m-%d")
                         if price and price > 0:
                             return {
+                                "quote_source": "polygon_close", "quote_date": _qd,
                                 "price": round(price, 2), "prev_close": round(prev, 2),
                                 "change": round(price - prev, 2),
                                 "change_pct": round((price - prev) / prev * 100, 2) if prev else 0,
@@ -3493,9 +3498,53 @@ _DELISTED_CACHE = set()
 # minute to minute, so reusing it across back-to-back scans (e.g. a broad scan
 # then a themed one) avoids re-downloading the same 1y history. 90s TTL.
 _SCAN_DATA_CACHE = {}   # ticker -> (timestamp, data)
-_SCAN_CACHE_TTL = 300   # 5 min  daily bars barely move intraday, so repeat
-                        # scans (or overlapping universes) reuse data and are
-                        # near-instant instead of re-downloading.
+# Last good pre-screen data per ticker, kept past the TTL. When Yahoo throttles
+# a bulk download it returns nothing for a random subset; without this, which
+# stocks a scan could even consider changed run to run. Picks it shows are
+# re-scored live (fetch_full), so stale bars only affect the pre-screen.
+_SCAN_LAST_GOOD = {}    # ticker -> (timestamp, data)
+_SCAN_LAST_GOOD_MAX_AGE = 3 * 86400
+
+# Tickers a user scan asked for recently, so the background warmer
+# (warm_scan_cache) keeps exactly those fresh. ticker -> last requested time.
+_SCAN_DEMAND: dict = {}
+_SCAN_DEMAND_WINDOW = 2 * 3600
+_SCAN_WARM_MAX_AGE = 8 * 60
+
+
+def _scan_cache_ttl() -> int:
+    """How long pre-screen data stays usable. A scan only uses it to pick
+    candidates; every pick it shows is re-scored on a live quote (fetch_full),
+    so 15 minutes is fine while the market is open. When it's closed the daily
+    bars can't change, so hours."""
+    try:
+        is_open, _ = _market_is_open()
+    except Exception:
+        is_open = True
+    return 15 * 60 if is_open else 6 * 3600
+
+
+def warm_scan_cache() -> int:
+    """Refresh pre-screen data for tickers users scanned in the last 2 hours,
+    during market hours only. Runs off the request path (see backend-v2
+    lifespan) so a user's scan reads warm data instead of waiting on Yahoo,
+    which throttles bulk downloads. Returns how many tickers it refreshed."""
+    import time as _t
+    try:
+        if not _market_is_open()[0]:
+            return 0
+    except Exception:
+        return 0
+    now = _t.time()
+    for k in [k for k, ts in _SCAN_DEMAND.items() if now - ts > _SCAN_DEMAND_WINDOW]:
+        _SCAN_DEMAND.pop(k, None)
+    stale = [k for k in _SCAN_DEMAND
+             if k not in _DELISTED_CACHE
+             and (k not in _SCAN_DATA_CACHE or now - _SCAN_DATA_CACHE[k][0] > _SCAN_WARM_MAX_AGE)]
+    if not stale:
+        return 0
+    got = batch_fetch_scan(stale, _warming=True)
+    return len(got)
 
 def _clear_yf_session():
     """Force yfinance to drop its cached session + crumb token. Yahoo's
@@ -3527,7 +3576,8 @@ def _clear_yf_session():
         pass
 
 
-def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None, _retry: bool = False) -> dict:
+def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None, _retry: bool = False,
+                     _warming: bool = False) -> dict:
     """Bulk-fetch 1-year history for MANY tickers in a few HTTP requests using
     yf.download (multi-ticker). Returns {ticker: scan_data_dict}. Far faster than
     per-ticker fetch_scan for big universes  one network round-trip per chunk
@@ -3545,11 +3595,19 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None, _r
     # Serve fresh-cached tickers immediately; only download the misses.
     import time as _t
     _now = _t.time()
+    if not _warming and not _retry:
+        for t in tickers:
+            _SCAN_DEMAND[t] = _now
+        if len(_SCAN_DEMAND) > 2000:
+            for _k in sorted(_SCAN_DEMAND, key=_SCAN_DEMAND.get)[:500]:
+                _SCAN_DEMAND.pop(_k, None)
+    _ttl = 0 if _warming else _scan_cache_ttl()
     _need = []
     for t in tickers:
         cached = _SCAN_DATA_CACHE.get(t)
-        if cached and (_now - cached[0]) < _SCAN_CACHE_TTL:
-            out[t] = cached[1]
+        if cached and (_now - cached[0]) < _ttl:
+            if cached[1] is not None:   # None = checked and filtered out (illiquid/thin)
+                out[t] = cached[1]
         else:
             _need.append(t)
     tickers = _need
@@ -3637,13 +3695,22 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None, _r
                 continue
             for t in chunk:
                 try:
-                    # Multi-ticker frame is column-keyed by ticker; single-ticker isn't.
-                    sub = df[t] if len(chunk) > 1 else df
+                    # group_by="ticker" frames are column-keyed by ticker. yfinance
+                    # 1.x does that even for a one-ticker chunk, so check the
+                    # columns rather than len(chunk) (a lone retry used to fail).
+                    if hasattr(df.columns, "levels") and t in df.columns.get_level_values(0):
+                        sub = df[t]
+                    elif len(chunk) == 1 and not hasattr(df.columns, "levels"):
+                        sub = df
+                    else:
+                        _empty.append(t)
+                        continue
                     sub = sub.dropna(how="all")
                     if sub is None or sub.empty:
                         _empty.append(t)
                         continue
                     if len(sub) < 50:
+                        _SCAN_DATA_CACHE[t] = (_now, None)
                         # IMPORTANT: do NOT mark delisted here. An empty frame in a
                         # bulk download usually means Yahoo throttled/blocked the
                         # whole request ("Invalid Crumb" 401), not that the stock is
@@ -3670,6 +3737,7 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None, _r
                         recent = sub.tail(20)
                         avg_dollar_vol = float((recent["Close"] * recent["Volume"]).mean())
                         if avg_dollar_vol < 5_000_000:
+                            _SCAN_DATA_CACHE[t] = (_now, None)
                             continue
                     except Exception:
                         pass
@@ -3689,6 +3757,7 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None, _r
                     }
                     out[t] = data
                     _SCAN_DATA_CACHE[t] = (_now, data)
+                    _SCAN_LAST_GOOD[t] = (_now, data)
                     if len(_SCAN_DATA_CACHE) > 1500:
                         for _k in sorted(_SCAN_DATA_CACHE, key=lambda k: _SCAN_DATA_CACHE[k][0])[:500]:
                             _SCAN_DATA_CACHE.pop(_k, None)
@@ -3702,7 +3771,18 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None, _r
     if _empty and not _retry:
         _time.sleep(1.5)
         _clear_yf_session()
-        out.update(batch_fetch_scan(_empty, skip_news=skip_news, _retry=True))
+        out.update(batch_fetch_scan(_empty, skip_news=skip_news, _retry=True, _warming=_warming))
+    if not _retry:
+        # Still nothing after the retry: fall back to the last good bars.
+        for t in tickers:
+            if t in out:
+                continue
+            lg = _SCAN_LAST_GOOD.get(t)
+            if lg and _now - lg[0] < _SCAN_LAST_GOOD_MAX_AGE and t not in _DELISTED_CACHE:
+                out[t] = lg[1]
+        if len(_SCAN_LAST_GOOD) > 3000:
+            for _k in sorted(_SCAN_LAST_GOOD, key=lambda k: _SCAN_LAST_GOOD[k][0])[:1000]:
+                _SCAN_LAST_GOOD.pop(_k, None)
     return out
 
 
@@ -3791,8 +3871,22 @@ def _fetch_full_uncached(ticker: str) -> dict | None:
         return None
     try:
         stk = yf.Ticker(ticker)
-        info = stk.info or {}
-        hist = stk.history(period="1y")
+        # .info is the endpoint Yahoo throttles first; losing it costs only
+        # fundamentals, so it must not take the price history down with it.
+        try:
+            info = stk.info or {}
+        except Exception:
+            info = {}
+        try:
+            hist = stk.history(period="1y")
+        except Exception:
+            hist = None
+        if hist is None or hist.empty or len(hist) < 50:
+            # Same fallback the scan uses, so a throttled Yahoo doesn't turn a
+            # live stock into NO_DATA here while the scan still scores it.
+            _ph = _polygon_daily_hist(ticker)
+            if _ph is not None and not _ph.empty:
+                hist = _ph
         tech = compute_technicals(hist)
         # Detect delisted/halted: how stale is the most recent bar?
         stale_days = 0
@@ -3823,7 +3917,9 @@ def _fetch_full_uncached(ticker: str) -> dict | None:
             "history_days": int(len(hist)) if hist is not None else 0,
             "stale_days": int(stale_days),
             "last_bar_date": (str(hist.index[-1])[:10] if hist is not None and not hist.empty else None),
-            "quote_time": datetime.now(ZoneInfo("US/Eastern")).strftime("%Y-%m-%d %H:%M ET"),
+            "quote_time": (datetime.now(ZoneInfo("US/Eastern")).strftime("%Y-%m-%d %H:%M ET")
+                           if basic.get("quote_source") == "yahoo"
+                           else f"{basic.get('quote_date', '')} close"),
             "delisted": bool(stale_days > 5),
             "peg_ratio": info.get("pegRatio"), "roe": info.get("returnOnEquity"),
             "profit_margin": info.get("profitMargins"),
@@ -3944,7 +4040,6 @@ def _llm_scan_category(msg: str):
         return None
 
 
-@st.cache_data(ttl=900)
 def _llm_classify_intent(msg: str, history: list = None) -> dict | None:
     """Second-opinion router for messages the keyword router can't confidently
     place. The LLM proposes BOTH the intent AND which ticker(s) the user means —

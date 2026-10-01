@@ -99,6 +99,8 @@ def _quote(result: Optional[dict]) -> Optional[dict]:
         "price": d.get("price", 0),
         "change": d.get("change", 0),
         "change_pct": d.get("change_pct", 0),
+        "quote_source": d.get("quote_source"),
+        "quote_date": d.get("quote_date"),
     }
 
 

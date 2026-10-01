@@ -18,6 +18,51 @@ class _MockSessionState(dict):
     def get(self, key, default=None):
         return super().get(key, default)
 
+import copy as _copy
+import functools as _functools
+import threading as _threading
+import time as _time
+
+
+def _ttl_cache(ttl):
+    seconds = ttl.total_seconds() if hasattr(ttl, "total_seconds") else (float(ttl) if ttl else None)
+
+    def decorator(func):
+        store = {}                      # key -> (expires_at, value)
+        locks = {}
+        guard = _threading.Lock()
+
+        @_functools.wraps(func)
+        def wrapper(*args, **kw):
+            try:
+                key = (args, tuple(sorted(kw.items())))
+                hash(key)
+            except TypeError:
+                return func(*args, **kw)          # unhashable args: don't cache
+            hit = store.get(key)
+            if hit and (hit[0] is None or hit[0] > _time.time()):
+                return _copy.deepcopy(hit[1])
+            with guard:
+                lock = locks.setdefault(key, _threading.Lock())
+            with lock:                            # one fetch per key at a time
+                hit = store.get(key)
+                if hit and (hit[0] is None or hit[0] > _time.time()):
+                    return _copy.deepcopy(hit[1])
+                value = func(*args, **kw)
+                # Don't pin a failure (None / empty) for the whole TTL.
+                if value is not None and not (hasattr(value, "__len__") and len(value) == 0):
+                    store[key] = (_time.time() + seconds if seconds else None, value)
+                    if len(store) > 2000:
+                        now = _time.time()
+                        for k in [k for k, (exp, _) in store.items() if exp and exp < now]:
+                            store.pop(k, None)
+                return _copy.deepcopy(value)
+
+        wrapper.clear = store.clear
+        return wrapper
+    return decorator
+
+
 class _MockStreamlit:
     """Minimal mock of streamlit module."""
     secrets = _MockSecrets()
@@ -25,9 +70,12 @@ class _MockStreamlit:
 
     @staticmethod
     def cache_data(ttl=None, **kwargs):
-        def decorator(func):
-            return func
-        return decorator
+        """A real TTL cache, like st.cache_data. It used to return the function
+        unchanged, so every @st.cache_data in trading.py was uncached in the
+        app: a scan re-downloaded the 11 sector ETFs for every stock it scored
+        (156 of a 183-second scan) and got the server rate-limited by Yahoo.
+        Only market-data functions carry the decorator; nothing per-user."""
+        return _ttl_cache(ttl)
 
     @staticmethod
     def set_page_config(**kwargs): pass

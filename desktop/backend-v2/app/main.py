@@ -27,7 +27,7 @@ from .routers import plus as plus_router
 from .routers import research as research_router
 from .routers import strategy as strategy_router
 from .routers import trade as trade_router
-from .services import autopilot_runner
+from .services import autopilot_runner, scan_warmer
 from .ws import manager
 
 
@@ -36,6 +36,7 @@ from .ws import manager
 async def lifespan(_app: FastAPI):
     # Keep the market strip's cache warm so no page load waits on it.
     warm = asyncio.create_task(overview_router.keep_warm())
+    scan_warm = asyncio.create_task(scan_warmer.keep_warm())
     # Autopilot runs unattended: bring it back if it was on before a restart.
     try:
         await autopilot_runner.resume_if_needed()
@@ -43,6 +44,7 @@ async def lifespan(_app: FastAPI):
         print(f"[autopilot] could not resume: {e!r}", flush=True)
     yield
     warm.cancel()
+    scan_warm.cancel()
     await autopilot_runner.shutdown()
 
 
