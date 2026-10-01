@@ -7,7 +7,6 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from ..bridge import engine
 from ..deps import broker_user_required, current_user_optional
 from ..services import popularity
-from ..services.ttl import TTLCache
 
 router = APIRouter(prefix="/api", tags=["market"])
 
@@ -56,9 +55,6 @@ def get_orders(status: str = "open", limit: int = 10, authorization: str = Heade
     return {"ok": True, "data": engine.alpaca_orders(status=status, limit=limit)}
 
 
-_analyze_cache = TTLCache(ttl=60)
-
-
 class _NoData(Exception):
     pass
 
@@ -82,9 +78,9 @@ def analyze_ticker(ticker: str, request: Request, authorization: str = Header(No
         return {**data, "signal": engine.generate_trade_signal(data)}
 
     try:
-        # Quotes/signals barely move inside a minute; re-opening a ticker you
-        # just viewed shouldn't redo every upstream call.
-        data = _analyze_cache.get_or_set(t, build)
+        # engine.fetch_full already caches each ticker for 60s (shared with
+        # chat and scans); a second cache here doubled how stale a quote could be.
+        data = build()
         user = current_user_optional(authorization)
         popularity.record(t, user_id=(user or {}).get("id"), ip=request.client.host if request.client else None)
         return {"ok": True, "data": data}
