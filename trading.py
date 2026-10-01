@@ -2983,11 +2983,15 @@ def generate_trade_signal(data: dict) -> dict:
         MAX_STOP_PCT = 0.04
         MIN_STOP_PCT = 0.015
         STOP_ATR_MULT = 3.0
-    if action in ("BUY", "STRONG_BUY"):
+    def _long_levels():
+        """Long-side levels: stop BELOW entry, targets ABOVE. Used for buys and
+        as the buyer's plan shown on every rating (see `plan` below)."""
         entry = price
         # Stop loss: ATR-based below entry, or below nearest support
         stop_atr = round(entry - STOP_ATR_MULT * atr, 2)
-        stop_support = round(supports[0] - 0.3 * atr, 2) if supports and (price - supports[0]) / price < 0.05 else stop_atr
+        # Only a support that sits below the price (and within 5%) can anchor a long stop.
+        stop_support = (round(supports[0] - 0.3 * atr, 2)
+                        if supports and 0 < (price - supports[0]) / price < 0.05 else stop_atr)
         stop_loss = max(stop_atr, stop_support)
         # Clamp stop distance to [MIN_STOP_PCT, MAX_STOP_PCT] of entry.
         min_stop = round(entry * (1 - MIN_STOP_PCT), 2)   # nearest allowed (tight)
@@ -3001,6 +3005,10 @@ def generate_trade_signal(data: dict) -> dict:
         target_1 = round(entry + 3.0 * risk, 2)
         target_2 = round(entry + 5.0 * risk, 2)
         risk_pct = round(risk / entry * 100, 2)
+        return entry, stop_loss, target_1, target_2, risk, risk_pct
+
+    if action in ("BUY", "STRONG_BUY"):
+        entry, stop_loss, target_1, target_2, risk, risk_pct = _long_levels()
     elif action in ("SELL", "STRONG_SELL"):
         entry = price
         stop_loss = round(price + STOP_ATR_MULT * atr, 2)
@@ -3032,7 +3040,19 @@ def generate_trade_signal(data: dict) -> dict:
     
     rr = round((target_1 - entry) / risk, 2) if risk > 0 and target_1 > entry else (
          round((entry - target_1) / risk, 2) if risk > 0 and entry > target_1 else 0)
-    
+
+    # `trade` can be short-side (SELL, bearish HOLD): autopilot shorts with it.
+    # `plan` is always the buyer's view  stop below, targets above  so Analyze,
+    # chat and the scan never show a stop above the target to someone going long.
+    _pe, _ps, _pt1, _pt2, _pr, _prp = _long_levels()
+    plan = {
+        "side": "long",
+        "entry": round(_pe, 2), "stop_loss": round(_ps, 2),
+        "target_1": _pt1, "target_2": _pt2,
+        "risk_reward": round((_pt1 - _pe) / _pr, 2) if _pr > 0 else 0,
+        "risk_pct": _prp, "atr": round(atr, 2),
+    }
+
     # Sub-scores for visual cards (0-100 scale)
     # Trend must be DIRECTIONAL: a high ADX (strong trend) only helps if price is
     # actually trending up. In a downtrend, trend strength counts against the score.
@@ -3097,6 +3117,7 @@ def generate_trade_signal(data: dict) -> dict:
             "risk_pct": risk_pct,
             "atr": round(atr, 2),
         },
+        "plan": plan,
     }
 
 # ── Data fetching ────────────────────────────────────────────────────────────
@@ -3506,7 +3527,7 @@ def _clear_yf_session():
         pass
 
 
-def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None) -> dict:
+def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None, _retry: bool = False) -> dict:
     """Bulk-fetch 1-year history for MANY tickers in a few HTTP requests using
     yf.download (multi-ticker). Returns {ticker: scan_data_dict}. Far faster than
     per-ticker fetch_scan for big universes  one network round-trip per chunk
@@ -3584,7 +3605,8 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None) ->
     from concurrent.futures import as_completed
     _total = len(tickers)
     _done = 0
-    if progress_cb:
+    _empty = []   # tickers Yahoo returned nothing for (usually throttling)
+    if progress_cb and not _retry:
         try: progress_cb(0, _total, "fetching")
         except Exception: pass
     # IMPORTANT: only 2 chunks in flight at once. Each yf.download(threads=True)
@@ -3611,13 +3633,17 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None) ->
                 try: progress_cb(min(_done, _total), _total, "scoring")
                 except Exception: pass
             if df is None or df.empty:
+                _empty.extend(chunk)
                 continue
             for t in chunk:
                 try:
                     # Multi-ticker frame is column-keyed by ticker; single-ticker isn't.
                     sub = df[t] if len(chunk) > 1 else df
                     sub = sub.dropna(how="all")
-                    if sub is None or sub.empty or len(sub) < 50:
+                    if sub is None or sub.empty:
+                        _empty.append(t)
+                        continue
+                    if len(sub) < 50:
                         # IMPORTANT: do NOT mark delisted here. An empty frame in a
                         # bulk download usually means Yahoo throttled/blocked the
                         # whole request ("Invalid Crumb" 401), not that the stock is
@@ -3670,6 +3696,13 @@ def batch_fetch_scan(tickers: list, skip_news: bool = True, progress_cb=None) ->
                     continue
             # Release this chunk's frame before moving to the next completed one.
             del df
+    # Yahoo often throttles part of a bulk download, returning empty columns for
+    # live names (TSLA, QCOM...). Retry those once so they aren't silently left
+    # out of the scan.
+    if _empty and not _retry:
+        _time.sleep(1.5)
+        _clear_yf_session()
+        out.update(batch_fetch_scan(_empty, skip_news=skip_news, _retry=True))
     return out
 
 
@@ -3804,6 +3837,10 @@ def _fetch_full_uncached(ticker: str) -> dict | None:
             "industry": info.get("industry", "N/A"),
             "technicals": tech, "news": news,
             "news_sentiment": _news_sentiment(ticker),
+            # Same inputs the scan scores with, so a ticker gets one score
+            # whether it comes from Analyze, chat or a scan.
+            "relative_strength": _calc_relative_strength(hist) if hist is not None and not hist.empty else {},
+            "sector_etf": TICKER_SECTOR.get(ticker),
         }
     except Exception:
         return basic
@@ -7189,6 +7226,37 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
         # clear autopilot's bar, so showing more candidates here costs nothing.
         top = picks[:15]
 
+        # ── One engine, one answer: the scan pre-screens on bulk daily bars, but
+        # what it SHOWS must match Analyze/chat for the same ticker. Re-score the
+        # candidates with fetch_full (live quote + fundamentals + news) and
+        # generate_trade_signal, and use those numbers  score, action, price
+        # and levels  from here on.
+        def _verify(p):
+            try:
+                d = fetch_full(p["ticker"])
+                if not d or not d.get("price"):
+                    return p
+                sg = generate_trade_signal(d)
+                if sg.get("action") == "NO_DATA":
+                    return p
+                tr = sg.get("trade", {})
+                return {**p, "score": sg["score"], "action": sg["action"],
+                        "setup": sg.get("setup", ""), "price": d["price"],
+                        "change_pct": d.get("change_pct", p.get("change_pct", 0)),
+                        "market_cap": d.get("market_cap") or p.get("market_cap"),
+                        "signals": (sg.get("signals") or [])[:3], "trade": tr,
+                        "confluence": sg.get("confluence", {}).get("bullish", 0),
+                        "rr": tr.get("risk_reward", 0), "verified": True}
+            except Exception:
+                return p
+        if top:
+            from concurrent.futures import ThreadPoolExecutor as _TPE
+            with _TPE(max_workers=4) as _vx:
+                top = list(_vx.map(_verify, top))
+            top.sort(key=lambda x: x["score"], reverse=True)
+            if max_price:
+                top = [p for p in top if p.get("price", 0) <= max_price]
+
         # ── Price consistency: the intraday scanner's price (last 5-min bar)
         # can differ by cents/dollars from the Analyze tab + chart, which use
         # the real-time quote. We re-stamp the displayed price from that SAME
@@ -7208,7 +7276,7 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
         if wants_single and top:
             p = top[0]
             try:
-                fresh = fetch_price(p["ticker"])
+                fresh = None if p.get("verified") else fetch_price(p["ticker"])
                 if fresh and fresh.get("price"):
                     _op = p["price"]; p["price"] = fresh["price"]
                     if fresh.get("prev_close"):
@@ -7277,7 +7345,7 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
         # Analyze tab/chart)  only for the buys we're about to show.
         for p in buys:
             try:
-                fresh = fetch_price(p["ticker"])
+                fresh = None if p.get("verified") else fetch_price(p["ticker"])
                 if fresh and fresh.get("price"):
                     old_price = p["price"]
                     p["price"] = fresh["price"]
@@ -7419,7 +7487,7 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
         if not data:
             return {"ok": False, "error": f"No data for {intent['ticker']}."}
         sig = generate_trade_signal(data)
-        tr = sig.get("trade", {})
+        tr = sig.get("plan") or sig.get("trade", {})
         entry = float(tr.get("entry") or data.get("price", 0) or 0)
         stop = float(tr.get("stop_loss") or 0)
         price = float(data.get("price", 0) or 0)
@@ -7513,10 +7581,13 @@ def execute(intent: dict, progress_cb=None, is_plus: bool = True) -> dict:
         # (so a HOLD/short still displays its stop & target). The LLM is handled
         # separately by _scrub_trade_levels_for_llm so it never writes prose
         # levels  this is the card's data, not the model's.
-        t_entry = trade.get("entry", 0)
-        t_stop = trade.get("stop_loss", 0)
-        t_target = trade.get("target_1", 0)
-        t_rr = trade.get("risk_reward", 0)
+        # Buyer's levels (stop below, target above) for every rating  the
+        # short-side `trade` levels read as "stop above target" to a buyer.
+        plan = signal.get("plan") or trade
+        t_entry = plan.get("entry", 0)
+        t_stop = plan.get("stop_loss", 0)
+        t_target = plan.get("target_1", 0)
+        t_rr = plan.get("risk_reward", 0)
 
         sig_data = {
             "ticker": tick,

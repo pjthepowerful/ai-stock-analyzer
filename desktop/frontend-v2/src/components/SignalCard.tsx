@@ -20,6 +20,8 @@ export interface Signal {
   signals: string[]
   warnings: string[]
   trade?: TradeLevels
+  /** Buyer's levels for every rating: stop below entry, targets above. */
+  plan?: TradeLevels
 }
 
 export interface AnalyzeData {
@@ -46,23 +48,26 @@ function actionClass(action: string): string {
   return ''
 }
 
-/** Which way the levels point. A stop above the entry is a short: without
- *  saying so, "Stop $67 · Target $43" on a $61 stock reads as swapped. */
-function levelsSide(t: TradeLevels): 'long' | 'short' {
-  return t.stop_loss > t.entry ? 'short' : 'long'
+/** Levels shown to the reader are always the buyer's: stop below entry,
+ *  target above. `trade` can be short-side on a sell rating (the autopilot
+ *  shorts with it), which reads as "stop above target" to anyone buying. */
+function buyerLevels(signal: Signal): TradeLevels | undefined {
+  const t = signal.plan ?? signal.trade
+  if (!t || !(t.entry > 0)) return undefined
+  if (t.stop_loss >= t.entry || t.target_1 <= t.entry) return undefined
+  return t
 }
 
-function levelsCaption(action: string, side: 'long' | 'short'): string {
+function levelsCaption(action: string): string {
   if (action.includes('BUY')) return 'Long setup · stop below entry, target above'
   if (action.includes('SELL'))
-    return 'Short-side levels · for a short the stop is above and the target below. Holding it long? This signal says exit, not add.'
-  return side === 'short'
-    ? 'No trade signal · indicative short-side levels (stop above, target below)'
-    : 'No trade signal · indicative levels only'
+    return 'Sell signal, not a buy. If you hold it, the stop is where to get out; the target is what a recovery would need.'
+  return 'No trade signal · levels only if you buy anyway'
 }
 
 export function SignalCard({ data }: { data: AnalyzeData }) {
   const { signal } = data
+  const levels = buyerLevels(signal)
   const up = data.change >= 0
   const factors = Object.entries(signal.category_scores)
   // Factor scores are small signed integers; scale bars to the largest so
@@ -152,25 +157,25 @@ export function SignalCard({ data }: { data: AnalyzeData }) {
         </ul>
       )}
 
-      {signal.trade && signal.trade.entry > 0 && (
+      {levels && (
         <>
-          <p className="sig-trade-side">{levelsCaption(signal.action, levelsSide(signal.trade))}</p>
+          <p className="sig-trade-side">{levelsCaption(signal.action)}</p>
           <dl className="sig-trade">
             <div>
-              <dt>{levelsSide(signal.trade) === 'short' ? 'Short entry' : 'Entry'}</dt>
-              <dd>${signal.trade.entry.toFixed(2)}</dd>
+              <dt>Entry</dt>
+              <dd>${levels.entry.toFixed(2)}</dd>
             </div>
             <div>
               <dt>Stop loss</dt>
-              <dd className="negative">${signal.trade.stop_loss.toFixed(2)}</dd>
+              <dd className="negative">${levels.stop_loss.toFixed(2)}</dd>
             </div>
             <div>
-              <dt>{levelsSide(signal.trade) === 'short' ? 'Cover target' : 'Profit target'}</dt>
-              <dd className="positive">${signal.trade.target_1.toFixed(2)}</dd>
+              <dt>Profit target</dt>
+              <dd className="positive">${levels.target_1.toFixed(2)}</dd>
             </div>
             <div>
               <dt>R:R</dt>
-              <dd>{signal.trade.risk_reward.toFixed(1)}:1</dd>
+              <dd>{levels.risk_reward.toFixed(1)}:1</dd>
             </div>
           </dl>
         </>
